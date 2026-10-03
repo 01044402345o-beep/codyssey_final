@@ -25,7 +25,12 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .validators import has_blocking, validate_pack, validate_speak_result
+from .validators import (
+    SCHEMA_CHECKER_AVAILABLE,
+    has_blocking,
+    validate_pack,
+    validate_speak_result,
+)
 
 # main.py 는 backend/app/ 에 있다. 저장소 루트의 agent_contract/ 를 본다.
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -33,16 +38,19 @@ REPO_ROOT = BACKEND_ROOT.parent
 CONTRACT_DIR = Path(os.getenv("CONTRACT_DIR") or (REPO_ROOT / "agent_contract"))
 CATEGORY_DIR = CONTRACT_DIR / "categories"
 SCHEMA_PATH = CONTRACT_DIR / "schema.json"
-WEAK_MAP_PATH = CONTRACT_DIR / "weak_expressions.json"
 
 MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "2"))
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
 MAX_AUDIO_SECONDS = 30
 
-# 호출 제한 (단일 인스턴스 기준). 진짜 비용 상한은 Google Cloud 예산 알림으로 잡는다.
+# 호출 제한 (단일 인스턴스 기준)
 RATE_LIMIT = int(os.getenv("RATE_LIMIT", "20"))          # 창당 최대 요청 수
 RATE_WINDOW = int(os.getenv("RATE_WINDOW", "60"))        # 초
+
+# 1이면 설정 누락(schema.json·jsonschema·카테고리) 상태에서 /generate 를 거부한다.
+# 기본 0은 '일단 돌아가게' 두되, /health 가 degraded 로 알린다.
+CONFIG_STRICT = os.getenv("CONFIG_STRICT", "0") == "1"
 
 PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 
@@ -101,16 +109,35 @@ def load_schema() -> dict[str, Any] | None:
         return None
 
 
-@lru_cache(maxsize=1)
-def load_weak_map() -> dict[str, Any]:
-    try:
-        return json.loads(WEAK_MAP_PATH.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return {"mapping": {}}
-
-
 def list_categories() -> list[str]:
     return sorted(p.stem for p in CATEGORY_DIR.glob("*.json"))
+
+
+def situation_index() -> dict[str, list[str]]:
+    """카테고리 -> situation_id 목록. 프론트가 유효한 weak id 를 알 수 있게 노출한다."""
+    out: dict[str, list[str]] = {}
+    for cid in list_categories():
+        try:
+            out[cid] = [
+                s.get("situation_id")
+                for s in load_category(cid).get("situations", [])
+                if isinstance(s, dict)
+            ]
+        except Exception:  # noqa: BLE001
+            out[cid] = []
+    return out
+
+
+def config_problems() -> list[str]:
+    """설정 누락을 조용히 넘기지 않는다. 구조 검증이 꺼진 채 돌면 '검증했다'고 말할 수 없다."""
+    problems: list[str] = []
+    if not SCHEMA_PATH.exists():
+        problems.append("agent_contract/schema.json 이 없습니다 — 구조 검증이 비활성입니다.")
+    if not SCHEMA_CHECKER_AVAILABLE:
+        problems.append("jsonschema 가 설치되지 않았습니다 — 구조 검증이 비활성입니다.")
+    if not list_categories():
+        problems.append("categories/*.json 이 없습니다 — 생성할 카테고리가 없습니다.")
+    return problems
 
 
 def build_prompt(cfg: dict[str, Any], req: GenerateRequest) -> str:
@@ -120,9 +147,11 @@ def build_prompt(cfg: dict[str, Any], req: GenerateRequest) -> str:
         lambda m: str(rules[m.group(1)]) if m.group(1) in rules else m.group(0),
         cfg.get("system_prompt", ""),
     )
-    mapping = load_weak_map().get("mapping") or {}
+    mapping = {s.get("situation_id"): s for s in cfg.get("situations", []) if isinstance(s, dict)}
     weak_spec = [
-        {"id": w, **(mapping.get(w) or {})} for w in req.weak_expressions
+        {"situation_id": w, "situation": (mapping.get(w) or {}).get("situation"),
+         "required_keywords": (mapping.get(w) or {}).get("required_keywords")}
+        for w in req.weak_expressions
     ]
     payload = {
         "category_id": cfg["category_id"],
@@ -202,13 +231,18 @@ def usability(issues: list[dict[str, Any]], mock: bool, degraded: bool) -> str:
 
 @app.get("/health")
 def health() -> dict[str, Any]:
+    problems = config_problems()
     return {
-        "status": "ok",
+        # 설정이 덜 갖춰지면 degraded — 배포 직후 이 값을 먼저 보게 된다
+        "status": "ok" if not problems else "degraded",
+        "config_problems": problems,
+        "config_strict": CONFIG_STRICT,
+        "schema_checker": SCHEMA_CHECKER_AVAILABLE,
         "model": MODEL,
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
         "contract_dir": str(CONTRACT_DIR),
         "categories": list_categories(),
-        "weak_expressions": sorted((load_weak_map().get("mapping") or {}).keys()),
+        "situations": situation_index(),
         "rate_limit": f"{RATE_LIMIT}/{RATE_WINDOW}s",
     }
 
@@ -216,13 +250,21 @@ def health() -> dict[str, Any]:
 @app.post("/generate")
 def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     rate_limit(request)
+    if CONFIG_STRICT and config_problems():
+        raise HTTPException(
+            status_code=503,
+            detail={"message": "설정이 갖춰지지 않아 생성을 거부했습니다.", "problems": config_problems()},
+        )
     cfg = load_category(req.category_id)
     schema = load_schema()
-    weak_map = load_weak_map()
 
     if not os.getenv("GEMINI_API_KEY"):
         pack = mock_pack(cfg, req)
-        issues = validate_pack(pack, cfg, req.weak_expressions, schema, weak_map)
+        try:
+            issues = validate_pack(pack, cfg, req.weak_expressions, schema)
+        except Exception as exc:  # noqa: BLE001 — 검증기 버그가 요청을 죽이지 않게
+            issues = [{"severity": "warn", "code": "validator_error",
+                       "detail": f"{type(exc).__name__}: {exc}"}]
         return {
             "pack": pack,
             "issues": issues,
@@ -247,7 +289,13 @@ def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
             last_error = f"{type(exc).__name__}: {exc}"
             continue
 
-        issues = validate_pack(pack, cfg, req.weak_expressions, schema, weak_map)
+        # 검증기 호출도 try 안에 둔다. 검증기 버그가 500 을 내면 재시도가 무의미해진다.
+        try:
+            issues = validate_pack(pack, cfg, req.weak_expressions, schema)
+        except Exception as exc:  # noqa: BLE001
+            last_error = f"validator error: {type(exc).__name__}: {exc}"
+            continue
+
         last_pack, last_issues = pack, issues
         if not has_blocking(issues):
             return {
@@ -262,7 +310,14 @@ def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     # 재시도에도 block 이 남으면 목업으로 대체한다. 다만 usable="rejected" 이므로
     # 프론트는 이 결과를 학습 화면에 넣으면 안 된다는 것을 알 수 있다.
     fallback = mock_pack(cfg, req)
-    final_issues = last_issues or validate_pack(fallback, cfg, req.weak_expressions, schema, weak_map)
+    if last_issues:
+        final_issues = last_issues
+    else:
+        try:
+            final_issues = validate_pack(fallback, cfg, req.weak_expressions, schema)
+        except Exception as exc:  # noqa: BLE001
+            final_issues = [{"severity": "block", "code": "validator_error",
+                             "detail": f"{type(exc).__name__}: {exc}"}]
     return {
         "pack": last_pack or fallback,
         "issues": final_issues,

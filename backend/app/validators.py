@@ -5,8 +5,10 @@
   2) 각 카테고리의 negative_cases 가 실제로 걸러지는지 자체 점검
 
 severity
-  block — 응답을 쓸 수 없음. 재생성한다. (스키마 위반, 금칙, 카테고리 불일치, 취약 표현 미반영)
+  block — 응답을 쓸 수 없음. 재생성한다.
   warn  — 쓸 수는 있으나 품질 문제. 3주차 비교 실험의 측정값.
+
+어떤 입력이 와도 예외를 내지 않는다. 검증기 버그가 요청 전체를 죽이면 안 된다.
 """
 from __future__ import annotations
 
@@ -21,10 +23,12 @@ try:  # 배포 환경에 없을 수도 있으므로 선택적으로
 except ImportError:  # pragma: no cover
     jsonschema = None  # type: ignore[assignment]
 
+SCHEMA_CHECKER_AVAILABLE = jsonschema is not None
+
 
 # 코드가 실제로 구현한 검사만 여기에 있다.
 # negative_case_patterns 에 이 목록에 없는 type/match 를 적으면 조용히 무시되므로,
-# 아래 check_pattern_declarations 가 경고를 띄운다.
+# check_pattern_declarations 가 경고를 띄운다.
 KNOWN_PATTERN_TYPES = {"situation_in_config", "word_count", "duplicate_en"}
 KNOWN_PATTERN_MATCH = {"substring"}
 
@@ -34,11 +38,7 @@ def _words(text: str) -> int:
 
 
 def check_pattern_declarations(patterns: dict[str, Any]) -> list[dict[str, Any]]:
-    """설정에 적힌 type/match 가 코드에 구현돼 있는지 확인한다.
-
-    이게 없으면 '규칙을 추가했다고 믿는데 실제로는 무시되는' 상태가 조용히 생긴다.
-    새 규칙이 필요하면 이슈로 요청해야 한다.
-    """
+    """설정에 적힌 type/match 가 코드에 구현돼 있는지 확인한다."""
     issues: list[dict[str, Any]] = []
     for name, p in (patterns or {}).items():
         if not isinstance(p, dict):
@@ -72,11 +72,7 @@ def validate_sentence(
     patterns: dict[str, Any],
     seen_en: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """문장 1개를 검사해 문제 목록을 돌려준다.
-
-    어떤 타입이 들어와도 예외를 내지 않는다. 타입이 틀리면 그것 자체를 block 으로 보고한다.
-    """
-    # 0) 문장이 dict 가 아니면 이후 .get 호출이 전부 터진다. 여기서 끊는다.
+    """문장 1개를 검사한다. 어떤 타입이 들어와도 예외를 내지 않는다."""
     if not isinstance(sentence, dict):
         return [{
             "severity": "block",
@@ -86,7 +82,6 @@ def validate_sentence(
 
     issues: list[dict[str, Any]] = []
 
-    # 1) en 은 반드시 문자열이어야 한다 (숫자·null 이면 이후 검사가 무의미)
     raw_en = sentence.get("en")
     if not isinstance(raw_en, str) or not raw_en.strip():
         issues.append({
@@ -96,7 +91,6 @@ def validate_sentence(
         })
         return issues
 
-    # 2) 상황 id 가 이 카테고리 설정에 있는가 (= 장소/카테고리 불일치 탐지)
     valid_ids = {s.get("situation_id") for s in cfg.get("situations", []) if isinstance(s, dict)}
     sid = sentence.get("situation_id")
     if sid not in valid_ids:
@@ -108,7 +102,6 @@ def validate_sentence(
 
     low = raw_en.lower()
 
-    # 3) 금칙 (부분일치)
     for code in ("forbidden_topic", "not_polite"):
         p = patterns.get(code) or {}
         for term in p.get("terms", []):
@@ -119,7 +112,6 @@ def validate_sentence(
                     "detail": f"{term!r} in: {raw_en}",
                 })
 
-    # 4) 길이
     p = patterns.get("too_long") or {}
     if isinstance(p.get("max"), int) and _words(raw_en) > p["max"]:
         issues.append({
@@ -128,7 +120,6 @@ def validate_sentence(
             "detail": f"{_words(raw_en)} words > max {p['max']}",
         })
 
-    # 5) 팩 안 중복
     if seen_en is not None:
         if low in seen_en:
             issues.append({
@@ -146,7 +137,6 @@ def validate_schema(pack: Any, schema: dict[str, Any] | None) -> list[dict[str, 
     if not schema:
         return []
     if jsonschema is None:
-        # 검사기가 없으면 '검증했다'고 말할 수 없다. 조용히 넘어가지 않는다.
         return [{
             "severity": "warn",
             "code": "schema_checker_missing",
@@ -167,49 +157,55 @@ def validate_schema(pack: Any, schema: dict[str, Any] | None) -> list[dict[str, 
 def check_weak_coverage(
     sentences: list[Any],
     requested: list[str],
-    weak_map: dict[str, Any] | None,
+    cfg: dict[str, Any],
 ) -> list[dict[str, Any]]:
     """취약 표현이 '정말로' 반영됐는지 확인한다.
 
-    태그(targets_weak)만 보고 판단하지 않는다. 태그는 자기가 붙였다고 주장하는 것일 뿐이고,
-    실제 반영 여부는 그 취약점이 속한 상황의 문장이 생성됐는지(=카드로 배정되는지)로 확인한다.
-    keywords 가 정의돼 있으면 그 단어가 실제로 문장에 들어갔는지까지 본다.
+    weak id 는 그 표현을 연습해야 하는 **situation_id 와 같은 값**을 쓴다.
+    (예: 알레르기 취약 → weak id 'allergy_notice' = 식당의 알레르기 상황)
+
+    이렇게 하면 별도 매핑 파일이 필요 없고, 담당자들이 만드는 파일 구조도 그대로다.
+    태그(targets_weak)만 보고 판단하지 않는다 — 태그는 자기 주장일 뿐이고,
+    실제 판단은 '그 상황의 문장이 생성됐는가'로 한다.
     """
     issues: list[dict[str, Any]] = []
     if not requested:
         return issues
 
-    mapping = (weak_map or {}).get("mapping") or {}
+    situations = [s for s in cfg.get("situations", []) if isinstance(s, dict)]
+    valid_ids = {s.get("situation_id") for s in situations}
+
+    def _kws(sid: Any) -> list[str]:
+        for s in situations:
+            if s.get("situation_id") == sid:
+                return [k.lower() for k in (s.get("required_keywords") or []) if isinstance(k, str)]
+        return []
 
     for wid in requested:
-        spec = mapping.get(wid)
-        if not isinstance(spec, dict):
-            # 레지스트리에 없으면 '반영됐다'고 말할 근거가 없다. 설정 공백으로 알린다.
+        if not isinstance(wid, str) or wid not in valid_ids:
             issues.append({
                 "severity": "warn",
-                "code": "weak_unmapped",
-                "detail": f"weak id {wid!r} is not in agent_contract/weak_expressions.json — 반영 여부를 판단할 수 없습니다.",
+                "code": "weak_unknown_situation",
+                "detail": (
+                    f"{wid!r} 는 카테고리 {cfg.get('category_id')!r} 의 situation_id 가 아닙니다. "
+                    f"weak id 는 situation_id 와 같은 값을 써야 합니다."
+                ),
             })
             continue
 
-        sat = spec.get("situation_id")
-        kws = [k.lower() for k in (spec.get("keywords") or []) if isinstance(k, str)]
-
         in_situation = [
             s for s in sentences
-            if isinstance(s, dict) and s.get("situation_id") == sat
+            if isinstance(s, dict) and s.get("situation_id") == wid
         ]
         if not in_situation:
             issues.append({
                 "severity": "block",
                 "code": "weak_not_covered",
-                "detail": (
-                    f"{wid} ({spec.get('label', '')}) 은 상황 {sat!r} 에서 연습되어야 하는데 "
-                    f"그 상황의 문장이 없습니다."
-                ),
+                "detail": f"취약 상황 {wid!r} 의 문장이 생성되지 않았습니다.",
             })
             continue
 
+        kws = _kws(wid)
         if kws:
             hit = any(
                 isinstance(s.get("en"), str) and any(k in s["en"].lower() for k in kws)
@@ -220,8 +216,8 @@ def check_weak_coverage(
                     "severity": "block",
                     "code": "weak_content_mismatch",
                     "detail": (
-                        f"{wid} 은 상황 {sat!r} 에 배정됐지만 {kws} 중 어떤 단어도 "
-                        f"문장에 없습니다. 태그만 붙은 상태입니다."
+                        f"{wid!r} 문장은 있지만 {kws} 중 어떤 단어도 없습니다. "
+                        f"상황만 배정하고 내용은 다른 상태입니다."
                     ),
                 })
 
@@ -233,13 +229,8 @@ def validate_pack(
     cfg: dict[str, Any],
     weak_expressions: list[str] | None = None,
     schema: dict[str, Any] | None = None,
-    weak_map: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """생성 결과 1건 전체를 검사한다. 어떤 입력에도 예외를 내지 않는다."""
-    patterns = cfg.get("negative_case_patterns", {})
-    rules = cfg.get("rules", {})
-    issues: list[dict[str, Any]] = []
-
     if not isinstance(pack, dict):
         return [{
             "severity": "block",
@@ -247,12 +238,14 @@ def validate_pack(
             "detail": f"expected object, got {type(pack).__name__}",
         }]
 
+    patterns = cfg.get("negative_case_patterns", {})
+    rules = cfg.get("rules", {})
+
     # 0) 스키마 구조. block 이면 이후 검사는 타입 전제가 깨지므로 여기서 멈춘다.
-    issues.extend(validate_schema(pack, schema))
+    issues = validate_schema(pack, schema)
     if any(i["severity"] == "block" for i in issues):
         return issues
 
-    # 0-1) 설정 오류 — 코드가 모르는 type/match 가 적혀 있으면 알린다
     issues.extend(check_pattern_declarations(patterns))
 
     if pack.get("category_id") != cfg.get("category_id"):
@@ -271,20 +264,37 @@ def validate_pack(
         })
         return issues
 
-    # 1) 문장 단위 규칙
     seen: set[str] = set()
     for i, sentence in enumerate(sentences):
         for issue in validate_sentence(sentence, cfg, patterns, seen):
             issue["index"] = i
             issues.append(issue)
 
-    # 2) 취약 표현 반영 — 태그가 아니라 상황·내용으로 확인한다 (Long-term Memory)
-    issues.extend(check_weak_coverage(sentences, list(weak_expressions or []), weak_map))
+    # 1) targets_weak 와 situation_id 의 구조적 일관성.
+    #    태그가 다른 상황을 가리키면 그 태그는 아무 의미가 없다 (커버리지는 situation_id 로 판단).
+    for i, s in enumerate(sentences):
+        if not isinstance(s, dict):
+            continue
+        tags = s.get("targets_weak")
+        if not isinstance(tags, list):
+            continue
+        for t in tags:
+            if isinstance(t, str) and t != s.get("situation_id"):
+                issues.append({
+                    "severity": "warn",
+                    "code": "weak_tag_mismatch",
+                    "detail": (
+                        f"targets_weak={t!r} 인데 이 문장의 situation_id={s.get('situation_id')!r} 입니다. "
+                        f"태그가 가리키는 상황과 실제 상황이 다릅니다."
+                    ),
+                    "index": i,
+                })
+
+    # 2) 취약 표현 반영 — 태그가 아니라 상황·내용으로 확인 (Long-term Memory)
+    issues.extend(check_weak_coverage(sentences, list(weak_expressions or []), cfg))
 
     # 3) 상황 커버리지 — 3주차 측정값
-    counts = Counter(
-        s.get("situation_id") for s in sentences if isinstance(s, dict)
-    )
+    counts = Counter(s.get("situation_id") for s in sentences if isinstance(s, dict))
     need = int(rules.get("min_sentences_per_situation", 1) or 1)
     missing = [
         sit["situation_id"]
@@ -319,9 +329,8 @@ def has_blocking(issues: list[dict[str, Any]]) -> bool:
 def validate_speak_result(data: Any) -> tuple[dict[str, Any], bool, str]:
     """음성 평가 응답을 정규화하고 쓸 수 있는지 판단한다.
 
-    반환: (정규화된 결과, 쓸 수 있는가, 못 쓰는 이유)
-    점수가 숫자로 안 나와도 heard/fix_one 이 있으면 쓸 수 있다 (초기 제품은 점수보다
-    '들린 내용 + 고칠 한 가지 + 다시 말하기'가 신뢰할 만하다).
+    점수가 숫자로 안 나와도 heard/fix_one 이 있으면 쓸 수 있다.
+    초기 제품은 숫자 점수보다 '들린 내용 + 고칠 한 가지 + 다시 말하기'가 신뢰할 만하다.
     """
     if not isinstance(data, dict):
         return (
@@ -330,7 +339,6 @@ def validate_speak_result(data: Any) -> tuple[dict[str, Any], bool, str]:
             "평가 결과 형식이 올바르지 않습니다.",
         )
 
-    # 점수는 있으면 0~100 숫자여야 한다. 아니면 버리되, 버렸다는 사실을 남긴다.
     raw_score = data.get("score")
     score_discarded = False
     if raw_score is None:
