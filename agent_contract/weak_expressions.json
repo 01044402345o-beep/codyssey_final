@@ -1,0 +1,23 @@
+{
+  "_note": "취약 표현 id -> 어느 카테고리·상황에서 실제로 연습되는지. 프론트는 id만 저장·전달하고, 서버가 이 표로 '정말 반영됐는지'를 확인한다. keywords 는 그 상황 문장 안에 실제로 들어가야 하는 단어(소문자, 부분일치). keywords 가 없으면 상황 존재만 확인한다.",
+  "mapping": {
+    "w_allergy_peanut": {
+      "label": "알레르기·재료 고지가 어려움",
+      "category_id": "restaurant",
+      "situation_id": "allergy_notice",
+      "keywords": ["allergy", "allergic"]
+    },
+    "w_ask_refill": {
+      "label": "리필·추가 요청이 어려움",
+      "category_id": "restaurant",
+      "situation_id": "request_side",
+      "keywords": ["refill", "one more", "another"]
+    },
+    "w_pay_check": {
+      "label": "계산 요청이 어려움",
+      "category_id": "restaurant",
+      "situation_id": "pay_check",
+      "keywords": ["check", "bill", "receipt"]
+    }
+  }
+}

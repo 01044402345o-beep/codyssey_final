@@ -87,9 +87,64 @@ python scripts/check_negatives.py
 
 | 필드 | 뜻 |
 |---|---|
+| `usable` | **프론트가 이 결과를 학습 화면에 넣어도 되는지** (아래 표) |
 | `issues[].severity` | `block` = 재생성 대상 / `warn` = 검토 대상 |
-| `degraded` | 재시도 후에도 `block` 이 남아 목업으로 대체됨. 화면에 표시하고 검증 담당에게 로그 전달 |
+| `degraded` | 재시도 후에도 `block` 이 남아 목업으로 대체됨 |
 | `mock` | API 키 없이 목업으로 응답 |
+
+### `usable` — 실패를 정상 학습으로 포장하지 않기
+
+| 값 | 뜻 | 프론트 처리 |
+|---|---|---|
+| `ok` | 검증 통과한 실제 AI 결과 | 정상 표시 |
+| `sample` | 검수된 샘플(목업) | **"샘플" 표시**하고 제공 |
+| `rejected` | 검증 실패 | **학습 화면에 넣지 않는다.** 재시도 안내 |
+
+`usable` 이 `ok`/`sample` 이 아니면 그 문장으로 학습시키지 마세요. 목업을 쓰는 것 자체는
+문제가 아니고, **목업과 실제 AI 성공을 구분하지 않는 것**이 문제입니다.
+
+## 4-1. 취약 표현(Long-term Memory) — 태그가 아니라 상황으로 검증
+
+`agent_contract/weak_expressions.json` 이 **취약 표현 id → 연습할 상황**을 정의합니다.
+
+```json
+"w_allergy_peanut": {
+  "label": "알레르기·재료 고지가 어려움",
+  "category_id": "restaurant",
+  "situation_id": "allergy_notice",
+  "keywords": ["allergy", "allergic"]
+}
+```
+
+검증 규칙:
+
+| 코드 | severity | 조건 |
+|---|---|---|
+| `weak_not_covered` | block | 그 상황의 문장이 하나도 없음 |
+| `weak_content_mismatch` | block | 상황은 맞지만 `keywords` 가 문장에 없음 |
+| `weak_unmapped` | warn | id 가 레지스트리에 없어 판단 불가 |
+
+**`targets_weak` 태그만 보고 통과시키지 않습니다.** 태그는 "반영했다"는 자기 주장일 뿐이고,
+실제 판단은 상황·키워드로 합니다. 그래서 목업도 태그를 위조하지 않습니다.
+
+Long-term Memory의 실제 완료 기준은 이것입니다:
+
+> **발화/어려움 표시 → 저장 → 새 세션 복구 → 관련 카드 우선 배정 → 성공 후 상태 갱신**
+
+지금 구현된 것은 네 번째(카드 우선 배정 = 관련 상황 문장 생성)까지입니다.
+**저장·복구·상태 갱신은 프론트 작업으로 남아 있습니다.**
+
+## 4-2. 비용·남용 방어
+
+| 항목 | 값 | 방법 |
+|---|---|---|
+| 호출 제한 | 20회/60초 (IP 기준) | `RATE_LIMIT` / `RATE_WINDOW` 환경변수 |
+| 입력 길이 | `city` 80자, `places` 20개, `weak_expressions` 20개, `target` 200자 | Pydantic → 초과 시 422 |
+| 오디오 | 8MB, `audio/*` 만 | 초과 시 413, 형식 오류 415, 빈 파일 400 |
+
+**호출 제한은 프로세스 메모리 기준이라 인스턴스가 늘면 약해집니다.** 진짜 비용 상한은
+Google Cloud **예산 알림**으로 잡으세요. API 키를 숨겨도 공개 서버가 대신 호출해 주면
+비용이 발생합니다.
 
 ### 실제로 검사하는 것
 
