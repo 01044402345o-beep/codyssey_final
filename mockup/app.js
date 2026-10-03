@@ -1240,8 +1240,10 @@ function speakHtml(s) {
   let res = '';
   if (mine && SPK.result) {
     const r = SPK.result;
-    res = r.error ? `<div class="speak-res">${esc(r.error)}</div>`
-      : `<div class="speak-res">${r.mock ? '샘플 응답이에요(채점 안 됨). ' : ''}${typeof r.score === 'number' ? `점수 ${esc(r.score)} · ` : ''}${r.heard ? `들린 문장: ${esc(r.heard)} · ` : ''}${esc(r.tip || '')}${r.saved ? ' · 취약 상황으로 저장했어요' : ''}</div>`;
+    const parts = r.error ? [r.error]
+      : r.usable !== true ? [r.mock ? '샘플 응답이에요(채점 안 됨).' : (r.reason || '평가하지 못했어요. 다시 시도해 주세요.'), '약점으로 저장하지 않았어요.']
+      : [typeof r.score === 'number' ? `점수 ${r.score}` : '', r.heard ? `들린 문장: ${r.heard}` : '', r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? '취약 상황으로 저장했어요' : ''];
+    res = `<div class="speak-res">${parts.filter(Boolean).map(esc).join(' · ')}</div>`;
   }
   return `<button class="speak-btn ${st === 'recording' ? 'rec' : ''}" data-act="speak-rec" ${st === 'requesting' || st === 'uploading' ? 'disabled' : ''}>${label}</button>${res}
     <div class="speak-note">녹음은 채점을 위해 ${esc(host)} 서버와 AI 서비스로 전송돼요.</div>`;
@@ -1297,7 +1299,7 @@ async function uploadSpeech(tok, blob, s) {
   catch (e) {
     if (tok !== SPK.tok) return;
     SPK.state = 'idle'; SPK.ctl = null;
-    SPK.result = { error: e.message === 'too-large' ? '녹음이 너무 길어요. 짧게 다시 말해 주세요.' : e.message === 'empty-audio' ? '녹음된 소리가 없어요. 다시 시도해 주세요.' : '채점 서버에 연결하지 못했어요. 카드 학습은 계속할 수 있어요.' };
+    SPK.result = { error: e.message === 'too-large' || e.status === 413 ? '녹음이 너무 길어요. 짧게 다시 말해 주세요.' : e.message === 'empty-audio' || e.status === 400 ? '녹음된 소리가 없어요. 다시 시도해 주세요.' : e.status === 429 ? '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.' : e.status === 415 ? '이 브라우저의 녹음 형식은 지원되지 않아요.' : '채점 서버에 연결하지 못했어요. 카드 학습은 계속할 수 있어요.' };
     updateSpeakUi(); return;
   }
   if (tok !== SPK.tok) return;                                               // 늦은 응답: 표시도 저장도 하지 않는다

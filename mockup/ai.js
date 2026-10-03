@@ -35,7 +35,8 @@
   }
 
   /* ---------- 응답 해석 ----------
-     검사 순서 고정: degraded → mock:true → mock:false + 정상 형식 → 그 외 폴백. */
+     검사 순서 고정: degraded → usable:'rejected' → (usable:'sample' ∧ mock:true) → (usable:'ok' ∧ mock:false) → 그 외 폴백.
+     서버의 usable 판정과 mock 플래그가 서로 맞지 않으면 믿지 않고 폴백한다. */
   function validSentence(s) {
     return !!s && typeof s === 'object' && str(s.en) && str(s.ko) && str(s.situation) && typeof s.situation_id === 'string' && ID_RE.test(s.situation_id) &&
       (s.place === undefined || typeof s.place === 'string') &&
@@ -44,13 +45,13 @@
   function normalizeAiResponse(res) {
     const fallback = { kind: 'fallback', sentences: [] };
     if (!res || typeof res !== 'object') return fallback;
-    if (res.degraded) return fallback;
+    if (res.degraded || res.usable === 'rejected') return fallback;
     const pack = res.pack;
     if (!pack || typeof pack !== 'object' || typeof pack.category_id !== 'string' || !Array.isArray(pack.sentences) || !pack.sentences.length) return fallback;
     if (!pack.sentences.every(validSentence)) return fallback;
     let kind;
-    if (res.mock === true) kind = 'sample';
-    else if (res.mock === false) kind = 'ai';
+    if (res.mock === true && res.usable === 'sample') kind = 'sample';
+    else if (res.mock === false && res.usable === 'ok') kind = 'ai';
     else return fallback;
     const sentences = pack.sentences.map(s => ({
       place: s.place || '', placeType: s.place_type || '', categoryId: pack.category_id, situationId: s.situation_id,
@@ -91,26 +92,36 @@
     const ctl = new AbortController();
     const onAbort = () => ctl.abort();
     if (parent) { if (parent.aborted) ctl.abort(); else parent.addEventListener('abort', onAbort, { once: true }); }
-    const timer = setTimeout(() => ctl.abort(), ms);
-    return { signal: ctl.signal, done() { clearTimeout(timer); if (parent) parent.removeEventListener('abort', onAbort); } };
+    const timer = ms ? setTimeout(() => ctl.abort(), ms) : null;
+    return { signal: ctl.signal, done() { if (timer) clearTimeout(timer); if (parent) parent.removeEventListener('abort', onAbort); } };
   }
-  async function postJson(fetchImpl, url, body, parent, ms) {
-    const t = withTimeout(parent, ms);
-    try {
-      const r = await fetchImpl(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: t.signal });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return await r.json();
-    } finally { t.done(); }
+  async function httpJson(fetchImpl, url, opt, signal) {
+    const r = await fetchImpl(url, { ...opt, signal });
+    if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
+    return await r.json();
   }
+  const postJson = (fetchImpl, url, body, signal) =>
+    httpJson(fetchImpl, url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, signal);
   /* cities: [{ name, places:[{id,name,en}] }] → [{ city, kind, pools }] */
   async function generateByCity({ fetchImpl, base, cities, weakIds, signal, timeoutMs = GEN_TIMEOUT_MS, categoryId = 'restaurant', placeType = 'restaurant' }) {
-    if (base === null || base === undefined) return cities.map(c => ({ city: c.name, kind: 'fallback', pools: null }));
-    const jobs = cities.map(c => postJson(fetchImpl, base + '/generate', {
-      category_id: categoryId, city: c.name,
-      places: c.places.map(p => ({ name: p.en || p.name, place_type: placeType })),
-      weak_expressions: weakIds,
-    }, signal, timeoutMs));
-    const settled = await Promise.allSettled(jobs);
+    const allFallback = () => cities.map(c => ({ city: c.name, kind: 'fallback', pools: null }));
+    if (base === null || base === undefined) return allFallback();
+    const t = withTimeout(signal, timeoutMs);        // /health 와 /generate 가 하나의 제한 시간을 공유한다
+    try {
+      // /health 로 서버를 깨우고, 이 카테고리의 현재 유효한 상황 id 만 취약 상황으로 보낸다.
+      let health;
+      try { health = await httpJson(fetchImpl, base + '/health', {}, t.signal); } catch (e) { return allFallback(); }
+      const valid = health && health.situations && Array.isArray(health.situations[categoryId]) ? health.situations[categoryId] : null;
+      const weak = valid ? weakIds.filter(w => valid.includes(w)) : weakIds;
+      const jobs = cities.map(c => postJson(fetchImpl, base + '/generate', {
+        category_id: categoryId, city: c.name,
+        places: c.places.map(p => ({ name: p.en || p.name, place_type: placeType })),
+        weak_expressions: weak,
+      }, t.signal));
+      return collect(cities, await Promise.allSettled(jobs));
+    } finally { t.done(); }
+  }
+  function collect(cities, settled) {
     return settled.map((r, i) => {
       const c = cities[i];
       if (r.status !== 'fulfilled') return { city: c.name, kind: 'fallback', pools: null };
@@ -162,7 +173,7 @@
   function shouldSaveWeak(sentence, res) {
     if (!sentence || sentence.ai !== true || !str(sentence.categoryId) || !str(sentence.situationId)) return false;
     if (!ID_RE.test(sentence.categoryId) || !ID_RE.test(sentence.situationId)) return false;
-    if (!res || typeof res !== 'object' || res.mock === true || 'raw' in res) return false;
+    if (!res || typeof res !== 'object' || res.usable !== true || res.mock === true || res.score_discarded === true || 'raw' in res) return false;
     const s = res.score;
     return typeof s === 'number' && Number.isFinite(s) && s >= 0 && s <= 100 && s < WEAK_THRESHOLD;
   }
@@ -185,11 +196,8 @@
     fd.append('target', target);
     fd.append('file', blob, 'speech.' + extFor(mime));
     const t = withTimeout(signal, timeoutMs);
-    try {
-      const r = await fetchImpl(base + '/speak-check', { method: 'POST', body: fd, signal: t.signal });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return await r.json();
-    } finally { t.done(); }
+    try { return await httpJson(fetchImpl, base + '/speak-check', { method: 'POST', body: fd }, t.signal); }
+    finally { t.done(); }
   }
 
   const api = {
