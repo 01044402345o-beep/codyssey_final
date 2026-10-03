@@ -1,0 +1,263 @@
+"""Codyssey Final — 최소 백엔드.
+
+엔드포인트는 3개가 상한. 기능을 더 붙이지 마세요.
+Firebase를 걷어낸 이유가 그대로 재발합니다.
+
+  GET  /health       배포·콜드스타트 확인용
+  POST /generate     카테고리 문장 생성 (+ 스키마·규칙 검증 후 재생성)
+  POST /speak-check  발음 오디오 → 피드백 (멀티모달)
+
+GEMINI_API_KEY 가 없으면 목업으로 응답한다. 그래서 키 없이도 배포·시연이 된다.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+
+from .validators import has_blocking, validate_pack
+
+# main.py 는 backend/app/ 에 있다. 저장소 루트의 agent_contract/ 를 본다.
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = BACKEND_ROOT.parent
+CONTRACT_DIR = Path(os.getenv("CONTRACT_DIR") or (REPO_ROOT / "agent_contract"))
+CATEGORY_DIR = CONTRACT_DIR / "categories"
+SCHEMA_PATH = CONTRACT_DIR / "schema.json"
+
+MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", "2"))
+MAX_AUDIO_BYTES = 8 * 1024 * 1024
+
+PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
+
+app = FastAPI(title="Codyssey Final API", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=(os.getenv("ALLOW_ORIGINS") or "*").split(","),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ---------------------------------------------------------------- 요청 모델
+
+class Place(BaseModel):
+    name: str
+    place_type: str | None = None
+
+
+class GenerateRequest(BaseModel):
+    category_id: str
+    city: str = "New York"
+    places: list[Place] = Field(default_factory=list)
+    weak_expressions: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------- 설정 로드
+
+@lru_cache(maxsize=32)
+def load_category(category_id: str) -> dict[str, Any]:
+    path = CATEGORY_DIR / f"{category_id}.json"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"unknown category: {category_id}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=1)
+def load_schema() -> dict[str, Any] | None:
+    try:
+        return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+
+
+def list_categories() -> list[str]:
+    return sorted(p.stem for p in CATEGORY_DIR.glob("*.json"))
+
+
+def build_prompt(cfg: dict[str, Any], req: GenerateRequest) -> str:
+    """system_prompt 의 {키} 를 rules 의 같은 키 값으로 치환한다."""
+    rules = cfg.get("rules", {})
+    body = PLACEHOLDER.sub(
+        lambda m: str(rules[m.group(1)]) if m.group(1) in rules else m.group(0),
+        cfg.get("system_prompt", ""),
+    )
+    payload = {
+        "category_id": cfg["category_id"],
+        "city": req.city,
+        "places": [p.model_dump() for p in req.places],
+        "situations": cfg.get("situations", []),
+        "weak_expressions": req.weak_expressions,
+        "rules": rules,
+    }
+    return (
+        f"{body}\n\nINPUT:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
+        f"\n\nOUTPUT JSON SCHEMA:\n{json.dumps(load_schema(), ensure_ascii=False)}"
+        f"\n\nReturn JSON only."
+    )
+
+
+def mock_pack(cfg: dict[str, Any], req: GenerateRequest) -> dict[str, Any]:
+    """키 없이도 시연되도록 설정의 good_examples 를 그대로 돌려준다."""
+    default_type = (cfg.get("place_types") or [None])[0]
+    requested = list(req.weak_expressions or [])
+    sentences = []
+    for i, ex in enumerate(cfg.get("good_examples", [])):
+        s = dict(ex)
+        s.setdefault("place_type", default_type)
+        # 목업에서도 취약 표현이 반영된 것처럼 보이게 한다 (시연용)
+        if requested and i == 0:
+            s["targets_weak"] = [requested[0]]
+        sentences.append(s)
+    return {"category_id": cfg["category_id"], "city": req.city, "sentences": sentences}
+
+
+def parse_json_object(text: str) -> dict[str, Any]:
+    text = (text or "").strip()
+    text = re.sub(r"^```[a-zA-Z]*\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end == -1:
+        raise ValueError("no JSON object in model output")
+    return json.loads(text[start : end + 1])
+
+
+def call_gemini(prompt: str) -> str:
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    resp = client.models.generate_content(
+        model=MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.7,
+            max_output_tokens=8192,
+        ),
+    )
+    return resp.text or ""
+
+
+# ---------------------------------------------------------------- 엔드포인트
+
+@app.get("/health")
+def health() -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "model": MODEL,
+        "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
+        "contract_dir": str(CONTRACT_DIR),
+        "categories": list_categories(),
+    }
+
+
+@app.post("/generate")
+def generate(req: GenerateRequest) -> dict[str, Any]:
+    cfg = load_category(req.category_id)
+    schema = load_schema()
+
+    if not os.getenv("GEMINI_API_KEY"):
+        pack = mock_pack(cfg, req)
+        return {
+            "pack": pack,
+            "issues": validate_pack(pack, cfg, req.weak_expressions, schema),
+            "attempts": 0,
+            "mock": True,
+        }
+
+    prompt = build_prompt(cfg, req)
+    last_error = ""
+    last_pack: dict[str, Any] | None = None
+    last_issues: list[dict[str, Any]] = []
+
+    for attempt in range(1, MAX_RETRIES + 2):
+        try:
+            src = prompt if attempt == 1 else (
+                prompt + f"\n\nPrevious attempt was rejected: {last_error}\nFix it and return JSON only."
+            )
+            raw = call_gemini(src)
+            pack = parse_json_object(raw)
+        except Exception as exc:  # noqa: BLE001
+            last_error = f"{type(exc).__name__}: {exc}"
+            continue
+
+        issues = validate_pack(pack, cfg, req.weak_expressions, schema)
+        last_pack, last_issues = pack, issues
+        if not has_blocking(issues):
+            return {"pack": pack, "issues": issues, "attempts": attempt, "mock": False}
+
+        last_error = json.dumps(
+            [i for i in issues if i["severity"] == "block"], ensure_ascii=False
+        )
+
+    # 재시도에도 block 이 남으면 목업으로 대체 (화면이 비지 않게)
+    return {
+        "pack": last_pack or mock_pack(cfg, req),
+        "issues": last_issues or validate_pack(mock_pack(cfg, req), cfg, req.weak_expressions, schema),
+        "attempts": MAX_RETRIES + 1,
+        "mock": last_pack is None,
+        "degraded": True,
+        "error": last_error,
+    }
+
+
+SPEAK_PROMPT = (
+    "You are an English pronunciation coach for Korean travelers. "
+    "Listen to the audio and compare it to the target sentence. "
+    'Return JSON only: {"score": 0-100, "heard": "what you heard", '
+    '"issues": [{"word": "...", "note": "..."}], "tip": "one short Korean tip"}.\n'
+    "TARGET: "
+)
+
+
+@app.post("/speak-check")
+async def speak_check(
+    target: str = Form(...),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    audio = await file.read()
+    if len(audio) > MAX_AUDIO_BYTES:
+        raise HTTPException(status_code=413, detail="audio too large (max 8MB)")
+
+    if not os.getenv("GEMINI_API_KEY"):
+        return {
+            "score": None,
+            "heard": "",
+            "issues": [],
+            "tip": "API 키가 없어 목업으로 응답했습니다.",
+            "mock": True,
+        }
+
+    # 브라우저는 'audio/webm;codecs=opus' 처럼 파라미터를 붙여 보낸다. 떼어낸다.
+    mime = (file.content_type or "audio/webm").split(";")[0].strip() or "audio/webm"
+
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    resp = client.models.generate_content(
+        model=MODEL,
+        contents=[
+            types.Part.from_bytes(data=audio, mime_type=mime),
+            SPEAK_PROMPT + target,
+        ],
+        config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2),
+    )
+    try:
+        return parse_json_object(resp.text or "")
+    except Exception:  # noqa: BLE001
+        return {
+            "score": None,
+            "heard": "",
+            "issues": [],
+            "tip": "채점 결과를 해석하지 못했습니다.",
+            "raw": resp.text,
+        }
