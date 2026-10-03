@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>배포 직후 3분 판정 — Go / 제한 Go / No-Go</title>
+<style>
+  @page { margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #0C131F; }
+  body {
+    width: 1560px;
+    padding: 56px 56px 44px;
+    font-family: 'NanumSquare', 'NanumGothic', sans-serif;
+    color: #E8EEF7;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      linear-gradient(rgba(90,169,255,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(90,169,255,.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+  .mono { font-family: 'NanumGothicCoding', 'DejaVu Sans Mono', monospace; }
+
+  /* ---------- HEADER ---------- */
+  header { border-bottom: 2px solid #2A3A52; padding-bottom: 26px; margin-bottom: 34px; }
+  .eyebrow {
+    font-family: 'NanumGothicCoding', 'DejaVu Sans Mono', monospace;
+    font-size: 13px; letter-spacing: .22em; color: #5AA9FF; margin-bottom: 14px;
+  }
+  h1 { font-family: 'NanumSquare ExtraBold', 'NanumGothic ExtraBold', sans-serif;
+       font-size: 54px; line-height: 1.1; letter-spacing: -.02em; }
+  h1 em { font-style: normal; color: #5AA9FF; }
+  .sub { margin-top: 14px; font-size: 19px; color: #93A4BC; line-height: 1.6; max-width: 1150px; }
+  .sub b { color: #E8EEF7; }
+  .cmd {
+    margin-top: 22px; display: inline-flex; align-items: center; gap: 12px;
+    background: #131C2B; border: 1px solid #2A3A52; border-radius: 10px;
+    padding: 13px 18px; font-family: 'NanumGothicCoding', 'DejaVu Sans Mono', monospace;
+    font-size: 15px; color: #A8E6C0;
+  }
+  .cmd span.tag { color: #5AA9FF; letter-spacing: .1em; font-size: 12px; }
+
+  /* ---------- FLOW ---------- */
+  .gate { display: grid; grid-template-columns: 132px minmax(0,1fr); column-gap: 22px;
+          position: relative; margin-bottom: 34px; }
+  .railcell { position: relative; }
+  .marker {
+    width: 56px; height: 56px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: #131C2B; border: 2px solid #5AA9FF;
+    font-family: 'NanumGothicCoding', 'DejaVu Sans Mono', monospace;
+    font-size: 17px; font-weight: 700; color: #5AA9FF;
+  }
+  .railcell::after {
+    content: ''; position: absolute; left: 27px; top: 60px; bottom: -34px;
+    border-left: 2px dashed #33465F;
+  }
+  .railcell::before {
+    content: ''; position: absolute; left: 20px; bottom: -34px;
+    border-left: 8px solid transparent; border-right: 8px solid transparent;
+    border-top: 11px solid #33465F;
+  }
+  .gate.last .railcell::before { display: none; }
+
+  .card { background: #141D2B; border: 1px solid #263449; border-radius: 16px; padding: 22px 26px 24px; }
+  .card-top { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+  .card-top h2 { font-family: 'NanumSquare ExtraBold', 'NanumGothic ExtraBold', sans-serif;
+                 font-size: 27px; letter-spacing: -.01em; }
+  .kw { font-family: 'NanumGothicCoding', 'DejaVu Sans Mono', monospace;
+        font-size: 14px; color: #7C8FA8; background: #0E1725; border: 1px solid #263449;
+        border-radius: 7px; padding: 5px 10px; }
+  .hint { font-size: 15px; color: #8FA2BB; margin: 10px 0 18px; line-height: 1.55; }
+
+  .branch { display: grid; grid-template-columns: 322px 104px minmax(0,1fr); align-items: center;
+            column-gap: 16px; padding: 12px 16px; margin-bottom: 9px;
+            background: #111A28; border-radius: 11px; border-left: 5px solid #33465F; }
+  .cond { font-family: 'NanumGothicCoding', 'DejaVu Sans Mono', monospace;
+          font-size: 15px; line-height: 1.45; color: #D6E2F2; overflow-wrap: anywhere; }
+  .verdict { font-family: 'NanumSquare ExtraBold', 'NanumGothic ExtraBold', sans-serif;
+             font-size: 14px; letter-spacing: .04em; text-align: center;
+             padding: 7px 0; border-radius: 7px; }
+  .act { font-size: 15.5px; line-height: 1.5; color: #A9BACF; }
+  .act b { color: #E8EEF7; }
+  .act .fcode { font-family: 'NanumGothicCoding', 'DejaVu Sans Mono', monospace;
+                font-size: 13px; color: #7C8FA8; border: 1px solid #2C3C52;
+                border-radius: 5px; padding: 1px 6px; margin-right: 8px; }
+
+  .b-nogo { border-left-color: #FF5C5C; }
+  .b-nogo .verdict { background: rgba(255,92,92,.16); color: #FF8A8A; box-shadow: inset 0 0 0 1px rgba(255,92,92,.4); }
+  .b-lim  { border-left-color: #F2B33D; }
+  .b-lim .verdict { background: rgba(242,179,61,.16); color: #FFCF73; box-shadow: inset 0 0 0 1px rgba(242,179,61,.4); }
+  .b-go   { border-left-color: #2FD07A; }
+  .b-go .verdict { background: rgba(47,208,122,.16); color: #6FE0A4; box-shadow: inset 0 0 0 1px rgba(47,208,122,.4); }
+  .b-wait { border-left-color: #5AA9FF; }
+  .b-wait .verdict { background: rgba(90,169,255,.16); color: #8FC4FF; box-shadow: inset 0 0 0 1px rgba(90,169,255,.4); }
+
+  .pass { display: flex; align-items: center; gap: 10px; margin-top: 15px; padding-top: 14px;
+          border-top: 1px dashed #263449; font-size: 15.5px; color: #6FE0A4; }
+  .pass .dot { width: 9px; height: 9px; border-radius: 50%; background: #2FD07A; flex: none; }
+  .pass span.rest { color: #7C8FA8; }
+
+  /* ---------- OUTCOMES ---------- */
+  .lanes { margin-top: 44px; padding-top: 30px; border-top: 2px solid #2A3A52; position: relative; }
+  .lanes::before { content: ''; position: absolute; left: 27px; top: -44px; height: 44px;
+                   border-left: 2px dashed #33465F; }
+  .lanes h3 { font-family: 'NanumSquare ExtraBold', 'NanumGothic ExtraBold', sans-serif;
+              font-size: 22px; margin-bottom: 20px; }
+  .lane-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 20px; }
+  .lane { background: #141D2B; border: 1px solid #263449; border-top: 6px solid; border-radius: 14px; padding: 22px 24px 24px; }
+  .lane .name { font-family: 'NanumSquare ExtraBold', 'NanumGothic ExtraBold', sans-serif;
+                font-size: 30px; letter-spacing: -.01em; margin-bottom: 6px; }
+  .lane .when { font-size: 14.5px; color: #8FA2BB; margin-bottom: 16px; line-height: 1.5; }
+  .lane ul { list-style: none; }
+  .lane li { font-size: 15.5px; line-height: 1.55; color: #C3D2E4; padding-left: 18px; position: relative; margin-bottom: 9px; }
+  .lane li::before { content: ''; position: absolute; left: 0; top: 9px; width: 6px; height: 6px; border-radius: 50%; background: #33465F; }
+  .lane li b { color: #E8EEF7; }
+  .lane.go { border-top-color: #2FD07A; } .lane.go .name { color: #6FE0A4; }
+  .lane.lim { border-top-color: #F2B33D; } .lane.lim .name { color: #FFCF73; }
+  .lane.no { border-top-color: #FF5C5C; } .lane.no .name { color: #FF8A8A; }
+
+  .note { margin-top: 18px; font-size: 14px; line-height: 1.6; color: #7C8FA8;
+          background: #111A28; border: 1px dashed #2C3C52; border-radius: 10px; padding: 14px 18px; }
+  .note b { color: #A9BACF; }
+
+  /* ---------- FOOTER ---------- */
+  footer { margin-top: 40px; padding-top: 26px; border-top: 2px solid #2A3A52;
+           display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 26px; }
+  footer h4 { font-family: 'NanumSquare Bold', 'NanumSquare', sans-serif;
+              font-size: 15px; letter-spacing: .04em; color: #8FA2BB; margin-bottom: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 9px; }
+  .chip { font-size: 14px; padding: 7px 12px; border-radius: 8px; background: #131C2B;
+          border: 1px solid #2C3C52; color: #C3D2E4; line-height: 1.35; }
+  .chip .mono { font-size: 13px; color: #8FC4FF; }
+  .chip.hot { border-color: #5AA9FF; background: rgba(90,169,255,.1); color: #E8EEF7; }
+  .chip.bad { border-color: #5A2E33; background: rgba(255,92,92,.07); color: #E4A9A9; text-decoration: line-through; }
+  .chip.bad .mono { color: #E4A9A9; text-decoration: line-through; }
+  .order { font-family: 'NanumGothicCoding', 'DejaVu Sans Mono', monospace; font-size: 12.5px; color: #7C8FA8; margin-top: 11px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">DEPLOY RUNBOOK &nbsp;/&nbsp; 배포 직후 게이트 &amp; 판정</div>
+  <h1>배포 직후 <em>3분 판정</em><br>Go · 제한 Go · No-Go</h1>
+  <p class="sub">
+    목적은 장애를 없애는 것이 아니라 <b>장애가 났을 때 3분 안에 판단하고 되돌리는 것</b>입니다.
+    아래 게이트를 통과하지 못하면 <b>거기서 멈춥니다.</b> 다음 단계로 넘어가지 않습니다.
+    왼쪽 위에서 아래로 내려가며, 각 게이트의 필드 값을 실제 응답에서 확인하세요.
+  </p>
+  <div class="cmd"><span class="tag">GATE</span>curl -s https://&lt;앱&gt;.onrender.com/health | python3 -m json.tool</div>
+  <p class="sub" style="margin-top:12px; font-size:15.5px">서비스명 <span class="mono" style="color:#8FC4FF">codyssey-api</span> — 실제 URL은 1장 자산 대장에서 채운 뒤 위 명령에 넣으세요.</p>
+</header>
+
+<!-- G1 -->
+<div class="gate">
+  <div class="railcell"><div class="marker">G1</div></div>
+  <div class="card">
+    <div class="card-top"><h2>서비스가 응답하나?</h2><span class="kw">HTTP 200 · /health</span></div>
+    <p class="hint">여기서 막히면 뒤의 검사는 전부 무의미합니다. 응답 자체를 먼저 확보합니다.</p>
+    <div class="branch b-nogo">
+      <div class="cond">render.yaml not found · 서비스 미생성</div>
+      <div class="verdict">NO-GO</div>
+      <div class="act"><span class="fcode">F01</span>배포 전 실패. <b>되돌릴 배포가 없습니다</b> — main에 render.yaml 머지 후 재시도</div>
+    </div>
+    <div class="branch b-wait">
+      <div class="cond">무응답 · 타임아웃 · 502</div>
+      <div class="verdict">60초 재시도</div>
+      <div class="act"><span class="fcode">F07</span>무료 플랜 콜드스타트. 계속 없으면 <b>F08</b>(빌드 실패) · <b>F12</b>(화면 연결) 확인</div>
+    </div>
+    <div class="pass"><span class="dot"></span>응답 확보 <span class="rest">— G2로</span></div>
+  </div>
+</div>
+
+<!-- G2 -->
+<div class="gate">
+  <div class="railcell"><div class="marker">G2</div></div>
+  <div class="card">
+    <div class="card-top"><h2>계약이 로드됐나?</h2><span class="kw">categories · contract_dir · schema_checker</span></div>
+    <p class="hint">이 게이트는 <b>서비스 자체가 깨진 것</b>을 잡습니다. 하나라도 어긋나면 프론트를 붙이지 않습니다.</p>
+    <div class="branch b-nogo">
+      <div class="cond">categories: []</div>
+      <div class="verdict">NO-GO</div>
+      <div class="act"><span class="fcode">F02</span><b>즉시 중단.</b> 계약 경로·파일 누락 — 런북 F02 확인 순서를 따릅니다. 프론트 연동을 시작하지 않습니다</div>
+    </div>
+    <div class="branch b-nogo">
+      <div class="cond">contract_dir …/backend/agent_contract</div>
+      <div class="verdict">NO-GO</div>
+      <div class="act"><span class="fcode">F02</span>Environment의 <b>CONTRACT_DIR</b> 오설정 · <b>rootDir</b> 사용 여부 확인 → 재배포 후 G1부터 재확인</div>
+    </div>
+    <div class="branch b-nogo">
+      <div class="cond">schema_checker: false</div>
+      <div class="verdict">NO-GO</div>
+      <div class="act"><span class="fcode">F03</span>jsonschema 미설치. <b>검증이 꺼진 채 통과로 보이는 상태</b> — 그대로 시연하지 않습니다</div>
+    </div>
+    <div class="branch b-nogo">
+      <div class="cond">status: "degraded"</div>
+      <div class="verdict">NO-GO</div>
+      <div class="act"><span class="fcode">F03</span>config_problems 확인 → CONFIG_STRICT=1 로 고정 후 재확인</div>
+    </div>
+    <div class="branch b-nogo">
+      <div class="cond">situations ≠ 기대 계약<br>(기준 커밋 8795d62: restaurant 10개)</div>
+      <div class="verdict">NO-GO</div>
+      <div class="act">카테고리 파일 문제 — 계약 README와 대조. <b>상황 개수는 확장되면 달라지므로</b> 기준 커밋과 함께 판단합니다</div>
+    </div>
+    <div class="pass"><span class="dot"></span>계약 정상 <span class="rest">— G3로 (여기까지 오면 서비스는 살아 있습니다)</span></div>
+  </div>
+</div>
+
+<!-- G3 -->
+<div class="gate">
+  <div class="railcell"><div class="marker">G3</div></div>
+  <div class="card">
+    <div class="card-top"><h2>AI가 실제로 도나?</h2><span class="kw">has_api_key · /generate → usable</span></div>
+    <p class="hint">서비스는 살아 있는데 <b>AI 계층만</b> 불완전한 구간입니다. 중단이 아니라 <b>시연 축소</b>입니다. <b>제한 GO = 샘플 UI 시연만 가능. AI·음성·자동 기억 검증 미완료</b> — 발표 가능 여부와 기술 검증 통과는 다릅니다.</p>
+    <div class="branch b-lim">
+      <div class="cond">has_api_key: false</div>
+      <div class="verdict">제한 GO</div>
+      <div class="act"><span class="fcode">F04</span>목업 모드. <b>"AI가 동작한다"고 말하지 않습니다</b> — 배지를 띄우고 시연을 줄입니다</div>
+    </div>
+    <div class="branch b-lim">
+      <div class="cond">mock: true</div>
+      <div class="verdict">제한 GO</div>
+      <div class="act"><span class="fcode">F04</span>키 미등록. 목표를 줄이는 것이 거짓말하는 것보다 낫습니다</div>
+    </div>
+    <div class="branch b-lim">
+      <div class="cond">계속 rejected (429 / 503 등)<br><span style="color:#7C8FA8">해당 백엔드 버전에 있는 코드·상태만 기준</span></div>
+      <div class="verdict">제한 GO</div>
+      <div class="act"><span class="fcode">F05·F06</span>할당량/장애. <b>스냅샷 시연으로 전환</b> (T-15분 백업 사용)</div>
+    </div>
+    <div class="pass"><span class="dot"></span>mock: false · usable: "ok" <span class="rest">— G4로</span></div>
+  </div>
+</div>
+
+<!-- G4 -->
+<div class="gate">
+  <div class="railcell"><div class="marker">G4</div></div>
+  <div class="card">
+    <div class="card-top"><h2>음성(멀티모달)이 도나?</h2><span class="kw">/speak-check → usable · heard</span></div>
+    <p class="hint">멀티모달 요건이 여기에 걸려 있습니다. 실패해도 시연은 됩니다 — <b>말을 바꿔야 합니다.</b></p>
+    <div class="branch b-lim">
+      <div class="cond">실제 오디오 실패</div>
+      <div class="verdict">제한 GO</div>
+      <div class="act">멀티모달 <b>검증 미완료</b>. 화면 시연은 가능하나 발표에서 <b>"확장 단계"로 정직하게</b> — 통과했다고 말하지 않습니다</div>
+    </div>
+    <div class="pass"><span class="dot"></span>usable: true · heard 비어 있지 않음 <span class="rest">— G5로</span></div>
+  </div>
+</div>
+
+<!-- G5 -->
+<div class="gate last">
+  <div class="railcell"><div class="marker">G5</div></div>
+  <div class="card">
+    <div class="card-top"><h2>화면이 붙고 기억이 도나?</h2><span class="kw">화면 연결 · 전체 흐름 1회 · 기억 4단계</span></div>
+    <p class="hint">마지막 게이트. 화면은 같은 서비스에서 서빙되므로 기본 구성에서는 CORS 문제가 없습니다. 화면만 실패하면 <b>백엔드 단독으로도 시연</b>이 됩니다.</p>
+    <div class="branch b-go">
+      <div class="cond">화면이 서버에 안 붙음<br>(?api= 외부 서버 · file:// · 서비스 중지)</div>
+      <div class="verdict">GO</div>
+      <div class="act"><span class="fcode">F12</span><b>백엔드 단독 시연</b> — /docs 로 API 흐름을 직접 보여줍니다. 상단 "외부 서버" 표시가 뜨면 의도한 주소인지 확인</div>
+    </div>
+    <div class="branch b-lim">
+      <div class="cond">복습 배지가 <b>데모 기록</b>으로만 뜸</div>
+      <div class="verdict">제한 GO</div>
+      <div class="act">빈 화면 방지용 시드입니다. <b>기억 검증 완료로 세지 않습니다</b> — "데모 학습 기록"이라고 밝히고 시연합니다</div>
+    </div>
+    <div class="branch b-go">
+      <div class="cond">기억 검증 (<b>실제 기록</b>)</div>
+      <div class="verdict">GO</div>
+      <div class="act"><b>실제 기록 저장 → 새로고침 후 복구 → 다음 요청에 전달 → 관련 상황 복습 확인</b> 네 단계를 모두 확인. 배지만 보고 끝내지 않습니다</div>
+    </div>
+    <div class="branch b-go">
+      <div class="cond">입력 → 생성 → 카드 → 녹음 → 진도 통과</div>
+      <div class="verdict">GO</div>
+      <div class="act">전체 흐름 시연. 예열(T-10분) 상태를 유지하세요</div>
+    </div>
+  </div>
+</div>
+
+<!-- OUTCOMES -->
+<section class="lanes">
+  <h3>판정 3분기 — 게이트 결과가 모이는 곳</h3>
+  <div class="lane-grid">
+    <div class="lane go">
+      <div class="name">GO</div>
+      <div class="when">게이트 전부 통과 · AI·음성 실동작 + 기억 4단계 확인</div>
+      <ul>
+        <li>프론트 연동 진행, 전체 흐름 시연</li>
+        <li>mock: false · usable: "ok" 를 화면에서 확인. 기억은 <b>데모 기록이 아닌 실제 기록</b>으로 확인</li>
+        <li>T-15분 <b>스냅샷 백업은 그대로 유지</b></li>
+      </ul>
+    </div>
+    <div class="lane lim">
+      <div class="name">제한 GO</div>
+      <div class="when"><b>샘플 UI 시연만 가능.</b> AI·음성·자동 기억 검증 미완료 (서비스는 살아 있음)</div>
+      <ul>
+        <li>스냅샷/목업으로 <b>시연은 계속</b>합니다</li>
+        <li>결과에 <b>배지 표시</b> — 목업을 AI라고 하지 않습니다. 발표 가능 ≠ 검증 통과</li>
+        <li>발표 멘트를 먼저 줄입니다. <b>목표 축소 &gt; 거짓말</b></li>
+      </ul>
+    </div>
+    <div class="lane no">
+      <div class="name">NO-GO</div>
+      <div class="when">계약/서비스 자체가 깨짐 (G1~G2)</div>
+      <ul>
+        <li>수정 후 <b>G1부터 재확인</b>. 프론트를 붙이지 않습니다</li>
+        <li>검증을 끈 채 "통과"라고 말하지 않습니다</li>
+        <li>복구까지 시간이 걸리면 <b>스냅샷으로 전환</b></li>
+      </ul>
+    </div>
+  </div>
+  <div class="note">
+    <b>§7과 일치:</b> 런북 §7도 <span class="mono">has_api_key: false</span>·<span class="mono">rejected</span>를
+    <b>제한 Go</b>로, <span class="mono">categories: []</span> 같은 서비스 자체 장애만 No-Go로 둡니다.<br>
+    <b>기준 버전:</b> 커밋 <span class="mono">8795d62</span> 의 백엔드. 상황 개수, <span class="mono">429/503</span>, <span class="mono">CONFIG_STRICT</span> 등은
+    <b>그 버전에 실제로 있는 조건일 때만</b> 판정 기준으로 씁니다. 확장되면 기대 계약과 일치하는지로 다시 판단하세요.
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div>
+    <h4>롤백 3계층 — 시연 중에는 C 먼저</h4>
+    <div class="chips">
+      <div class="chip hot"><span class="mono">C</span> 환경변수 완화 — <b>배포 없이 즉시</b></div>
+      <div class="chip"><span class="mono">A</span> 배포 롤백 — 직전 2개</div>
+      <div class="chip"><span class="mono">B</span> 코드 롤백 — git</div>
+    </div>
+    <div class="order">C: RATE_LIMIT · CONFIG_STRICT · ALLOW_ORIGINS · GEMINI_MODEL</div>
+  </div>
+  <div>
+    <h4>하지 말아야 할 것</h4>
+    <div class="chips">
+      <div class="chip bad"><span class="mono">git add -A</span></div>
+      <div class="chip bad"><span class="mono">git reset --hard</span></div>
+      <div class="chip bad">검증 끈 채 "통과"</div>
+      <div class="chip bad">목업으로 "AI 동작"</div>
+    </div>
+  </div>
+  <div>
+    <h4>복구 후 5분 내 기록 (양식 9장)</h4>
+    <div class="order" style="margin-top:0; line-height:1.9">
+      시각 &nbsp;·&nbsp; 증상(화면/응답)<br>
+      판정 시나리오 &nbsp;<span style="color:#8FC4FF">F__</span> &nbsp;·&nbsp; 확인 명령·결과<br>
+      조치 계층(A/B/C) &nbsp;·&nbsp; 복구까지 걸린 시간<br>
+      재발 방지로 바꾼 것
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
