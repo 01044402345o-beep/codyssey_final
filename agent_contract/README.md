@@ -72,15 +72,15 @@ PR 본문에 아래 4개를 체크해 주세요.
       "ko": "파스트라미 샌드위치 하나 주세요.",
       "level": "basic",
       "tags": ["주문"],
-      "targets_weak": ["w_allergy_peanut"]
+      "targets_weak": ["allergy_notice"]
     }
   ]
 }
 ```
 
-**`targets_weak`** — 이 문장이 겨냥한 취약 표현 id 목록입니다.
+**`targets_weak`** — 이 문장이 겨냥한 취약 **상황** id 목록입니다(문장의 `situation_id`와 같은 값).
 Long-term Memory가 실제로 문장 생성에 반영됐다는 증거이고, 화면에
-"지난번 틀린 표현이 오늘 다시 나왔어요"로 표시됩니다. 해당 없으면 생략합니다.
+"저장된 취약 상황 복습"으로 표시됩니다. 해당 없으면 생략합니다.
 
 ---
 
@@ -96,7 +96,8 @@ Long-term Memory가 실제로 문장 생성에 반영됐다는 증거이고, 화
 | 카테고리 최소 문장 수 | `below_min_sentences` | warn | `rules.min_sentences_per_category` 대비 |
 | 영문 중복 | `duplicate_en` | warn | 팩 안 중복 수 |
 | 문장 길이 | `too_long` | warn | `max_words_per_sentence` 초과 수 |
-| 취약 표현 반영 | `weak_not_covered` | block | 요청 대비 미반영 수 |
+| 취약 상황 반영 | `weak_not_covered` | block | 요청 대비 미반영 수 |
+| 취약 표시가 엉뚱한 상황에 붙음 | `weak_situation_mismatch` | block | `targets_weak` 값 ≠ 문장의 `situation_id` |
 
 **block 은 재생성이 돌고, warn 은 측정값으로 남습니다.**
 3주차 비교 실험(단일 프롬프트 vs 카테고리 분할)은 **warn 항목의 개수**로 비교하세요.

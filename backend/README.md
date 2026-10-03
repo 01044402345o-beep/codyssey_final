@@ -96,7 +96,9 @@ python scripts/check_negatives.py
 | 코드 | severity | 내용 |
 |---|---|---|
 | `schema_invalid` | block | `schema.json` 구조 위반 (필드 누락·타입 오류) — `jsonschema` 로 실제 검사 |
-| `weak_not_covered` | block | 요청한 취약 표현을 겨냥한 문장이 없음 (Long-term Memory를 코드로 보장) |
+| `weak_not_covered` | block | 요청한 취약 상황(situation_id)을 겨냥한 문장이 없음 (Long-term Memory를 코드로 보장) |
+| `weak_situation_mismatch` | block | `targets_weak`에 적힌 id가 그 문장의 `situation_id`와 다름 (엉뚱한 문장에 기억 표시 방지) |
+| `validator_error` | block | 검증기 자체의 예외. 재호출 없이 `degraded` 응답 |
 | `forbidden_topic` | block | 금칙 표현 |
 | `category_mismatch` / `empty_pack` | block | 카테고리 불일치 / 빈 결과 |
 | `situation_not_in_config` | block | 카테고리에 없는 상황 id |
@@ -124,7 +126,7 @@ const res = await fetch(`${API}/generate`, {
     category_id: "restaurant",
     city: "New York",
     places: [{ name: "Katz's Delicatessen", place_type: "restaurant" }],
-    weak_expressions: ["w_allergy_peanut"],   // localStorage 에서 읽어 전달
+    weak_expressions: ["allergy_notice"],   // localStorage 에서 읽어 전달
   }),
 });
 const { pack, issues, degraded } = await res.json();
@@ -150,3 +152,6 @@ const r = await (await fetch(`${API}/speak-check`, { method: "POST", body: fd })
 | 시연용 프리셋 시드 + "데모 불러오기" 버튼 | 10/11 전 |
 | 프론트 `data.js` → `/generate` 교체 | URL 확보 직후 |
 | 실사용자 테스트 | 10/19~ |
+
+## 화면 서빙
+`mockup/` 을 같은 서비스의 `/` 에서 정적으로 서빙합니다(API 라우트 뒤에 마운트). 배포 URL 하나로 화면과 API가 같은 출처가 되어 CORS 설정이 필요 없습니다.

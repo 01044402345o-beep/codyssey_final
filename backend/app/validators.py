@@ -123,8 +123,20 @@ def validate_sentence(
     return issues
 
 
-def validate_schema(pack: dict[str, Any], schema: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """schema.json 으로 구조를 실제 검사한다. (필드 누락·타입 오류)"""
+def require_schema_support(schema: dict[str, Any] | None) -> None:
+    """시작 단계에서 호출. 스키마 파일·라이브러리가 없으면 조용히 통과시키지 않고 실패한다."""
+    if jsonschema is None:
+        raise RuntimeError("jsonschema 가 설치돼 있지 않습니다 (pip install -r backend/requirements.txt)")
+    if not schema:
+        raise RuntimeError("agent_contract/schema.json 을 읽을 수 없습니다")
+
+
+def validate_schema(pack: Any, schema: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """schema.json 으로 구조를 실제 검사한다. (필드 누락·타입 오류)
+
+    스키마 지원 여부는 시작 단계(require_schema_support)에서 보장한다.
+    여기서 schema 가 없으면 검사하지 않는다 (단위 테스트 용도).
+    """
     if not schema or jsonschema is None:
         return []
     try:
@@ -150,8 +162,12 @@ def validate_pack(
     rules = cfg.get("rules", {})
     issues: list[dict[str, Any]] = []
 
-    # 0) 스키마 구조
-    issues.extend(validate_schema(pack, schema))
+    # 0) 스키마 구조 — 위반이면 이후 규칙(.get 등)이 깨지므로 즉시 반환
+    schema_issues = validate_schema(pack, schema)
+    if schema_issues:
+        return schema_issues
+    if not isinstance(pack, dict):
+        return [{"severity": "block", "code": "schema_invalid", "detail": "(root): not an object"}]
 
     # 0-1) 설정 오류 — 코드가 모르는 type/match 가 적혀 있으면 알린다
     issues.extend(check_pattern_declarations(patterns))
@@ -187,6 +203,16 @@ def validate_pack(
                     "code": "weak_not_covered",
                     "detail": f"weak_expression {w!r} not targeted by any sentence",
                 })
+        # 취약 표시는 그 상황의 문장에만 붙을 수 있다 (무관한 문장에 기억 태그 금지)
+        for i, s in enumerate(sentences):
+            for w in s.get("targets_weak") or []:
+                if w in requested and s.get("situation_id") != w:
+                    issues.append({
+                        "severity": "block",
+                        "code": "weak_situation_mismatch",
+                        "index": i,
+                        "detail": f"targets_weak {w!r} on a sentence of situation {s.get('situation_id')!r}",
+                    })
 
     # 3) 상황 커버리지 — 3주차 측정값
     counts = Counter(s.get("situation_id") for s in sentences)
