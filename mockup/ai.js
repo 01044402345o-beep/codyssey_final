@@ -6,6 +6,8 @@
   const WEAK_KEY = 'cd_weak';
   /* 임시 제품 규칙: 이 점수 미만이면 "취약 상황" 후보로 저장한다. 검증된 학습 기준이 아니다. */
   const WEAK_THRESHOLD = 70;
+  /* 임시 제품 규칙: 서버가 점수를 주지 않을 때(score 선택 항목), 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 후보로 저장한다. */
+  const HEARD_MATCH_MIN = 0.8;
   const MAX_AUDIO_BYTES = 8 * 1024 * 1024; // backend/app/main.py MAX_AUDIO_BYTES 와 같다
   const GEN_TIMEOUT_MS = 90 * 1000;
   const ID_RE = /^[a-z][a-z0-9_]*$/;
@@ -168,13 +170,26 @@
     return cleanWeak(list).find(w => w.category_id === sentence.categoryId && w.id === sentence.situationId) || null;
   }
 
+  /* 목표 문장 단어 중 들린 문장에 나온 비율 (0~1). 대소문자·구두점 무시. */
+  const words = t => norm(t).replace(/[^a-z0-9'\s]/g, ' ').split(/\s+/).filter(Boolean);
+  function heardCoverage(target, heard) {
+    const t = words(target), h = new Set(words(heard));
+    if (!t.length) return 1;
+    return t.filter(w => h.has(w)).length / t.length;
+  }
+
   /* ---------- 말하기 결과 → 약점 저장 여부 ----------
-     정상 평가 ∧ 유한한 점수 ∧ 0~100 ∧ 임계값 미만 ∧ 실제 AI 문장(유효한 카테고리·상황). 그 외는 저장하지 않는다. */
+     공통: 서버가 쓸 수 있다고 판정(usable:true) ∧ 목업 아님 ∧ 파싱 실패·점수 폐기 아님 ∧ 실제 AI 문장(유효한 카테고리·상황).
+     점수가 있으면: 0~100 ∧ 임계값 미만.
+     점수가 없으면(모델이 생략): 들린 문장이 있고 목표와 충분히 다를 때만. 무음·인식 실패(heard 없음)는 저장하지 않는다. */
   function shouldSaveWeak(sentence, res) {
     if (!sentence || sentence.ai !== true || !str(sentence.categoryId) || !str(sentence.situationId)) return false;
     if (!ID_RE.test(sentence.categoryId) || !ID_RE.test(sentence.situationId)) return false;
     if (!res || typeof res !== 'object' || res.usable !== true || res.mock === true || res.score_discarded === true || 'raw' in res) return false;
     const s = res.score;
+    if (s === null || s === undefined) {
+      return typeof res.heard === 'string' && res.heard.trim().length > 0 && heardCoverage(sentence.en, res.heard) < HEARD_MATCH_MIN;
+    }
     return typeof s === 'number' && Number.isFinite(s) && s >= 0 && s <= 100 && s < WEAK_THRESHOLD;
   }
 
@@ -201,7 +216,7 @@
   }
 
   const api = {
-    WEAK_KEY, WEAK_THRESHOLD, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
+    WEAK_KEY, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, weakIdsFor, weakReviewOf, shouldSaveWeak, extFor, speakCheck,
   };
