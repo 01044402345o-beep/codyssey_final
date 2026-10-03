@@ -8,25 +8,30 @@ Firebase를 걷어낸 이유가 그대로 재발합니다.
   POST /speak-check  발음 오디오 → 피드백 (멀티모달)
 
 GEMINI_API_KEY 가 없으면 목업으로 응답한다. 그래서 키 없이도 배포·시연이 된다.
+목업·검증실패 결과는 usable 로 구분되므로, 프론트가 학습 화면에 넣지 않게 막을 수 있다.
 """
 from __future__ import annotations
 
 import json
-import logging
 import os
 import re
+import time
+from collections import defaultdict, deque
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .validators import has_blocking, require_schema_support, validate_pack
-
-log = logging.getLogger("codyssey")
+from .validators import (
+    SCHEMA_CHECKER_AVAILABLE,
+    has_blocking,
+    validate_pack,
+    validate_speak_result,
+)
 
 # main.py 는 backend/app/ 에 있다. 저장소 루트의 agent_contract/ 를 본다.
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -38,9 +43,17 @@ SCHEMA_PATH = CONTRACT_DIR / "schema.json"
 MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "2"))
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
+MAX_AUDIO_SECONDS = 30
+
+# 호출 제한 (단일 인스턴스 기준)
+RATE_LIMIT = int(os.getenv("RATE_LIMIT", "20"))          # 창당 최대 요청 수
+RATE_WINDOW = int(os.getenv("RATE_WINDOW", "60"))        # 초
+
+# 1이면 설정 누락(schema.json·jsonschema·카테고리) 상태에서 /generate 를 거부한다.
+# 기본 0은 '일단 돌아가게' 두되, /health 가 degraded 로 알린다.
+CONFIG_STRICT = os.getenv("CONFIG_STRICT", "0") == "1"
 
 PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
-CATEGORY_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 app = FastAPI(title="Codyssey Final API", version="0.1.0")
 app.add_middleware(
@@ -50,47 +63,43 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_hits: dict[str, deque[float]] = defaultdict(deque)
+
+
+def rate_limit(request: Request) -> None:
+    """IP 기준 슬라이딩 윈도. 프로세스 메모리라 인스턴스가 늘면 약해진다 — 임시 방어."""
+    ip = (request.client.host if request.client else "unknown")
+    now = time.time()
+    q = _hits[ip]
+    while q and now - q[0] > RATE_WINDOW:
+        q.popleft()
+    if len(q) >= RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.")
+    q.append(now)
+
 
 # ---------------------------------------------------------------- 요청 모델
 
 class Place(BaseModel):
-    name: str
-    place_type: str | None = None
+    name: str = Field(min_length=1, max_length=120)
+    place_type: str | None = Field(default=None, max_length=40)
 
 
 class GenerateRequest(BaseModel):
-    category_id: str
-    city: str = "New York"
-    places: list[Place] = Field(default_factory=list)
-    weak_expressions: list[str] = Field(default_factory=list)
+    category_id: str = Field(min_length=1, max_length=40)
+    city: str = Field(default="New York", min_length=1, max_length=80)
+    places: list[Place] = Field(default_factory=list, max_length=20)
+    weak_expressions: list[str] = Field(default_factory=list, max_length=20)
 
 
 # ---------------------------------------------------------------- 설정 로드
 
 @lru_cache(maxsize=32)
 def load_category(category_id: str) -> dict[str, Any]:
-    """없는 카테고리(404)와 서버 설정 파일 불량(500)을 구분한다."""
-    if not CATEGORY_ID_RE.match(category_id):
-        raise HTTPException(status_code=404, detail=f"unknown category: {category_id!r}")
     path = CATEGORY_DIR / f"{category_id}.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"unknown category: {category_id}")
-    try:
-        cfg = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        log.error("category config unreadable: %s: %s", path, exc)
-        raise HTTPException(status_code=500, detail=f"category config {category_id!r} is unreadable: {exc}") from exc
-    problems = []
-    if not isinstance(cfg, dict) or cfg.get("category_id") != category_id:
-        problems.append("category_id missing or different from file name")
-    elif not isinstance(cfg.get("situations"), list) or not all(
-        isinstance(x, dict) and "situation_id" in x for x in cfg["situations"]
-    ):
-        problems.append("situations must be a list of objects with situation_id")
-    if problems:
-        log.error("category config invalid: %s: %s", path, problems)
-        raise HTTPException(status_code=500, detail=f"category config {category_id!r} is invalid: {'; '.join(problems)}")
-    return cfg
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 @lru_cache(maxsize=1)
@@ -101,12 +110,35 @@ def load_schema() -> dict[str, Any] | None:
         return None
 
 
-# 스키마 파일·jsonschema 가 없으면 서버가 뜨지 않는다 (조용히 검증을 건너뛰지 않는다).
-require_schema_support(load_schema())
-
-
 def list_categories() -> list[str]:
     return sorted(p.stem for p in CATEGORY_DIR.glob("*.json"))
+
+
+def situation_index() -> dict[str, list[str]]:
+    """카테고리 -> situation_id 목록. 프론트가 유효한 weak id 를 알 수 있게 노출한다."""
+    out: dict[str, list[str]] = {}
+    for cid in list_categories():
+        try:
+            out[cid] = [
+                s.get("situation_id")
+                for s in load_category(cid).get("situations", [])
+                if isinstance(s, dict)
+            ]
+        except Exception:  # noqa: BLE001
+            out[cid] = []
+    return out
+
+
+def config_problems() -> list[str]:
+    """설정 누락을 조용히 넘기지 않는다. 구조 검증이 꺼진 채 돌면 '검증했다'고 말할 수 없다."""
+    problems: list[str] = []
+    if not SCHEMA_PATH.exists():
+        problems.append("agent_contract/schema.json 이 없습니다 — 구조 검증이 비활성입니다.")
+    if not SCHEMA_CHECKER_AVAILABLE:
+        problems.append("jsonschema 가 설치되지 않았습니다 — 구조 검증이 비활성입니다.")
+    if not list_categories():
+        problems.append("categories/*.json 이 없습니다 — 생성할 카테고리가 없습니다.")
+    return problems
 
 
 def build_prompt(cfg: dict[str, Any], req: GenerateRequest) -> str:
@@ -116,12 +148,18 @@ def build_prompt(cfg: dict[str, Any], req: GenerateRequest) -> str:
         lambda m: str(rules[m.group(1)]) if m.group(1) in rules else m.group(0),
         cfg.get("system_prompt", ""),
     )
+    mapping = {s.get("situation_id"): s for s in cfg.get("situations", []) if isinstance(s, dict)}
+    weak_spec = [
+        {"situation_id": w, "situation": (mapping.get(w) or {}).get("situation"),
+         "required_keywords": (mapping.get(w) or {}).get("required_keywords")}
+        for w in req.weak_expressions
+    ]
     payload = {
         "category_id": cfg["category_id"],
         "city": req.city,
         "places": [p.model_dump() for p in req.places],
         "situations": cfg.get("situations", []),
-        "weak_expressions": req.weak_expressions,
+        "weak_expressions": weak_spec,
         "rules": rules,
     }
     return (
@@ -132,14 +170,17 @@ def build_prompt(cfg: dict[str, Any], req: GenerateRequest) -> str:
 
 
 def mock_pack(cfg: dict[str, Any], req: GenerateRequest) -> dict[str, Any]:
-    """키 없이도 시연되도록 설정의 good_examples 를 그대로 돌려준다."""
+    """키 없이도 시연되도록 설정의 good_examples 를 그대로 돌려준다.
+
+    주의: 여기서 취약 표현 태그를 임의로 붙이지 않는다. 태그를 조작하면
+    '반영됐다'는 증거를 위조하는 것이 된다. 반영 여부는 검증기가
+    weak_expressions.json 의 상황·키워드로 판단한다.
+    """
     default_type = (cfg.get("place_types") or [None])[0]
     sentences = []
     for ex in cfg.get("good_examples", []):
         s = dict(ex)
         s.setdefault("place_type", default_type)
-        # 샘플은 개인화되지 않았다. 예시에 적힌 취약 표시도 그대로 내보내지 않는다.
-        s.pop("targets_weak", None)
         sentences.append(s)
     return {"category_id": cfg["category_id"], "city": req.city, "sentences": sentences}
 
@@ -171,34 +212,66 @@ def call_gemini(prompt: str) -> str:
     return resp.text or ""
 
 
+def usability(issues: list[dict[str, Any]], mock: bool, degraded: bool) -> str:
+    """프론트가 이 결과를 학습 화면에 넣어도 되는지 한 값으로 알려준다.
+
+    ok       — 검증 통과한 실제 AI 결과. 정상 표시
+    sample   — 검수된 샘플(목업). '샘플' 표시하고 제공
+    rejected — 검증 실패. 학습 화면에 넣지 않는다
+    """
+    if has_blocking(issues):
+        return "rejected"
+    if degraded:
+        return "rejected"
+    if mock:
+        return "sample"
+    return "ok"
+
+
 # ---------------------------------------------------------------- 엔드포인트
 
 @app.get("/health")
 def health() -> dict[str, Any]:
+    problems = config_problems()
     return {
-        "status": "ok",
+        # 설정이 덜 갖춰지면 degraded — 배포 직후 이 값을 먼저 보게 된다
+        "status": "ok" if not problems else "degraded",
+        "config_problems": problems,
+        "config_strict": CONFIG_STRICT,
+        "schema_checker": SCHEMA_CHECKER_AVAILABLE,
         "model": MODEL,
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
         "contract_dir": str(CONTRACT_DIR),
         "categories": list_categories(),
+        "situations": situation_index(),
+        "rate_limit": f"{RATE_LIMIT}/{RATE_WINDOW}s",
     }
 
 
 @app.post("/generate")
-def generate(req: GenerateRequest) -> dict[str, Any]:
+def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
+    rate_limit(request)
+    if CONFIG_STRICT and config_problems():
+        raise HTTPException(
+            status_code=503,
+            detail={"message": "설정이 갖춰지지 않아 생성을 거부했습니다.", "problems": config_problems()},
+        )
     cfg = load_category(req.category_id)
     schema = load_schema()
-    # 이 카테고리의 현재 유효한 상황 id 만 취약 상황으로 인정한다.
-    valid_ids = {x["situation_id"] for x in cfg["situations"]}
-    req.weak_expressions = [w for w in dict.fromkeys(req.weak_expressions) if w in valid_ids]
 
     if not os.getenv("GEMINI_API_KEY"):
         pack = mock_pack(cfg, req)
+        try:
+            issues = validate_pack(pack, cfg, req.weak_expressions, schema)
+        except Exception as exc:  # noqa: BLE001 — 검증기 버그가 요청을 죽이지 않게
+            issues = [{"severity": "warn", "code": "validator_error",
+                       "detail": f"{type(exc).__name__}: {exc}"}]
         return {
             "pack": pack,
-            "issues": validate_pack(pack, cfg, req.weak_expressions, schema),
+            "issues": issues,
             "attempts": 0,
             "mock": True,
+            "usable": usability(issues, True, False),
         }
 
     prompt = build_prompt(cfg, req)
@@ -217,90 +290,113 @@ def generate(req: GenerateRequest) -> dict[str, Any]:
             last_error = f"{type(exc).__name__}: {exc}"
             continue
 
+        # 검증기 호출도 try 안에 둔다. 검증기 버그가 500 을 내면 재시도가 무의미해진다.
         try:
             issues = validate_pack(pack, cfg, req.weak_expressions, schema)
         except Exception as exc:  # noqa: BLE001
-            # 검증기 자체의 버그는 모델 출력 문제가 아니다. 재호출하지 않고 안전하게 실패한다.
-            log.exception("validator crashed for category %s", req.category_id)
-            return {
-                "pack": mock_pack(cfg, req),
-                "issues": [{"severity": "block", "code": "validator_error", "detail": f"{type(exc).__name__}: {exc}"}],
-                "attempts": attempt,
-                "mock": True,
-                "degraded": True,
-                "error": f"validator_error: {type(exc).__name__}",
-            }
+            last_error = f"validator error: {type(exc).__name__}: {exc}"
+            continue
+
         last_pack, last_issues = pack, issues
         if not has_blocking(issues):
-            return {"pack": pack, "issues": issues, "attempts": attempt, "mock": False}
+            return {
+                "pack": pack, "issues": issues, "attempts": attempt,
+                "mock": False, "usable": "ok",
+            }
 
         last_error = json.dumps(
             [i for i in issues if i["severity"] == "block"], ensure_ascii=False
         )
 
-    # 재시도에도 block 이 남으면 목업으로 대체 (화면이 비지 않게)
+    # 재시도에도 block 이 남으면 목업으로 대체한다. 다만 usable="rejected" 이므로
+    # 프론트는 이 결과를 학습 화면에 넣으면 안 된다는 것을 알 수 있다.
+    fallback = mock_pack(cfg, req)
+    if last_issues:
+        final_issues = last_issues
+    else:
+        try:
+            final_issues = validate_pack(fallback, cfg, req.weak_expressions, schema)
+        except Exception as exc:  # noqa: BLE001
+            final_issues = [{"severity": "block", "code": "validator_error",
+                             "detail": f"{type(exc).__name__}: {exc}"}]
     return {
-        "pack": last_pack or mock_pack(cfg, req),
-        "issues": last_issues or validate_pack(mock_pack(cfg, req), cfg, req.weak_expressions, schema),
+        "pack": last_pack or fallback,
+        "issues": final_issues,
         "attempts": MAX_RETRIES + 1,
         "mock": last_pack is None,
         "degraded": True,
+        "usable": "rejected",
         "error": last_error,
     }
 
 
 SPEAK_PROMPT = (
-    "You are an English pronunciation coach for Korean travelers. "
-    "Listen to the audio and compare it to the target sentence. "
-    'Return JSON only: {"score": 0-100, "heard": "what you heard", '
-    '"issues": [{"word": "...", "note": "..."}], "tip": "one short Korean tip"}.\n'
+    "You are an English pronunciation and speaking coach for Korean travelers. "
+    "Listen to the audio and compare it to the target.\n"
+    'Return JSON only: {"heard": "what you actually heard", '
+    '"fix_one": "the single most important thing to fix, in Korean", '
+    '"issues": [{"word": "...", "note": "..."}], '
+    '"tip": "one short Korean tip", "score": optional 0-100}.\n'
+    "If the audio is silent or unintelligible, set heard to \"\" and leave score out.\n"
     "TARGET: "
 )
 
 
 @app.post("/speak-check")
 async def speak_check(
-    target: str = Form(...),
+    request: Request,
+    target: str = Form(..., max_length=200),
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
+    rate_limit(request)
+
     audio = await file.read()
+    if not audio:
+        raise HTTPException(status_code=400, detail="빈 오디오입니다. 다시 녹음해 주세요.")
     if len(audio) > MAX_AUDIO_BYTES:
-        raise HTTPException(status_code=413, detail="audio too large (max 8MB)")
+        raise HTTPException(status_code=413, detail="오디오가 너무 큽니다 (최대 8MB).")
+
+    # 형식 검사는 목업 응답보다 먼저 한다. 키가 없어도 잘못된 입력은 잘못된 입력이다.
+    mime = (file.content_type or "audio/webm").split(";")[0].strip() or "audio/webm"
+    if not mime.startswith("audio/"):
+        raise HTTPException(status_code=415, detail=f"지원하지 않는 형식입니다: {mime}")
 
     if not os.getenv("GEMINI_API_KEY"):
         return {
-            "score": None,
-            "heard": "",
-            "issues": [],
-            "tip": "API 키가 없어 목업으로 응답했습니다.",
+            "usable": False,
+            "reason": "API 키가 없어 목업으로 응답했습니다.",
+            "score": None, "heard": "", "issues": [], "fix_one": "", "tip": "",
             "mock": True,
         }
-
-    # 브라우저는 'audio/webm;codecs=opus' 처럼 파라미터를 붙여 보낸다. 떼어낸다.
-    mime = (file.content_type or "audio/webm").split(";")[0].strip() or "audio/webm"
 
     from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    resp = client.models.generate_content(
-        model=MODEL,
-        contents=[
-            types.Part.from_bytes(data=audio, mime_type=mime),
-            SPEAK_PROMPT + target,
-        ],
-        config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2),
-    )
     try:
-        return parse_json_object(resp.text or "")
-    except Exception:  # noqa: BLE001
+        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        resp = client.models.generate_content(
+            model=MODEL,
+            contents=[
+                types.Part.from_bytes(data=audio, mime_type=mime),
+                SPEAK_PROMPT + target,
+            ],
+            config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2),
+        )
+        parsed = parse_json_object(resp.text or "")
+    except Exception as exc:  # noqa: BLE001
+        # 평가 실패는 점수·약점으로 저장되면 안 된다.
         return {
-            "score": None,
-            "heard": "",
-            "issues": [],
-            "tip": "채점 결과를 해석하지 못했습니다.",
-            "raw": resp.text,
+            "usable": False,
+            "reason": "채점 중 오류가 발생했습니다. 다시 시도해 주세요.",
+            "error": f"{type(exc).__name__}: {exc}",
+            "score": None, "heard": "", "issues": [], "fix_one": "", "tip": "",
         }
+
+    norm, usable, reason = validate_speak_result(parsed)
+    norm["usable"] = usable
+    if reason:
+        norm["reason"] = reason
+    return norm
 
 
 # 화면(목업)을 같은 서비스에서 서빙한다. 반드시 모든 API 라우트 등록 뒤에 마운트한다.

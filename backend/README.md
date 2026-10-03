@@ -87,9 +87,85 @@ python scripts/check_negatives.py
 
 | 필드 | 뜻 |
 |---|---|
+| `usable` | **프론트가 이 결과를 학습 화면에 넣어도 되는지** (아래 표) |
 | `issues[].severity` | `block` = 재생성 대상 / `warn` = 검토 대상 |
-| `degraded` | 재시도 후에도 `block` 이 남아 목업으로 대체됨. 화면에 표시하고 검증 담당에게 로그 전달 |
+| `degraded` | 재시도 후에도 `block` 이 남아 목업으로 대체됨 |
 | `mock` | API 키 없이 목업으로 응답 |
+
+### `usable` — 실패를 정상 학습으로 포장하지 않기
+
+| 값 | 뜻 | 프론트 처리 |
+|---|---|---|
+| `ok` | 검증 통과한 실제 AI 결과 | 정상 표시 |
+| `sample` | 검수된 샘플(목업) | **"샘플" 표시**하고 제공 |
+| `rejected` | 검증 실패 | **학습 화면에 넣지 않는다.** 재시도 안내 |
+
+`usable` 이 `ok`/`sample` 이 아니면 그 문장으로 학습시키지 마세요. 목업을 쓰는 것 자체는
+문제가 아니고, **목업과 실제 AI 성공을 구분하지 않는 것**이 문제입니다.
+
+## 4-1. 취약 표현(Long-term Memory) — 태그가 아니라 상황으로 검증
+
+**별도 매핑 파일이 없습니다. 취약 id = 연습해야 할 `situation_id` 입니다.**
+
+```json
+"weak_expressions": ["allergy_notice"]   →   알레르기 상황의 문장이 생성돼야 함
+```
+
+검증 규칙 (세 조건):
+
+| # | 조건 | 코드 | severity |
+|---|---|---|---|
+| 1 | 요청한 id 가 그 카테고리의 유효한 `situation_id` 인가 | `weak_unknown_situation` | warn |
+| 2 | `targets_weak` 태그가 그 문장의 `situation_id` 와 일치하는가 | `weak_tag_mismatch` | warn |
+| 3 | 요청한 상황의 문장이 결과에 포함됐는가 (+ 키워드) | `weak_not_covered` / `weak_content_mismatch` | block |
+
+`required_keywords` 는 카테고리 파일의 상황에 선택적으로 답니다. 없으면 상황 존재만 봅니다.
+
+**`targets_weak` 태그만 보고 통과시키지 않습니다.** 태그는 "반영했다"는 자기 주장일 뿐이고,
+실제 판단은 상황(+키워드)으로 합니다. 그래서 목업도 태그를 위조하지 않습니다.
+
+### 이 검사가 보장하지 않는 것
+
+**구조적 일관성 검사이지 의미 검증이 아닙니다.** 문장 내용이 "샌드위치 주세요"인데
+`situation_id` 를 `allergy_notice` 로 잘못 붙이고 키워드까지 넣으면 통과합니다.
+그래서 **"내용까지 자동으로 보장한다"고 주장하면 안 됩니다.** 관련 문장은 사람이 검수합니다.
+`required_keywords` 는 명백한 불일치(알레르기 단어가 아예 없음)만 잡는 보조 장치입니다.
+
+### 제품 용어도 맞추세요
+
+weak id 가 상황 단위가 되었으므로, **"취약 표현 기억"보다 "어려워한 상황 기억"**이 정확합니다.
+
+Long-term Memory의 실제 완료 기준:
+
+> **발화/어려움 표시 → 저장 → 새 세션 복구 → 관련 카드 우선 배정 → 성공 후 상태 갱신**
+
+지금 구현된 것은 네 번째(관련 카드 우선 배정 = 관련 상황 문장 생성)까지입니다.
+**저장·복구·상태 갱신은 프론트 작업으로 남아 있습니다.**
+
+### `usable` 이 `sample` 일 때
+
+목업/샘플 결과로는 **취약 상태를 저장·갱신하지 마세요.** 개인화가 실제로 일어난 것처럼
+표시하면 안 됩니다. "샘플 데이터입니다" 배지를 띄우고, 약점 기록은 `ok` 일 때만 씁니다.
+
+## 4-2. 비용·남용 방어
+
+| 항목 | 값 | 방법 |
+|---|---|---|
+| 호출 제한 | 20회/60초 (IP 기준) | `RATE_LIMIT` / `RATE_WINDOW` 환경변수 |
+| 입력 길이 | `city` 80자, `places` 20개, `weak_expressions` 20개, `target` 200자 | Pydantic → 초과 시 422 |
+| 오디오 | 8MB, `audio/*` 만 | 초과 시 413, 형식 오류 415, 빈 파일 400 |
+
+> ⚠️ **Google Cloud 예산 알림은 지출을 자동으로 차단하는 상한이 아닙니다.** 알림만으로는
+> 비용이 계속 나갑니다. "알림 + 상한이면 코드보다 확실하다"는 설명은 틀렸습니다.
+>
+> 실제로 준비할 것:
+> - 예산 **알림** 설정 (경고용)
+> - 사용 API 의 **할당량(quota) 한도** 확인·설정 — 이게 실질 상한
+> - 이상 시 **API 키 비활성화 절차**를 미리 정해둠
+> - 테스트 기간을 정해두고 그 뒤 키 회수
+> - `ALLOW_ORIGINS` 를 배포 주소로 좁히기 (단, **브라우저 접근만 좁힐 뿐 API 직접 호출 비용은 못 막습니다**)
+
+
 
 ### 실제로 검사하는 것
 
@@ -97,8 +173,6 @@ python scripts/check_negatives.py
 |---|---|---|
 | `schema_invalid` | block | `schema.json` 구조 위반 (필드 누락·타입 오류) — `jsonschema` 로 실제 검사 |
 | `weak_not_covered` | block | 요청한 취약 상황(situation_id)을 겨냥한 문장이 없음 (Long-term Memory를 코드로 보장) |
-| `weak_situation_mismatch` | block | `targets_weak`에 적힌 id가 그 문장의 `situation_id`와 다름 (엉뚱한 문장에 기억 표시 방지) |
-| `validator_error` | block | 검증기 자체의 예외. 재호출 없이 `degraded` 응답 |
 | `forbidden_topic` | block | 금칙 표현 |
 | `category_mismatch` / `empty_pack` | block | 카테고리 불일치 / 빈 결과 |
 | `situation_not_in_config` | block | 카테고리에 없는 상황 id |

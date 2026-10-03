@@ -12,13 +12,16 @@
 | 이영애 | 식당·카페 | `restaurant` |
 | 이창진 | 교통·공항 | `transport` |
 | 함명자 | 숙소·체크인 | `lodging` |
-| 한재정 | 돌발·응급 | `emergency` |
 | 이주란 | 검증 — 전 카테고리 실패 케이스 | — |
 | 최성빈 | 생성 함수·검증 코드·통합 | — |
+| 한재정 | 전체 리뷰 | — |
 
-> **돌발·응급 안전장치**: 한재정 선생님은 바쁘셔서 고문 역할로 합의된 상태입니다.
-> `emergency` 파일이 **10/8까지 안 올라오면 최성빈이 흡수**합니다. 안전 관련 문장이라 비워둘 수 없습니다.
+> **돌발·응급은 AI 생성 카테고리에서 제외합니다.** 안전 문장은 매번 AI가 새로 만들면 안 되고,
+> 팀원 한 명에게 의존하면 비면 위험합니다. **검수된 고정 문장 10개**로 넣어 코드에 둡니다
+> (한재정 선생님 부담은 전체 리뷰만). 기획서에는 "돌발·응급 표현 제공"으로 남습니다.
+>
 > 늦어져도 괜찮으니 편하게 알려주세요. 비난이 아니라 일정 장치입니다.
+
 
 ---
 
@@ -78,9 +81,27 @@ PR 본문에 아래 4개를 체크해 주세요.
 }
 ```
 
-**`targets_weak`** — 이 문장이 겨냥한 취약 **상황** id 목록입니다(문장의 `situation_id`와 같은 값).
-Long-term Memory가 실제로 문장 생성에 반영됐다는 증거이고, 화면에
-"저장된 취약 상황 복습"으로 표시됩니다. 해당 없으면 생략합니다.
+**`targets_weak`** — 이 문장이 겨냥한 취약 표현을 적습니다. **값은 `situation_id` 와 같아야 합니다.**
+
+> ⚠️ **태그는 "반영했다"는 자기 주장일 뿐입니다.** 서버는 태그만 보고 통과시키지 않습니다.
+> 요청에 취약 상황이 오면 **그 상황의 문장이 실제로 생성됐는지**, 그리고
+> **`required_keywords` 가 그 문장에 들어갔는지**를 확인합니다.
+> - 그 상황의 문장이 없으면 → `weak_not_covered` (차단)
+> - 상황은 맞는데 관련 단어가 없으면 → `weak_content_mismatch` (차단)
+>
+> 별도 취약 표현 목록 파일은 없습니다. **취약 id = 연습할 상황 id** 입니다.
+> (예: 알레르기를 못하면 weak id 는 `allergy_notice`)
+
+상황별로 반드시 들어가야 할 단어가 있으면 그 상황에 `required_keywords` 를 답니다.
+
+```json
+{ "situation_id": "allergy_notice", "situation": "알레르기·재료 고지",
+  "required_keywords": ["allergy", "allergic"] }
+```
+
+이 필드는 **선택**입니다. 없으면 "그 상황의 문장이 있는지"만 검사합니다.
+단어까지 확인하려면 본인 카테고리 파일의 해당 상황에 추가하세요.
+
 
 ---
 
@@ -92,12 +113,12 @@ Long-term Memory가 실제로 문장 생성에 반영됐다는 증거이고, 화
 | 검사 | 코드 | severity | 측정값 |
 |---|---|---|---|
 | 금칙이 실제로 걸러지는가 | `forbidden_topic` | block | 카테고리별 적중률 |
+| 취약 상황 반영 | `weak_not_covered` / `weak_content_mismatch` | block | 요청 대비 미반영 수 |
 | 상황 누락 수 | `missing_situation` | warn | `situations` 대비 누락 |
 | 카테고리 최소 문장 수 | `below_min_sentences` | warn | `rules.min_sentences_per_category` 대비 |
 | 영문 중복 | `duplicate_en` | warn | 팩 안 중복 수 |
 | 문장 길이 | `too_long` | warn | `max_words_per_sentence` 초과 수 |
-| 취약 상황 반영 | `weak_not_covered` | block | 요청 대비 미반영 수 |
-| 취약 표시가 엉뚱한 상황에 붙음 | `weak_situation_mismatch` | block | `targets_weak` 값 ≠ 문장의 `situation_id` |
+
 
 **block 은 재생성이 돌고, warn 은 측정값으로 남습니다.**
 3주차 비교 실험(단일 프롬프트 vs 카테고리 분할)은 **warn 항목의 개수**로 비교하세요.
@@ -117,9 +138,9 @@ cd backend && uvicorn app.main:app --reload            # /docs 에서 직접 호
 
 | 시점 | 할 일 |
 |---|---|
-| 10/5 (일) | 최성빈: `restaurant.json` 샘플 + 생성 함수 형식 확정, 채널 공지 |
-| 10/8 (수) | 각자 `categories/<id>.json` PR (emergency 미제출 시 성빈 흡수) |
-| 10/11 (토) | 검증 코드 연결, 비교 실험 1회 |
+| 10/5 (월) | 최성빈: `restaurant.json` 샘플 + 생성 함수 형식 확정, 채널 공지 |
+| 10/8 (목) | 각자 `categories/<id>.json` PR |
+| 10/11 (일) | 검증 코드 연결, 비교 실험 1회 |
 
 샘플이 늦으면 다섯 명이 전부 대기합니다. 이 구조에서 가장 먼저 깨지는 지점입니다.
 

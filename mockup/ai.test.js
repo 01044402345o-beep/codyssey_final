@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const AI = require('./ai.js');
 
 const sent = (o = {}) => ({ situation_id: 'order_menu', situation: '주문', en: 'A table for two, please.', ko: '두 명이요.', ...o });
-const res = (o = {}) => ({ pack: { category_id: 'restaurant', city: 'New York', sentences: [sent()] }, issues: [], attempts: 1, mock: false, ...o });
+const res = (o = {}) => ({ pack: { category_id: 'restaurant', city: 'New York', sentences: [sent()] }, issues: [], attempts: 1, mock: false, usable: 'ok', ...o });
 
 test('apiBase: ?api= 는 저장하지 않고 external 로 표시, file:// 은 폴백 전용', () => {
   assert.deepEqual(AI.apiBase({ protocol: 'https:', host: 'a.onrender.com', origin: 'https://a.onrender.com', search: '' }), { base: '', external: false, host: 'a.onrender.com' });
@@ -20,9 +20,14 @@ test('apiBase: ?api= 는 저장하지 않고 external 로 표시, file:// 은 �
 
 test('응답 분기: degraded 우선 폐기 → mock:true 샘플 → mock:false AI → 그 외 폴백', () => {
   assert.equal(AI.normalizeAiResponse(res()).kind, 'ai');
-  assert.equal(AI.normalizeAiResponse(res({ mock: true })).kind, 'sample');
+  assert.equal(AI.normalizeAiResponse(res({ mock: true, usable: 'sample' })).kind, 'sample');
   assert.equal(AI.normalizeAiResponse(res({ degraded: true })).kind, 'fallback');
-  assert.equal(AI.normalizeAiResponse(res({ degraded: true, mock: true })).kind, 'fallback'); // 동시에 있어도 degraded 먼저
+  assert.equal(AI.normalizeAiResponse(res({ degraded: true, mock: true, usable: 'sample' })).kind, 'fallback'); // 동시에 있어도 degraded 먼저
+  assert.equal(AI.normalizeAiResponse(res({ usable: 'rejected' })).kind, 'fallback');
+  assert.equal(AI.normalizeAiResponse(res({ mock: true, usable: 'rejected' })).kind, 'fallback');
+  assert.equal(AI.normalizeAiResponse(res({ mock: true, usable: 'ok' })).kind, 'fallback');      // 판정과 mock 이 안 맞으면 믿지 않음
+  assert.equal(AI.normalizeAiResponse(res({ mock: false, usable: 'sample' })).kind, 'fallback');
+  assert.equal(AI.normalizeAiResponse(res({ usable: undefined })).kind, 'fallback');
   assert.equal(AI.normalizeAiResponse(res({ mock: undefined })).kind, 'fallback');
   assert.equal(AI.normalizeAiResponse(null).kind, 'fallback');
   assert.equal(AI.normalizeAiResponse({ mock: false }).kind, 'fallback');
@@ -57,6 +62,7 @@ test('도시별 부분 실패: 성공 도시는 살리고 실패 도시만 폴�
     { name: 'Chicago', places: [{ id: 'c', name: 'C', en: 'C' }] },
   ];
   const fetchImpl = async (url, opt) => {
+    if (url.endsWith('/health')) return { ok: true, json: async () => ({ situations: { restaurant: ['allergy_notice'] } }) };
     const city = JSON.parse(opt.body).city;
     if (city === 'Boston') throw new Error('network');
     if (city === 'Chicago') return { ok: true, json: async () => res({ degraded: true }) };
@@ -64,6 +70,16 @@ test('도시별 부분 실패: 성공 도시는 살리고 실패 도시만 폴�
   };
   const out = await AI.generateByCity({ fetchImpl, base: '', cities, weakIds: [] });
   assert.deepEqual(out.map(o => o.kind), ['ai', 'fallback', 'fallback']);
+});
+
+test('generateByCity: 서버가 유효하다고 알린 상황 id 만 취약 상황으로 보낸다', async () => {
+  const bodies = [];
+  const fetchImpl = async (url, opt) => {
+    if (url.endsWith('/health')) return { ok: true, json: async () => ({ situations: { restaurant: ['allergy_notice', 'order_menu'] } }) };
+    bodies.push(JSON.parse(opt.body)); return { ok: true, json: async () => res() };
+  };
+  await AI.generateByCity({ fetchImpl, base: '', cities: [{ name: 'X', places: [] }], weakIds: ['allergy_notice', 'check_in', 'w_old'] });
+  assert.deepEqual(bodies[0].weak_expressions, ['allergy_notice']);
 });
 
 test('generateByCity: API 없음(file://)이면 전부 폴백, 호출 안 함', async () => {
@@ -76,7 +92,7 @@ test('generateByCity: 타임아웃·취소는 폴백이 되고 재시도하지 �
   let calls = 0;
   const fetchImpl = (url, opt) => { calls++; return new Promise((_, rej) => opt.signal.addEventListener('abort', () => rej(new Error('aborted')))); };
   const out = await AI.generateByCity({ fetchImpl, base: '', cities: [{ name: 'X', places: [] }], weakIds: [], timeoutMs: 20 });
-  assert.equal(out[0].kind, 'fallback'); assert.equal(calls, 1);
+  assert.equal(out[0].kind, 'fallback'); assert.equal(calls, 1); // /health 에서 이미 막혀 /generate 는 부르지 않는다
   const ctl = new AbortController(); calls = 0;
   const p = AI.generateByCity({ fetchImpl, base: '', cities: [{ name: 'X', places: [] }], weakIds: [], signal: ctl.signal, timeoutMs: 5000 });
   ctl.abort();
@@ -113,7 +129,7 @@ test('복습 표시: AI 문장이 (카테고리, 상황) 모두 일치하고 그
 
 test('shouldSaveWeak: null/NaN/범위 밖/목업/샘플·폴백 문장/파싱 실패는 저장 안 함', () => {
   const ai = { ai: true, categoryId: 'restaurant', situationId: 'order_menu' };
-  const ok = score => AI.shouldSaveWeak(ai, { score, heard: 'x', issues: [], tip: 't' });
+  const ok = score => AI.shouldSaveWeak(ai, { usable: true, score, heard: 'x', issues: [], tip: 't' });
   assert.equal(ok(40), true);
   assert.equal(ok(69), true);
   assert.equal(ok(70), false);          // 임계값은 미만만
@@ -125,10 +141,13 @@ test('shouldSaveWeak: null/NaN/범위 밖/목업/샘플·폴백 문장/파싱 �
   assert.equal(ok(-5), false);
   assert.equal(ok(120), false);
   assert.equal(ok('40'), false);
-  assert.equal(AI.shouldSaveWeak(ai, { score: 40, mock: true }), false);
-  assert.equal(AI.shouldSaveWeak(ai, { score: 40, raw: '...' }), false);
-  assert.equal(AI.shouldSaveWeak({ ...ai, ai: false }, { score: 40 }), false);
-  assert.equal(AI.shouldSaveWeak({ ai: true, categoryId: 'restaurant' }, { score: 40 }), false);
+  assert.equal(AI.shouldSaveWeak(ai, { usable: true, score: 40, mock: true }), false);
+  assert.equal(AI.shouldSaveWeak(ai, { usable: true, score: 40, raw: '...' }), false);
+  assert.equal(AI.shouldSaveWeak(ai, { usable: false, score: 40 }), false);                        // 서버가 못 쓴다고 판정
+  assert.equal(AI.shouldSaveWeak(ai, { score: 40 }), false);                                       // usable 없음
+  assert.equal(AI.shouldSaveWeak(ai, { usable: true, score: null, score_discarded: true }), false);
+  assert.equal(AI.shouldSaveWeak({ ...ai, ai: false }, { usable: true, score: 40 }), false);
+  assert.equal(AI.shouldSaveWeak({ ai: true, categoryId: 'restaurant' }, { usable: true, score: 40 }), false);
   assert.equal(AI.shouldSaveWeak(ai, null), false);
 });
 

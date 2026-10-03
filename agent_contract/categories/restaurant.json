@@ -17,15 +17,18 @@
     { "situation_id": "ask_wait",        "situation": "대기 시간·웨이팅 확인" },
     { "situation_id": "order_menu",      "situation": "대표 메뉴 주문" },
     { "situation_id": "ask_recommend",   "situation": "추천 메뉴 요청" },
-    { "situation_id": "allergy_notice",  "situation": "알레르기·재료 고지" },
-    { "situation_id": "request_side",    "situation": "추가 요청 (물·리필·소스)" },
+    { "situation_id": "allergy_notice",  "situation": "알레르기·재료 고지",
+      "required_keywords": ["allergy", "allergic"] },
+    { "situation_id": "request_side",    "situation": "추가 요청 (물·리필·소스)",
+      "required_keywords": ["refill", "one more", "another"] },
     { "situation_id": "ask_ingredient",  "situation": "재료·조리법 질문" },
     { "situation_id": "takeout",         "situation": "포장 요청" },
-    { "situation_id": "pay_check",       "situation": "계산·영수증 요청" },
+    { "situation_id": "pay_check",       "situation": "계산·영수증 요청",
+      "required_keywords": ["check", "bill", "receipt"] },
     { "situation_id": "tip_split",       "situation": "팁·더치페이" }
   ],
 
-  "system_prompt": "You generate travel English practice sentences for the 'restaurant / cafe' category.\n\nINPUT: city, a list of places (place_type in [restaurant, cafe]), the situation list, and the learner's weak expressions.\n\nRULES:\n- Output ONLY JSON matching the attached schema. No prose, no markdown fences.\n- Generate between {min_sentences_per_situation} and {max_sentences_per_situation} sentences for each situation_id.\n- English: polite register, at most {max_words_per_sentence} words, immediately usable on the spot.\n- Korean: natural translation, not word-for-word.\n- weak_expressions is a list of situation_ids the learner struggled with. For each one, produce at least one sentence whose situation_id is exactly that id, and list that id in its targets_weak. Do not put an id in targets_weak for any other situation.\n- Do NOT encourage drinking, or raise politics or religion.\n- Never repeat the same English sentence across situations.\n- When a specific place is given, reference its signature dish or feature where natural.",
+  "system_prompt": "You generate travel English practice sentences for the 'restaurant / cafe' category.\n\nINPUT: city, a list of places (place_type in [restaurant, cafe]), the situation list, and the learner's weak situations.\n\nRULES:\n- Output ONLY JSON matching the attached schema. No prose, no markdown fences.\n- Generate between {min_sentences_per_situation} and {max_sentences_per_situation} sentences for each situation_id.\n- English: polite register, at most {max_words_per_sentence} words, immediately usable on the spot.\n- Korean: natural translation, not word-for-word.\n- If a weak situation is given, it MUST have at least one sentence, and that sentence must contain the situation's required_keywords (e.g. allergy_notice -> allergy/allergic).\n- Do NOT encourage drinking, or raise politics or religion.\n- Never repeat the same English sentence across situations.\n- When a specific place is given, reference its signature dish or feature where natural.",
 
   "good_examples": [
     {
