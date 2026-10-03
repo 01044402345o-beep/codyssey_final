@@ -25,7 +25,7 @@
     { "situation_id": "tip_split",       "situation": "팁·더치페이" }
   ],
 
-  "system_prompt": "You generate travel English practice sentences for the 'restaurant / cafe' category.\n\nINPUT: city, a list of places (place_type in [restaurant, cafe]), the situation list, and the learner's weak expressions.\n\nRULES:\n- Output ONLY JSON matching the attached schema. No prose, no markdown fences.\n- Generate between {min_sentences_per_situation} and {max_sentences_per_situation} sentences for each situation_id.\n- English: polite register, at most {max_words_per_sentence} words, immediately usable on the spot.\n- Korean: natural translation, not word-for-word.\n- If weak_expressions are given, produce at least one sentence that exercises each, and list its id in targets_weak.\n- Do NOT encourage drinking, or raise politics or religion.\n- Never repeat the same English sentence across situations.\n- When a specific place is given, reference its signature dish or feature where natural.",
+  "system_prompt": "You generate travel English practice sentences for the 'restaurant / cafe' category.\n\nINPUT: city, a list of places (place_type in [restaurant, cafe]), the situation list, and the learner's weak expressions.\n\nRULES:\n- Output ONLY JSON matching the attached schema. No prose, no markdown fences.\n- Generate between {min_sentences_per_situation} and {max_sentences_per_situation} sentences for each situation_id.\n- English: polite register, at most {max_words_per_sentence} words, immediately usable on the spot.\n- Korean: natural translation, not word-for-word.\n- weak_expressions is a list of situation_ids the learner struggled with. For each one, produce at least one sentence whose situation_id is exactly that id, and list that id in its targets_weak. Do not put an id in targets_weak for any other situation.\n- Do NOT encourage drinking, or raise politics or religion.\n- Never repeat the same English sentence across situations.\n- When a specific place is given, reference its signature dish or feature where natural.",
 
   "good_examples": [
     {
@@ -47,7 +47,7 @@
       "ko": "땅콩 알레르기가 있어요. 이거에 땅콩이 들어가나요?",
       "level": "basic",
       "tags": ["알레르기", "안전"],
-      "targets_weak": ["w_allergy_peanut"]
+      "targets_weak": ["allergy_notice"]
     },
     {
       "place": "A local cafe",

@@ -42,7 +42,7 @@
           "targets_weak": {
             "type": "array",
             "items": { "type": "string" },
-            "description": "이 문장이 겨냥한 취약 표현 id 목록. 없으면 생략. 예: ['w_allergy_peanut']. 화면에 '지난번 틀린 표현이 오늘 다시 나왔어요'로 표시되는 근거."
+            "description": "이 문장이 겨냥한 취약 상황 id 목록(= 이 문장의 situation_id와 같은 값). 없으면 생략. 예: ['allergy_notice']. 화면의 '저장된 취약 상황 복습' 표시 근거."
           }
         }
       }

@@ -12,6 +12,7 @@ GEMINI_API_KEY 가 없으면 목업으로 응답한다. 그래서 키 없이도 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from functools import lru_cache
@@ -20,9 +21,12 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .validators import has_blocking, validate_pack
+from .validators import has_blocking, require_schema_support, validate_pack
+
+log = logging.getLogger("codyssey")
 
 # main.py 는 backend/app/ 에 있다. 저장소 루트의 agent_contract/ 를 본다.
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +40,7 @@ MAX_RETRIES = int(os.getenv("MAX_RETRIES", "2"))
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
 
 PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
+CATEGORY_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 app = FastAPI(title="Codyssey Final API", version="0.1.0")
 app.add_middleware(
@@ -64,10 +69,28 @@ class GenerateRequest(BaseModel):
 
 @lru_cache(maxsize=32)
 def load_category(category_id: str) -> dict[str, Any]:
+    """없는 카테고리(404)와 서버 설정 파일 불량(500)을 구분한다."""
+    if not CATEGORY_ID_RE.match(category_id):
+        raise HTTPException(status_code=404, detail=f"unknown category: {category_id!r}")
     path = CATEGORY_DIR / f"{category_id}.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"unknown category: {category_id}")
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        cfg = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        log.error("category config unreadable: %s: %s", path, exc)
+        raise HTTPException(status_code=500, detail=f"category config {category_id!r} is unreadable: {exc}") from exc
+    problems = []
+    if not isinstance(cfg, dict) or cfg.get("category_id") != category_id:
+        problems.append("category_id missing or different from file name")
+    elif not isinstance(cfg.get("situations"), list) or not all(
+        isinstance(x, dict) and "situation_id" in x for x in cfg["situations"]
+    ):
+        problems.append("situations must be a list of objects with situation_id")
+    if problems:
+        log.error("category config invalid: %s: %s", path, problems)
+        raise HTTPException(status_code=500, detail=f"category config {category_id!r} is invalid: {'; '.join(problems)}")
+    return cfg
 
 
 @lru_cache(maxsize=1)
@@ -76,6 +99,10 @@ def load_schema() -> dict[str, Any] | None:
         return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return None
+
+
+# 스키마 파일·jsonschema 가 없으면 서버가 뜨지 않는다 (조용히 검증을 건너뛰지 않는다).
+require_schema_support(load_schema())
 
 
 def list_categories() -> list[str]:
@@ -107,14 +134,12 @@ def build_prompt(cfg: dict[str, Any], req: GenerateRequest) -> str:
 def mock_pack(cfg: dict[str, Any], req: GenerateRequest) -> dict[str, Any]:
     """키 없이도 시연되도록 설정의 good_examples 를 그대로 돌려준다."""
     default_type = (cfg.get("place_types") or [None])[0]
-    requested = list(req.weak_expressions or [])
     sentences = []
-    for i, ex in enumerate(cfg.get("good_examples", [])):
+    for ex in cfg.get("good_examples", []):
         s = dict(ex)
         s.setdefault("place_type", default_type)
-        # 목업에서도 취약 표현이 반영된 것처럼 보이게 한다 (시연용)
-        if requested and i == 0:
-            s["targets_weak"] = [requested[0]]
+        # 샘플은 개인화되지 않았다. 예시에 적힌 취약 표시도 그대로 내보내지 않는다.
+        s.pop("targets_weak", None)
         sentences.append(s)
     return {"category_id": cfg["category_id"], "city": req.city, "sentences": sentences}
 
@@ -163,6 +188,9 @@ def health() -> dict[str, Any]:
 def generate(req: GenerateRequest) -> dict[str, Any]:
     cfg = load_category(req.category_id)
     schema = load_schema()
+    # 이 카테고리의 현재 유효한 상황 id 만 취약 상황으로 인정한다.
+    valid_ids = {x["situation_id"] for x in cfg["situations"]}
+    req.weak_expressions = [w for w in dict.fromkeys(req.weak_expressions) if w in valid_ids]
 
     if not os.getenv("GEMINI_API_KEY"):
         pack = mock_pack(cfg, req)
@@ -189,7 +217,19 @@ def generate(req: GenerateRequest) -> dict[str, Any]:
             last_error = f"{type(exc).__name__}: {exc}"
             continue
 
-        issues = validate_pack(pack, cfg, req.weak_expressions, schema)
+        try:
+            issues = validate_pack(pack, cfg, req.weak_expressions, schema)
+        except Exception as exc:  # noqa: BLE001
+            # 검증기 자체의 버그는 모델 출력 문제가 아니다. 재호출하지 않고 안전하게 실패한다.
+            log.exception("validator crashed for category %s", req.category_id)
+            return {
+                "pack": mock_pack(cfg, req),
+                "issues": [{"severity": "block", "code": "validator_error", "detail": f"{type(exc).__name__}: {exc}"}],
+                "attempts": attempt,
+                "mock": True,
+                "degraded": True,
+                "error": f"validator_error: {type(exc).__name__}",
+            }
         last_pack, last_issues = pack, issues
         if not has_blocking(issues):
             return {"pack": pack, "issues": issues, "attempts": attempt, "mock": False}
@@ -261,3 +301,9 @@ async def speak_check(
             "tip": "채점 결과를 해석하지 못했습니다.",
             "raw": resp.text,
         }
+
+
+# 화면(목업)을 같은 서비스에서 서빙한다. 반드시 모든 API 라우트 등록 뒤에 마운트한다.
+WEB_DIR = REPO_ROOT / "mockup"
+if WEB_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")

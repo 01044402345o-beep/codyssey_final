@@ -154,3 +154,8 @@ const MOCK_USERS = [
   { email: 'doyun@gmail.com', name: '정도윤', trips: [{ route: '프랑스 · 파리 → 니스', state: '방문 순서 생성 중' }, { route: '일본 · 도쿄', state: '보관' }, { route: '홍콩', state: '보관' }] },
   { email: 'yerin.c@gmail.com', name: '최예린', trips: [{ route: '호주 · 시드니', state: '보고서 실패' }] },
 ];
+
+/* 빈 화면 방지용 데모 학습 기록. 실제 사용자 학습에서 생긴 기억이 아니다 (demo:true 로 표시). */
+const DEMO_WEAK = [
+  { category_id: 'restaurant', id: 'allergy_notice', situation: '알레르기·재료 고지', en: 'I have a peanut allergy. Does this contain peanuts?', ko: '땅콩 알레르기가 있어요. 이거에 땅콩이 들어가나요?', demo: true },
+];
