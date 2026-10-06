@@ -356,36 +356,14 @@ class EndpointTest(Base):
         self.assertEqual(d["failed_at"], "models.list")
         self.assertEqual(d["attempts"], 0)
 
-    def speak(self) -> dict[str, Any]:
-        r = self.http.post("/speak-check", data={"target": "Hello."},
-                           files={"file": ("a.webm", b"\x00" * 100, "audio/webm")})
-        return r.json()
-
-    def test_speak_error_tried_30_times(self) -> None:
-        fake = self.install(gen_fn=boom)
-        d = self.speak()
-        self.assertEqual(len(fake.gen_calls), 30)
-        self.assertEqual(d["attempts"], 30)
-        self.assertFalse(d["usable"])
-
-    def test_speak_success_after_failures(self) -> None:
-        # 9번째에 받아쓰기 성공 → 10번째 호출은 피드백(글만). 같은 JSON 이 두 역할을 다 채운다.
-        ok = json.dumps({"heard": "Hello.", "fix_one": "좋아요", "tip": "또 말해 봐요"})
-        fake = self.install(gen_fn=lambda n, _m: ok if n >= 9 else "")
-        d = self.speak()
-        self.assertEqual(len(fake.gen_calls), 10)
-        self.assertEqual(d["attempts"], 9)
-        self.assertEqual(d["heard"], "Hello.")
-        self.assertEqual(d["score"], 100)                  # 목표 'Hello.' 와 같음 — 코드 판정
-        self.assertEqual(len(d["failures"]), 8)
-        self.assertEqual(d["feedback"]["attempts"], 1)
-
     def test_health_reports_dynamic_selection(self) -> None:
         d = self.http.get("/health").json()
         self.assertEqual(d["model_selection"], "dynamic")
         self.assertEqual(d["min_attempts"], 30)
         self.assertNotIn("model", d)
-        self.assertEqual(d["model_health"], {"last_good": None, "cooling": {}})
+        self.assertEqual(d["model_health"], {"last_good": None, "last_good_by_pool": {}, "cooling": {}})
+        self.assertIn("silero", d["vad"])
+        self.assertEqual(set(d["stt_providers"]), {"groq", "openai", "assemblyai"})
 
 
 if __name__ == "__main__":
