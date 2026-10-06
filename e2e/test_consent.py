@@ -67,9 +67,9 @@ with sync_playwright() as p:
 
     # 3) 동의 → 바로 녹음 시작
     page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(300)
-    page.locator('[data-act="modal-ok"]').click(); page.wait_for_timeout(1200)
+    page.locator('[data-act="modal-ok"]').click(); page.wait_for_timeout(3000)   # 가짜 장치 신호음이 300ms 이상 쌓이도록
     c = json.loads(ls("cd_consent") or "null")
-    check("동의 저장 (version 2·voice·at)", c and c.get("voice") is True and c.get("version") == 2 and c.get("at"), str(c))
+    check("동의 저장 (version 3·voice·at)", c and c.get("voice") is True and c.get("version") == 3 and c.get("at"), str(c))
     check("동의 후 getUserMedia 1회", gum() == 1, f"gum={gum()}")
     check("녹음 중 표시", "녹음 끝내기" in page.locator('[data-act="speak-rec"]').first.inner_text())
     page.screenshot(path=f"{OUT}/2_recording.png")
@@ -83,7 +83,7 @@ with sync_playwright() as p:
     check("동의 후 안내 '동의함'", "동의함" in page.locator(".speak-note").first.inner_text())
 
     # 5) 두 번째 녹음은 창 없이 바로
-    page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(800)
+    page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(3000)
     check("재녹음 시 동의 창 없음", page.locator(".modal").count() == 0)
     check("재녹음 getUserMedia 2회", gum() == 2, f"gum={gum()}")
     page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(2500)

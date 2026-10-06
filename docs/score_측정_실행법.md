@@ -165,3 +165,32 @@ python3 backend/scripts/measure_score_rate.py \
 | 실제 Gemini 호출 | **미검증** — 키와 URL 필요 |
 
 > 위는 합성 응답으로 확인한 것이다. **실제 Gemini 응답의 점수 반환률은 아직 모른다.**
+
+---
+
+## 무음 실측 (2026-10-07) — 채점 구조 변경 근거
+
+자세한 조사와 결정: `docs/research/speak-hallucination.md`
+
+목표 문장 "I have a peanut allergy.", 배포 서버, `measure_score_rate.py`.
+음성은 macOS `say -v Samantha` → `afconvert -f WAVE -d LEI16@16000` 로 만들었다(사람 녹음 아님).
+
+### 수정 전 (`01d29ae`, 녹음 + 목표 문장을 한 번에 Gemini 에)
+
+| 입력 | n | usable:true | 유효 점수 | heard |
+|---|---:|---:|---:|---|
+| 1초 완전 무음 WAV | 10 | **10** | **10 (95~100점)** | **10회 모두 목표 문장 그대로** |
+| 맞게 읽음 (TTS) | 3 | 3 | 3 (95~100점) | 정확 |
+| 다른 문장 (TTS) | 3 | 3 | 3 (10~20점) | 정확 ("where is the subway station") |
+
+### 수정 후 (받아쓰기 AI 는 목표 문장을 모름, 점수는 코드)
+
+머지·배포 뒤 같은 명령으로 채운다.
+
+| 입력 | n | usable:true | 유효 점수 | heard |
+|---|---:|---:|---:|---|
+| 1초 완전 무음 WAV | 10 | | | |
+| 맞게 읽음 (TTS) | 3 | | | |
+| 다른 문장 (TTS) | 3 | | | |
+
+> 수정 후 점수는 **단어 일치율**(`score_kind: "word_match"`)이다. 수정 전 점수(AI 가 매긴 발음 점수)와 뜻이 다르므로 숫자를 직접 비교하지 않는다. 비교할 것은 무음에 점수가 나오는지와 heard 를 지어내는지다.
