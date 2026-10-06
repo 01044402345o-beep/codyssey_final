@@ -1,0 +1,32 @@
+name: Gemini 모델 목록
+
+# 지금 API 키로 쓸 수 있는 Gemini 모델을 조회한다. 서비스는 같은 규칙으로 실행 중에 직접 고른다.
+# 필요: 저장소 Settings → Secrets and variables → Actions → GEMINI_API_KEY
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 1"   # 매주 월요일 09:00 KST
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.9"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r backend/requirements.txt
+      - name: 모델 목록 조회
+        working-directory: backend
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python scripts/list_gemini_models.py --json gemini-models.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gemini-models
+          path: backend/gemini-models.json
+          if-no-files-found: ignore

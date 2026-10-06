@@ -63,13 +63,43 @@ python scripts/check_negatives.py
 | 키 | 값 | 비고 |
 |---|---|---|
 | `GEMINI_API_KEY` | Google AI Studio에서 발급 | 없으면 목업 응답 |
-| `GEMINI_MODEL` | 기본 `gemini-flash-latest` | 별칭이 바뀌면 AI Studio에서 현재 이름 확인 |
+| `GEMINI_MODEL` | 비워 둠 | **고정이 아니라 우선 선호.** 실행 중 받은 목록에 있을 때만 맨 앞에 둔다 |
+| `AI_MIN_ATTEMPTS` | 기본 `30` | AI API 호출당 최소 시도 횟수. **늘릴 수만 있고 30 미만은 무시** |
+| `AI_BACKOFF_BASE` / `AI_BACKOFF_MAX` | `0.5` / `4` (초) | 실패 후 대기: 0.5→1→2→4→4… |
+| `AI_CALL_TIMEOUT` | `60` (초) | API 요청 1회의 제한 시간 (전체 제한 시간은 없음) |
+| `AI_MODELS_TTL` | `600` (초) | 모델 목록 캐시 시간 |
 | `ALLOW_ORIGINS` | 프론트 배포 주소 | 기본 `*` |
 
 ### 무료 플랜 주의
 
 - **콜드스타트**: 15분 유휴 후 첫 요청이 30~60초. **시연 10분 전에 `/health` 를 호출**해 깨우세요.
 - 파일시스템이 휘발성입니다. 상태를 저장하지 마세요(취약 표현은 요청에 실어 보내는 구조).
+
+## 3-1. 모델 선택과 재시도 (`app/gemini.py`)
+
+**모델 이름을 코드에 고정하지 않습니다.** Gemini 모델은 수시로 추가·폐기되고 별칭이 바뀌므로,
+서버가 `models.list()` 로 지금 쓸 수 있는 목록을 받아(10분 캐시) 고릅니다.
+
+- 대상: `gemini*` 이면서 `generateContent` 지원. 임베딩·이미지·TTS·Live·Gemma 는 제외
+- 순서: 안정 버전 → flash → flash-lite → pro, 같은 계열은 `-latest` 별칭·최신 버전 우선
+- 시도마다 목록을 순서대로 돌아가며 씁니다. 한 모델의 장애·할당량 초과를 다른 모델로 흡수합니다.
+
+**AI API 호출 하나당 최소 30회 시도합니다.** (`/generate`, `/speak-check`, 모델 목록 조회 각각)
+
+| 규칙 | 내용 |
+|---|---|
+| 하한 | 실패를 확정하기 전에 **반드시 30회 이상** 요청한다. 오류 종류로 조기 중단하지 않는다 |
+| 시도 1회 | API 요청 1회. SDK 자체 재시도는 꺼서(`attempts=1`) 셈이 어긋나지 않게 한다 |
+| 실패로 세는 것 | 예외(네트워크·429·5xx·잘못된 모델 등), 빈 응답, JSON 아님, (`/generate`) 검증 block |
+| 성공 | 그 자리에서 멈춘다. 응답의 `attempts` 에 실제 시도 횟수, `model` 에 성공한 모델 |
+| 전체 제한 시간 | **두지 않는다.** 시간 제한이 시도 횟수를 깎으면 '최소'가 깨진다 |
+
+> ⚠️ 모두 실패하면 대기만 약 1분 48초(0.5+1+2+4×26=107.5초)에 요청 시간이 더해집니다.
+> 프론트 제한 시간(`/generate` 90초, `/speak-check` 60초)이 먼저 끝나면 화면은 대체 결과를 보여 주지만,
+> 서버는 30회를 끝까지 채웁니다. 시도 횟수는 `backend/tests/test_gemini_retry.py` 가 검증합니다.
+
+지금 쓸 수 있는 모델은 GitHub Actions **"Gemini 모델 목록"** 워크플로(수동 실행 + 매주 월요일)나
+`python scripts/list_gemini_models.py` 로 확인합니다. Actions 에는 저장소 Secret `GEMINI_API_KEY` 가 필요합니다.
 
 ## 4. 응답 형태
 
