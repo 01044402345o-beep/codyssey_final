@@ -166,6 +166,19 @@ test('shouldSaveWeak: 점수가 없을 때는 들린 문장이 목표와 충분�
   assert.equal(AI.heardCoverage('a b c d', 'a b'), 0.5);
 });
 
+test('shouldSaveWeak: 점수가 있어도 heard 가 없으면(무음) 저장하지 않는다', () => {
+  const ai = { ai: true, categoryId: 'restaurant', situationId: 'order_menu', en: 'A table for two, please.' };
+  assert.equal(AI.shouldSaveWeak(ai, { usable: true, score: 10, heard: '' }), false);
+  assert.equal(AI.shouldSaveWeak(ai, { usable: true, score: 10 }), false);
+  assert.equal(AI.shouldSaveWeak(ai, { usable: true, score: 10, heard: '  ' }), false);
+  assert.equal(AI.shouldSaveWeak(ai, { usable: true, score: 10, heard: 'a table' }), true);
+});
+
+test('heardCoverage 한계(문서화): 부정문은 같은 문장으로, 자연스러운 대체 표현은 누락으로 본다', () => {
+  assert.equal(AI.heardCoverage('I have a peanut allergy.', "I don't have a peanut allergy."), 1);
+  assert.ok(AI.heardCoverage("I'd like a coffee, please.", 'Could I have a coffee, please?') < AI.HEARD_MATCH_MIN);
+});
+
 test('speakCheck: 빈 오디오·용량 초과·API 없음은 업로드 전에 거절, MIME→확장자', async () => {
   const f = async () => { throw new Error('should not call'); };
   await assert.rejects(AI.speakCheck({ fetchImpl: f, base: '', blob: { size: 0 }, target: 't' }), /empty-audio/);
