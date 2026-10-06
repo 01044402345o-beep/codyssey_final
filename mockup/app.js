@@ -408,6 +408,7 @@ async function runAi(tok) {
   if (genAbort) genAbort.abort();
   const ctl = genAbort = new AbortController();
   S.aiPools = {}; S.aiBy = {};                 // 새 생성 시작: 이전 결과 폐기
+  if (!consentRec()) return;                   // 동의 전에는 서버로 아무것도 보내지 않고 로컬 문장으로 진행
   const byCity = {};
   S.places.filter(p => p.selected && p.kind === 'restaurant').forEach(p => (byCity[p.city] ??= []).push({ id: p.id, name: p.name, en: p.en }));
   const cities = Object.entries(byCity).map(([name, places]) => ({ name, places }));
@@ -693,18 +694,43 @@ function userScreen() {
 }
 
 /* SCR-01 */
+let consentTick = false;
+const consentRec = () => AI.loadConsent(localStorage);
+/* 동의가 있으면 true. 체크만 한 상태면 지금 기록하고 true. 아니면 안내하고 false. */
+function requireConsent() {
+  if (consentRec()) return true;
+  if (!consentTick) { toast('개인정보 수집·이용 동의(필수)에 체크해 주세요.'); return false; }
+  if (!AI.saveConsent(localStorage)) { toast('이 브라우저에서는 동의 기록을 저장할 수 없어요. 저장소 차단을 해제해 주세요.'); return false; }
+  return true;
+}
+const CONSENT_ITEMS = [
+  ['수집 항목', '복습 목록(어려워한 상황), 말하기 연습 때의 녹음 음성'],
+  ['수집·이용 목적', '맞춤 복습 제공, 발음·표현 피드백'],
+  ['보관', '복습 목록은 이 브라우저에만 저장되고 직접 삭제하기 전까지 남아요. 녹음은 채점이 끝난 뒤 서버에 저장하지 않아요(서버는 받은 녹음을 처리만 해요).'],
+  ['외부 전송', 'AI 문장 생성·말하기 채점을 위해 입력(도시·장소명, 복습 상황 ID)과 녹음이 Google Gemini API로 전송돼요. 전송된 데이터는 Google의 약관에 따라 처리돼요.'],
+  ['동의 거부', '동의하지 않으면 서비스를 시작할 수 없어요. 동의한 뒤에도 언제든 철회하고 기록을 삭제할 수 있어요.'],
+];
+function consentBlock() {
+  const rec = consentRec();
+  if (rec) return `<div class="consent-ok">✓ 개인정보 수집·이용에 동의했어요 <span class="small">(${esc(rec.at.slice(0, 16).replace('T', ' '))} UTC)</span>
+    <button class="linkbtn" data-act="consent-revoke">동의 철회 · 기록 삭제</button></div>`;
+  return `<div class="consent"><b>개인정보 수집·이용 동의 (필수)</b>
+    <ul>${CONSENT_ITEMS.map(([k, v]) => `<li><b>${k}</b> — ${esc(v)}</li>`).join('')}</ul>
+    <label class="consent-check"><input type="checkbox" data-act="consent-toggle" ${consentTick ? 'checked' : ''}> 위 내용에 동의합니다</label></div>`;
+}
 function scrLogin() {
+  const can = !!consentRec() || consentTick;
   const body = S.user
     ? `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:50%;background:var(--sea);color:#fff;display:grid;place-items:center;font-weight:700">김</div>
         <div style="flex:1"><b>${DEMO_USER.name}</b><div class="small">${DEMO_USER.email}</div></div></div>
-       <div style="display:flex;gap:8px;margin-top:10px"><button class="btn soft" style="flex:1" data-act="logout">로그아웃</button><button class="btn primary" style="flex:2" data-act="after-login">계속하기</button></div>`
-    : `<button class="gbtn" data-act="login">${I.google}Google로 계속하기</button>`;
+       <div style="display:flex;gap:8px;margin-top:10px"><button class="btn soft" style="flex:1" data-act="logout">로그아웃</button><button class="btn primary" style="flex:2" data-act="after-login" ${can ? '' : 'disabled'}>계속하기</button></div>`
+    : `<button class="gbtn" data-act="login" ${can ? '' : 'disabled'}>${I.google}Google로 계속하기</button>`;
   return frame(`<div class="login">
     <div class="stamp">TRIP · ENGLISH<br>PASSPORT<br>— 2026 —</div>
     <div class="eyebrow" style="margin-top:130px">Travel English, planned</div>
     <h1 style="margin-top:10px">Speak where<br>you'll <em>actually</em><br>be.</h1>
     <p class="sub">여행지와 일정을 입력하면, 실제로 갈 관광지와 맛집에서 쓸 영어 문장을 만들어 출발 전부터 매일 학습하게 해 드려요.</p>
-    <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">로그인하지 않으면 다른 화면에 들어갈 수 없어요.</p>
+    <div class="ticket">${consentBlock()}${body}<p class="small" style="text-align:center;margin-top:12px">로그인하지 않으면 다른 화면에 들어갈 수 없어요.</p>
       <p class="small" style="text-align:center;margin-top:8px">일부 문장은 AI가 만들어요 · 학습 기록은 이 브라우저에만 저장돼요 · 말하기 연습을 쓰면 녹음이 채점 서버로 전송돼요.</p></div>
   </div>`);
 }
@@ -1271,6 +1297,9 @@ async function toggleSpeak() {
   if (SPK.state === 'recording') { stopSpeak(); return; }
   const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]]; if (!s) return;
   cancelSpeak();
+  if (!consentRec()) {                                                         // 동의 전에는 녹음하지 않고 서버로 보내지 않는다
+    SPK.sid = s.id; SPK.result = { error: '말하기 연습은 개인정보 수집·이용에 동의한 뒤에 쓸 수 있어요. 로그인 화면에서 동의해 주세요.' }; updateSpeakUi(); return;
+  }
   const tok = SPK.tok; SPK.sid = s.id; SPK.state = 'requesting'; updateSpeakUi();
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
@@ -1338,8 +1367,13 @@ const ACT = {
     SPK.result = { ...SPK.result, offer: false, saved: true, savedBy: 'user' }; updateSpeakUi(); renderDemo(); toast('복습 목록에 저장했어요.');
   },
 
-  login: () => { S.user = DEMO_USER; toast('Google 계정으로 로그인했어요.'); ACT['after-login'](); },
-  'after-login': () => go(S.trip && !S.trip.archived ? (S.plan ? 'u-home' : S.places.length ? 'u-report' : 'u-gen') : 'u-input'),
+  'consent-toggle': el => { consentTick = !!el.checked; render(); },
+  'consent-revoke': () => {
+    AI.clearConsent(localStorage); AI.saveWeak(localStorage, []); consentTick = false; cancelSpeak();
+    S.user = null; toast('동의를 철회하고 복습 목록을 삭제했어요.'); go('u-login');
+  },
+  login: () => { if (!requireConsent()) return; S.user = DEMO_USER; toast('Google 계정으로 로그인했어요.'); ACT['after-login'](); },
+  'after-login': () => { if (!requireConsent()) return; go(S.trip && !S.trip.archived ? (S.plan ? 'u-home' : S.places.length ? 'u-report' : 'u-gen') : 'u-input'); },
   logout: () => { S.user = null; toast('로그아웃했어요. 로그인 화면 외에는 들어갈 수 없어요.'); go('u-login'); },
 
   'add-city': () => {

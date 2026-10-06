@@ -531,3 +531,11 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .speak-note { font-size: 11px; color: #9aa0ad; }
 .speak-res { font-size: 12.5px; color: #e9e4d8; background: rgba(255,255,255,.08); border-radius: 10px; padding: 8px 10px; }
 .api-note { font-size: 12px; color: var(--bad); }
+
+.consent { background: #fff; border: 1px solid var(--line-2); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; font-size: 12.5px; line-height: 1.5; text-align: left; }
+.consent ul { margin: 8px 0; padding-left: 16px; }
+.consent li { margin-bottom: 4px; color: var(--ink-soft); }
+.consent-check { display: flex; gap: 8px; align-items: center; font-weight: 700; }
+.consent-ok { font-size: 12.5px; margin-bottom: 12px; color: var(--ok); }
+.linkbtn { background: none; border: 0; color: var(--ink-soft); text-decoration: underline; cursor: pointer; font-size: 12px; margin-left: 6px; }
+.gbtn:disabled, .btn:disabled { opacity: .5; cursor: not-allowed; }
