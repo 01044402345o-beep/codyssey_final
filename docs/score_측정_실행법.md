@@ -50,21 +50,21 @@ python3 backend/scripts/measure_score_rate.py \
   --base https://<앱>.onrender.com \
   --audio good.webm \
   --target "I have a peanut allergy." \
-  --label good --n 10
+  --label good --n 10 --out measure_good_run01.jsonl
 
 # bad
 python3 backend/scripts/measure_score_rate.py \
   --base https://<앱>.onrender.com \
   --audio bad.webm \
   --target "I have a peanut allergy." \
-  --label bad --n 10
+  --label bad --n 10 --out measure_bad_run01.jsonl
 
 # silent
 python3 backend/scripts/measure_score_rate.py \
   --base https://<앱>.onrender.com \
   --audio silent.webm \
   --target "I have a peanut allergy." \
-  --label silent --n 10
+  --label silent --n 10 --out measure_silent_run01.jsonl
 ```
 
 ### 플래그 (검증된 실제 값)
@@ -101,7 +101,7 @@ python3 backend/scripts/measure_score_rate.py \
 | 1 | 전체 요청 | 네트워크·서버가 살아 있는가 |
 | 2 | 실제 응답(HTTP 200 ∧ 목업 아님) | 모델이 `usable:true`를 주는가 |
 | 3 | `usable:true` | **점수가 유효하게 오는가** (bool 제외·유한·0~100·폐기 아님) |
-| 4 | `usable:true` | 점수는 없고 `heard`만 있는가 → **`ask` 경로로 감** |
+| 4 | `usable:true` | 점수는 없고 `heard`만 있는가 → **`ask` 후보** (프론트는 AI 문장 여부·유효한 상황 ID 등 다른 조건도 확인하므로 이 지표가 곧 `ask`는 아니다) |
 | 참고 | 실제 응답 | 점수를 줬다가 버린 경우 / 들린 내용이 빈 경우 |
 
 ---
@@ -110,15 +110,22 @@ python3 backend/scripts/measure_score_rate.py \
 
 | 관찰 | 해석 | 조치 |
 |---|---|---|
-| **good**: 3번 ≥ 80% | 점수가 자주 온다(정확성은 별개) | `auto`(70 미만 자동 저장) 규칙을 임시로 유지. 점수가 맞는지는 `bad`와 비교해서 본다 |
+| **good**: 3번 ≥ 80% | 점수가 자주 온다 (**점수가 타당한지, 자동 저장이 적절한지는 별개**) | `auto`(70 미만 자동 저장) 규칙을 임시로 유지. good이 낮은 점수를 받으면 오저장 가능성이 있고, 높은 점수면 정상이지만 자동 저장은 일어나지 않는다. `bad`와 비교해서 본다 |
 | **good**: 3번 < 50%, 4번 높음 | 모델이 점수를 자주 생략 | `auto` 경로가 거의 안 쓰임 → **제품은 `ask`(사용자 선택)가 기본**. 발표에서도 이 사실을 그대로 말한다 |
 | **bad**: 3번 유효 score가 **높게**(70 이상) 나옴 | 틀린 발화를 통과시킴 | 자동 저장 규칙 신뢰 불가 — `ask` 비중을 높이는 쪽으로 |
 | **silent**: 4번이 아니라 **3번이 높음** | **무음에 점수를 줌 — 결함** | `heard` 빈값 가드가 저장은 막지만(`none`), 점수 자체가 무의미 → `measure` 기록과 함께 보고 |
 | **silent**: 참고 `heard 비어 있음` = 100% | 정상 | 무음이 무음으로 인식됨 |
-| 1번 < 100% | 콜드스타트·타임아웃·429 | `--timeout` 상향 / `--sleep` 증가 후 재측정 |
+| 1번 < 100% | **원인을 먼저 구분한다** (JSONL의 `status`·`error`) | 413·415·422: 파일·MIME·입력 수정 / 429: 우리 서버 제한(`RATE_LIMIT`)인지 Gemini 할당량인지 구분 / 타임아웃: 서버 상태·콜드스타트 확인 후 `--timeout` / 5xx: 서버 로그 확인. **실패 기록은 지우지 말고, 조건을 바꾼 재측정은 별도 실행으로 남긴다** |
 | `exit 2` + "mock 모드" | 키 없음 | 키 등록 후 재실행 (측정 무효) |
 
 ---
+
+## 4-1. 하지 말 것
+
+- **"70 미만이 나올 때까지" 재실행하지 않는다.** good에서 점수가 70 위아래로 흔들리는 것은 자연스럽다. `auto`가 한 번도 안 나왔다면 그대로 보고하고, 기억은 `ask`(사용자 선택) 경로로 시연한다.
+- 확장자만 바꿔서 형식을 맞추지 않는다. 확장자는 MIME 추정에만 쓰이고 **오디오 변환이 아니다.** 실제로 해당 형식으로 녹음된 파일을 쓴다.
+- `--out` 은 append 이다. **실행마다 `--out measure_good_run01.jsonl` 처럼 다르게 지정**해 이전 측정과 섞이지 않게 한다.
+- `--base` 는 Render의 **실제 URL** 로 바꿔서 실행한다. 아래 예시의 `<앱>` 은 실행 가능한 주소가 아니다.
 
 ## 5. 한계 — 발표에 쓸 때 반드시 붙일 것
 

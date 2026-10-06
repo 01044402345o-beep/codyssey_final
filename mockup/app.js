@@ -610,8 +610,8 @@ function renderDemo() {
     <div class="demo-chips">${chips.map(([l, d]) => `<button data-act="set-today" data-date="${d}">${l} ${Dt.md(d)}</button>`).join('')}</div>
     ${tg('fail', 'AI 생성 실패')}${tg('stuck', '생성 멈춤 (응답 없음)')}${tg('routeInvalid', '방문 순서 AI 규칙 위반')}${tg('noTts', 'TTS 미지원 브라우저')}
     <div class="demo-actions"><button data-act="preset" data-kind="short">짧은 학습 3일</button><button data-act="preset" data-kind="zero">당일 시작 0일</button></div>
-    <div class="demo-actions"><button data-act="weak-demo">데모 학습 기록 불러오기</button><button data-act="weak-clear">취약 상황 비우기</button></div>
-    <div class="small" style="margin-top:6px;color:#9aa0ad">저장된 취약 상황 ${weakList().length}개 (데모 ${weakList().filter(w => w.demo).length}개) · 데모 기록은 실제 학습 기억이 아니에요</div>`;
+    <div class="demo-actions"><button data-act="weak-demo">데모 학습 기록 불러오기</button><button data-act="weak-clear">복습 목록 비우기</button></div>
+    <div class="small" style="margin-top:6px;color:#9aa0ad">복습 목록 ${weakList().length}개 (데모 ${weakList().filter(w => w.demo).length}개) · 데모 기록은 실제 학습 기억이 아니에요</div>`;
 }
 function updateSideActive() {
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.id === S.screen));
@@ -1228,7 +1228,7 @@ function aiBadges(s) {
   if (s.ai) h += '<span class="badge b-ai">AI 생성</span>';
   else if (s.sample) h += '<span class="badge b-sample">샘플</span>';
   const w = AI.weakReviewOf(s, weakList());
-  if (w) h += `<span class="badge b-weak">저장된 취약 상황 복습${w.demo ? ' · 데모 학습 기록' : ''}</span>`;
+  if (w) h += `<span class="badge b-weak">복습 목록 상황${w.demo ? ' · 데모 학습 기록' : ''}</span>`;
   return h;
 }
 function speakHtml(s) {
@@ -1241,8 +1241,8 @@ function speakHtml(s) {
   if (mine && SPK.result) {
     const r = SPK.result;
     const parts = r.error ? [r.error]
-      : r.usable !== true ? [r.mock ? '샘플 응답이에요(채점 안 됨).' : (r.reason || '평가하지 못했어요. 다시 시도해 주세요.'), '약점으로 저장하지 않았어요.']
-      : [typeof r.score === 'number' ? `점수 ${r.score}` : '', r.heard ? `들린 문장: ${r.heard}` : '', r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? '취약 상황으로 저장했어요' : '',
+      : r.usable !== true ? [r.mock ? '샘플 응답이에요(채점 안 됨).' : (r.reason || '평가하지 못했어요. 다시 시도해 주세요.'), '복습 목록에 저장하지 않았어요.']
+      : [typeof r.score === 'number' ? `점수 ${r.score}` : '', r.heard ? `들린 문장: ${r.heard}` : '', r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '',
          r.offer && r.coverage !== null ? `참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)` : ''];
     res = `<div class="speak-res">${parts.filter(Boolean).map(esc).join(' · ')}</div>`;
     if (r.offer) res += `<button class="speak-btn" data-act="weak-save">이 상황을 복습 목록에 저장</button>`;
@@ -1310,7 +1310,7 @@ async function uploadSpeech(tok, blob, s) {
   const decision = AI.weakDecision(s, res);
   const save = decision === 'auto';
   if (save) AI.saveWeak(localStorage, AI.upsertWeak(weakList(), weakItem(s)));
-  SPK.result = { ...res, saved: save, offer: decision === 'ask', coverage: typeof res.heard === 'string' ? AI.heardCoverage(s.en, res.heard) : null };
+  SPK.result = { ...res, saved: save, savedBy: save ? 'auto' : null, offer: decision === 'ask', coverage: typeof res.heard === 'string' ? AI.heardCoverage(s.en, res.heard) : null };
   updateSpeakUi(); renderDemo();
 }
 
@@ -1329,13 +1329,13 @@ const ACT = {
   'set-today': el => { S.today = el.dataset.date; S.justCompleted = null; render(); toast(`오늘을 ${Dt.full(S.today)}로 바꿨어요.`); },
   preset: el => preset(el.dataset.kind),
   'weak-demo': () => { AI.saveWeak(localStorage, DEMO_WEAK.reduce((l, w) => AI.upsertWeak(l, w), weakList())); renderDemo(); toast('데모 학습 기록을 불러왔어요. 실제 학습에서 생긴 기록이 아니에요.'); },
-  'weak-clear': () => { AI.saveWeak(localStorage, []); renderDemo(); toast('저장된 취약 상황을 비웠어요.'); },
+  'weak-clear': () => { AI.saveWeak(localStorage, []); renderDemo(); toast('복습 목록을 비웠어요.'); },
   'speak-rec': () => toggleSpeak(),
   'weak-save': () => {
     const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]];
     if (!s || SPK.sid !== s.id || !SPK.result || !SPK.result.offer) return;       // 다른 카드·취소된 결과에는 저장하지 않는다
     AI.saveWeak(localStorage, AI.upsertWeak(weakList(), weakItem(s)));
-    SPK.result = { ...SPK.result, offer: false, saved: true }; updateSpeakUi(); renderDemo(); toast('복습 목록에 저장했어요.');
+    SPK.result = { ...SPK.result, offer: false, saved: true, savedBy: 'user' }; updateSpeakUi(); renderDemo(); toast('복습 목록에 저장했어요.');
   },
 
   login: () => { S.user = DEMO_USER; toast('Google 계정으로 로그인했어요.'); ACT['after-login'](); },
