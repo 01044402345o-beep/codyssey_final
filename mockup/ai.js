@@ -11,6 +11,8 @@
   const MAX_AUDIO_BYTES = 8 * 1024 * 1024; // backend/app/main.py MAX_AUDIO_BYTES 와 같다
   const GEN_TIMEOUT_MS = 90 * 1000;
   const ID_RE = /^[a-z][a-z0-9_]*$/;
+  const CONSENT_KEY = 'cd_consent';
+  const CONSENT_VERSION = 1;   // 동의 문구가 바뀌면 올려서 다시 동의를 받는다
 
   const str = v => typeof v === 'string' && v.trim().length > 0;
   const norm = v => String(v ?? '').trim().toLowerCase();
@@ -221,7 +223,24 @@
     finally { t.done(); }
   }
 
+  /* ---------- 개인정보 수집·이용 동의 기록 (이 브라우저의 localStorage) ---------- */
+  function loadConsent(storage) {
+    try {
+      const c = JSON.parse(storage.getItem(CONSENT_KEY) || 'null');
+      if (c && c.version === CONSENT_VERSION && typeof c.at === 'string' && !Number.isNaN(Date.parse(c.at))) return { version: c.version, at: c.at };
+    } catch (e) { /* 저장소 차단·깨진 값은 동의 없음으로 본다 */ }
+    return null;
+  }
+  function saveConsent(storage, now) {
+    const rec = { version: CONSENT_VERSION, at: (now || new Date()).toISOString() };
+    try { storage.setItem(CONSENT_KEY, JSON.stringify(rec)); return rec; } catch (e) { return null; }
+  }
+  function clearConsent(storage) {
+    try { storage.removeItem(CONSENT_KEY); return true; } catch (e) { return false; }
+  }
+
   const api = {
+    CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, clearConsent,
     WEAK_KEY, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
