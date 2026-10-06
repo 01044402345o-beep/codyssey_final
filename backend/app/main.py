@@ -240,6 +240,7 @@ def health() -> dict[str, Any]:
         "models": ai.cached_models(),
         "preferred_model": os.getenv("GEMINI_MODEL") or None,
         "min_attempts": ai.min_attempts(),
+        "model_health": ai.model_health(),
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
         "contract_dir": str(CONTRACT_DIR),
         "categories": list_categories(),

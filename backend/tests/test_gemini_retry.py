@@ -46,7 +46,7 @@ def boom(*_: Any) -> Any:
 class Base(unittest.TestCase):
     def setUp(self) -> None:
         self.env = dict(os.environ)
-        for k in ("AI_MIN_ATTEMPTS", "GEMINI_MODEL", "AI_MODELS_TTL"):
+        for k in ("AI_MIN_ATTEMPTS", "GEMINI_MODEL", "AI_MODELS_TTL", "AI_COOLDOWN_BUSY"):
             os.environ.pop(k, None)
         self.sleeps: list[float] = []
         ai._sleep = self.sleeps.append
@@ -228,6 +228,72 @@ class ModelListTest(Base):
         ])
 
 
+class ApiError(Exception):
+    """google.genai.errors.APIError 처럼 code 를 가진 오류."""
+
+    def __init__(self, code: int) -> None:
+        super().__init__(f"{code} error")
+        self.code = code
+
+
+class CooldownTest(Base):
+    MODELS = ["a", "b", "c", "d"]
+
+    def install_names(self, gen_fn: Callable[[int, str], str]) -> FakeModels:
+        return self.install(list_fn=lambda _: [model(f"gemini-{m}") for m in self.MODELS], gen_fn=gen_fn)
+
+    def test_classification(self) -> None:
+        self.assertEqual(ai.cooldown_for(ApiError(404))[1], "404 사용 불가")
+        self.assertEqual(ai.cooldown_for(ApiError(429))[1], "429 할당량")
+        self.assertEqual(ai.cooldown_for(ApiError(503))[1], "503 과부하")
+        self.assertEqual(ai.cooldown_for(TimeoutError())[1], "timeout")
+        self.assertIsNone(ai.cooldown_for(ValueError("빈 응답")))
+        self.assertIsNone(ai.cooldown_for(main.BlockedResult("block")))
+        self.assertGreater(ai.cooldown_for(ApiError(404))[0], ai.cooldown_for(ApiError(429))[0])
+
+    def test_order_keeps_every_model(self) -> None:
+        models = ["m1", "m2", "m3", "m4"]
+        ai.note_failure("m1", ApiError(503))
+        ai.note_failure("m2", ApiError(404))
+        ai.note_success("m4")
+        self.assertEqual(ai.attempt_order(models), ["m4", "m3", "m1", "m2"])
+
+    def test_failed_models_go_last_next_request(self) -> None:
+        def gen(_n: int, m: str) -> str:
+            if m in ("gemini-a", "gemini-b"):
+                raise ApiError(503 if m == "gemini-a" else 404)
+            return json.dumps({"ok": 1})
+
+        fake = self.install_names(gen)
+        r1 = ai.run("t", lambda c, m, a: json.loads(ai_text(c, m)))
+        self.assertEqual((r1.attempts, r1.model), (3, "gemini-c"))
+        fake.gen_calls.clear()
+        r2 = ai.run("t", lambda c, m, a: json.loads(ai_text(c, m)))
+        self.assertEqual((r2.attempts, r2.model), (1, "gemini-c"))   # 마지막 성공 모델부터
+        h = ai.model_health()
+        self.assertEqual(h["last_good"], "gemini-c")
+        self.assertEqual(h["cooling"]["gemini-b"]["reason"], "404 사용 불가")
+
+    def test_all_cooling_still_30_attempts(self) -> None:
+        for m in self.MODELS:
+            ai.note_failure(f"gemini-{m}", ApiError(429))
+        fake = self.install_names(lambda *_: (_ for _ in ()).throw(ApiError(503)))
+        with self.assertRaises(ai.AttemptsExhausted) as cm:
+            ai.run("t", lambda c, m, a: ai_text(c, m))
+        self.assertEqual(cm.exception.attempts, 30)
+        self.assertEqual(len(fake.gen_calls), 30)
+        self.assertEqual(set(fake.gen_calls), {f"gemini-{m}" for m in self.MODELS})
+
+    def test_cooldown_expires(self) -> None:
+        os.environ["AI_COOLDOWN_BUSY"] = "0"
+        ai.note_failure("m1", ApiError(503))
+        self.assertEqual(ai.attempt_order(["m1", "m2"]), ["m1", "m2"])
+
+
+def ai_text(client: Any, m: str) -> str:
+    return client.models.generate_content(model=m, contents="", config=None).text
+
+
 GOOD_PACK = {
     "category_id": "restaurant",
     "city": "New York",
@@ -316,6 +382,7 @@ class EndpointTest(Base):
         self.assertEqual(d["model_selection"], "dynamic")
         self.assertEqual(d["min_attempts"], 30)
         self.assertNotIn("model", d)
+        self.assertEqual(d["model_health"], {"last_good": None, "cooling": {}})
 
 
 if __name__ == "__main__":
