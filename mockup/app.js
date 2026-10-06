@@ -1221,21 +1221,7 @@ function preset(kind) {
 
 /* ================= 말하기 연습 (녹음 → /speak-check) =================
    작업 토큰(SPK.tok)으로 취소·늦은 응답을 구분한다. 카드 이동·화면 전환·재진입 시 cancelSpeak(). */
-const SPK = { state: 'idle', tok: 0, rec: null, stream: null, ctl: null, timer: null, sid: null, result: null, meter: null };
-/* 녹음 중 마이크 음량을 100ms 마다 잰다(무음 감지용). 실패하면 감지 없이 진행 → 서버가 무음을 판정한다. */
-function startMeter(stream) {
-  const levels = [];
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return { levels, stop() {} };
-    const ctx = new Ctx(); const an = ctx.createAnalyser(); an.fftSize = 2048;
-    ctx.createMediaStreamSource(stream).connect(an);
-    if (ctx.state !== 'running' && ctx.resume) ctx.resume().catch(() => {});
-    const buf = new Float32Array(an.fftSize);
-    // 정지(suspended) 상태의 측정값은 0 이라 믿을 수 없다 → 기록하지 않는다. 끝까지 비면 감지 불가로 보고 서버가 판정한다.
-    const timer = setInterval(() => { if (ctx.state !== 'running') return; an.getFloatTimeDomainData(buf); let s = 0; for (const v of buf) s += v * v; levels.push(Math.sqrt(s / buf.length)); }, 100);
-    return { levels, stop() { clearInterval(timer); try { ctx.close(); } catch (e) { /* 이미 닫힘 */ } } };
-  } catch (e) { return { levels: [], stop() {} }; }
-}
+const SPK = { state: 'idle', tok: 0, rec: null, stream: null, ctl: null, timer: null, sid: null, result: null };
 const stopTracks = st => { try { st && st.getTracks().forEach(t => t.stop()); } catch (e) { /* 이미 종료 */ } };
 const speakAvailable = () => API.base !== null && typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 function aiBadges(s) {
@@ -1263,7 +1249,7 @@ function speakHtml(s) {
     if (r.offer) res += `<button class="speak-btn" data-act="weak-save">이 상황을 복습 목록에 저장</button>`;
   }
   return `<button class="speak-btn ${st === 'recording' ? 'rec' : ''}" data-act="speak-rec" ${st === 'requesting' || st === 'uploading' ? 'disabled' : ''}>${label}</button>${res}
-    <div class="speak-note">녹음은 채점을 위해 ${esc(host)} 서버와 Google Gemini API로 전송돼요.${voiceConsent().voice ? ' (동의함 · 홈에서 철회)' : ' 처음 녹음할 때 동의를 받아요.'}</div>`;
+    <div class="speak-note">녹음은 ${esc(host)} 서버로 가고, 말소리가 있을 때만 전사 AI(Groq Whisper 등)로 전송돼요.${voiceConsent().voice ? ' (동의함 · 홈에서 철회)' : ' 처음 녹음할 때 동의를 받아요.'}</div>`;
 }
 /* 말하기 연습 동의 — 녹음이 서버와 Google 로 나가고 복습 목록이 쌓이므로 첫 녹음 전에 받는다.
    저장소가 막힌 브라우저에서는 이번 접속 동안만 기억한다(consentMem). */
@@ -1273,10 +1259,10 @@ function askVoiceConsent() {
   const host = esc(API.host || location.host);
   confirmBox('말하기 연습 전에 확인해 주세요',
     `<b>보내는 것</b> · 녹음한 목소리(최대 15초)와 연습 중인 영어 문장<br>
-     <b>받는 곳</b> · 이 서비스 서버(${host}) → Google Gemini API<br>
-     <b>처리</b> · AI는 목표 문장을 모른 채 <b>받아쓰기만</b> 하고, 일치율은 코드가 계산해요. 받아쓴 문장·목표 문장·상황 이름은 피드백 문장을 쓰도록 AI에 한 번 더 보내요(녹음은 다시 보내지 않아요).<br>
+     <b>받는 곳</b> · ① 이 서비스 서버(${host}) — 말소리가 있는지 신경망(VAD)으로 확인 ② <b>말소리가 있을 때만</b> 그 구간의 녹음이 전사 AI(Groq Whisper, 실패 시 OpenAI Whisper·AssemblyAI)로 ③ 받아쓴 문장·목표 문장·상황 이름(글만)이 피드백용 Google Gemini API로<br>
+     <b>처리</b> · 전사 AI는 목표 문장을 모른 채 <b>받아쓰기만</b> 하고, 일치율은 코드가 계산해요.<br>
      <b>목적</b> · 말하기 연습 피드백 (피드백 문장은 AI가 만든 결과예요)<br>
-     <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요(받은 녹음을 채점에 넘기기만 해요).<br>
+     <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요. 전사 AI 회사의 처리·보관은 각 회사 약관을 따라요.<br>
      <b>Google 처리</b> · 무료 등급 API에서는 Google이 전송된 내용을 제품 개선에 사용하고 사람 검토자가 읽을 수 있어요(계정·키와는 분리돼요). <b>민감한 개인정보는 말하지 마세요.</b><br>
      <b>이 브라우저에 저장</b> · 채점 결과로 고른 '어려워한 상황'(복습 목록). 다음 문장을 만들 때 상황 이름만 서버로 보내요.<br><br>
      동의하지 않아도 카드 학습과 듣기는 그대로 쓸 수 있어요. 동의는 홈 화면에서 언제든 철회할 수 있고, 철회하면 복습 목록도 지워져요.`,
@@ -1310,7 +1296,6 @@ function cancelSpeak() {
   SPK.tok++;
   clearTimeout(SPK.timer); SPK.timer = null;
   if (SPK.rec) { SPK.rec.cancelled = true; try { if (SPK.rec.state !== 'inactive') SPK.rec.stop(); } catch (e) { /* 이미 종료 */ } }
-  if (SPK.meter) { SPK.meter.stop(); SPK.meter = null; }
   stopTracks(SPK.stream); SPK.stream = null; SPK.rec = null;
   if (SPK.ctl) { SPK.ctl.abort(); SPK.ctl = null; }
   SPK.state = 'idle'; SPK.result = null;
@@ -1337,14 +1322,10 @@ async function toggleSpeak() {
   const chunks = [];
   SPK.stream = stream; SPK.rec = rec;
   rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-  const meter = SPK.meter = startMeter(stream);
   rec.onstop = () => {
-    meter.stop(); if (SPK.meter === meter) SPK.meter = null;
     stopTracks(stream);
     if (tok !== SPK.tok || rec.cancelled) return;                            // 취소는 업로드하지 않는다
-    if (AI.isSilent(meter.levels)) {                                         // 무음은 AI 로 보내지 않는다 (지어낸 만점 방지)
-      SPK.state = 'idle'; SPK.result = { error: '목소리가 들리지 않았어요. 마이크 가까이에서 다시 말해 주세요. (전송하지 않았어요)' }; updateSpeakUi(); return;
-    }
+    // 말소리 여부는 서버의 Silero 신경망 VAD 가 판정한다(음량·데시벨 기준이 아님). 말이 없으면 외부 AI 로 보내지 않는다.
     uploadSpeech(tok, new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' }), s);
   };
   rec.start();
