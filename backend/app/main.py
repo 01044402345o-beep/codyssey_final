@@ -261,7 +261,9 @@ def health() -> dict[str, Any]:
         "min_attempts": ai.min_attempts(),
         "model_health": ai.model_health(),
         "vad": "silero (faster-whisper), min_silence 500ms, pad 200ms",
-        "stt_providers": {pid: bool(stt.api_key(pid)) for pid in stt.ORDER},
+        "stt_providers": {pid: bool(stt.api_key(pid)) for pid in (*stt.ORDER, stt.DETECTOR)},
+        "cross_validation_ready": bool(stt.configured_primary() and stt.api_key(stt.CHECKER)
+                                       and stt.api_key(stt.DETECTOR)),
         "stt_models": stt.cached_models(),
         "stt_selftest": selftest.status(),
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
