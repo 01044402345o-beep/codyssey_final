@@ -6,7 +6,7 @@
 |---|---|---|
 | GET | `/health` | 배포 확인 + 시연 전 콜드스타트 깨우기 |
 | POST | `/generate` | 카테고리 문장 생성 → 스키마·규칙 검증 → 위반 시 재생성 |
-| POST | `/speak-check` | 녹음 → 받아쓰기(AI, 목표 문장 모름) → 단어 비교(코드) → 피드백(AI, 오디오 없음). 근거: `docs/research/speak-hallucination.md` |
+| POST | `/speak-check` | 녹음 → **Silero VAD**(말소리 없으면 끝) → **전용 STT**(Groq Whisper 등, 목표 문장 모름) → 환각 필터·단어 비교(코드) → 피드백(Gemini, 오디오 없음). 근거: `docs/research/speak-hallucination.md` |
 
 `GEMINI_API_KEY` 가 없으면 **목업으로 응답**합니다. 그래서 키 없이도 배포·시연이 됩니다.
 
@@ -62,7 +62,12 @@ python scripts/check_negatives.py
 
 | 키 | 값 | 비고 |
 |---|---|---|
-| `GEMINI_API_KEY` | Google AI Studio에서 발급 | 없으면 목업 응답 |
+| `GEMINI_API_KEY` | Google AI Studio에서 발급 | 문장 생성·말하기 피드백. 없으면 생성은 목업, 피드백은 문장 틀 |
+| `GROQ_API_KEY` | console.groq.com | 말하기 전사 1순위(Whisper). STT 키가 하나도 없으면 말하기는 목업 |
+| `OPENAI_API_KEY` | platform.openai.com | 전사 보충(whisper 계열만, gpt-4o-transcribe 제외) |
+| `ASSEMBLYAI_API_KEY` | assemblyai.com | 전사 보충(`speech_models` 를 보내지 않아 계정 기본 모델) |
+| `GROQ_STT_MODEL` / `OPENAI_STT_MODEL` | 비워 둠 | 고정이 아니라 우선 선호(목록에 있을 때만) |
+| `STT_SELFTEST` | 비워 둠 | `1` 이면 시작 시 공급자별 실제 호출 점검 → `/health` `stt_selftest`. **검증 뒤 지운다**(콜드스타트마다 비용) |
 | `GEMINI_MODEL` | 비워 둠 | **고정이 아니라 우선 선호.** 실행 중 받은 목록에 있을 때만 맨 앞에 둔다 |
 | `AI_MIN_ATTEMPTS` | 기본 `30` | AI API 호출당 최소 시도 횟수. **늘릴 수만 있고 30 미만은 무시** |
 | `AI_BACKOFF_BASE` / `AI_BACKOFF_MAX` | `0.5` / `4` (초) | 실패 후 대기: 0.5→1→2→4→4… |
@@ -118,6 +123,23 @@ python scripts/check_negatives.py
 > 배포 실측(10/7): flash 5개 `503` 과부하, `gemini-2.5-flash` `404`(신규 사용자 제공 중단),
 > `gemini-omni-1.1-flash` `429`(무료 할당량 없음) → 8번째 `gemini-flash-lite-latest` 성공, 60초.
 > 이 기억이 있으면 다음 요청은 성공한 모델부터 시도합니다.
+
+### 말하기 — 말소리 검출과 전사 (`app/speech_vad.py`, `app/stt_providers.py`)
+
+seongbin45/transcribe_app 의 방식을 따랐다(정독·커밋 교차검증 결과는 `docs/research/speak-hallucination.md`).
+
+1. **말소리 검출은 Silero 신경망 VAD** — 데시벨(음량) 기준이 아니다. faster-whisper 의
+   `get_speech_timestamps(audio, VadOptions(min_silence_duration_ms=500, speech_pad_ms=200))`(transcribe_app 과 같은 옵션).
+   큰 백색잡음·440Hz 신호음도 말소리 0초로 판정한다(`tests/test_speech_vad.py`). 말소리가 없으면 **외부 API 0회**.
+   디코드는 PyAV 로 16kHz mono(브라우저 webm/opus·Safari mp4/aac·ogg·wav). 프레임 없는 녹음은 말소리 없음, 깨진 파일은 400.
+2. **전사는 전용 STT** — Groq Whisper → OpenAI Whisper → AssemblyAI. 말소리 구간만 이어붙여 보내고, **목표 문장은 보내지 않는다**.
+   공급자마다 최소 30회·모델 회전·쿨다운, 다 실패해야 다음 공급자. 모델은 `/models` 에서 whisper 계열만 동적으로 고른다.
+3. **환각 필터(코드)** — `no_speech_prob > 0.85`(transcribe_app), `no_speech_prob > 0.6 ∧ avg_logprob < -1.0`(openai/whisper 기본),
+   알려진 환각 문구. transcribe_app 은 로컬 엔진에만 적용했지만 여기서는 모든 공급자에 적용한다. 필드가 없으면 그 규칙만 건너뛴다.
+4. 점수(단어 일치율)는 코드, 피드백 문장만 Gemini(오디오 없음, 점수 변경 불가).
+
+응답에 `vad`(말소리 구간), `stt`(공급자·모델·시도), `dropped_segments`(필터가 버린 세그먼트)가 들어간다.
+Render 무료 플랜 메모리: faster-whisper+onnxruntime 로드 후 최대 약 88MB(로컬 실측, Whisper 모델은 로드 안 함).
 
 ### 실패 원인 보기
 

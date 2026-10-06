@@ -82,3 +82,65 @@ def template_feedback(diff: dict[str, Any]) -> tuple[str, str]:
     else:
         fix = "목표 문장의 단어를 모두 말했어요."
     return fix, "듣기 버튼으로 원어민 발음을 들은 뒤 따라 말해 보세요."
+
+
+# ---------------------------------------------------------------- 전사 환각 필터
+# seongbin45/transcribe_app core/engines/local_whisper.py 에서 가져왔다. transcribe_app 은 이 필터를
+# 로컬 엔진에만 적용했지만(커밋 교차검증으로 확인), 여기서는 모든 STT 공급자 결과에 적용한다.
+
+# Whisper 가 무음·저에너지 구간에서 지어내는 것으로 잘 알려진 문구(유튜브 자막 학습 영향).
+# transcribe_app 목록 그대로. "Thank you." 처럼 학습 문장일 수 있는 짧은 말은 넣지 않는다.
+HALLUCINATION_PHRASES = {
+    "시청해주셔서 감사합니다",
+    "구독과 좋아요 부탁드립니다",
+    "구독과 좋아요",
+    "다음 영상에서 만나요",
+    "많은 시청 부탁드립니다",
+    "구독 좋아요 알림설정",
+    "thank you for watching",
+    "please subscribe",
+    "don't forget to subscribe",
+    "like and subscribe",
+    "see you in the next video",
+}
+NO_SPEECH_PROB_THRESHOLD = 0.85        # transcribe_app: 모델 스스로 '거의 무음'이라고 본 세그먼트
+WHISPER_NO_SPEECH_THRESHOLD = 0.6      # openai/whisper 기본 규칙: no_speech_prob > 0.6
+WHISPER_LOGPROB_THRESHOLD = -1.0       #   그리고 avg_logprob < -1.0 이면 무음으로 본다
+
+
+def _num(v: Any) -> float | None:
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def hallucination_reason(text: str, no_speech_prob: Any = None, avg_logprob: Any = None) -> str | None:
+    """버릴 이유. 값이 없는 신호(공급자가 안 준 필드)는 그 규칙만 건너뛴다."""
+    normalized = (text or "").strip().strip(".!?~ ").lower()
+    if normalized in HALLUCINATION_PHRASES:
+        return "known_phrase"
+    nsp, lp = _num(no_speech_prob), _num(avg_logprob)
+    if nsp is not None and nsp > NO_SPEECH_PROB_THRESHOLD:
+        return "no_speech_prob"
+    if nsp is not None and lp is not None and nsp > WHISPER_NO_SPEECH_THRESHOLD and lp < WHISPER_LOGPROB_THRESHOLD:
+        return "no_speech_and_low_logprob"
+    return None
+
+
+def filter_segments(text: str, segments: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
+    """(남은 텍스트, 버린 세그먼트 목록). 세그먼트가 없으면 전체 텍스트에 문구 규칙만 적용한다."""
+    dropped: list[dict[str, Any]] = []
+    if not segments:
+        reason = hallucination_reason(text)
+        if reason:
+            return "", [{"text": text, "reason": reason}]
+        return (text or "").strip(), []
+    kept: list[str] = []
+    for seg in segments:
+        t = str(seg.get("text") or "").strip()
+        reason = hallucination_reason(t, seg.get("no_speech_prob"), seg.get("avg_logprob"))
+        if reason:
+            dropped.append({"text": t, "reason": reason,
+                            "no_speech_prob": _num(seg.get("no_speech_prob")),
+                            "avg_logprob": _num(seg.get("avg_logprob"))})
+        elif t:
+            kept.append(t)
+    return " ".join(kept).strip(), dropped
