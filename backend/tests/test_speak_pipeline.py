@@ -58,35 +58,53 @@ def stt_ok(text: str, nsp: float = 0.01, lp: float = -0.2) -> dict[str, Any]:
 
 
 class FakeSTT:
-    """OpenAI 호환(Groq·OpenAI)과 AssemblyAI 요청을 받아 기록한다."""
+    """Groq·OpenAI(OpenAI 호환), AssemblyAI, pyannoteAI 요청을 받아 기록한다."""
 
     def __init__(self, transcribe: dict[str, Callable[[int], Resp]]) -> None:
         self.transcribe = transcribe
         self.posts: list[dict[str, Any]] = []
         self.calls: dict[str, int] = {}
+        self.aai_text = TARGET                          # 교차검증 전사(AssemblyAI) 결과
+        self.aai_fail = False
+        self.pyannote_segments: list[dict[str, Any]] = [{"start": 0.0, "end": 1.2, "speaker": "SPEAKER_00"}]
+        self.pyannote_fail = False
 
     def _pid(self, url: str) -> str:
-        return "groq" if "groq" in url else "openai" if "openai.com" in url else "assemblyai"
+        return ("groq" if "groq" in url else "openai" if "openai.com" in url
+                else "pyannoteai" if "pyannote" in url or "presigned" in url else "assemblyai")
+
+    def _count(self, pid: str) -> int:
+        self.calls[pid] = self.calls.get(pid, 0) + 1
+        return self.calls[pid]
 
     def get(self, url: str, headers: Any = None, timeout: Any = None) -> Resp:
         assert timeout, "모든 요청에 timeout 이 있어야 한다"
         if url.endswith("/models"):
             return Resp(200, {"data": [{"id": i} for i in WHISPER_IDS]})
+        if "/jobs/" in url:                              # pyannoteAI 폴링
+            return Resp(200, {"status": "succeeded", "output": {"diarization": self.pyannote_segments}})
         return Resp(200, {"status": "completed", "text": self.aai_text, "speech_model": "universal"})  # AssemblyAI 폴링
+
+    def put(self, url: str, data: Any = None, timeout: Any = None) -> Resp:
+        assert timeout
+        self.posts.append({"pid": "pyannoteai", "url": url, "data": data})
+        return Resp(200, {})
 
     def post(self, url: str, headers: Any = None, timeout: Any = None, **kw: Any) -> Resp:
         assert timeout, "모든 요청에 timeout 이 있어야 한다"
         pid = self._pid(url)
         self.posts.append({"pid": pid, "url": url, **kw})
+        if pid == "pyannoteai":
+            if url.endswith("/media/input"):
+                self._count("pyannoteai")
+                return Resp(503, "busy") if self.pyannote_fail else Resp(200, {"url": "https://presigned/x"})
+            return Resp(200, {"jobId": "pj"})
         if url.endswith("/upload"):
-            return Resp(200, {"upload_url": "https://cdn/x"})
+            self._count("assemblyai")
+            return Resp(500, "down") if self.aai_fail else Resp(200, {"upload_url": "https://cdn/x"})
         if url.endswith("/transcript"):
             return Resp(200, {"id": "job1"})
-        self.calls[pid] = self.calls.get(pid, 0) + 1
-        r = self.transcribe[pid](self.calls[pid])
-        return r
-
-    aai_text = ""
+        return self.transcribe[pid](self._count(pid))
 
 
 class GeminiFake:
@@ -108,6 +126,7 @@ def fb_ok(_n: int) -> str:
 
 class Base(unittest.TestCase):
     KEYS = ("GROQ_API_KEY", "OPENAI_API_KEY", "ASSEMBLYAI_API_KEY", "ASSEMBLY_AI_API_KEY", "GEMINI_API_KEY",
+            "PYANNOTEAI_API_KEY", "PYANNOTE_API_KEY",
             "AI_MIN_ATTEMPTS", "GROQ_STT_MODEL", "OPENAI_STT_MODEL", "GEMINI_MODEL")
 
     def setUp(self) -> None:
@@ -130,9 +149,11 @@ class Base(unittest.TestCase):
         ai.reset_cache()
         stt.reset_cache()
 
+    CROSS = ("ASSEMBLYAI_API_KEY", "PYANNOTEAI_API_KEY")
+
     def install(self, transcribe: dict[str, Callable[[int], Resp]], keys: tuple[str, ...] = ("GROQ_API_KEY",),
                 feedback: Callable[[int], str] = fb_ok) -> tuple[FakeSTT, GeminiFake]:
-        for k in keys:
+        for k in keys + self.CROSS:     # 교차검증 필수 — 기본으로 AssemblyAI·pyannoteAI 키를 넣는다
             os.environ[k] = "k"
         fake = FakeSTT(transcribe)
         gem = GeminiFake(feedback)
@@ -158,7 +179,7 @@ class SilenceGateTest(Base):
                 self.assertFalse(d["usable"])
                 self.assertIsNone(d["score"])
                 self.assertEqual(d["vad"]["speech_sec"], 0)
-                self.assertEqual(fake.posts, [])        # STT 호출 0회
+                self.assertEqual(fake.posts, [])        # STT·교차검증·pyannoteAI 호출 0회
                 self.assertEqual(gem.texts, [])         # 피드백 호출 0회
 
     def test_vad_runs_without_any_key(self) -> None:
@@ -182,6 +203,10 @@ class SttTest(Base):
         fake, _ = self.install({"groq": lambda n: Resp(200, stt_ok(TARGET))})
         from app import speech_vad as vad
         self.speak(wav_of(np.concatenate([np.zeros(32000), vad.decode(GOOD), np.zeros(32000)])))
+        for p in fake.posts:                                    # 세 AI 어디에도 목표 문장이 가지 않는다
+            self.assertNotIn("peanut", json.dumps({k: v for k, v in p.items() if k not in ("files", "data")}).lower())
+            if isinstance(p.get("data"), (bytes, bytearray)):
+                self.assertNotIn(b"peanut", p["data"])
         post = [p for p in fake.posts if p["url"].endswith("/audio/transcriptions")][0]
         sent = post["data"]
         self.assertEqual(set(sent), {"model", "response_format", "language", "temperature"})
@@ -210,11 +235,12 @@ class SttTest(Base):
         _, gem = self.install({"groq": lambda n: Resp(200, stt_ok("I have a peanut allergy"))})
         _, d = self.speak(GOOD)
         self.assertTrue(d["usable"])
-        self.assertEqual((d["score"], d["score_kind"]), (100, "word_match"))
+        self.assertEqual((d["score"], d["score_kind"]), (100, "word_match_consensus"))
         self.assertEqual(d["fix_one"], "좋아요")            # 문장은 AI
         self.assertEqual(len(gem.texts), 1)
         self.assertIsInstance(gem.texts[0], str)             # 피드백은 글만
         self.assertIn("알레르기·재료 고지", gem.texts[0])
+        self.assertIn("HEARD_BY_SECOND_RECOGNIZER", gem.texts[0])
         self.assertNotIn("score\": 3", json.dumps(d))        # AI 가 준 점수는 버림
 
     def test_no_gemini_key_uses_template_feedback(self) -> None:
@@ -274,7 +300,7 @@ class ProviderChainTest(Base):
                                 "openai": lambda n: Resp(200, stt_ok(TARGET))},
                                keys=("GROQ_API_KEY", "OPENAI_API_KEY"))
         _, d = self.speak(GOOD)
-        self.assertEqual(fake.calls, {"groq": 30, "openai": 1})
+        self.assertEqual(fake.calls, {"groq": 30, "openai": 1, "assemblyai": 1, "pyannoteai": 1})
         self.assertEqual((d["stt"]["provider"], d["stt"]["skipped_providers"]), ("openai", ["groq"]))
         self.assertEqual(d["attempts"], 31)
         self.assertTrue(d["usable"])
@@ -290,15 +316,16 @@ class ProviderChainTest(Base):
     def test_unconfigured_provider_skipped(self) -> None:
         fake, _ = self.install({"openai": lambda n: Resp(200, stt_ok(TARGET))}, keys=("OPENAI_API_KEY",))
         _, d = self.speak(GOOD)
-        self.assertEqual((d["stt"]["provider"], fake.calls), ("openai", {"openai": 1}))
+        self.assertEqual((d["stt"]["provider"], fake.calls),
+                         ("openai", {"openai": 1, "assemblyai": 1, "pyannoteai": 1}))
 
-    def test_assemblyai_no_speech_models_and_language(self) -> None:
-        fake, _ = self.install({}, keys=("ASSEMBLYAI_API_KEY",))
-        fake.aai_text = "I have a peanut allergy."
+    def test_assemblyai_checker_no_speech_models_and_language(self) -> None:
+        fake, _ = self.install({"groq": lambda n: Resp(200, stt_ok(TARGET))})
         _, d = self.speak(GOOD)
         job = [p for p in fake.posts if p["url"].endswith("/transcript")][0]["json"]
         self.assertEqual(job, {"audio_url": "https://cdn/x", "language_code": "en"})   # speech_models 없음
-        self.assertEqual((d["stt"]["provider"], d["score"]), ("assemblyai", 100))
+        self.assertEqual(d["cross_validation"]["checker"]["provider"], "assemblyai")
+        self.assertEqual(d["score"], 100)
 
     def test_404_model_cooled_and_rotated(self) -> None:
         def groq(n: int) -> Resp:
@@ -320,3 +347,98 @@ class ModelPickTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CrossValidationTest(Base):
+    """교차검증 필수화: 다른 모델 계열 전사(AssemblyAI) + 두 번째 말소리 검출기(pyannoteAI)."""
+
+    def ok(self) -> dict[str, Callable[[int], Resp]]:
+        return {"groq": lambda n: Resp(200, stt_ok(TARGET))}
+
+    def test_whisper_hallucination_rejected_by_checker(self) -> None:
+        """배포 실측 재현: Groq 는 무음에 'you'(no_speech_prob 0.70)를, AssemblyAI 는 '' 를 냈다."""
+        fake, gem = self.install({"groq": lambda n: Resp(200, stt_ok("you", nsp=0.70, lp=-0.71))})
+        fake.aai_text = ""
+        _, d = self.speak(GOOD)
+        self.assertFalse(d["usable"])
+        self.assertIsNone(d["score"])
+        self.assertEqual((d["heard_raw"], d["heard_checker_raw"]), ("you", ""))
+        self.assertEqual(gem.texts, [])
+
+    def test_only_words_both_heard_count(self) -> None:
+        fake, _ = self.install(self.ok())
+        fake.aai_text = "I have a allergy"
+        _, d = self.speak(GOOD)
+        self.assertTrue(d["usable"])
+        self.assertEqual(d["diff"]["missing"], ["peanut"])
+        self.assertLessEqual(d["score"], min(d["diff"]["per_stt"]))
+        self.assertEqual(d["heard_checker"], "I have a allergy")
+
+    def test_pyannote_no_speech_blocks_scoring(self) -> None:
+        fake, gem = self.install(self.ok())
+        fake.pyannote_segments = []
+        _, d = self.speak(GOOD)
+        self.assertFalse(d["usable"])
+        self.assertIn("두 번째 말소리 검출기", d["reason"])
+        self.assertEqual(gem.texts, [])
+
+    def test_checker_failure_means_no_score_after_floor(self) -> None:
+        fake, gem = self.install(self.ok())
+        fake.aai_fail = True
+        _, d = self.speak(GOOD)
+        self.assertFalse(d["usable"])
+        self.assertEqual(d["failed_at"], "cross_validation")
+        self.assertEqual(fake.calls["assemblyai"], 30)          # 교차검증자도 최소 30회
+        self.assertEqual(d["cross_validation"]["checker"]["attempts"], 30)
+        self.assertEqual(gem.texts, [])
+
+    def test_detector_failure_means_no_score_after_floor(self) -> None:
+        fake, _ = self.install(self.ok())
+        fake.pyannote_fail = True
+        _, d = self.speak(GOOD)
+        self.assertFalse(d["usable"])
+        self.assertEqual(fake.calls["pyannoteai"], 30)
+        self.assertIn("detector", d["cross_validation"])
+
+    def test_missing_cross_keys_means_no_score(self) -> None:
+        for k in self.CROSS:
+            with self.subTest(k):
+                fake, _ = self.install(self.ok())
+                os.environ.pop(k)
+                _, d = self.speak(GOOD)
+                self.assertFalse(d["usable"])
+                self.assertEqual(d["failed_at"], "cross_validation")
+                self.assertEqual(fake.posts, [])               # 아무 AI 도 부르지 않는다
+                os.environ[k] = "k"
+
+    def test_openai_is_not_a_checker(self) -> None:
+        """같은 Whisper 계열(OpenAI)은 교차검증자로 쓰지 않는다 — AssemblyAI 가 없으면 채점 안 함."""
+        fake, _ = self.install({"groq": lambda n: Resp(200, stt_ok(TARGET)),
+                                "openai": lambda n: Resp(200, stt_ok(TARGET))}, keys=("GROQ_API_KEY", "OPENAI_API_KEY"))
+        os.environ.pop("ASSEMBLYAI_API_KEY")
+        _, d = self.speak(GOOD)
+        self.assertFalse(d["usable"])
+        self.assertIn("assemblyai", d["cross_validation"]["missing_keys"])
+
+    def test_pyannote_sends_no_model_and_polls(self) -> None:
+        fake, _ = self.install(self.ok())
+        _, d = self.speak(GOOD)
+        dia = [p for p in fake.posts if p["url"].endswith("/diarize")][0]["json"]
+        self.assertEqual(set(dia), {"url"})                      # model 하드코딩 없음
+        self.assertGreater(d["cross_validation"]["detector"]["speech_sec"], 0)
+
+
+class ConsensusUnitTest(unittest.TestCase):
+    def test_consensus_never_above_either(self) -> None:
+        cases = [("I have a peanut allergy", "I have a allergy"), ("I have a cashew allergy", "I have peanut allergy"),
+                 ("I have a peanut allergy please", "I have a peanut allergy")]
+        for a, b in cases:
+            c = compare.compare_consensus(TARGET, a, b)
+            self.assertLessEqual(c["score"], min(c["per_stt"]), (a, b))
+
+    def test_hallucinated_word_by_one_side_does_not_count(self) -> None:
+        c = compare.compare_consensus(TARGET, "I have a peanut allergy", "you")
+        self.assertEqual(c["score"], 0)
+
+    def test_openai_realtime_model_excluded(self) -> None:
+        self.assertEqual(stt.pick_stt_models("openai", ["gpt-realtime-whisper", "whisper-1"]), ["whisper-1"])

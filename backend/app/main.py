@@ -380,10 +380,11 @@ def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
 
 FEEDBACK_PROMPT = (
     "You are a friendly English speaking coach for Korean travelers.\n"
-    "A learner practiced saying the TARGET sentence in the given SITUATION. A speech recognizer "
-    "(not you) transcribed what they said as HEARD, and code compared the two word by word (DIFF). "
+    "A learner practiced saying the TARGET sentence in the given SITUATION. Two independent speech recognizers "
+    "(not you) transcribed what they said as HEARD and HEARD_BY_SECOND_RECOGNIZER, and code compared them with "
+    "the TARGET word by word (DIFF). Only words that BOTH recognizers heard count as correct. "
     "The SCORE was computed by code; you cannot change it and must not output a score.\n"
-    "Base your feedback ONLY on the TARGET, HEARD and DIFF below. You did not hear the audio, so do not "
+    "Base your feedback ONLY on the TARGET, the two HEARD texts and DIFF below. You did not hear the audio, so do not "
     "comment on accent, intonation or sounds that are not visible in the DIFF.\n"
     "Write in Korean:\n"
     '- "fix_one": the single most useful thing to fix next time (one sentence). If nothing differs, '
@@ -393,15 +394,31 @@ FEEDBACK_PROMPT = (
 )
 
 
-def feedback_input(situation: str, target: str, heard: str, diff: dict[str, Any]) -> str:
+def feedback_input(situation: str, target: str, heard: str, diff: dict[str, Any], second_heard: str = "") -> str:
     facts = {
         "SITUATION": situation or "(unknown)",
         "TARGET": target,
         "HEARD": heard,
+        "HEARD_BY_SECOND_RECOGNIZER": second_heard,
         "SCORE": diff["score"],
         "DIFF": {k: diff[k] for k in ("missing", "extra", "replaced")},
     }
     return FEEDBACK_PROMPT + json.dumps(facts, ensure_ascii=False, indent=2)
+
+
+def _run_parallel(tasks: dict[str, Any]) -> dict[str, Any]:
+    """여러 외부 AI 호출을 동시에 돌린다. 예외도 값으로 돌려준다(어느 쪽이 실패했는지 판정에 쓴다)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=len(tasks)) as ex:
+        futures = {k: ex.submit(fn) for k, fn in tasks.items()}
+        out: dict[str, Any] = {}
+        for k, f in futures.items():
+            try:
+                out[k] = f.result()
+            except Exception as exc:  # noqa: BLE001
+                out[k] = exc
+        return out
 
 
 def no_speech(reason: str, **extra: Any) -> dict[str, Any]:
@@ -447,32 +464,66 @@ async def speak_check(
             "mock": True, "vad": speech.summary(),
         }
 
-    # 2) 전사 — 말소리 구간만, 목표 문장 없이. 공급자 체인(최소 30회씩).
-    wav = vad.speech_only_wav(samples, speech)
-    try:
-        tr = await run_in_threadpool(stt.transcribe, wav)
-    except stt.SttChainExhausted as exc:
-        # 평가 실패는 점수·약점으로 저장되면 안 된다.
+    # 교차검증 필수화: 다른 모델 계열의 전사(AssemblyAI)와 두 번째 말소리 검출기(pyannoteAI)가 없으면 채점하지 않는다.
+    missing = [pid for pid in (stt.CHECKER, stt.DETECTOR) if not stt.api_key(pid)]
+    if missing:
         return no_speech(
-            "채점 중 오류가 발생했습니다. 다시 시도해 주세요.",
-            error=exc.last_error, attempts=exc.attempts, failed_at="stt",
-            failures=exc.failures, vad=speech.summary(),
+            "교차검증에 필요한 AI 키가 없어 채점하지 않았습니다.",
+            failed_at="cross_validation", cross_validation={"required": [stt.CHECKER, stt.DETECTOR],
+                                                             "missing_keys": missing},
+            vad=speech.summary(),
         )
-    meta = {"attempts": tr.attempts, "model": tr.model, "failures": tr.failures,
-            "stt": tr.meta(), "vad": speech.summary()}
 
-    # 3) 환각 세그먼트 제거와 무음 판정 — 코드가 한다.
+    # 2) 말소리 구간만, 목표 문장 없이 세 AI 에 동시에 보낸다(지연 시간 = 가장 느린 하나).
+    #    1차 전사(Whisper 계열 체인) · 교차검증 전사(AssemblyAI) · 2차 말소리 검출(pyannoteAI). 각각 최소 30회.
+    wav = vad.speech_only_wav(samples, speech)
+    jobs = await run_in_threadpool(_run_parallel, {
+        "primary": lambda: stt.transcribe(wav),
+        "checker": lambda: stt.transcribe_with(stt.CHECKER, wav),
+        "detector": lambda: stt.detect_speech(wav),
+    })
+    base = {"vad": speech.summary()}
+    if isinstance(jobs["primary"], Exception):
+        exc = jobs["primary"]
+        # 평가 실패는 점수·약점으로 저장되면 안 된다.
+        return no_speech("채점 중 오류가 발생했습니다. 다시 시도해 주세요.", failed_at="stt",
+                         error=getattr(exc, "last_error", str(exc)), attempts=getattr(exc, "attempts", 0),
+                         failures=getattr(exc, "failures", []), **base)
+    tr = jobs["primary"]
+    base.update(attempts=tr.attempts, model=tr.model, failures=tr.failures, stt=tr.meta())
+    broken = {k: jobs[k] for k in ("checker", "detector") if isinstance(jobs[k], Exception)}
+    if broken:
+        return no_speech(
+            "교차검증 AI 가 응답하지 않아 채점하지 않았습니다. 잠시 후 다시 시도해 주세요.",
+            failed_at="cross_validation",
+            cross_validation={k: {"error": getattr(e, "last_error", str(e)), "attempts": getattr(e, "attempts", 0)}
+                              for k, e in broken.items()},
+            **base,
+        )
+    ck, det = jobs["checker"], jobs["detector"]
+    base["cross_validation"] = {"checker": ck.meta(), "detector": det.meta()}
+
+    # 3) 판정 — 모두 코드가 한다.
+    #    두 말소리 검출기(Silero·pyannoteAI)가 모두 말소리를 찾아야 하고,
+    #    두 전사(Whisper 계열·AssemblyAI) 모두 비어 있지 않아야 한다(환각 세그먼트 제거 뒤).
+    if det.speech_sec <= 0:
+        return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요. (두 번째 말소리 검출기가 말소리를 찾지 못함)",
+                         heard_raw=tr.text, **base)
     heard, dropped = compare.filter_segments(tr.text, tr.segments)
-    meta["dropped_segments"] = dropped
-    if compare.is_placeholder(heard):
-        return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요.", heard_raw=tr.text, **meta)
-    diff = compare.compare(target, heard)
+    heard_ck, dropped_ck = compare.filter_segments(ck.text, ck.segments)
+    base["dropped_segments"] = dropped + [dict(d, provider=stt.CHECKER) for d in dropped_ck]
+    if compare.is_placeholder(heard) or compare.is_placeholder(heard_ck):
+        return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요.",
+                         heard_raw=tr.text, heard_checker_raw=ck.text, **base)
+    meta = base
+    # 두 전사 모두에서 들린 목표 단어만 점수가 된다.
+    diff = compare.compare_consensus(target, heard, heard_ck)
     issues = [{"word": w, "note": "빠짐"} for w in diff["missing"]] + \
              [{"word": a, "note": f"'{b}'(으)로 들림"} for a, b in diff["replaced"]] + \
              [{"word": w, "note": "목표 문장에 없음"} for w in diff["extra"]]
 
     # 3) 피드백 문장 — 오디오 없이 비교 결과만 준다. 응답의 다른 키(score 등)는 버린다.
-    prompt = feedback_input(situation, target, heard, diff)
+    prompt = feedback_input(situation, target, heard, diff, heard_ck)
 
     def write_feedback(client: Any, model: str, attempt: int) -> tuple[str, str]:
         data = parse_json_object(ai.generate_text(client, model, prompt, temperature=0.4))
@@ -496,8 +547,9 @@ async def speak_check(
     return {
         "usable": True,
         "score": diff["score"],
-        "score_kind": "word_match",      # 발음 점수가 아니라 단어 일치율
+        "score_kind": "word_match_consensus",   # 발음 점수가 아니라, 두 전사 모두에서 들린 단어 일치율
         "heard": heard,
+        "heard_checker": heard_ck,
         "issues": issues,
         "diff": diff,
         "fix_one": fix_one,

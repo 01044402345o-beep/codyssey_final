@@ -18,3 +18,6 @@ services:
         sync: false
       - key: ASSEMBLYAI_API_KEY
         sync: false
+      # 교차검증 필수: AssemblyAI(다른 모델 계열 전사) + pyannoteAI(두 번째 말소리 검출). 없으면 채점하지 않는다.
+      - key: PYANNOTEAI_API_KEY
+        sync: false

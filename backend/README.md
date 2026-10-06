@@ -65,7 +65,8 @@ python scripts/check_negatives.py
 | `GEMINI_API_KEY` | Google AI Studio에서 발급 | 문장 생성·말하기 피드백. 없으면 생성은 목업, 피드백은 문장 틀 |
 | `GROQ_API_KEY` | console.groq.com | 말하기 전사 1순위(Whisper). STT 키가 하나도 없으면 말하기는 목업 |
 | `OPENAI_API_KEY` | platform.openai.com | 전사 보충(whisper 계열만, gpt-4o-transcribe 제외) |
-| `ASSEMBLYAI_API_KEY` | assemblyai.com | 전사 보충(`speech_models` 를 보내지 않아 계정 기본 모델) |
+| `ASSEMBLYAI_API_KEY` | assemblyai.com | **교차검증 전사(필수)**. `speech_models` 미전송 → 계정 기본 모델. `ASSEMBLY_AI_API_KEY` 도 인식 |
+| `PYANNOTEAI_API_KEY` | pyannote.ai | **두 번째 말소리 검출(필수)**. `model` 미전송. `PYANNOTE_API_KEY` 도 인식 |
 | `GROQ_STT_MODEL` / `OPENAI_STT_MODEL` | 비워 둠 | 고정이 아니라 우선 선호(목록에 있을 때만) |
 | `STT_SELFTEST` | 비워 둠 | `1` 이면 시작 시 공급자별 실제 호출 점검 → `/health` `stt_selftest`. **검증 뒤 지운다**(콜드스타트마다 비용) |
 | `GEMINI_MODEL` | 비워 둠 | **고정이 아니라 우선 선호.** 실행 중 받은 목록에 있을 때만 맨 앞에 둔다 |
@@ -136,7 +137,16 @@ seongbin45/transcribe_app 의 방식을 따랐다(정독·커밋 교차검증 �
    공급자마다 최소 30회·모델 회전·쿨다운, 다 실패해야 다음 공급자. 모델은 `/models` 에서 whisper 계열만 동적으로 고른다.
 3. **환각 필터(코드)** — `no_speech_prob > 0.85`(transcribe_app), `no_speech_prob > 0.6 ∧ avg_logprob < -1.0`(openai/whisper 기본),
    알려진 환각 문구. transcribe_app 은 로컬 엔진에만 적용했지만 여기서는 모든 공급자에 적용한다. 필드가 없으면 그 규칙만 건너뛴다.
-4. 점수(단어 일치율)는 코드, 피드백 문장만 Gemini(오디오 없음, 점수 변경 불가).
+4. **교차검증 필수**(다음 절) — 다른 모델 계열 전사(AssemblyAI)와 두 번째 말소리 검출기(pyannoteAI).
+5. 점수(두 전사 모두에서 들린 단어 일치율)는 코드, 피드백 문장만 Gemini(오디오 없음, 점수 변경 불가).
+
+#### 교차검증 (필수)
+- 배포 자가 점검: Groq·OpenAI(둘 다 Whisper)는 1초 무음에 같은 "you"를 지어냈고 AssemblyAI 는 "" 를 냈다.
+  그래서 1차 전사(Groq→OpenAI)와 **다른 계열**인 AssemblyAI 를 교차검증자로 쓴다. OpenAI 는 검증자로 인정하지 않는다.
+- pyannoteAI 로 말소리를 한 번 더 확인한다(Silero 와 다른 신경망). 둘 다 말소리를 찾아야 채점한다.
+- 세 호출은 동시에(각각 최소 30회). 교차검증 키(`ASSEMBLYAI_API_KEY`·`PYANNOTEAI_API_KEY`)가 없거나 실패하면 **채점하지 않는다**.
+- 점수 `100 × 2·M_both / (T + H_max)` — 각 전사 단독 점수보다 크지 않다. 응답 `cross_validation`, `heard_checker`, `diff.per_stt`, `diff.agreement`.
+- 근거·한계: `docs/research/references.md`.
 
 응답에 `vad`(말소리 구간), `stt`(공급자·모델·시도), `dropped_segments`(필터가 버린 세그먼트)가 들어간다.
 Render 무료 플랜 메모리: faster-whisper+onnxruntime 로드 후 최대 약 88MB(로컬 실측, Whisper 모델은 로드 안 함).
