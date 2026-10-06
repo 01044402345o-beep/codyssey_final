@@ -6,7 +6,7 @@
   const WEAK_KEY = 'cd_weak';
   /* 임시 제품 규칙: 이 점수 미만이면 "취약 상황" 후보로 저장한다. 검증된 학습 기준이 아니다. */
   const WEAK_THRESHOLD = 70;
-  /* 임시 제품 규칙: 서버가 점수를 주지 않을 때(score 선택 항목), 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 후보로 저장한다. */
+  /* 참고 신호: 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 "다르게 들렸어요"로 표시한다 (저장 판정에 쓰지 않음). */
   const HEARD_MATCH_MIN = 0.8;
   const MAX_AUDIO_BYTES = 8 * 1024 * 1024; // backend/app/main.py MAX_AUDIO_BYTES 와 같다
   const GEN_TIMEOUT_MS = 90 * 1000;
@@ -179,19 +179,25 @@
   }
 
   /* ---------- 말하기 결과 → 약점 저장 여부 ----------
-     공통: 서버가 쓸 수 있다고 판정(usable:true) ∧ 목업 아님 ∧ 파싱 실패·점수 폐기 아님 ∧ 실제 AI 문장(유효한 카테고리·상황).
+     이 규칙은 "따라 말하기에서 목표 단어가 빠졌는가"를 보는 임시 저장 규칙이다. 과업 성공·발음·영어 능력 판정이 아니다.
+     (heardCoverage 는 단어 포함 비율일 뿐이라 부정문 "I don't have…"을 같은 문장으로, 자연스러운 대체 표현을 누락으로 볼 수 있다.)
+     공통: 서버가 쓸 수 있다고 판정(usable:true) ∧ 목업 아님 ∧ 파싱 실패·점수 폐기 아님 ∧ 들린 내용(heard) 있음 ∧ 실제 AI 문장(유효한 카테고리·상황).
      점수가 있으면: 0~100 ∧ 임계값 미만.
-     점수가 없으면(모델이 생략): 들린 문장이 있고 목표와 충분히 다를 때만. 무음·인식 실패(heard 없음)는 저장하지 않는다. */
-  function shouldSaveWeak(sentence, res) {
-    if (!sentence || sentence.ai !== true || !str(sentence.categoryId) || !str(sentence.situationId)) return false;
-    if (!ID_RE.test(sentence.categoryId) || !ID_RE.test(sentence.situationId)) return false;
-    if (!res || typeof res !== 'object' || res.usable !== true || res.mock === true || res.score_discarded === true || 'raw' in res) return false;
+     점수가 없으면(모델이 생략): 자동 저장하지 않고 'ask'(사용자 선택). heardCoverage 는 그때 보여주는 참고 신호일 뿐이다.
+     무음·인식 실패(heard 없음)·폐기된 점수는 'none'. 결과: 'auto' | 'ask' | 'none'. */
+  function weakDecision(sentence, res) {
+    if (!sentence || sentence.ai !== true || !str(sentence.categoryId) || !str(sentence.situationId)) return 'none';
+    if (!ID_RE.test(sentence.categoryId) || !ID_RE.test(sentence.situationId)) return 'none';
+    if (!res || typeof res !== 'object' || res.usable !== true || res.mock === true || res.score_discarded === true || 'raw' in res) return 'none';
+    // 무음·인식 실패(heard 없음)는 점수가 낮게 와도 실력 부족이 아니다.
+    if (typeof res.heard !== 'string' || !res.heard.trim()) return 'none';
     const s = res.score;
-    if (s === null || s === undefined) {
-      return typeof res.heard === 'string' && res.heard.trim().length > 0 && heardCoverage(sentence.en, res.heard) < HEARD_MATCH_MIN;
-    }
-    return typeof s === 'number' && Number.isFinite(s) && s >= 0 && s <= 100 && s < WEAK_THRESHOLD;
+    // 점수가 없으면 단어 일치율만으로 자동 저장하지 않는다. 사용자에게 저장할지 묻는다 (일치율은 참고 신호).
+    if (s === null || s === undefined) return 'ask';
+    return typeof s === 'number' && Number.isFinite(s) && s >= 0 && s <= 100 && s < WEAK_THRESHOLD ? 'auto' : 'none';
   }
+  /* 자동 저장(점수 기반 임시 규칙)만 true. 점수가 없는 경우는 weakDecision()이 'ask' 를 돌려주고 사용자가 선택한다. */
+  function shouldSaveWeak(sentence, res) { return weakDecision(sentence, res) === 'auto'; }
 
   /* ---------- 말하기 업로드 ---------- */
   function extFor(mime) {
@@ -218,7 +224,7 @@
   const api = {
     WEAK_KEY, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
-    cleanWeak, upsertWeak, loadWeak, saveWeak, weakIdsFor, weakReviewOf, shouldSaveWeak, extFor, speakCheck,
+    cleanWeak, upsertWeak, loadWeak, saveWeak, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AI = api;

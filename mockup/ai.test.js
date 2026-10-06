@@ -149,21 +149,38 @@ test('shouldSaveWeak: null/NaN/범위 밖/목업/샘플·폴백 문장/파싱 �
   assert.equal(AI.shouldSaveWeak(ai, null), false);
 });
 
-test('shouldSaveWeak: 점수가 없을 때는 들린 문장이 목표와 충분히 다를 때만 저장', () => {
+test('weakDecision: 점수가 없으면 자동 저장하지 않고 사용자에게 묻는다(ask)', () => {
   const ai = { ai: true, categoryId: 'restaurant', situationId: 'allergy_notice', en: 'I have a peanut allergy.' };
-  const r = o => AI.shouldSaveWeak(ai, { usable: true, score: null, ...o });
-  assert.equal(r({ heard: 'I have a nut' }), true);                        // 단어 누락 → 후보
-  assert.equal(r({ heard: 'i have a peanut allergy' }), false);            // 거의 일치 → 저장 안 함
-  assert.equal(r({ heard: 'I HAVE A PEANUT ALLERGY!' }), false);           // 대소문자·구두점 무시
-  assert.equal(r({ heard: '' }), false);                                   // 무음·인식 실패는 실력 부족이 아님
-  assert.equal(r({ heard: '   ' }), false);
-  assert.equal(r({}), false);
-  assert.equal(r({ heard: 'I have a nut', fix_one: '발음' }), true);
-  assert.equal(r({ heard: 'I have a nut', score_discarded: true }), false); // 범위 밖 점수를 서버가 폐기
-  assert.equal(AI.shouldSaveWeak(ai, { usable: true, heard: 'I have a nut' }), true);   // score 키 자체가 없음
-  assert.equal(AI.shouldSaveWeak(ai, { usable: false, heard: 'I have a nut' }), false);
-  assert.equal(AI.shouldSaveWeak(ai, { usable: true, mock: true, heard: 'x' }), false);
+  const d = o => AI.weakDecision(ai, { usable: true, score: null, ...o });
+  assert.equal(d({ heard: 'I have a nut' }), 'ask');
+  assert.equal(d({ heard: "I don't have a peanut allergy." }), 'ask');       // 일치율과 무관하게 ask
+  assert.equal(d({ heard: 'I have an allergy to peanuts' }), 'ask');          // 자연스러운 대체 표현도 자동 저장되지 않음
+  assert.equal(d({ heard: '' }), 'none');                                     // 무음·인식 실패
+  assert.equal(d({ heard: '   ' }), 'none');
+  assert.equal(d({}), 'none');
+  assert.equal(d({ heard: 'x', score_discarded: true }), 'none');            // 범위 밖 점수를 서버가 폐기
+  assert.equal(AI.weakDecision(ai, { usable: true, heard: 'x' }), 'ask');   // score 키 자체가 없음
+  assert.equal(AI.weakDecision(ai, { usable: false, heard: 'x' }), 'none');
+  assert.equal(AI.weakDecision(ai, { usable: true, mock: true, heard: 'x' }), 'none');
+  assert.equal(AI.weakDecision(ai, { usable: true, score: 40, heard: 'x' }), 'auto');
+  assert.equal(AI.weakDecision(ai, { usable: true, score: 90, heard: 'x' }), 'none');
+  assert.equal(AI.weakDecision({ ...ai, ai: false }, { usable: true, score: null, heard: 'x' }), 'none'); // 샘플·폴백 문장
+  // 자동 저장은 점수 경로만
+  assert.equal(AI.shouldSaveWeak(ai, { usable: true, score: null, heard: 'I have a nut' }), false);
   assert.equal(AI.heardCoverage('a b c d', 'a b'), 0.5);
+});
+
+test('shouldSaveWeak: 점수가 있어도 heard 가 없으면(무음) 저장하지 않는다', () => {
+  const ai = { ai: true, categoryId: 'restaurant', situationId: 'order_menu', en: 'A table for two, please.' };
+  assert.equal(AI.shouldSaveWeak(ai, { usable: true, score: 10, heard: '' }), false);
+  assert.equal(AI.shouldSaveWeak(ai, { usable: true, score: 10 }), false);
+  assert.equal(AI.shouldSaveWeak(ai, { usable: true, score: 10, heard: '  ' }), false);
+  assert.equal(AI.shouldSaveWeak(ai, { usable: true, score: 10, heard: 'a table' }), true);
+});
+
+test('heardCoverage 한계(문서화): 부정문은 같은 문장으로, 자연스러운 대체 표현은 누락으로 본다', () => {
+  assert.equal(AI.heardCoverage('I have a peanut allergy.', "I don't have a peanut allergy."), 1);
+  assert.ok(AI.heardCoverage("I'd like a coffee, please.", 'Could I have a coffee, please?') < AI.HEARD_MATCH_MIN);
 });
 
 test('speakCheck: 빈 오디오·용량 초과·API 없음은 업로드 전에 거절, MIME→확장자', async () => {
