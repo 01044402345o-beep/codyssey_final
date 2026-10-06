@@ -193,3 +193,42 @@ test('speakCheck: 빈 오디오·용량 초과·API 없음은 업로드 전에 �
   assert.equal(AI.extFor('audio/ogg; codecs=opus'), 'ogg');
   assert.equal(AI.extFor(''), 'webm');
 });
+
+const memStorage = (init = {}) => {
+  const m = new Map(Object.entries(init));
+  return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k), m };
+};
+const brokenStorage = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); } };
+
+test('동의: 기본은 미동의, 저장하면 시각과 함께 유효', () => {
+  const st = memStorage();
+  assert.deepEqual(AI.loadConsent(st), { voice: false, at: null });
+  assert.equal(AI.saveConsent(st, true, new Date('2026-10-07T01:02:03Z')), true);
+  assert.deepEqual(AI.loadConsent(st), { voice: true, at: '2026-10-07T01:02:03.000Z' });
+  AI.saveConsent(st, false);
+  assert.equal(AI.loadConsent(st).voice, false);
+});
+
+test('동의: 구버전·손상·형식 불일치·저장소 차단은 미동의', () => {
+  const v = AI.CONSENT_VERSION;
+  for (const raw of [JSON.stringify({ version: v - 1, voice: true, at: 'x' }), JSON.stringify({ version: v, voice: 'yes', at: 'x' }),
+                     JSON.stringify({ version: v, voice: true }), JSON.stringify({ version: v, voice: true, at: 'x' }),
+                     JSON.stringify({ version: v, at: '2026-10-07T00:00:00Z' }),   // 로그인 동의 방식(voice 없음) 기록 → 다시 동의
+                     '{broken', 'null', '[]']) {
+    assert.equal(AI.loadConsent(memStorage({ [AI.CONSENT_KEY]: raw })).voice, false, raw);
+  }
+  assert.equal(AI.loadConsent(brokenStorage).voice, false);
+  assert.equal(AI.saveConsent(brokenStorage, true), false);
+});
+
+test('동의 철회: 동의와 복습 목록을 함께 지운다', () => {
+  const st = memStorage();
+  AI.saveConsent(st, true);
+  AI.saveWeak(st, [{ category_id: 'restaurant', id: 'allergy_notice', situation: '알레르기', en: 'I am allergic.', ko: '알레르기' }]);
+  assert.equal(AI.loadWeak(st).length, 1);
+  assert.equal(AI.withdrawConsent(st), true);
+  assert.equal(AI.loadConsent(st).voice, false);
+  assert.equal(AI.loadWeak(st).length, 0);
+  assert.equal(st.m.size, 0);
+  assert.equal(AI.withdrawConsent(brokenStorage), false);
+});
