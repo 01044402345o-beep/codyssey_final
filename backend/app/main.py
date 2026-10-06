@@ -7,6 +7,9 @@ Firebase를 걷어낸 이유가 그대로 재발합니다.
   POST /generate     카테고리 문장 생성 (+ 스키마·규칙 검증 후 재생성)
   POST /speak-check  발음 오디오 → 피드백 (멀티모달)
 
+모델은 고정하지 않고 호출 시점의 사용 가능 목록에서 고르며, AI API 호출은
+하나당 최소 30회 시도한다 (app/gemini.py).
+
 GEMINI_API_KEY 가 없으면 목업으로 응답한다. 그래서 키 없이도 배포·시연이 된다.
 목업·검증실패 결과는 usable 로 구분되므로, 프론트가 학습 화면에 넣지 않게 막을 수 있다.
 """
@@ -25,6 +28,9 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
+
+from . import gemini as ai
 
 from .validators import (
     SCHEMA_CHECKER_AVAILABLE,
@@ -40,8 +46,6 @@ CONTRACT_DIR = Path(os.getenv("CONTRACT_DIR") or (REPO_ROOT / "agent_contract"))
 CATEGORY_DIR = CONTRACT_DIR / "categories"
 SCHEMA_PATH = CONTRACT_DIR / "schema.json"
 
-MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
-MAX_RETRIES = int(os.getenv("MAX_RETRIES", "2"))
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
 MAX_AUDIO_SECONDS = 30
 
@@ -195,21 +199,8 @@ def parse_json_object(text: str) -> dict[str, Any]:
     return json.loads(text[start : end + 1])
 
 
-def call_gemini(prompt: str) -> str:
-    from google import genai
-    from google.genai import types
-
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    resp = client.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.7,
-            max_output_tokens=8192,
-        ),
-    )
-    return resp.text or ""
+class BlockedResult(Exception):
+    """응답은 왔지만 block 이슈가 남음 — 실패한 시도로 세고 다시 생성한다."""
 
 
 def usability(issues: list[dict[str, Any]], mock: bool, degraded: bool) -> str:
@@ -239,7 +230,11 @@ def health() -> dict[str, Any]:
         "config_problems": problems,
         "config_strict": CONFIG_STRICT,
         "schema_checker": SCHEMA_CHECKER_AVAILABLE,
-        "model": MODEL,
+        # 모델은 고정하지 않는다. 마지막으로 받은 목록(첫 AI 호출 전에는 null)만 보여준다.
+        "model_selection": "dynamic",
+        "models": ai.cached_models(),
+        "preferred_model": os.getenv("GEMINI_MODEL") or None,
+        "min_attempts": ai.min_attempts(),
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
         "contract_dir": str(CONTRACT_DIR),
         "categories": list_categories(),
@@ -275,58 +270,65 @@ def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
         }
 
     prompt = build_prompt(cfg, req)
-    last_error = ""
-    last_pack: dict[str, Any] | None = None
-    last_issues: list[dict[str, Any]] = []
+    state: dict[str, Any] = {"last_error": "", "last_pack": None, "last_issues": []}
 
-    for attempt in range(1, MAX_RETRIES + 2):
+    def once(client: Any, model: str, attempt: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        src = prompt if attempt == 1 else (
+            prompt + f"\n\nPrevious attempt was rejected: {state['last_error']}\nFix it and return JSON only."
+        )
         try:
-            src = prompt if attempt == 1 else (
-                prompt + f"\n\nPrevious attempt was rejected: {last_error}\nFix it and return JSON only."
-            )
-            raw = call_gemini(src)
+            raw = ai.generate_text(client, model, src, temperature=0.7, max_output_tokens=8192)
             pack = parse_json_object(raw)
-        except Exception as exc:  # noqa: BLE001
-            last_error = f"{type(exc).__name__}: {exc}"
-            continue
+        except Exception as exc:
+            state["last_error"] = f"{type(exc).__name__}: {exc}"
+            raise
 
-        # 검증기 호출도 try 안에 둔다. 검증기 버그가 500 을 내면 재시도가 무의미해진다.
+        # 검증기 호출도 시도 안에 둔다. 검증기 버그가 500 을 내면 재시도가 무의미해진다.
         try:
             issues = validate_pack(pack, cfg, req.weak_expressions, schema)
-        except Exception as exc:  # noqa: BLE001
-            last_error = f"validator error: {type(exc).__name__}: {exc}"
-            continue
+        except Exception as exc:
+            state["last_error"] = f"validator error: {type(exc).__name__}: {exc}"
+            raise
 
-        last_pack, last_issues = pack, issues
-        if not has_blocking(issues):
-            return {
-                "pack": pack, "issues": issues, "attempts": attempt,
-                "mock": False, "usable": "ok",
-            }
+        state["last_pack"], state["last_issues"] = pack, issues
+        if has_blocking(issues):
+            state["last_error"] = json.dumps(
+                [i for i in issues if i["severity"] == "block"], ensure_ascii=False
+            )
+            raise BlockedResult(state["last_error"])
+        return pack, issues
 
-        last_error = json.dumps(
-            [i for i in issues if i["severity"] == "block"], ensure_ascii=False
-        )
+    try:
+        res = ai.run("generate", once)
+    except ai.AttemptsExhausted as exc:
+        # 최소 시도 횟수를 다 채워도 block 이 남으면 목업으로 대체한다. usable="rejected" 이므로
+        # 프론트는 이 결과를 학습 화면에 넣으면 안 된다는 것을 알 수 있다.
+        last_pack, last_issues = state["last_pack"], state["last_issues"]
+        fallback = mock_pack(cfg, req)
+        if last_issues:
+            final_issues = last_issues
+        else:
+            try:
+                final_issues = validate_pack(fallback, cfg, req.weak_expressions, schema)
+            except Exception as vexc:  # noqa: BLE001
+                final_issues = [{"severity": "block", "code": "validator_error",
+                                 "detail": f"{type(vexc).__name__}: {vexc}"}]
+        return {
+            "pack": last_pack or fallback,
+            "issues": final_issues,
+            # 모델 목록 조회에서 실패했으면 생성 호출은 0회다. failed_at 으로 구분한다.
+            "attempts": exc.attempts if exc.what == "generate" else 0,
+            "failed_at": exc.what,
+            "mock": last_pack is None,
+            "degraded": True,
+            "usable": "rejected",
+            "error": state["last_error"] or exc.last_error,
+        }
 
-    # 재시도에도 block 이 남으면 목업으로 대체한다. 다만 usable="rejected" 이므로
-    # 프론트는 이 결과를 학습 화면에 넣으면 안 된다는 것을 알 수 있다.
-    fallback = mock_pack(cfg, req)
-    if last_issues:
-        final_issues = last_issues
-    else:
-        try:
-            final_issues = validate_pack(fallback, cfg, req.weak_expressions, schema)
-        except Exception as exc:  # noqa: BLE001
-            final_issues = [{"severity": "block", "code": "validator_error",
-                             "detail": f"{type(exc).__name__}: {exc}"}]
+    pack, issues = res.value
     return {
-        "pack": last_pack or fallback,
-        "issues": final_issues,
-        "attempts": MAX_RETRIES + 1,
-        "mock": last_pack is None,
-        "degraded": True,
-        "usable": "rejected",
-        "error": last_error,
+        "pack": pack, "issues": issues, "attempts": res.attempts, "model": res.model,
+        "mock": False, "usable": "ok",
     }
 
 
@@ -369,31 +371,34 @@ async def speak_check(
             "mock": True,
         }
 
-    from google import genai
-    from google.genai import types
+    def once(client: Any, model: str, attempt: int) -> dict[str, Any]:
+        from google.genai import types
+
+        raw = ai.generate_text(
+            client, model,
+            [types.Part.from_bytes(data=audio, mime_type=mime), SPEAK_PROMPT + target],
+            temperature=0.2,
+        )
+        return parse_json_object(raw)
 
     try:
-        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-        resp = client.models.generate_content(
-            model=MODEL,
-            contents=[
-                types.Part.from_bytes(data=audio, mime_type=mime),
-                SPEAK_PROMPT + target,
-            ],
-            config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2),
-        )
-        parsed = parse_json_object(resp.text or "")
-    except Exception as exc:  # noqa: BLE001
+        # 최소 30회 시도 + 대기가 이벤트 루프를 막지 않도록 스레드에서 돌린다.
+        res = await run_in_threadpool(ai.run, "speak-check", once)
+    except ai.AttemptsExhausted as exc:
         # 평가 실패는 점수·약점으로 저장되면 안 된다.
         return {
             "usable": False,
             "reason": "채점 중 오류가 발생했습니다. 다시 시도해 주세요.",
-            "error": f"{type(exc).__name__}: {exc}",
+            "error": exc.last_error,
+            "attempts": exc.attempts if exc.what == "speak-check" else 0,
+            "failed_at": exc.what,
             "score": None, "heard": "", "issues": [], "fix_one": "", "tip": "",
         }
+    parsed = res.value
 
     norm, usable, reason = validate_speak_result(parsed)
     norm["usable"] = usable
+    norm["attempts"], norm["model"] = res.attempts, res.model
     if reason:
         norm["reason"] = reason
     return norm
