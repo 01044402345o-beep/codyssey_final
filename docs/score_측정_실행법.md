@@ -45,23 +45,26 @@ target = "I have a peanut allergy."   ← 세 조건 모두 같은 문장
 **조건별로 따로** 실행한다 (한 번에 하나씩). `--label`이 출력 파일명과 요약 제목이 된다.
 
 ```bash
+# Render 의 실제 HTTPS URL 로 바꿔서 한 번만 지정한다 (<…> 를 그대로 붙이면 셸이 리다이렉션으로 해석한다)
+BASE_URL='여기에_Render의_실제_URL'
+
 # good
 python3 backend/scripts/measure_score_rate.py \
-  --base https://<앱>.onrender.com \
+  --base "$BASE_URL" \
   --audio good.webm \
   --target "I have a peanut allergy." \
   --label good --n 10 --out measure_good_run01.jsonl
 
 # bad
 python3 backend/scripts/measure_score_rate.py \
-  --base https://<앱>.onrender.com \
+  --base "$BASE_URL" \
   --audio bad.webm \
   --target "I have a peanut allergy." \
   --label bad --n 10 --out measure_bad_run01.jsonl
 
 # silent
 python3 backend/scripts/measure_score_rate.py \
-  --base https://<앱>.onrender.com \
+  --base "$BASE_URL" \
   --audio silent.webm \
   --target "I have a peanut allergy." \
   --label silent --n 10 --out measure_silent_run01.jsonl
@@ -89,7 +92,8 @@ python3 backend/scripts/measure_score_rate.py \
 1 HTTP 성공 / 전체 요청                         10 /  10  (100%)
 2 usable:true / 실제 응답                       10 /  10  (100%)
 3 유효 score / usable:true                     9 /  10  (90%)
-4 score 없음+heard 있음 / usable:true             1 /  10  (10%)
+4 점수 누락(null)+heard 있음 / usable:true        1 /  10  (10%)
+  (참고) 값은 있으나 무효한 점수 / usable:true         0 /  10  (0%)
   (참고) score_discarded / 실제 응답               0 /  10  (0%)
   (참고) heard 비어 있음 / 실제 응답                 0 /  10  (0%)
 ```
@@ -101,7 +105,7 @@ python3 backend/scripts/measure_score_rate.py \
 | 1 | 전체 요청 | 네트워크·서버가 살아 있는가 |
 | 2 | 실제 응답(HTTP 200 ∧ 목업 아님) | 모델이 `usable:true`를 주는가 |
 | 3 | `usable:true` | **점수가 유효하게 오는가** (bool 제외·유한·0~100·폐기 아님) |
-| 4 | `usable:true` | 점수는 없고 `heard`만 있는가 → **`ask` 후보** (프론트는 AI 문장 여부·유효한 상황 ID 등 다른 조건도 확인하므로 이 지표가 곧 `ask`는 아니다) |
+| 4 | `usable:true` | **점수가 누락(null/없음)** 이고 `heard`는 있는가 → **`ask` 후보**. 점수 값이 있으나 무효(범위 밖·bool·문자열)인 응답은 여기 넣지 않고 "(참고) 값은 있으나 무효한 점수"로 센다. 프론트는 AI 문장 여부·유효한 상황 ID 등 다른 조건도 확인하므로 **이 비율을 `ask` 발생률로 읽지 않는다** |
 | 참고 | 실제 응답 | 점수를 줬다가 버린 경우 / 들린 내용이 빈 경우 |
 
 ---
@@ -111,7 +115,7 @@ python3 backend/scripts/measure_score_rate.py \
 | 관찰 | 해석 | 조치 |
 |---|---|---|
 | **good**: 3번 ≥ 80% | 점수가 자주 온다 (**점수가 타당한지, 자동 저장이 적절한지는 별개**) | `auto`(70 미만 자동 저장) 규칙을 임시로 유지. good이 낮은 점수를 받으면 오저장 가능성이 있고, 높은 점수면 정상이지만 자동 저장은 일어나지 않는다. `bad`와 비교해서 본다 |
-| **good**: 3번 < 50%, 4번 높음 | 모델이 점수를 자주 생략 | `auto` 경로가 거의 안 쓰임 → **제품은 `ask`(사용자 선택)가 기본**. 발표에서도 이 사실을 그대로 말한다 |
+| **good**: 3번 < 50%, 4번 높음 | 모델이 점수를 자주 생략 (JSONL의 `response`로 누락인지 무효값인지 확인) | `auto` 경로가 거의 안 쓰임 → **제품은 `ask`(사용자 선택)가 기본**. 발표에서도 이 사실을 그대로 말한다 |
 | **bad**: 3번 유효 score가 **높게**(70 이상) 나옴 | 틀린 발화를 통과시킴 | 자동 저장 규칙 신뢰 불가 — `ask` 비중을 높이는 쪽으로 |
 | **silent**: 4번이 아니라 **3번이 높음** | **무음에 점수를 줌 — 결함** | `heard` 빈값 가드가 저장은 막지만(`none`), 점수 자체가 무의미 → `measure` 기록과 함께 보고 |
 | **silent**: 참고 `heard 비어 있음` = 100% | 정상 | 무음이 무음으로 인식됨 |
@@ -154,9 +158,10 @@ python3 backend/scripts/measure_score_rate.py \
 
 | 항목 | 결과 |
 |---|---|
-| 분류 규칙 단위 테스트 (`test_measure_score_rate.py`) | **3 tests OK** (실행 확인) |
+| 분류 규칙 단위 테스트 (`test_measure_score_rate.py`) | 4 tests OK (이 저장소 작업 세션에서 실행 확인) |
 | 가짜 로컬 서버에 응답 5종(정상 점수 · 점수 없음 · `usable:false` · 깨진 JSON · 429)을 보내 집계·원본 JSONL 기록 확인 | 분모별 집계가 의도대로 나옴 (실행 확인) |
 | 연결 불가 서버 대상 실행 | 중단 없이 분모 0으로 종료 (실행 확인) |
+| good·bad·silent 스텁 서버 3조건 실행 | **다른 작업 세션의 실행 보고** (good → 3번 100%, bad → 4번 100%, silent → heard 비어 있음 100%). 재현 자료(명령·로그) 미첨부 |
 | 실제 Gemini 호출 | **미검증** — 키와 URL 필요 |
 
 > 위는 합성 응답으로 확인한 것이다. **실제 Gemini 응답의 점수 반환률은 아직 모른다.**
