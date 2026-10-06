@@ -32,12 +32,12 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from . import gemini as ai
+from . import speech_compare as compare
 
 from .validators import (
     SCHEMA_CHECKER_AVAILABLE,
     has_blocking,
     validate_pack,
-    validate_speak_result,
 )
 
 # main.py 는 backend/app/ 에 있다. 저장소 루트의 agent_contract/ 를 본다.
@@ -347,16 +347,50 @@ def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     }
 
 
-SPEAK_PROMPT = (
-    "You are an English pronunciation and speaking coach for Korean travelers. "
-    "Listen to the audio and compare it to the target.\n"
-    'Return JSON only: {"heard": "what you actually heard", '
-    '"fix_one": "the single most important thing to fix, in Korean", '
-    '"issues": [{"word": "...", "note": "..."}], '
-    '"tip": "one short Korean tip", "score": optional 0-100}.\n'
-    "If the audio is silent or unintelligible, set heard to \"\" and leave score out.\n"
-    "TARGET: "
+# ---------------------------------------------------------------- 말하기 판정
+# 원칙: AI 에게는 최소 권한만 준다 (docs/research/speak-hallucination.md).
+#   1) 받아쓰기 AI 는 목표 문장을 모른다. 목표 문장을 함께 주면 무음에도 목표 문장을 들었다고
+#      지어냈다 (배포 실측 10/10, 95~100점).
+#   2) 무음 판정·점수·빠진 단어는 코드가 정한다 (app/speech_compare.py).
+#   3) 피드백 AI 는 오디오 없이 코드가 낸 비교 결과만 받아 문장을 쓴다. 점수는 바꿀 수 없다.
+
+TRANSCRIBE_PROMPT = (
+    "Transcribe this audio verbatim in English. Write only the words that are actually spoken, "
+    "exactly as pronounced, including mistakes. Do not guess, complete, correct or paraphrase. "
+    "If there is no intelligible speech (silence, noise, breathing), return an empty string.\n"
+    'Return JSON only: {"heard": "..."}'
 )
+
+FEEDBACK_PROMPT = (
+    "You are a friendly English speaking coach for Korean travelers.\n"
+    "A learner practiced saying the TARGET sentence in the given SITUATION. A speech recognizer "
+    "(not you) transcribed what they said as HEARD, and code compared the two word by word (DIFF). "
+    "The SCORE was computed by code; you cannot change it and must not output a score.\n"
+    "Base your feedback ONLY on the TARGET, HEARD and DIFF below. You did not hear the audio, so do not "
+    "comment on accent, intonation or sounds that are not visible in the DIFF.\n"
+    "Write in Korean:\n"
+    '- "fix_one": the single most useful thing to fix next time (one sentence). If nothing differs, '
+    "praise briefly and suggest one natural variation useful in this situation.\n"
+    '- "tip": one short practical tip for using this sentence in this situation.\n'
+    'Return JSON only: {"fix_one": "...", "tip": "..."}\n\n'
+)
+
+
+def feedback_input(situation: str, target: str, heard: str, diff: dict[str, Any]) -> str:
+    facts = {
+        "SITUATION": situation or "(unknown)",
+        "TARGET": target,
+        "HEARD": heard,
+        "SCORE": diff["score"],
+        "DIFF": {k: diff[k] for k in ("missing", "extra", "replaced")},
+    }
+    return FEEDBACK_PROMPT + json.dumps(facts, ensure_ascii=False, indent=2)
+
+
+def no_speech(reason: str, **extra: Any) -> dict[str, Any]:
+    """말이 없거나 받아쓰기에 실패한 경우. 점수·피드백을 만들지 않는다."""
+    return {"usable": False, "reason": reason, "score": None, "heard": "", "issues": [],
+            "fix_one": "", "tip": "", **extra}
 
 
 @app.post("/speak-check")
@@ -364,6 +398,7 @@ async def speak_check(
     request: Request,
     target: str = Form(..., max_length=200),
     file: UploadFile = File(...),
+    situation: str = Form("", max_length=120),
 ) -> dict[str, Any]:
     rate_limit(request)
 
@@ -386,38 +421,72 @@ async def speak_check(
             "mock": True,
         }
 
-    def once(client: Any, model: str, attempt: int) -> dict[str, Any]:
+    # 1) 받아쓰기 — 목표 문장을 주지 않는다.
+    def transcribe(client: Any, model: str, attempt: int) -> str:
         from google.genai import types
 
         raw = ai.generate_text(
             client, model,
-            [types.Part.from_bytes(data=audio, mime_type=mime), SPEAK_PROMPT + target],
-            temperature=0.2,
+            [types.Part.from_bytes(data=audio, mime_type=mime), TRANSCRIBE_PROMPT],
+            temperature=0.0,
         )
-        return parse_json_object(raw)
+        heard = parse_json_object(raw).get("heard")
+        if not isinstance(heard, str):
+            raise ValueError("heard 가 문자열이 아님")
+        return heard.strip()
 
     try:
         # 최소 30회 시도 + 대기가 이벤트 루프를 막지 않도록 스레드에서 돌린다.
-        res = await run_in_threadpool(ai.run, "speak-check", once)
+        tr = await run_in_threadpool(ai.run, "speak-check", transcribe)
     except ai.AttemptsExhausted as exc:
         # 평가 실패는 점수·약점으로 저장되면 안 된다.
-        return {
-            "usable": False,
-            "reason": "채점 중 오류가 발생했습니다. 다시 시도해 주세요.",
-            "error": exc.last_error,
-            "attempts": exc.attempts if exc.what == "speak-check" else 0,
-            "failed_at": exc.what,
-            "failures": exc.failures,
-            "score": None, "heard": "", "issues": [], "fix_one": "", "tip": "",
-        }
-    parsed = res.value
+        return no_speech(
+            "채점 중 오류가 발생했습니다. 다시 시도해 주세요.",
+            error=exc.last_error,
+            attempts=exc.attempts if exc.what == "speak-check" else 0,
+            failed_at=exc.what, failures=exc.failures,
+        )
+    meta = {"attempts": tr.attempts, "model": tr.model, "failures": tr.failures}
 
-    norm, usable, reason = validate_speak_result(parsed)
-    norm["usable"] = usable
-    norm["attempts"], norm["model"], norm["failures"] = res.attempts, res.model, res.failures
-    if reason:
-        norm["reason"] = reason
-    return norm
+    # 2) 무음 판정과 점수 — 코드가 한다.
+    if compare.is_placeholder(tr.value):
+        return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요.", heard_raw=tr.value, **meta)
+    heard = tr.value
+    diff = compare.compare(target, heard)
+    issues = [{"word": w, "note": "빠짐"} for w in diff["missing"]] + \
+             [{"word": a, "note": f"'{b}'(으)로 들림"} for a, b in diff["replaced"]] + \
+             [{"word": w, "note": "목표 문장에 없음"} for w in diff["extra"]]
+
+    # 3) 피드백 문장 — 오디오 없이 비교 결과만 준다. 응답의 다른 키(score 등)는 버린다.
+    prompt = feedback_input(situation, target, heard, diff)
+
+    def write_feedback(client: Any, model: str, attempt: int) -> tuple[str, str]:
+        data = parse_json_object(ai.generate_text(client, model, prompt, temperature=0.4))
+        fix_one, tip = data.get("fix_one"), data.get("tip")
+        if not (isinstance(fix_one, str) and fix_one.strip() and isinstance(tip, str)):
+            raise ValueError("fix_one/tip 형식 오류")
+        return fix_one.strip(), tip.strip()
+
+    try:
+        fb = await run_in_threadpool(ai.run, "speak-feedback", write_feedback)
+        (fix_one, tip), feedback = fb.value, {"source": "ai", "attempts": fb.attempts, "model": fb.model}
+    except ai.AttemptsExhausted as exc:
+        # 점수는 코드가 이미 정했으므로 결과는 쓸 수 있다. 문구만 사실 기반 문장 틀로 대신한다.
+        fix_one, tip = compare.template_feedback(diff)
+        feedback = {"source": "template", "attempts": exc.attempts, "error": exc.last_error}
+
+    return {
+        "usable": True,
+        "score": diff["score"],
+        "score_kind": "word_match",      # 발음 점수가 아니라 단어 일치율
+        "heard": heard,
+        "issues": issues,
+        "diff": diff,
+        "fix_one": fix_one,
+        "tip": tip,
+        "feedback": feedback,
+        **meta,
+    }
 
 
 # 화면(목업)을 같은 서비스에서 서빙한다. 반드시 모든 API 라우트 등록 뒤에 마운트한다.

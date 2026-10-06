@@ -66,13 +66,14 @@ jobs:
         run: |
           pip install -r backend/requirements.txt playwright==1.63.0
           python -m playwright install --with-deps chromium
-      - name: 동의 흐름 E2E
+      - name: 동의 · 무음 E2E
         working-directory: backend
         run: |
           uvicorn app.main:app --port 8768 &
           for i in $(seq 1 30); do curl -sf localhost:8768/health > /dev/null && break; sleep 1; done
           mkdir -p ../e2e-shots
           python ../e2e/test_consent.py http://localhost:8768 ../e2e-shots
+          python ../e2e/test_silence.py http://localhost:8768 ../e2e-shots
       - uses: actions/upload-artifact@v4
         if: always()
         with:

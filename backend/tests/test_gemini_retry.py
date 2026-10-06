@@ -369,13 +369,16 @@ class EndpointTest(Base):
         self.assertFalse(d["usable"])
 
     def test_speak_success_after_failures(self) -> None:
-        ok = json.dumps({"heard": "Hello.", "fix_one": "", "issues": [], "tip": "", "score": 90})
-        fake = self.install(gen_fn=lambda n, _m: ok if n == 9 else "")
+        # 9번째에 받아쓰기 성공 → 10번째 호출은 피드백(글만). 같은 JSON 이 두 역할을 다 채운다.
+        ok = json.dumps({"heard": "Hello.", "fix_one": "좋아요", "tip": "또 말해 봐요"})
+        fake = self.install(gen_fn=lambda n, _m: ok if n >= 9 else "")
         d = self.speak()
-        self.assertEqual(len(fake.gen_calls), 9)
+        self.assertEqual(len(fake.gen_calls), 10)
         self.assertEqual(d["attempts"], 9)
         self.assertEqual(d["heard"], "Hello.")
+        self.assertEqual(d["score"], 100)                  # 목표 'Hello.' 와 같음 — 코드 판정
         self.assertEqual(len(d["failures"]), 8)
+        self.assertEqual(d["feedback"]["attempts"], 1)
 
     def test_health_reports_dynamic_selection(self) -> None:
         d = self.http.get("/health").json()
