@@ -70,6 +70,41 @@ def compare(target: str, heard: str) -> dict[str, Any]:
     }
 
 
+def _matched_target_indices(t: list[str], h: list[str]) -> set[int]:
+    sm = SequenceMatcher(a=t, b=h, autojunk=False)
+    return {b.a + k for b in sm.get_matching_blocks() for k in range(b.size)}
+
+
+def compare_consensus(target: str, heard_a: str, heard_b: str) -> dict[str, Any]:
+    """두 전사(서로 다른 모델 계열)에서 **둘 다** 목표 단어로 들은 것만 인정한다.
+
+    score = 100 × 2·M_both / (T + H_max)
+      M_both: 두 전사 모두에서 같은 자리로 맞은 목표 단어 수
+      H_max : 두 전사 중 긴 쪽 단어 수(덧붙인 말도 보수적으로 깎는다)
+    이 값은 각 전사 단독 점수보다 항상 작거나 같다 — 한쪽만 들은(또는 한쪽이 지어낸) 단어는 점수가 되지 않는다.
+    missing 은 '둘 중 하나라도 듣지 못한' 목표 단어다.
+    """
+    t, ha, hb = words(target), words(heard_a), words(heard_b)
+    a, b = compare(target, heard_a), compare(target, heard_b)
+    if not t:
+        return {**a, "agreement": None, "per_stt": [a["score"], b["score"]]}
+    both = _matched_target_indices(t, ha) & _matched_target_indices(t, hb)
+    h_max = max(len(ha), len(hb))
+    score = round(100 * 2 * len(both) / (len(t) + h_max))
+    missing = [w for i, w in enumerate(t) if i not in both]
+    agreement = round(SequenceMatcher(a=ha, b=hb, autojunk=False).ratio(), 2)
+    return {
+        "score": score,
+        "missing": missing,
+        "extra": sorted(set(a["extra"]) | set(b["extra"])),
+        "replaced": a["replaced"] or b["replaced"],
+        "target_words": len(t),
+        "heard_words": h_max,
+        "agreement": agreement,            # 두 전사 서로의 단어 일치도(0~1)
+        "per_stt": [a["score"], b["score"]],
+    }
+
+
 def template_feedback(diff: dict[str, Any]) -> tuple[str, str]:
     """피드백 AI 호출이 끝내 실패했을 때의 대체 문구 (사실만 말한다)."""
     if diff.get("replaced"):

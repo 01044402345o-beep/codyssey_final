@@ -82,7 +82,7 @@ def run() -> None:
     with _lock:
         _state.update(status="running", results={})
     tts = FIXTURE.read_bytes() if FIXTURE.exists() else None
-    for pid in stt.configured():
+    for pid in stt.configured():   # 전사 공급자(groq·openai·assemblyai)
         out: dict[str, Any] = {}
         try:
             out["models"] = stt.available_models(pid, stt.session())
@@ -93,6 +93,19 @@ def run() -> None:
         out["tts_expected"] = FIXTURE_TEXT
         with _lock:
             _state["results"][pid] = out
+    if stt.api_key(stt.DETECTOR):
+        det: dict[str, Any] = {}
+        for label, wav in (("silence_1s", silence_wav()), ("tts", tts)):
+            if wav is None:
+                continue
+            t0 = time.time()
+            try:
+                r = stt.detect_speech(wav)
+                det[label] = {"ok": True, **r.meta(), "seconds": round(time.time() - t0, 1)}
+            except ai.AttemptsExhausted as exc:
+                det[label] = {"ok": False, "attempts": exc.attempts, "error": exc.last_error}
+        with _lock:
+            _state["results"][stt.DETECTOR] = det
     with _lock:
         _state["status"] = "done"
 

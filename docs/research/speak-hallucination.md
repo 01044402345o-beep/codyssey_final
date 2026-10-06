@@ -113,9 +113,26 @@
 
 | 가정 | 공급자 | 결과 |
 |---|---|---|
-| `verbose_json` 세그먼트에 `no_speech_prob`·`avg_logprob` 가 있다, 현재 whisper 모델 목록 | Groq | (배포 후 기록) |
-| whisper 계열 `verbose_json` 필드 / gpt-4o-transcribe 제외 | OpenAI | (배포 후 기록) |
-| `speech_models` 생략 가능, `language_code: en`, 무음 응답 | AssemblyAI | (배포 후 기록) |
+| `verbose_json` 세그먼트에 `no_speech_prob`·`avg_logprob` 가 있다, 현재 whisper 모델 목록 | Groq | ✅ 둘 다 있음. 모델 `whisper-large-v3`, `whisper-large-v3-turbo`. TTS → 정확(no_speech 0.001, 0.4초). **1초 무음 → " you"(no_speech 0.70, avg_logprob −0.71) — 기존 필터 통과** |
+| whisper 계열 `verbose_json` 필드 / gpt-4o-transcribe 제외 | OpenAI | ✅ `whisper-1` 에 같은 필드. 목록에 **`gpt-realtime-whisper`** 가 있어 이름 필터를 통과 → 전사 엔드포인트 404 → 'whisper 로 시작' 규칙으로 수정. 1초 무음 → "you"(no_speech 0.94, 필터가 제거) |
+| `speech_models` 생략 가능, `language_code: en`, 무음 응답 | AssemblyAI | ✅ 생략 시 계정 기본 `universal-3-5-pro`. **1초 무음 → ""(환각 없음)**, TTS 정확(2.5~3.8초). 세그먼트 확률은 없음 |
+
+→ 결론: Whisper 계열(Groq·OpenAI)은 무음에서 같은 "you"를 지어낸다(문헌 B4·B10 과 일치). 둘의 합의는 독립 검증이 아니다.
+AssemblyAI 는 같은 무음에 빈 결과를 냈다(문헌 B3 과 일치).
+
+## 3-2. 교차검증 필수화 (사용자 결정, 2026-10-07)
+
+```
+녹음 → Silero VAD(서버) ── 말소리 0 → 끝
+     → 동시에: ① 1차 전사 Groq Whisper(→ OpenAI Whisper)  ② 교차검증 전사 AssemblyAI  ③ 2차 말소리 검출 pyannoteAI
+       (각각 최소 30회, 목표 문장 없음)
+     → [코드] pyannoteAI 도 말소리를 찾아야 하고, 두 전사 모두 환각 제거 뒤 비어 있지 않아야 한다
+     → [코드] 두 전사 모두에서 들린 목표 단어만 점수: 100 × 2·M_both / (T + H_max)  ≤  각 전사 단독 점수
+     → 교차검증 키가 없거나 30회 실패 → 채점하지 않음
+```
+- 같은 Whisper 계열(OpenAI)은 교차검증자로 인정하지 않는다.
+- pyannoteAI 는 `model` 을 보내지 않는다(transcribe_app 은 화자 수 힌트 때문에 `precision-2` 고정 — 우리는 힌트 불필요, 하드코딩 금지).
+- 문헌 근거·한계: `references.md`. 특히 두 검출기 AND 는 오탐을 줄이는 대신 작은·서툰 발화를 놓칠 수 있다(A9) — 실제 학습자 녹음으로 거부율을 재야 한다.
 
 ## 4. 한계 (정직하게)
 - 점수는 **단어 일치율**이다. 억양·강세·음소 수준의 **발음 품질은 재지 않는다**. 그러려면 Azure Pronunciation Assessment 같은 음향 기반 채점이 필요하다.

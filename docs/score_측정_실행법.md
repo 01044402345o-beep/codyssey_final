@@ -183,14 +183,14 @@ python3 backend/scripts/measure_score_rate.py \
 | 맞게 읽음 (TTS) | 3 | 3 | 3 (95~100점) | 정확 |
 | 다른 문장 (TTS) | 3 | 3 | 3 (10~20점) | 정확 ("where is the subway station") |
 
-### 수정 후 (받아쓰기 AI 는 목표 문장을 모름, 점수는 코드)
+### 수정 후 (`e961b55`: Silero VAD + Groq Whisper, 점수는 코드)
 
-머지·배포 뒤 같은 명령으로 채운다.
+| 입력 | n | usable:true | 점수 | heard | 비고 |
+|---|---:|---:|---|---|---|
+| 1초 완전 무음 WAV | 10 | **0** | 없음 | "" | VAD 말소리 0초, 전사 API 호출 0회 |
+| 맞게 읽음 (TTS) | 3 | 3 | 100·100·100 | "I have a peanut allergy." | Groq `whisper-large-v3`, 1회 시도 |
+| 다른 문장 (TTS) | 3 | 3 | 0·0·0 | "Where is the subway station?" | 들린 문장을 그대로 받아씀 |
 
-| 입력 | n | usable:true | 유효 점수 | heard |
-|---|---:|---:|---:|---|
-| 1초 완전 무음 WAV | 10 | | | |
-| 맞게 읽음 (TTS) | 3 | | | |
-| 다른 문장 (TTS) | 3 | | | |
+원자료: 측정 스크립트 jsonl(로컬 보관). 교차검증 필수화(다음 PR) 뒤 같은 표를 다시 잰다.
 
 > 수정 후 점수는 **단어 일치율**(`score_kind: "word_match"`)이다. 수정 전 점수(AI 가 매긴 발음 점수)와 뜻이 다르므로 숫자를 직접 비교하지 않는다. 비교할 것은 무음에 점수가 나오는지와 heard 를 지어내는지다.
