@@ -13,6 +13,11 @@
    - SDK 자체 재시도는 끈다(attempts=1). 그래야 시도 횟수 = 실제 API 요청 수다.
    - 성공하면 그 자리에서 멈춘다. '최소'는 실패를 확정하기 전까지의 하한이다.
    - 시도마다 모델 목록을 순서대로 돌아가며 쓴다. 한 모델의 장애·할당량 초과를 다른 모델로 흡수한다.
+
+3. 모델 상태를 기억한다 (프로세스 메모리).
+   - 마지막으로 성공한 모델을 다음 요청에서 먼저 쓴다.
+   - 404(제공 중단)·429(할당량)·5xx(과부하) 로 실패한 모델은 일정 시간 순서의 뒤로 미룬다.
+   - 미루는 것이지 빼는 것이 아니다. 모든 모델이 미뤄져 있어도 30회는 그대로 시도한다.
 """
 from __future__ import annotations
 
@@ -43,6 +48,11 @@ _client_factory: Callable[[], Any] | None = None      # 테스트에서 가짜 �
 
 _models_lock = threading.Lock()
 _models_cache: tuple[float, list[str]] | None = None
+
+# 모델 상태: 마지막 성공 모델 + 실패로 뒤로 미룬 모델 {이름: (해제 시각, 사유)}
+_state_lock = threading.Lock()
+_last_good: str | None = None
+_cooldown: dict[str, tuple[float, str]] = {}
 
 
 def _env_int(key: str, default: int) -> int:
@@ -222,9 +232,76 @@ def cached_models() -> list[str] | None:
 
 
 def reset_cache() -> None:
-    global _models_cache
+    global _models_cache, _last_good
     with _models_lock:
         _models_cache = None
+    with _state_lock:
+        _last_good = None
+        _cooldown.clear()
+
+
+def cooldown_for(exc: BaseException) -> tuple[float, str] | None:
+    """실패 종류별로 그 모델을 얼마나 뒤로 미룰지. 모델 탓이 아닌 실패(빈 응답·JSON·검증)는 None."""
+    code = getattr(exc, "code", None)
+    if not isinstance(code, int):
+        if isinstance(exc, TimeoutError) or "timeout" in type(exc).__name__.lower():
+            return _env_float("AI_COOLDOWN_BUSY", 60.0), "timeout"
+        return None
+    if code in (403, 404):
+        return _env_float("AI_COOLDOWN_GONE", 6 * 3600.0), f"{code} 사용 불가"
+    if code == 400:   # 요청 형식 문제일 수도 있어(예: 오디오 미지원) 길게 미루지 않는다
+        return _env_float("AI_COOLDOWN_QUOTA", 600.0), "400 요청 거부"
+    if code == 429:
+        return _env_float("AI_COOLDOWN_QUOTA", 600.0), "429 할당량"
+    if code >= 500:
+        return _env_float("AI_COOLDOWN_BUSY", 60.0), f"{code} 과부하"
+    return None
+
+
+def note_failure(model: str, exc: BaseException) -> None:
+    cd = cooldown_for(exc)
+    if cd is None:
+        return
+    seconds, reason = cd
+    with _state_lock:
+        _cooldown[model] = (time.time() + max(0.0, seconds), reason)
+
+
+def note_success(model: str) -> None:
+    global _last_good
+    with _state_lock:
+        _last_good = model
+        _cooldown.pop(model, None)
+
+
+def attempt_order(models: list[str]) -> list[str]:
+    """이번 요청의 시도 순서. 마지막 성공 모델 → 정상 모델(원래 순서) → 미룬 모델(빨리 풀리는 순).
+
+    목록의 모델은 하나도 빠지지 않는다. 순서만 바뀐다.
+    """
+    now = time.time()
+    with _state_lock:
+        cooling = {m: until for m, (until, _r) in _cooldown.items() if until > now and m in models}
+        last = _last_good
+    healthy = [m for m in models if m not in cooling]
+    if last in healthy:
+        healthy.remove(last)
+        healthy.insert(0, last)
+    return healthy + sorted(cooling, key=lambda m: (cooling[m], models.index(m)))
+
+
+def model_health() -> dict[str, Any]:
+    """/health 용 — 마지막 성공 모델과 지금 뒤로 미뤄 둔 모델."""
+    now = time.time()
+    with _state_lock:
+        return {
+            "last_good": _last_good,
+            "cooling": {
+                m: {"reason": r, "seconds_left": int(until - now)}
+                for m, (until, r) in sorted(_cooldown.items())
+                if until > now
+            },
+        }
 
 
 @dataclass
@@ -238,14 +315,22 @@ class Result(Generic[T]):
 def run(what: str, fn: Callable[[Any, str, int], T]) -> Result[T]:
     """fn(client, model, attempt) 를 최소 시도 규칙으로 실행한다. 시도마다 모델을 돌아가며 쓴다."""
     client = make_client()
-    models = available_models(client)
+    order = attempt_order(available_models(client))
 
     def model_of(attempt: int) -> str:
-        return models[(attempt - 1) % len(models)]
+        return order[(attempt - 1) % len(order)]
 
-    value, attempts, failures = retry(
-        what, lambda attempt: fn(client, model_of(attempt), attempt), model_of
-    )
+    def once(attempt: int) -> T:
+        model = model_of(attempt)
+        try:
+            value = fn(client, model, attempt)
+        except Exception as exc:
+            note_failure(model, exc)
+            raise
+        note_success(model)
+        return value
+
+    value, attempts, failures = retry(what, once, model_of)
     return Result(value=value, attempts=attempts, model=model_of(attempts), failures=failures)
 
 
