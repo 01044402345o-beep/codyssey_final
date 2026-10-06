@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "codyssey_final/agent_contract/schema.json",
+  "title": "SentencePack",
+  "description": "문장 생성 1회의 출력. 모든 카테고리가 같은 형식을 쓴다. AI는 이 형식으로만 응답하고, 벗어나면 재시도한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["category_id", "city", "sentences"],
+  "properties": {
+    "category_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "예: restaurant, transport, lodging, emergency"
+    },
+    "city": { "type": "string", "minLength": 1 },
+    "sentences": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["situation_id", "situation", "en", "ko"],
+        "properties": {
+          "place": {
+            "type": "string",
+            "description": "이 문장을 쓸 장소 이름. 공통 상황이면 생략 가능"
+          },
+          "place_type": {
+            "type": "string",
+            "description": "예: restaurant, cafe, airport, hotel"
+          },
+          "situation_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "카테고리 설정의 situations[].situation_id 중 하나"
+          },
+          "situation": { "type": "string", "minLength": 1 },
+          "en": { "type": "string", "minLength": 1 },
+          "ko": { "type": "string", "minLength": 1 },
+          "level": { "type": "string", "enum": ["basic", "intermediate", "advanced"] },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "targets_weak": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "이 문장이 겨냥한 취약 상황 id 목록(= 이 문장의 situation_id와 같은 값). 없으면 생략. 예: ['allergy_notice']. 화면의 '저장된 취약 상황 복습' 표시 근거."
+          }
+        }
+      }
+    }
+  }
+}

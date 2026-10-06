@@ -1,0 +1,146 @@
+{
+  "category_id": "restaurant",
+  "category": "식당·카페",
+  "owner": "이영애",
+  "place_types": ["restaurant", "cafe"],
+
+  "rules": {
+    "min_sentences_per_situation": 1,
+    "max_sentences_per_situation": 3,
+    "max_words_per_sentence": 15,
+    "min_sentences_per_category": 8,
+    "tone": "polite"
+  },
+
+  "situations": [
+    { "situation_id": "reserve_table",   "situation": "자리 예약·문의" },
+    { "situation_id": "ask_wait",        "situation": "대기 시간·웨이팅 확인" },
+    { "situation_id": "order_menu",      "situation": "대표 메뉴 주문" },
+    { "situation_id": "ask_recommend",   "situation": "추천 메뉴 요청" },
+    { "situation_id": "allergy_notice",  "situation": "알레르기·재료 고지",
+      "required_keywords": ["allergy", "allergic"] },
+    { "situation_id": "request_side",    "situation": "추가 요청 (물·리필·소스)",
+      "required_keywords": ["refill", "one more", "another"] },
+    { "situation_id": "ask_ingredient",  "situation": "재료·조리법 질문" },
+    { "situation_id": "takeout",         "situation": "포장 요청" },
+    { "situation_id": "pay_check",       "situation": "계산·영수증 요청",
+      "required_keywords": ["check", "bill", "receipt"] },
+    { "situation_id": "tip_split",       "situation": "팁·더치페이" }
+  ],
+
+  "system_prompt": "You generate travel English practice sentences for the 'restaurant / cafe' category.\n\nINPUT: city, a list of places (place_type in [restaurant, cafe]), the situation list, and the learner's weak situations.\n\nRULES:\n- Output ONLY JSON matching the attached schema. No prose, no markdown fences.\n- Generate between {min_sentences_per_situation} and {max_sentences_per_situation} sentences for each situation_id.\n- English: polite register, at most {max_words_per_sentence} words, immediately usable on the spot.\n- Korean: natural translation, not word-for-word.\n- If a weak situation is given, it MUST have at least one sentence, and that sentence must contain the situation's required_keywords (e.g. allergy_notice -> allergy/allergic).\n- Do NOT encourage drinking, or raise politics or religion.\n- Never repeat the same English sentence across situations.\n- When a specific place is given, reference its signature dish or feature where natural.",
+
+  "good_examples": [
+    {
+      "place": "Katz's Delicatessen",
+      "place_type": "restaurant",
+      "situation_id": "order_menu",
+      "situation": "대표 메뉴 주문",
+      "en": "I'd like a pastrami sandwich, please.",
+      "ko": "파스트라미 샌드위치 하나 주세요.",
+      "level": "basic",
+      "tags": ["주문"]
+    },
+    {
+      "place": "Katz's Delicatessen",
+      "place_type": "restaurant",
+      "situation_id": "allergy_notice",
+      "situation": "알레르기·재료 고지",
+      "en": "I have a peanut allergy. Does this contain peanuts?",
+      "ko": "땅콩 알레르기가 있어요. 이거에 땅콩이 들어가나요?",
+      "level": "basic",
+      "tags": ["알레르기", "안전"],
+      "targets_weak": ["allergy_notice"]
+    },
+    {
+      "place": "A local cafe",
+      "place_type": "cafe",
+      "situation_id": "request_side",
+      "situation": "추가 요청 (물·리필·소스)",
+      "en": "Could I get a refill, please?",
+      "ko": "리필 한 번 더 주시겠어요?",
+      "level": "basic",
+      "tags": ["추가요청"]
+    }
+  ],
+
+  "negative_cases": [
+    {
+      "case_id": "forbidden_topic",
+      "why": "음주 권유·정치 화제",
+      "expect": "forbidden_topic",
+      "sentence": {
+        "place_type": "restaurant",
+        "situation_id": "ask_recommend",
+        "situation": "추천 메뉴 요청",
+        "en": "Do you want to grab a beer and talk about politics?",
+        "ko": "맥주 마시면서 정치 얘기 할래요?"
+      }
+    },
+    {
+      "case_id": "place_mismatch",
+      "why": "카테고리에 없는 상황 (식당인데 체크인)",
+      "expect": "situation_not_in_config",
+      "sentence": {
+        "place_type": "restaurant",
+        "situation_id": "check_in",
+        "situation": "호텔 체크인",
+        "en": "I'd like to check in. My reservation is under Kim.",
+        "ko": "체크인하고 싶어요. 김으로 예약했습니다."
+      }
+    },
+    {
+      "case_id": "too_long",
+      "why": "15단어 초과",
+      "expect": "too_long",
+      "sentence": {
+        "place_type": "restaurant",
+        "situation_id": "request_side",
+        "situation": "추가 요청 (물·리필·소스)",
+        "en": "Excuse me, I was wondering if it might be possible for me to possibly get a glass of water at some point when you have a moment.",
+        "ko": "실례합니다, 혹시 잠시 괜찮으실 때 물 한 잔 받을 수 있을까요?"
+      }
+    },
+    {
+      "case_id": "duplicate",
+      "why": "같은 팩 안에서 영문 중복",
+      "expect": "duplicate_en",
+      "sentence": {
+        "place_type": "restaurant",
+        "situation_id": "request_side",
+        "situation": "추가 요청 (물·리필·소스)",
+        "en": "Could I get a refill, please?",
+        "ko": "리필 한 번 더 주시겠어요?"
+      }
+    },
+    {
+      "case_id": "not_polite",
+      "why": "명령조",
+      "expect": "not_polite",
+      "sentence": {
+        "place_type": "restaurant",
+        "situation_id": "pay_check",
+        "situation": "계산·영수증 요청",
+        "en": "Gimme the check.",
+        "ko": "계산서 줘."
+      }
+    }
+  ],
+
+  "negative_case_patterns": {
+    "_note": "terms 는 소문자 기준 부분일치. '행위·태도'만 넣고 명사(beer, wine)나 'now' 같은 일반어는 넣지 말 것 — 정상 문장을 막는다. severity=block 은 재생성, warn 은 검토 대상.",
+    "forbidden_topic": {
+      "severity": "block",
+      "match": "substring",
+      "terms": ["let's drink", "let's get drunk", "you should drink", "get drunk", "talk about politics", "about religion"]
+    },
+    "place_mismatch": { "severity": "block", "type": "situation_in_config" },
+    "too_long": { "severity": "warn", "type": "word_count", "max": 15 },
+    "duplicate": { "severity": "warn", "type": "duplicate_en" },
+    "not_polite": {
+      "severity": "warn",
+      "match": "substring",
+      "terms": ["gimme", "give me the", "hurry up", "right now"]
+    }
+  }
+}

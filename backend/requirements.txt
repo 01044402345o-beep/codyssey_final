@@ -1,0 +1,7 @@
+# 시연 안정성을 위해 고정한다.
+# 10/20 이전 고정 완료. google-genai 는 10/3에 2.28.0 기준으로 확인.
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+google-genai==2.28.0
+python-multipart==0.0.32
+jsonschema==4.26.0
