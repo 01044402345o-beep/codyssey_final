@@ -370,7 +370,7 @@ function makeRoute() {
 /* ================= 생성 흐름 (FR-GEN-01~03) ================= */
 function stepsFor(stage) {
   const t = S.trip, cs = t.cities.map(c => c.name);
-  if (stage === 'report') return [`${t.country} 여행 정보를 확인하고 있어요`, ...cs.flatMap(c => [`${josa(c, '의', '의')} 관광지를 웹에서 찾고 있어요`, `${josa(c, '의', '의')} 맛집과 대표 메뉴를 찾고 있어요`]), '출처와 응답 형식을 확인하고 있어요'];
+  if (stage === 'report') return [`${t.country} 여행 정보를 확인하고 있어요`, ...cs.flatMap(c => [`${josa(c, '의', '의')} 관광지를 고르고 있어요`, `${josa(c, '의', '의')} 맛집과 대표 메뉴를 고르고 있어요`]), '출처를 정리하고 있어요'];
   if (stage === 'route') return ['선택한 장소의 지역을 확인하고 있어요', '날짜별로 장소를 배치하고 있어요', '방문 순서 규칙을 검사하고 있어요'];
   return ['문장 수를 계산하고 있어요', '장소별 영어 문장을 만들고 있어요', '맛집 대표 메뉴 주문 문장을 확인하고 있어요', '학습 일정표를 계산하고 있어요'];
 }
@@ -705,7 +705,7 @@ function scrLogin() {
     <h1 style="margin-top:10px">Speak where<br>you'll <em>actually</em><br>be.</h1>
     <p class="sub">여행지와 일정을 입력하면, 실제로 갈 관광지와 맛집에서 쓸 영어 문장을 만들어 출발 전부터 매일 학습하게 해 드려요.</p>
     <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">로그인하지 않으면 다른 화면에 들어갈 수 없어요.</p>
-      <p class="small" style="text-align:center;margin-top:8px">일부 문장은 AI가 만들어요 · 학습 기록은 이 브라우저에만 저장돼요 · 말하기 연습을 쓰면 녹음이 채점 서버로 전송돼요.</p></div>
+      <p class="small" style="text-align:center;margin-top:8px">맛집 문장은 AI가 만들고 'AI 생성' 표시가 붙어요 · 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API로 전송돼요 · 장소 목록은 예시 데이터예요 · 학습 기록은 이 브라우저에만 저장돼요 · 말하기 연습은 동의한 뒤에만 녹음을 채점 서버로 보내요.</p></div>
   </div>`);
 }
 
@@ -769,7 +769,7 @@ function scrGen() {
   const t = S.trip;
   if (!t || !/_(requested|generating|failed)$/.test(t.status)) {
     return frame(`<div class="app-pad"><div class="empty" style="padding-top:120px"><div class="ico">${I.info}</div>
-      <b style="color:var(--ink);font-size:16px">진행 중인 생성 작업이 없어요</b><p>AI가 보고서, 방문 순서, 문장을 만드는 동안 이 화면이 나타나요.<br>오른쪽 데모 버튼으로 생성·실패·멈춤 화면을 확인할 수 있어요.</p>
+      <b style="color:var(--ink);font-size:16px">진행 중인 생성 작업이 없어요</b><p>보고서, 방문 순서, 문장을 만드는 동안 이 화면이 나타나요. (맛집 문장은 AI가 만들어요)<br>오른쪽 데모 버튼으로 생성·실패·멈춤 화면을 확인할 수 있어요.</p>
       ${t ? `<button class="btn soft" data-act="tab" data-id="${t.status === 'studying' ? 'u-home' : t.status === 'report_done' ? 'u-report' : 'u-input'}">현재 단계로 돌아가기</button>` : `<button class="btn soft" data-act="tab" data-id="u-input">여행 입력으로</button>`}
       </div></div>`);
   }
@@ -822,7 +822,7 @@ function scrReport() {
     <div class="city-tabs">${t.cities.map(c => `<button class="${c.name === city ? 'on' : ''}" data-act="city-tab" data-city="${esc(c.name)}">${esc(c.name)} <b>${selCount(c.name)}/${S.reportMeta[c.name].base}</b></button>`).join('')}</div>
     <div class="stack" style="margin-bottom:14px">
       ${locked ? notice('장소를 확정했어요. 이제 선택을 바꿀 수 없어요.', 'plain') : ''}
-      ${notice('웹 검색으로 최신 정보를 모았지만, 영업시간과 메뉴는 바뀔 수 있어요.')}
+      ${notice('이 장소 목록은 <b>미리 준비한 예시 데이터</b>예요. (AI 웹 검색은 아직 연결 전이에요) 영업시간과 메뉴는 바뀔 수 있으니 방문 전에 확인해 주세요.')}
       ${nonEng ? notice('현지에서 영어가 통하지 않을 수 있어요.', 'warn') : ''}
       ${meta.found < meta.base ? notice(`추천할 장소를 충분히 찾지 못했어요. 기본 ${meta.base}곳 중 ${meta.found}곳만 찾았어요. 후보로 채울 수 있어요.`, 'warn') : ''}
       ${sel < meta.base / 2 ? notice('장소가 적어 비어 있는 날(자유 일정)이 생길 수 있어요.', 'warn') : ''}
@@ -884,7 +884,7 @@ function scrRoute() {
 /* SCR-06 */
 function scrHome() {
   const t = S.trip, ph = phase();
-  if (ph === 'ended') return frame(`<div class="app-pad">${endBody()}</div>`, { tabbar: true });
+  if (ph === 'ended') return frame(`<div class="app-pad">${endBody()}${privacyCard()}</div>`, { tabbar: true });
   const pr = progress();
   let hero;
   if (ph === 'trip') {
@@ -923,6 +923,7 @@ function scrHome() {
       <div class="mini-stats"><div><span>완료한 날</span><b>${pr.done}일</b></div><div><span>학습 날짜</span><b>${pr.den}일</b></div>
       <div class="${pr.miss ? 'bad' : ''}"><span>미완료</span><b>${pr.miss}일</b></div><div><span>자유 일정 (제외)</span><b>${pr.free}일</b></div></div></div>
     ${upcoming.length ? `<div class="sec-title"><h4>다가오는 일정</h4></div>${upcoming.map(srow).join('')}` : ''}
+    ${privacyCard()}
   </div>`;
   return frame(inner, { tabbar: true });
 }
@@ -995,7 +996,7 @@ function scrStudy() {
     ? `<div class="tts-row"><button class="tts-btn" data-act="speak-card">${I.speaker}듣기</button><button class="tts-rate" data-act="rate">${S.ttsRate < 0.9 ? '느리게' : '보통 속도'}</button></div>`
     : `<div class="tts-off">이 브라우저는 듣기를 지원하지 않아요. 카드 학습은 계속할 수 있어요.</div>`;
   const inner = `<div class="app-pad">${head}${banner ? banner + '<div style="height:10px"></div>' : ''}
-    <div class="flip" data-act="flip">
+    <div class="flip ${S.card.back === S.card.i ? 'flipped' : ''}" data-act="flip">
       <div class="flip-inner">
         <div class="face front"><div class="ctx">${tag}${aiBadges(s)}${isNew ? '<span class="badge b-new">새 문장</span>' : ''}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
           <div class="ko">${phHtml(s.ko)}</div><div class="hint">탭해서 영어 문장 보기 ↻</div></div>
@@ -1030,7 +1031,7 @@ function updateStudyLive() {
 function scrColl() {
   const tab = S.coll.tab, f = S.coll.filter;
   const learnBadge = s => s.learnPhase === 'none' ? '<span class="badge b-only">문장 모음 전용</span>' : s.learnPhase === 'trip' ? '<span class="badge b-new">여행 중 새 문장</span>' : '';
-  const item = s => `<div class="sent"><div><div class="tags">${learnBadge(s)}<span class="small">${esc(s.situation)}</span></div><div class="en">${phHtml(s.en)}</div><div class="ko">${phHtml(s.ko)}</div></div>
+  const item = s => `<div class="sent"><div><div class="tags">${learnBadge(s)}${aiBadges(s)}<span class="small">${esc(s.situation)}</span></div><div class="en">${phHtml(s.en)}</div><div class="ko">${phHtml(s.ko)}</div></div>
     <button class="play" data-act="speak" data-id="${s.id}">${I.speaker}</button></div>`;
   let body;
   if (tab === 'common') {
@@ -1170,7 +1171,7 @@ function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
-function go(id) { cancelSpeak(); S.screen = id; S.modal = null; render(); }
+function go(id) { cancelSpeak(); S.card.back = null; S.screen = id; S.modal = null; render(); }
 
 function navFromMenu(id) {
   S.modal = null;
@@ -1248,7 +1249,40 @@ function speakHtml(s) {
     if (r.offer) res += `<button class="speak-btn" data-act="weak-save">이 상황을 복습 목록에 저장</button>`;
   }
   return `<button class="speak-btn ${st === 'recording' ? 'rec' : ''}" data-act="speak-rec" ${st === 'requesting' || st === 'uploading' ? 'disabled' : ''}>${label}</button>${res}
-    <div class="speak-note">녹음은 채점을 위해 ${esc(host)} 서버와 AI 서비스로 전송돼요.</div>`;
+    <div class="speak-note">녹음은 채점을 위해 ${esc(host)} 서버와 Google Gemini API로 전송돼요.${voiceConsent().voice ? ' (동의함 · 홈에서 철회)' : ' 처음 녹음할 때 동의를 받아요.'}</div>`;
+}
+/* 말하기 연습 동의 — 녹음이 서버와 Google 로 나가고 복습 목록이 쌓이므로 첫 녹음 전에 받는다.
+   저장소가 막힌 브라우저에서는 이번 접속 동안만 기억한다(consentMem). */
+let consentMem = false;
+const voiceConsent = () => { const c = AI.loadConsent(localStorage); return c.voice ? c : consentMem ? { voice: true, at: null } : c; };
+function askVoiceConsent() {
+  const host = esc(API.host || location.host);
+  confirmBox('말하기 연습 전에 확인해 주세요',
+    `<b>보내는 것</b> · 녹음한 목소리(최대 15초)와 연습 중인 영어 문장<br>
+     <b>받는 곳</b> · 이 서비스 서버(${host}) → Google Gemini API<br>
+     <b>목적</b> · 발음 채점과 피드백 (AI가 만든 결과예요)<br>
+     <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요(받은 녹음을 채점에 넘기기만 해요).<br>
+     <b>Google 처리</b> · 무료 등급 API에서는 Google이 전송된 내용을 제품 개선에 사용하고 사람 검토자가 읽을 수 있어요(계정·키와는 분리돼요). <b>민감한 개인정보는 말하지 마세요.</b><br>
+     <b>이 브라우저에 저장</b> · 채점 결과로 고른 '어려워한 상황'(복습 목록). 다음 문장을 만들 때 상황 이름만 서버로 보내요.<br><br>
+     동의하지 않아도 카드 학습과 듣기는 그대로 쓸 수 있어요. 동의는 홈 화면에서 언제든 철회할 수 있고, 철회하면 복습 목록도 지워져요.`,
+    '동의하고 녹음하기', () => {
+      S.modal = null;
+      if (!AI.saveConsent(localStorage, true)) consentMem = true;
+      render(); toggleSpeak();
+    }, { cancel: '동의하지 않기' });
+}
+function privacyCard() {
+  const c = voiceConsent(), n = weakList().length;
+  const when = c.at ? Dt.full(c.at.slice(0, 10)) : '이번 접속';
+  return `<div class="sec-title"><h4>AI · 개인정보</h4></div><div class="card">
+    <p class="small" style="line-height:1.7">· 'AI 생성' 표시가 붙은 문장과 말하기 채점은 AI가 만든 결과예요. 틀릴 수 있어요.<br>
+      · AI 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API로 전송돼요.<br>
+      · 말하기 연습 동의: <b>${c.voice ? `동의함 (${when})` : '동의하지 않음'}</b>${c.voice ? '' : ' — 처음 녹음할 때 물어봐요'}<br>
+      · 복습 목록: <b>${n}개</b> · 이 브라우저에만 저장돼요</p>
+    ${c.voice || n ? `<div style="display:flex;gap:8px;margin-top:10px">
+      ${c.voice ? '<button class="btn soft" style="flex:1" data-act="consent-withdraw">동의 철회</button>' : ''}
+      ${n ? '<button class="btn soft" style="flex:1" data-act="weak-delete">복습 목록 삭제</button>' : ''}</div>` : ''}
+  </div>`;
 }
 const weakItem = s => ({ category_id: s.categoryId, id: s.situationId, situation: s.situation, en: s.en, ko: s.ko });
 function updateSpeakUi() {
@@ -1269,6 +1303,7 @@ function stopSpeak() { clearTimeout(SPK.timer); SPK.timer = null; if (SPK.rec &&
 async function toggleSpeak() {
   if (SPK.state === 'requesting' || SPK.state === 'uploading') return;      // 중복 요청 방지
   if (SPK.state === 'recording') { stopSpeak(); return; }
+  if (!voiceConsent().voice) { askVoiceConsent(); return; }                 // 동의 전에는 마이크도 열지 않는다
   const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]]; if (!s) return;
   cancelSpeak();
   const tok = SPK.tok; SPK.sid = s.id; SPK.state = 'requesting'; updateSpeakUi();
@@ -1331,6 +1366,21 @@ const ACT = {
   'weak-demo': () => { AI.saveWeak(localStorage, DEMO_WEAK.reduce((l, w) => AI.upsertWeak(l, w), weakList())); renderDemo(); toast('데모 학습 기록을 불러왔어요. 실제 학습에서 생긴 기록이 아니에요.'); },
   'weak-clear': () => { AI.saveWeak(localStorage, []); renderDemo(); toast('복습 목록을 비웠어요.'); },
   'speak-rec': () => toggleSpeak(),
+  'consent-withdraw': () => confirmBox('동의를 철회할까요?',
+    `말하기 연습을 다시 쓰려면 새로 동의해야 해요. 이 브라우저에 저장된 복습 목록 ${weakList().length}개도 함께 지워요.`,
+    '철회하고 지우기', () => {
+      S.modal = null; cancelSpeak(); consentMem = false;
+      const ok = AI.withdrawConsent(localStorage);
+      render(); renderDemo();
+      toast(ok ? '동의를 철회하고 복습 목록을 지웠어요.' : '브라우저 저장소에 접근하지 못했어요. 브라우저 설정에서 이 사이트 데이터를 지워 주세요.');
+    }, { danger: true }),
+  'weak-delete': () => confirmBox('복습 목록을 지울까요?',
+    `이 브라우저에 저장된 어려워한 상황 ${weakList().length}개를 지워요. 다음 문장 생성부터 반영돼요.`,
+    '지우기', () => {
+      S.modal = null;
+      const ok = AI.saveWeak(localStorage, []);
+      render(); renderDemo(); toast(ok ? '복습 목록을 지웠어요.' : '브라우저 저장소에 접근하지 못했어요.');
+    }, { danger: true }),
   'weak-save': () => {
     const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]];
     if (!s || SPK.sid !== s.id || !SPK.result || !SPK.result.offer) return;       // 다른 카드·취소된 결과에는 저장하지 않는다
@@ -1398,6 +1448,8 @@ const ACT = {
   'study-date': el => { S.studyDate = el.dataset.date; S.justCompleted = null; go('u-study'); },
   flip: el => {
     el.classList.toggle('flipped');
+    // 보고 있는 면을 기억한다. 동의 창 등으로 화면을 다시 그려도 카드가 앞면으로 돌아가지 않게.
+    S.card.back = el.classList.contains('flipped') ? S.card.i : null;
     if (el.classList.contains('flipped')) { S.card.flipped.add(S.card.i); updateStudyLive(); }
     else if (ttsSupported()) speechSynthesis.cancel();
   },

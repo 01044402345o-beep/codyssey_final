@@ -4,6 +4,9 @@
   'use strict';
 
   const WEAK_KEY = 'cd_weak';
+  /* 말하기 연습 동의. 문구를 바꾸면 CONSENT_VERSION 을 올려 다시 동의를 받는다. */
+  const CONSENT_KEY = 'cd_consent';
+  const CONSENT_VERSION = 2;   // v2: Gemini 무료 등급 데이터 사용·민감정보 금지 고지 추가
   /* 임시 제품 규칙: 이 점수 미만이면 "취약 상황" 후보로 저장한다. 검증된 학습 기준이 아니다. */
   const WEAK_THRESHOLD = 70;
   /* 참고 신호: 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 "다르게 들렸어요"로 표시한다 (저장 판정에 쓰지 않음). */
@@ -159,6 +162,28 @@
   function saveWeak(storage, list) {
     try { storage.setItem(WEAK_KEY, JSON.stringify(cleanWeak(list))); return true; } catch (e) { return false; }
   }
+  /* 동의는 '현재 버전 + voice === true + 시각' 이 모두 맞을 때만 유효하다. 손상·구버전·차단은 미동의로 본다. */
+  function loadConsent(storage) {
+    try {
+      const c = JSON.parse(storage.getItem(CONSENT_KEY) || 'null');
+      if (c && c.version === CONSENT_VERSION && c.voice === true && typeof c.at === 'string' && !Number.isNaN(Date.parse(c.at))) return { voice: true, at: c.at };
+    } catch (e) { /* 손상·차단 */ }
+    return { voice: false, at: null };
+  }
+  function saveConsent(storage, voice, now = new Date()) {
+    try {
+      if (voice) storage.setItem(CONSENT_KEY, JSON.stringify({ version: CONSENT_VERSION, voice: true, at: now.toISOString() }));
+      else storage.removeItem(CONSENT_KEY);
+      return true;
+    } catch (e) { return false; }
+  }
+  /* 동의 철회: 동의 기록과, 동의 아래에서 쌓인 복습 목록을 함께 지운다. 둘 다 지워졌을 때만 true. */
+  function withdrawConsent(storage) {
+    let ok = saveConsent(storage, false);
+    try { storage.removeItem(WEAK_KEY); } catch (e) { ok = false; }
+    return ok;
+  }
+
   /* 요청에는 해당 카테고리의 취약 상황 id 만 보낸다 (서버가 현재 유효한 id 로 다시 거른다). */
   function weakIdsFor(list, categoryId) {
     return cleanWeak(list).filter(w => w.category_id === categoryId).map(w => w.id);
@@ -222,7 +247,7 @@
   }
 
   const api = {
-    WEAK_KEY, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
+    WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
   };
