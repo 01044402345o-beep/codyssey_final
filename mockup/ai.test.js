@@ -212,7 +212,9 @@ test('동의: 기본은 미동의, 저장하면 시각과 함께 유효', () => 
 test('동의: 구버전·손상·형식 불일치·저장소 차단은 미동의', () => {
   const v = AI.CONSENT_VERSION;
   for (const raw of [JSON.stringify({ version: v - 1, voice: true, at: 'x' }), JSON.stringify({ version: v, voice: 'yes', at: 'x' }),
-                     JSON.stringify({ version: v, voice: true }), '{broken', 'null', '[]']) {
+                     JSON.stringify({ version: v, voice: true }), JSON.stringify({ version: v, voice: true, at: 'x' }),
+                     JSON.stringify({ version: v, at: '2026-10-07T00:00:00Z' }),   // 로그인 동의 방식(voice 없음) 기록 → 다시 동의
+                     '{broken', 'null', '[]']) {
     assert.equal(AI.loadConsent(memStorage({ [AI.CONSENT_KEY]: raw })).voice, false, raw);
   }
   assert.equal(AI.loadConsent(brokenStorage).voice, false);

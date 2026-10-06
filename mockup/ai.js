@@ -6,7 +6,7 @@
   const WEAK_KEY = 'cd_weak';
   /* 말하기 연습 동의. 문구를 바꾸면 CONSENT_VERSION 을 올려 다시 동의를 받는다. */
   const CONSENT_KEY = 'cd_consent';
-  const CONSENT_VERSION = 1;
+  const CONSENT_VERSION = 2;   // v2: Gemini 무료 등급 데이터 사용·민감정보 금지 고지 추가
   /* 임시 제품 규칙: 이 점수 미만이면 "취약 상황" 후보로 저장한다. 검증된 학습 기준이 아니다. */
   const WEAK_THRESHOLD = 70;
   /* 참고 신호: 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 "다르게 들렸어요"로 표시한다 (저장 판정에 쓰지 않음). */
@@ -166,7 +166,7 @@
   function loadConsent(storage) {
     try {
       const c = JSON.parse(storage.getItem(CONSENT_KEY) || 'null');
-      if (c && c.version === CONSENT_VERSION && c.voice === true && typeof c.at === 'string') return { voice: true, at: c.at };
+      if (c && c.version === CONSENT_VERSION && c.voice === true && typeof c.at === 'string' && !Number.isNaN(Date.parse(c.at))) return { voice: true, at: c.at };
     } catch (e) { /* 손상·차단 */ }
     return { voice: false, at: null };
   }

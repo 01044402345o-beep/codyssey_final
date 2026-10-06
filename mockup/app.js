@@ -705,7 +705,7 @@ function scrLogin() {
     <h1 style="margin-top:10px">Speak where<br>you'll <em>actually</em><br>be.</h1>
     <p class="sub">여행지와 일정을 입력하면, 실제로 갈 관광지와 맛집에서 쓸 영어 문장을 만들어 출발 전부터 매일 학습하게 해 드려요.</p>
     <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">로그인하지 않으면 다른 화면에 들어갈 수 없어요.</p>
-      <p class="small" style="text-align:center;margin-top:8px">맛집 문장은 AI가 만들고 'AI 생성' 표시가 붙어요 · 장소 목록은 예시 데이터예요 · 학습 기록은 이 브라우저에만 저장돼요 · 말하기 연습은 동의한 뒤에만 녹음을 채점 서버로 보내요.</p></div>
+      <p class="small" style="text-align:center;margin-top:8px">맛집 문장은 AI가 만들고 'AI 생성' 표시가 붙어요 · 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API로 전송돼요 · 장소 목록은 예시 데이터예요 · 학습 기록은 이 브라우저에만 저장돼요 · 말하기 연습은 동의한 뒤에만 녹음을 채점 서버로 보내요.</p></div>
   </div>`);
 }
 
@@ -1261,7 +1261,8 @@ function askVoiceConsent() {
     `<b>보내는 것</b> · 녹음한 목소리(최대 15초)와 연습 중인 영어 문장<br>
      <b>받는 곳</b> · 이 서비스 서버(${host}) → Google Gemini API<br>
      <b>목적</b> · 발음 채점과 피드백 (AI가 만든 결과예요)<br>
-     <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요. Google 은 Gemini API 약관에 따라 처리하며, 무료 등급에서는 서비스 개선에 쓰이고 사람이 검토할 수 있어요.<br>
+     <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요(받은 녹음을 채점에 넘기기만 해요).<br>
+     <b>Google 처리</b> · 무료 등급 API에서는 Google이 전송된 내용을 제품 개선에 사용하고 사람 검토자가 읽을 수 있어요(계정·키와는 분리돼요). <b>민감한 개인정보는 말하지 마세요.</b><br>
      <b>이 브라우저에 저장</b> · 채점 결과로 고른 '어려워한 상황'(복습 목록). 다음 문장을 만들 때 상황 이름만 서버로 보내요.<br><br>
      동의하지 않아도 카드 학습과 듣기는 그대로 쓸 수 있어요. 동의는 홈 화면에서 언제든 철회할 수 있고, 철회하면 복습 목록도 지워져요.`,
     '동의하고 녹음하기', () => {
@@ -1275,6 +1276,7 @@ function privacyCard() {
   const when = c.at ? Dt.full(c.at.slice(0, 10)) : '이번 접속';
   return `<div class="sec-title"><h4>AI · 개인정보</h4></div><div class="card">
     <p class="small" style="line-height:1.7">· 'AI 생성' 표시가 붙은 문장과 말하기 채점은 AI가 만든 결과예요. 틀릴 수 있어요.<br>
+      · AI 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API로 전송돼요.<br>
       · 말하기 연습 동의: <b>${c.voice ? `동의함 (${when})` : '동의하지 않음'}</b>${c.voice ? '' : ' — 처음 녹음할 때 물어봐요'}<br>
       · 복습 목록: <b>${n}개</b> · 이 브라우저에만 저장돼요</p>
     ${c.voice || n ? `<div style="display:flex;gap:8px;margin-top:10px">
