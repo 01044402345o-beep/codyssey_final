@@ -37,6 +37,16 @@ PR 본문에 아래 4개를 체크해 주세요.
 - [ ] `good_examples` — 좋은 출력 예시 3개
 - [ ] `negative_cases` — 반드시 걸러야 할 예시 5개 (금칙·장소 불일치·중복·길이·말투)
 
+**PR 올리기 전에 점검 한 줄** (내 파일이 서버가 읽을 수 있는 형식인지 확인합니다):
+
+```bash
+pip install -r backend/requirements.txt          # 처음 한 번
+python backend/scripts/validate_category.py agent_contract/categories/<내_id>.json
+```
+
+`오류 0개` 가 나오면 PR 해도 됩니다. 오류는 무엇을 고칠지 한국어로 알려줍니다.
+문장이 자연스러운지·상황이 실제로 쓸모 있는지는 이 점검이 보지 못합니다. 그건 사람이 검수합니다.
+
 > 코드를 몰라도 됩니다. JSON은 `{ "키": "값" }` 형태의 목록이고, 예시 파일을 그대로 따라 쓰면 됩니다.
 > 작성하다 막히면 디스코드에 물어보세요.
 
