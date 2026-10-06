@@ -31,7 +31,7 @@ def main() -> int:
 
     client = ai.make_client()
     try:
-        raw, attempts = ai.retry("models.list", lambda _a: list(client.models.list()))
+        raw, attempts, _ = ai.retry("models.list", lambda _a: list(client.models.list()))
     except ai.AttemptsExhausted as exc:
         print(f"목록 조회 실패: {exc}", file=sys.stderr)
         return 1
