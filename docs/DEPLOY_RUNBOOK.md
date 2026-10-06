@@ -30,7 +30,7 @@
 | `/health` 확인 URL | `https://____________.onrender.com/health` | |
 | 프론트 주소 | **기본: 위 배포 URL 과 동일** (`mockup/` 을 같은 서비스의 `/` 에서 서빙) | 별도 프론트를 쓸 때만 CORS `ALLOW_ORIGINS` 에 추가 |
 | Gemini API 키 발급처 | Google AI Studio (`aistudio.google.com/apikey`) | |
-| 키 보관 위치 | Render → Environment → `GEMINI_API_KEY` | **코드·깃에 절대 넣지 않음** |
+| 키 보관 위치 | Render → Environment → `GEMINI_API_KEY`, `GROQ_API_KEY`(전사), 보충 `OPENAI_API_KEY`·`ASSEMBLYAI_API_KEY` | **코드·깃에 절대 넣지 않음** |
 | 담당(배포) | 최성빈 | |
 | 담당(대리) | ____________ | 한 사람이 막히면 여기서 멈춥니다 — 반드시 지정 |
 | 비상 연락 채널 | Discord `#일반` | |
@@ -78,6 +78,8 @@ curl -s https://<앱>.onrender.com/health | python3 -m json.tool
 | `situations` | restaurant 10개 | 비었으면 카테고리 파일 문제 |
 | `contract_dir` | `.../codyssey_final/agent_contract` | `backend/agent_contract`면 경로 버그 (F02) |
 | `has_api_key` | `true` | `false` → F04 |
+| `stt_providers.groq` | `true` | `false` → 말하기가 목업. Render 에 `GROQ_API_KEY` |
+| `vad` | `silero (faster-whisper)…` | 없으면 배포 코드가 옛 버전 |
 | `model_selection` | `"dynamic"` | 모델은 고정하지 않음. `models` 는 첫 AI 호출 전 `null`, 이후 실제 목록 |
 | `min_attempts` | `30` 이상 | 30 미만이면 코드 이상 — 배포 중단 |
 | `deploy.commit` / `deploy.branch` / `deploy.repo` | 배포한 커밋·브랜치·저장소와 일치 | 값이 `null` 이면 Render 환경변수(`RENDER_GIT_*`)가 없는 환경. 다르면 **낡은 배포** — 재배포 전에 이 값부터 기록 |
@@ -339,7 +341,7 @@ git push origin main
 구현자가 1명일 때 **가장 빠른 복구**입니다. Render → Environment → 값 변경 → 자동 재시작.
 
 > **기본값 주의 (코드 기준)**: `RATE_LIMIT=20`, `RATE_WINDOW=60`, `CONFIG_STRICT=0`, `ALLOW_ORIGINS=*`, `AI_MIN_ATTEMPTS=30`(하한, 낮출 수 없음).
-> 현재 `render.yaml` 에는 `PYTHON_VERSION`, `GEMINI_API_KEY` 만 정의돼 있습니다. 모델은 실행 중 목록에서 고릅니다.
+> 현재 `render.yaml` 에는 `PYTHON_VERSION`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `ASSEMBLYAI_API_KEY` 가 정의돼 있습니다. 모델은 실행 중 목록에서 고릅니다. `STT_SELFTEST=1` 은 검증할 때만 넣고 끝나면 지웁니다.
 > 아래 표의 "평상시" 값은 **Render Environment 에 직접 추가해야** 적용됩니다.
 > 교육장처럼 한 공용 IP 에서 여러 명이 테스트하면 `RATE_LIMIT=20/60s` 에 걸릴 수 있으니 테스트 전에 올려 두세요.
 

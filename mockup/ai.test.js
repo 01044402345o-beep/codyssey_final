@@ -233,19 +233,7 @@ test('동의 철회: 동의와 복습 목록을 함께 지운다', () => {
   assert.equal(AI.withdrawConsent(brokenStorage), false);
 });
 
-test('무음 감지: 300ms 이상 소리가 있어야 무음이 아니다, 감지 불가(빈 배열)는 서버에 맡긴다', () => {
-  assert.equal(AI.isSilent(Array(30).fill(0)), true);                          // 3초 완전 무음
-  assert.equal(AI.isSilent(Array(30).fill(0.005)), true);                      // 작은 잡음
-  assert.equal(AI.isSilent([...Array(28).fill(0), 0.3, 0.3]), true);           // 200ms 짧은 소리(딸깍)
-  assert.equal(AI.isSilent([...Array(27).fill(0), 0.1, 0.1, 0.1]), false);     // 300ms
-  assert.equal(AI.isSilent(Array(20).fill(0.08)), false);                      // 정상 발화
-  assert.equal(AI.isSilent([]), false);                                        // 감지 불가 → 무음으로 단정하지 않음
-  assert.equal(AI.isSilent(undefined), false);
-  assert.equal(AI.isSilent([NaN, Infinity, 'x', 0.01]), true);                 // 이상값은 소리로 세지 않음
-  assert.equal(AI.isSilent(Array(10).fill(0.05), 100, { threshold: 0.1 }), true);
-});
-
-test('speakCheck: 목표 문장과 상황 이름을 보낸다 (상황은 120자 제한), 두 번 호출을 기다리도록 90초', async () => {
+test('speakCheck: 목표 문장과 상황 이름을 보낸다 (상황은 120자 제한)', async () => {
   let sent = null;
   const f = async (url, opt) => { sent = opt.body; return { ok: true, status: 200, json: async () => ({ usable: true }) }; };
   await AI.speakCheck({ fetchImpl: f, base: '', blob: new Blob(['x'], { type: 'audio/webm' }), target: 'I have a peanut allergy.', situation: '알레르기·재료 고지' + 'x'.repeat(200) });
@@ -254,4 +242,8 @@ test('speakCheck: 목표 문장과 상황 이름을 보낸다 (상황은 120자 
   assert.ok(sent.get('situation').startsWith('알레르기·재료 고지'));
   await AI.speakCheck({ fetchImpl: f, base: '', blob: new Blob(['x'], { type: 'audio/webm' }), target: 't' });
   assert.equal(sent.get('situation'), '');
+});
+
+test('무음 판정은 서버(Silero VAD) 몫 — 브라우저 음량(데시벨) 판정 함수가 없다', () => {
+  for (const k of ['isSilent', 'SILENCE_RMS', 'MIN_VOICED_MS']) assert.equal(k in AI, false, k);
 });

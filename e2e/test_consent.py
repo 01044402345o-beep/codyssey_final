@@ -9,6 +9,7 @@
 """
 import json
 import sys
+from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
@@ -23,7 +24,10 @@ def check(name, cond, extra=""):
 
 
 with sync_playwright() as p:
-    b = p.chromium.launch(args=["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"])
+    # 가짜 마이크에 실제 말소리(TTS "I have a peanut allergy.")를 넣는다 — 서버 Silero VAD 를 통과해야 한다.
+    speech_wav = str(Path(__file__).resolve().parents[1] / "backend" / "tests" / "fixtures" / "good.wav")
+    b = p.chromium.launch(args=["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
+                                f"--use-file-for-fake-audio-capture={speech_wav}"])
     ctx = b.new_context(viewport={"width": 1400, "height": 1000}, permissions=["microphone"])
     ctx.add_init_script("""
       window.__gum = 0;
@@ -69,7 +73,7 @@ with sync_playwright() as p:
     page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(300)
     page.locator('[data-act="modal-ok"]').click(); page.wait_for_timeout(3000)   # 가짜 장치 신호음이 300ms 이상 쌓이도록
     c = json.loads(ls("cd_consent") or "null")
-    check("동의 저장 (version 3·voice·at)", c and c.get("voice") is True and c.get("version") == 3 and c.get("at"), str(c))
+    check("동의 저장 (version 4·voice·at)", c and c.get("voice") is True and c.get("version") == 4 and c.get("at"), str(c))
     check("동의 후 getUserMedia 1회", gum() == 1, f"gum={gum()}")
     check("녹음 중 표시", "녹음 끝내기" in page.locator('[data-act="speak-rec"]').first.inner_text())
     page.screenshot(path=f"{OUT}/2_recording.png")
@@ -79,7 +83,7 @@ with sync_playwright() as p:
     page.wait_for_timeout(2500)
     res = page.locator(".speak-res").first
     check("/speak-check 호출됨", len(speak_calls) == 1, str(len(speak_calls)))
-    check("목업 결과는 저장 안 함 안내", res.count() == 1 and "저장하지 않았어요" in res.inner_text(), res.inner_text() if res.count() else "")
+    check("말소리는 VAD 통과 → (키 없는 서버) 샘플 응답, 저장 안 함", res.count() == 1 and "샘플 응답" in res.inner_text() and "저장하지 않았어요" in res.inner_text(), res.inner_text() if res.count() else "")
     check("동의 후 안내 '동의함'", "동의함" in page.locator(".speak-note").first.inner_text())
 
     # 5) 두 번째 녹음은 창 없이 바로
