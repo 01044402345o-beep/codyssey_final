@@ -12,7 +12,7 @@
   const GEN_TIMEOUT_MS = 90 * 1000;
   const ID_RE = /^[a-z][a-z0-9_]*$/;
   const CONSENT_KEY = 'cd_consent';
-  const CONSENT_VERSION = 1;   // 동의 문구가 바뀌면 올려서 다시 동의를 받는다
+  const CONSENT_VERSION = 2;   // 동의 문구가 바뀌면 올려서 다시 동의를 받는다
 
   const str = v => typeof v === 'string' && v.trim().length > 0;
   const norm = v => String(v ?? '').trim().toLowerCase();

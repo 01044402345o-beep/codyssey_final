@@ -80,6 +80,7 @@ curl -s https://<앱>.onrender.com/health | python3 -m json.tool
 | `has_api_key` | `true` | `false` → F04 |
 | `model_selection` | `"dynamic"` | 모델은 고정하지 않음. `models` 는 첫 AI 호출 전 `null`, 이후 실제 목록 |
 | `min_attempts` | `30` 이상 | 30 미만이면 코드 이상 — 배포 중단 |
+| `deploy.commit` / `deploy.branch` / `deploy.repo` | 배포한 커밋·브랜치·저장소와 일치 | 값이 `null` 이면 Render 환경변수(`RENDER_GIT_*`)가 없는 환경. 다르면 **낡은 배포** — 재배포 전에 이 값부터 기록 |
 
 **게이트 규칙: 하나라도 어긋나면 배포 실패로 간주하고 F0X 절차로 갑니다. 프론트를 붙이지 않습니다.**
 

@@ -190,7 +190,7 @@ test('동의 기록: 버전·시각이 맞을 때만 동의로 인정, 철회하
   const rec = AI.saveConsent(st, new Date('2026-10-07T01:00:00Z'));
   assert.deepEqual(rec, { version: AI.CONSENT_VERSION, at: '2026-10-07T01:00:00.000Z' });
   assert.deepEqual(AI.loadConsent(st), rec);
-  st.setItem(AI.CONSENT_KEY, JSON.stringify({ version: 0, at: rec.at }));          // 옛 문구 버전 → 다시 동의
+  st.setItem(AI.CONSENT_KEY, JSON.stringify({ version: AI.CONSENT_VERSION - 1, at: rec.at }));  // 옛 문구 버전 → 다시 동의
   assert.equal(AI.loadConsent(st), null);
   st.setItem(AI.CONSENT_KEY, JSON.stringify({ version: AI.CONSENT_VERSION, at: 'x' }));
   assert.equal(AI.loadConsent(st), null);

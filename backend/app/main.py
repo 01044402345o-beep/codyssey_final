@@ -241,6 +241,13 @@ def health() -> dict[str, Any]:
         "preferred_model": os.getenv("GEMINI_MODEL") or None,
         "min_attempts": ai.min_attempts(),
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
+        # 배포된 코드가 어느 커밋인지 응답 한 번으로 알 수 있게 한다. Render 가 빌드·런타임에 주는 기본 환경변수이고,
+        # 로컬 실행처럼 값이 없으면 null 이다. (SHA 는 비밀이 아니다.)
+        "deploy": {
+            "commit": os.getenv("RENDER_GIT_COMMIT") or None,
+            "branch": os.getenv("RENDER_GIT_BRANCH") or None,
+            "repo": os.getenv("RENDER_GIT_REPO_SLUG") or None,
+        },
         "contract_dir": str(CONTRACT_DIR),
         "categories": list_categories(),
         "situations": situation_index(),
