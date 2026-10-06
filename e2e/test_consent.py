@@ -56,7 +56,7 @@ with sync_playwright() as p:
     check("동의 전 getUserMedia 0회", gum() == 0, f"gum={gum()}")
     page.screenshot(path=f"{OUT}/1_consent_modal.png")
     txt = modal.inner_text()
-    for k in ["Google Gemini API", "저장하지 않아요", "사람이 검토", "철회"]:
+    for k in ["Google Gemini API", "저장하지 않아요", "사람 검토자", "민감한 개인정보는 말하지 마세요", "철회"]:
         check(f"동의 창에 '{k}'", k in txt)
 
     # 2) 거부
@@ -69,7 +69,7 @@ with sync_playwright() as p:
     page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(300)
     page.locator('[data-act="modal-ok"]').click(); page.wait_for_timeout(1200)
     c = json.loads(ls("cd_consent") or "null")
-    check("동의 저장 (version·voice·at)", c and c.get("voice") is True and c.get("version") == 1 and c.get("at"), str(c))
+    check("동의 저장 (version 2·voice·at)", c and c.get("voice") is True and c.get("version") == 2 and c.get("at"), str(c))
     check("동의 후 getUserMedia 1회", gum() == 1, f"gum={gum()}")
     check("녹음 중 표시", "녹음 끝내기" in page.locator('[data-act="speak-rec"]').first.inner_text())
     page.screenshot(path=f"{OUT}/2_recording.png")
@@ -113,6 +113,7 @@ with sync_playwright() as p:
 
     # 8) 문구: 보고서는 예시 데이터, 로그인 고지, 문장 모음 배지
     page.goto(BASE + "/?fresh=1#u-report"); page.wait_for_timeout(1200)   # 새 로드 = 새 데모 여행 (보고서 단계)
+    check("동의 철회 상태에서 시작 (생성은 동의와 무관)", ls("cd_consent") is None)
     rep = page.locator(".app").inner_text()
     check("보고서 '예시 데이터' 고지", "미리 준비한 예시 데이터" in rep)
     check("보고서에 '웹 검색으로 최신 정보' 없음", "웹 검색으로 최신 정보" not in rep)
@@ -128,7 +129,11 @@ with sync_playwright() as p:
             break
     check("문장 생성까지 완료 + /generate 호출", page.evaluate("S.trip.status") == "studying" and gen_calls, f"calls={len(gen_calls)}")
     page.locator('[data-act="nav"][data-id="u-login"]').click(); page.wait_for_timeout(500)
-    check("로그인 고지 'AI 생성' 표시 안내", "'AI 생성' 표시" in page.locator(".screen").first.inner_text())
+    login_txt = page.locator(".screen").first.inner_text()
+    check("로그인 고지 'AI 생성' 표시 안내", "'AI 생성' 표시" in login_txt)
+    check("로그인 고지 문장 생성 시 Gemini 전송", "Google Gemini API로 전송" in login_txt)
+    check("로그인 화면에 필수 동의 체크박스 없음", page.locator('.screen input[type="checkbox"]').count() == 0)
+    check("로그인 버튼 활성 (동의 없이 이용 가능)", page.locator('[data-act="login"], [data-act="after-login"]').first.is_enabled())
     page.locator('[data-act="nav"][data-id="u-coll"]').click(); page.wait_for_timeout(800)
     page.locator('[data-act="coll-tab"][data-v="place"]').click(); page.wait_for_timeout(300)
     coll = page.locator(".app").inner_text()
