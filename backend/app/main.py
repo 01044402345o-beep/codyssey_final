@@ -16,6 +16,7 @@ GEMINI_API_KEY 가 없으면 목업으로 응답한다. 그래서 키 없이도 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
@@ -56,6 +57,10 @@ RATE_WINDOW = int(os.getenv("RATE_WINDOW", "60"))        # 초
 # 1이면 설정 누락(schema.json·jsonschema·카테고리) 상태에서 /generate 를 거부한다.
 # 기본 0은 '일단 돌아가게' 두되, /health 가 degraded 로 알린다.
 CONFIG_STRICT = os.getenv("CONFIG_STRICT", "0") == "1"
+
+# 시도별 실패 로그(app.gemini)가 Render 로그에 시각과 함께 남도록 한다.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)   # Gemini 요청마다 찍히는 INFO 는 끈다
 
 PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 
@@ -319,6 +324,7 @@ def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
             # 모델 목록 조회에서 실패했으면 생성 호출은 0회다. failed_at 으로 구분한다.
             "attempts": exc.attempts if exc.what == "generate" else 0,
             "failed_at": exc.what,
+            "failures": exc.failures,
             "mock": last_pack is None,
             "degraded": True,
             "usable": "rejected",
@@ -328,6 +334,7 @@ def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     pack, issues = res.value
     return {
         "pack": pack, "issues": issues, "attempts": res.attempts, "model": res.model,
+        "failures": res.failures,   # 성공 전에 실패한 시도들 (원인 진단용)
         "mock": False, "usable": "ok",
     }
 
@@ -392,13 +399,14 @@ async def speak_check(
             "error": exc.last_error,
             "attempts": exc.attempts if exc.what == "speak-check" else 0,
             "failed_at": exc.what,
+            "failures": exc.failures,
             "score": None, "heard": "", "issues": [], "fix_one": "", "tip": "",
         }
     parsed = res.value
 
     norm, usable, reason = validate_speak_result(parsed)
     norm["usable"] = usable
-    norm["attempts"], norm["model"] = res.attempts, res.model
+    norm["attempts"], norm["model"], norm["failures"] = res.attempts, res.model, res.failures
     if reason:
         norm["reason"] = reason
     return norm
