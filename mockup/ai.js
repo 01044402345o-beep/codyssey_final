@@ -6,9 +6,13 @@
   const WEAK_KEY = 'cd_weak';
   /* 말하기 연습 동의. 문구를 바꾸면 CONSENT_VERSION 을 올려 다시 동의를 받는다. */
   const CONSENT_KEY = 'cd_consent';
-  const CONSENT_VERSION = 2;   // v2: Gemini 무료 등급 데이터 사용·민감정보 금지 고지 추가
+  const CONSENT_VERSION = 3;   // v2: Gemini 무료 등급·민감정보 고지 / v3: 받아쓰기→코드 판정→피드백 2단계 처리 고지
   /* 임시 제품 규칙: 이 점수 미만이면 "취약 상황" 후보로 저장한다. 검증된 학습 기준이 아니다. */
   const WEAK_THRESHOLD = 70;
+  /* 무음 감지: 100ms 마다 잰 마이크 음량(RMS 0~1) 중 SILENCE_RMS 이상인 구간이 MIN_VOICED_MS 미만이면 무음.
+     무음은 서버·AI 로 보내지 않는다 — AI 는 무음에도 목표 문장을 들었다고 지어낸다(배포 실측 10/10). */
+  const SILENCE_RMS = 0.02;
+  const MIN_VOICED_MS = 300;
   /* 참고 신호: 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 "다르게 들렸어요"로 표시한다 (저장 판정에 쓰지 않음). */
   const HEARD_MATCH_MIN = 0.8;
   const MAX_AUDIO_BYTES = 8 * 1024 * 1024; // backend/app/main.py MAX_AUDIO_BYTES 와 같다
@@ -233,13 +237,22 @@
     if (m.includes('wav')) return 'wav';
     return 'webm';
   }
-  async function speakCheck({ fetchImpl, base, blob, target, signal, timeoutMs = 60 * 1000 }) {
+  /* levels 가 비면 감지할 수 없었던 것(AudioContext 미지원 등) → 무음으로 단정하지 않고 서버 판정에 맡긴다. */
+  function isSilent(levels, frameMs = 100, { threshold = SILENCE_RMS, minVoicedMs = MIN_VOICED_MS } = {}) {
+    if (!Array.isArray(levels) || !levels.length) return false;
+    const voiced = levels.filter(v => typeof v === 'number' && Number.isFinite(v) && v >= threshold).length;
+    return voiced * frameMs < minVoicedMs;
+  }
+
+  /* 받아쓰기 + 피드백 두 번의 AI 호출을 기다린다. situation 은 피드백 AI 가 맥락을 알도록 보낸다. */
+  async function speakCheck({ fetchImpl, base, blob, target, situation = '', signal, timeoutMs = 90 * 1000 }) {
     if (base === null || base === undefined) throw new Error('no-api');
     if (!blob || !blob.size) throw new Error('empty-audio');
     if (blob.size > MAX_AUDIO_BYTES) throw new Error('too-large');
     const mime = blob.type || 'audio/webm';
     const fd = new FormData();
     fd.append('target', target);
+    fd.append('situation', String(situation || '').slice(0, 120));
     fd.append('file', blob, 'speech.' + extFor(mime));
     const t = withTimeout(signal, timeoutMs);
     try { return await httpJson(fetchImpl, base + '/speak-check', { method: 'POST', body: fd }, t.signal); }
@@ -247,6 +260,7 @@
   }
 
   const api = {
+    SILENCE_RMS, MIN_VOICED_MS, isSilent,
     WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
