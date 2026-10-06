@@ -192,7 +192,11 @@ const R = {
 
 /* ================= 상태 ================= */
 let S;
-let genTimer = null, genToken = 0, placeSeq = 0;
+let genTimer = null, genToken = 0, placeSeq = 0, genAbort = null;
+const API = AI.apiBase(location);            // 서버 주소(저장하지 않음). base === null 이면 폴백 전용
+const weakList = () => AI.loadWeak(localStorage);
+/* 생성 취소: 토큰을 올려 오래된 응답이 상태를 덮어쓰지 못하게 하고, 진행 중 요청도 중단한다 */
+function cancelGen() { genToken++; clearTimeout(genTimer); if (genAbort) { genAbort.abort(); genAbort = null; } }
 
 function defaultDraft(base) {
   return {
@@ -206,12 +210,12 @@ function defaultDraft(base) {
 }
 
 function initState() {
-  clearTimeout(genTimer); genToken++;
+  cancelGen();
   S = {
     screen: 'u-login', user: null, today: BASE_TODAY,
     flags: { fail: false, stuck: false, routeInvalid: false, noTts: false },
     draft: defaultDraft(BASE_TODAY), showErrors: false,
-    trip: null, places: [], reportMeta: {}, days: [], sents: [], smap: {}, sched: [], plan: null,
+    trip: null, places: [], reportMeta: {}, days: [], sents: [], smap: {}, sched: [], plan: null, aiPools: {}, aiBy: {},
     archived: [], gen: null, cityTab: null, showCand: {},
     studyDate: null, card: { date: null, i: 0, flipped: new Set() }, justCompleted: null,
     coll: { tab: 'common', filter: 'all' }, schedFilter: 'all', ttsRate: 0.95,
@@ -270,7 +274,14 @@ const selCount = city => S.places.filter(p => p.city === city && p.selected).len
 /* ---------- 문장 + 일정표 (AI-03 흉내 + FR-SENT-02, FR-SCHED-01·02) ---------- */
 function placeSentences(p, n) {
   const fill = s => s.replace('{menuEn}', p.menuEn).replace('{menuKo}', p.menuKo).replace('{en}', p.en).replace('{name}', p.name);
-  return PLACE_TEMPLATES[p.kind].slice(0, n).map(t => ({ situation: t.situation, en: fill(t.en), ko: fill(t.ko) }));
+  const ai = (S.aiBy[p.id] || []).slice(0, n).map(s => ({
+    situation: s.situation, en: s.en, ko: s.ko, categoryId: s.categoryId, situationId: s.situationId, targetsWeak: s.targetsWeak,
+    ai: s.kind === 'ai', sample: s.kind === 'sample',
+  }));
+  const used = new Set(ai.map(s => s.en.toLowerCase()));
+  const rest = PLACE_TEMPLATES[p.kind].map(t => ({ situation: t.situation, en: fill(t.en), ko: fill(t.ko) }))
+    .filter(t => !used.has(t.en.toLowerCase())).slice(0, Math.max(0, n - ai.length));
+  return [...ai, ...rest];
 }
 
 function buildPlan() {
@@ -281,6 +292,14 @@ function buildPlan() {
   const D = kinds.filter(k => k === 'new').length;
   const { per, T, A, P } = R.counts(D, ordered.length);
   ordered.forEach((p, i) => (p.count = per[i]));
+  // AI 풀은 여러 번 buildPlan 해도 같은 결과가 나오도록 복사해서 쓴다 (공통 풀은 한 번 쓰면 빠진다)
+  const cityPools = {};
+  S.aiBy = {};
+  ordered.forEach(p => {
+    const e = S.aiPools[p.city]; if (!e || p.kind !== 'restaurant') return;
+    const pools = cityPools[p.city] ??= { byPlace: e.pools.byPlace, common: e.pools.common.slice() };
+    S.aiBy[p.id] = AI.takeForPlace(pools, p.id, p.count).map(s => ({ ...s, kind: e.kind }));
+  });
 
   const sents = [];
   SIT_ORDER.forEach(key => {
@@ -364,7 +383,7 @@ function request(stage, byUser = true) {
   t.status = stage + '_requested'; t.error = null;
   S.gen = { stage, step: 0, steps: stepsFor(stage), stuck: false };
   S.screen = 'u-gen'; render();
-  const tok = ++genToken; clearTimeout(genTimer);
+  cancelGen(); const tok = genToken;
   genTimer = setTimeout(() => {
     if (tok !== genToken || t.status !== stage + '_requested') return;
     t.status = stage + '_generating'; t.genStartedAt = Date.now();
@@ -372,17 +391,39 @@ function request(stage, byUser = true) {
   }, 500);
 }
 function tick(tok, stage) {
-  genTimer = setTimeout(() => {
+  genTimer = setTimeout(async () => {
     if (tok !== genToken) return;
     const g = S.gen;
     if (g.step < g.steps.length - 1) { g.step++; if (S.screen === 'u-gen') render(); tick(tok, stage); return; }
     if (S.flags.stuck) { g.stuck = true; if (S.screen === 'u-gen') render(); return; }
     if (S.flags.fail) { failStage(stage); return; }
+    if (stage === 'sentences') { await runAi(tok); if (tok !== genToken) return; }
     succeed(stage);
   }, 700);
 }
+
+/* 선택한 맛집의 문장만 /generate 로 만든다. 일정·문장 수 계산(R.counts)은 그대로 코드가 한다.
+   성공한 도시는 살리고 실패·degraded·형식 불일치 도시만 로컬 템플릿으로 폴백한다. 자동 재시도 없음. */
+async function runAi(tok) {
+  if (genAbort) genAbort.abort();
+  const ctl = genAbort = new AbortController();
+  S.aiPools = {}; S.aiBy = {};                 // 새 생성 시작: 이전 결과 폐기
+  const byCity = {};
+  S.places.filter(p => p.selected && p.kind === 'restaurant').forEach(p => (byCity[p.city] ??= []).push({ id: p.id, name: p.name, en: p.en }));
+  const cities = Object.entries(byCity).map(([name, places]) => ({ name, places }));
+  if (!cities.length) return;
+  const slow = setTimeout(() => {
+    if (tok === genToken && S.gen) { S.gen.waitNote = '첫 요청은 시간이 걸릴 수 있어요. 서버를 깨우는 중일 수 있어요.'; if (S.screen === 'u-gen') render(); }
+  }, 10000);
+  let out = [];
+  try {
+    out = await AI.generateByCity({ fetchImpl: (u, o) => fetch(u, o), base: API.base, cities, weakIds: AI.weakIdsFor(weakList(), 'restaurant'), signal: ctl.signal, timeoutMs: AI.GEN_TIMEOUT_MS });
+  } finally { clearTimeout(slow); }
+  if (tok !== genToken || ctl.signal.aborted) return;   // 오래된 요청은 상태를 덮어쓰지 못한다
+  out.forEach(o => { if (o.pools) S.aiPools[o.city] = { kind: o.kind, pools: o.pools }; });
+}
 function failStage(stage) {
-  const t = S.trip; genToken++; clearTimeout(genTimer);
+  const t = S.trip; cancelGen();
   t.status = stage + '_failed'; t.failStreak++; t.fails++;
   t.error = stage === 'report' ? 'AI 응답이 정해진 형식에 맞지 않았어요. (2번 다시 요청했지만 실패)' : stage === 'route' ? '방문 순서를 만드는 중 오류가 났어요.' : '일부 장소의 문장을 만들지 못했어요.';
   if (S.gen) S.gen.failed = true;
@@ -421,12 +462,12 @@ function ensure(level) {
   if (!S.trip) { createTrip(defaultDraft(S.today)); did = true; }
   const t = S.trip;
   if (!S.places.length) {
-    genToken++; clearTimeout(genTimer);
+    cancelGen();
     S.places = genReport(t, t.reportRound); t.reportRound++;
     t.status = 'report_done'; mark('report_done'); t.reportSec = 42; did = true;
   }
   if (level === 'plan' && !S.plan) {
-    genToken++; clearTimeout(genTimer);
+    cancelGen();
     S.days = makeRoute().days; mark('route_done'); buildPlan();
     t.status = 'studying'; t.failStreak = 0; mark('studying'); did = true;
   }
@@ -568,13 +609,16 @@ function renderDemo() {
     <div class="demo-date"><span style="color:#9aa0ad">오늘</span><input type="date" id="demo-date" value="${S.today}"></div>
     <div class="demo-chips">${chips.map(([l, d]) => `<button data-act="set-today" data-date="${d}">${l} ${Dt.md(d)}</button>`).join('')}</div>
     ${tg('fail', 'AI 생성 실패')}${tg('stuck', '생성 멈춤 (응답 없음)')}${tg('routeInvalid', '방문 순서 AI 규칙 위반')}${tg('noTts', 'TTS 미지원 브라우저')}
-    <div class="demo-actions"><button data-act="preset" data-kind="short">짧은 학습 3일</button><button data-act="preset" data-kind="zero">당일 시작 0일</button></div>`;
+    <div class="demo-actions"><button data-act="preset" data-kind="short">짧은 학습 3일</button><button data-act="preset" data-kind="zero">당일 시작 0일</button></div>
+    <div class="demo-actions"><button data-act="weak-demo">데모 학습 기록 불러오기</button><button data-act="weak-clear">취약 상황 비우기</button></div>
+    <div class="small" style="margin-top:6px;color:#9aa0ad">저장된 취약 상황 ${weakList().length}개 (데모 ${weakList().filter(w => w.demo).length}개) · 데모 기록은 실제 학습 기억이 아니에요</div>`;
 }
 function updateSideActive() {
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.id === S.screen));
 }
 
 function render() {
+  if (S.screen !== 'u-study' && SPK.state !== 'idle') cancelSpeak();
   const app = $('.app'), prevTop = app ? app.scrollTop : 0, same = S.lastScreen === S.screen;
   updateSideActive(); renderDemo();
   const sc = SCR[S.screen];
@@ -583,7 +627,8 @@ function render() {
   const cls = t && /_failed$/.test(t.status) ? 'bad' : t && /_(generating|requested)$/.test(t.status) ? 'warn' : '';
   $('#topbar').innerHTML = `<span class="id">${sc.no}</span><h1>${sc.name}</h1>${sc.prop ? '<span class="fr prop">PRD 외 제안 화면</span>' : ''}<span class="spacer"></span>
     <span class="pill"><span class="dot"></span>오늘 <b>${S.today}</b> (${Dt.dow(S.today)})</span>
-    <span class="pill ${cls}"><span class="dot"></span>여행 상태 <b>${status}</b></span>`;
+    <span class="pill ${cls}"><span class="dot"></span>여행 상태 <b>${status}</b></span>
+    ${API.external ? `<span class="pill bad" title="?api= 로 지정한 외부 서버에 요청하고 녹음을 전송합니다"><span class="dot"></span>외부 서버 <b>${esc(API.host)}</b></span>` : ''}`;
   const body = S.screen.startsWith('a-') ? adminScreen() : userScreen();
   $('#stage').className = 'stage ' + (S.screen.startsWith('a-') ? 'is-admin' : 'is-user');
   $('#stage').innerHTML = body + notes(sc);
@@ -659,7 +704,8 @@ function scrLogin() {
     <div class="eyebrow" style="margin-top:130px">Travel English, planned</div>
     <h1 style="margin-top:10px">Speak where<br>you'll <em>actually</em><br>be.</h1>
     <p class="sub">여행지와 일정을 입력하면, 실제로 갈 관광지와 맛집에서 쓸 영어 문장을 만들어 출발 전부터 매일 학습하게 해 드려요.</p>
-    <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">로그인하지 않으면 다른 화면에 들어갈 수 없어요.</p></div>
+    <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">로그인하지 않으면 다른 화면에 들어갈 수 없어요.</p>
+      <p class="small" style="text-align:center;margin-top:8px">일부 문장은 AI가 만들어요 · 학습 기록은 이 브라우저에만 저장돼요 · 말하기 연습을 쓰면 녹음이 채점 서버로 전송돼요.</p></div>
   </div>`);
 }
 
@@ -753,6 +799,7 @@ function scrGen() {
       <p class="sub" style="text-align:center">화면을 닫거나 새로고침해도 이어서 진행돼요.</p>`;
     bottom = `<button class="btn soft block" disabled>생성 중에는 다시 요청할 수 없어요</button>`;
     if (g.stuck) extra = notice('서버 응답이 오지 않고 있어요. (데모: 오른쪽 "16분 경과시키기"로 멈춤 처리를 확인하세요)', 'plain');
+    else if (g.waitNote) extra = notice(esc(g.waitNote), 'plain');
   }
   return frame(`<div class="gen">${head}${stepList}<div style="margin-top:14px">${extra}</div></div>`, { bottom });
 }
@@ -950,10 +997,10 @@ function scrStudy() {
   const inner = `<div class="app-pad">${head}${banner ? banner + '<div style="height:10px"></div>' : ''}
     <div class="flip" data-act="flip">
       <div class="flip-inner">
-        <div class="face front"><div class="ctx">${tag}${isNew ? '<span class="badge b-new">새 문장</span>' : ''}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
+        <div class="face front"><div class="ctx">${tag}${aiBadges(s)}${isNew ? '<span class="badge b-new">새 문장</span>' : ''}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
           <div class="ko">${phHtml(s.ko)}</div><div class="hint">탭해서 영어 문장 보기 ↻</div></div>
-        <div class="face back"><div class="ctx">${tag}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
-          <div class="en">${phHtml(s.en)}</div><div class="ko-s">${phHtml(s.ko)}</div>${tts}</div>
+        <div class="face back"><div class="ctx">${tag}${aiBadges(s)}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
+          <div class="en">${phHtml(s.en)}</div><div class="ko-s">${phHtml(s.ko)}</div>${tts}<div class="speak" data-live="speak">${speakHtml(s)}</div></div>
       </div>
     </div>
     <div class="card-nav"><button class="round" data-act="card-prev" ${i === 0 ? 'disabled' : ''}>${I.back}</button>
@@ -1123,7 +1170,7 @@ function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
-function go(id) { S.screen = id; S.modal = null; render(); }
+function go(id) { cancelSpeak(); S.screen = id; S.modal = null; render(); }
 
 function navFromMenu(id) {
   S.modal = null;
@@ -1158,7 +1205,7 @@ function demoGen(mode) {
 }
 
 function preset(kind) {
-  genToken++; clearTimeout(genTimer);
+  cancelGen();
   S.user = DEMO_USER;
   const base = BASE_TODAY;
   const d = defaultDraft(base);
@@ -1169,6 +1216,98 @@ function preset(kind) {
   ensure('plan');
   S.screen = 'u-route'; S.modal = null; render();
   toast(kind === 'short' ? '짧은 학습 예시: 여행 전 3일 → 하루 10문장, 장소 문장은 여행 중 학습' : '당일 시작 예시: 여행 전 학습 0일 → 모든 문장을 여행 중에 학습');
+}
+
+/* ================= 말하기 연습 (녹음 → /speak-check) =================
+   작업 토큰(SPK.tok)으로 취소·늦은 응답을 구분한다. 카드 이동·화면 전환·재진입 시 cancelSpeak(). */
+const SPK = { state: 'idle', tok: 0, rec: null, stream: null, ctl: null, timer: null, sid: null, result: null };
+const stopTracks = st => { try { st && st.getTracks().forEach(t => t.stop()); } catch (e) { /* 이미 종료 */ } };
+const speakAvailable = () => API.base !== null && typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+function aiBadges(s) {
+  let h = '';
+  if (s.ai) h += '<span class="badge b-ai">AI 생성</span>';
+  else if (s.sample) h += '<span class="badge b-sample">샘플</span>';
+  const w = AI.weakReviewOf(s, weakList());
+  if (w) h += `<span class="badge b-weak">저장된 취약 상황 복습${w.demo ? ' · 데모 학습 기록' : ''}</span>`;
+  return h;
+}
+function speakHtml(s) {
+  if (!speakAvailable()) return '';
+  const mine = SPK.sid === s.id;
+  const st = mine ? SPK.state : 'idle';
+  const label = st === 'requesting' ? '마이크 확인 중…' : st === 'recording' ? '■ 녹음 끝내기' : st === 'uploading' ? '채점 중…' : '🎤 말해보기';
+  const host = API.host || location.host;
+  let res = '';
+  if (mine && SPK.result) {
+    const r = SPK.result;
+    const parts = r.error ? [r.error]
+      : r.usable !== true ? [r.mock ? '샘플 응답이에요(채점 안 됨).' : (r.reason || '평가하지 못했어요. 다시 시도해 주세요.'), '약점으로 저장하지 않았어요.']
+      : [typeof r.score === 'number' ? `점수 ${r.score}` : '', r.heard ? `들린 문장: ${r.heard}` : '', r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? '취약 상황으로 저장했어요' : ''];
+    res = `<div class="speak-res">${parts.filter(Boolean).map(esc).join(' · ')}</div>`;
+  }
+  return `<button class="speak-btn ${st === 'recording' ? 'rec' : ''}" data-act="speak-rec" ${st === 'requesting' || st === 'uploading' ? 'disabled' : ''}>${label}</button>${res}
+    <div class="speak-note">녹음은 채점을 위해 ${esc(host)} 서버와 AI 서비스로 전송돼요.</div>`;
+}
+function updateSpeakUi() {
+  const el = $('[data-live=speak]'); const r = S.screen === 'u-study' && pickRow();
+  if (!el || !r) return;
+  const s = S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]];
+  if (s) el.innerHTML = speakHtml(s);
+}
+function cancelSpeak() {
+  SPK.tok++;
+  clearTimeout(SPK.timer); SPK.timer = null;
+  if (SPK.rec) { SPK.rec.cancelled = true; try { if (SPK.rec.state !== 'inactive') SPK.rec.stop(); } catch (e) { /* 이미 종료 */ } }
+  stopTracks(SPK.stream); SPK.stream = null; SPK.rec = null;
+  if (SPK.ctl) { SPK.ctl.abort(); SPK.ctl = null; }
+  SPK.state = 'idle'; SPK.result = null;
+}
+function stopSpeak() { clearTimeout(SPK.timer); SPK.timer = null; if (SPK.rec && SPK.rec.state === 'recording') SPK.rec.stop(); }
+async function toggleSpeak() {
+  if (SPK.state === 'requesting' || SPK.state === 'uploading') return;      // 중복 요청 방지
+  if (SPK.state === 'recording') { stopSpeak(); return; }
+  const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]]; if (!s) return;
+  cancelSpeak();
+  const tok = SPK.tok; SPK.sid = s.id; SPK.state = 'requesting'; updateSpeakUi();
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) {
+    if (tok === SPK.tok) { SPK.state = 'idle'; SPK.result = { error: '마이크를 사용할 수 없어요. 권한을 확인해 주세요. 카드 학습은 계속할 수 있어요.' }; updateSpeakUi(); }
+    return;
+  }
+  if (tok !== SPK.tok) { stopTracks(stream); return; }                      // 취소 뒤에 늦게 허용된 권한: 바로 해제
+  const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'].find(m => MediaRecorder.isTypeSupported?.(m));
+  let rec;
+  try { rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); }
+  catch (e) { stopTracks(stream); SPK.state = 'idle'; SPK.result = { error: '이 브라우저에서는 녹음을 시작할 수 없어요.' }; updateSpeakUi(); return; }
+  const chunks = [];
+  SPK.stream = stream; SPK.rec = rec;
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  rec.onstop = () => {
+    stopTracks(stream);
+    if (tok !== SPK.tok || rec.cancelled) return;                            // 취소는 업로드하지 않는다
+    uploadSpeech(tok, new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' }), s);
+  };
+  rec.start();
+  SPK.state = 'recording'; SPK.timer = setTimeout(stopSpeak, 15000); updateSpeakUi();
+}
+async function uploadSpeech(tok, blob, s) {
+  SPK.state = 'uploading'; SPK.rec = null; SPK.stream = null; updateSpeakUi();
+  const ctl = SPK.ctl = new AbortController();
+  let res;
+  try { res = await AI.speakCheck({ fetchImpl: (u, o) => fetch(u, o), base: API.base, blob, target: s.en, signal: ctl.signal }); }
+  catch (e) {
+    if (tok !== SPK.tok) return;
+    SPK.state = 'idle'; SPK.ctl = null;
+    SPK.result = { error: e.message === 'too-large' || e.status === 413 ? '녹음이 너무 길어요. 짧게 다시 말해 주세요.' : e.message === 'empty-audio' || e.status === 400 ? '녹음된 소리가 없어요. 다시 시도해 주세요.' : e.status === 429 ? '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.' : e.status === 415 ? '이 브라우저의 녹음 형식은 지원되지 않아요.' : '채점 서버에 연결하지 못했어요. 카드 학습은 계속할 수 있어요.' };
+    updateSpeakUi(); return;
+  }
+  if (tok !== SPK.tok) return;                                               // 늦은 응답: 표시도 저장도 하지 않는다
+  SPK.state = 'idle'; SPK.ctl = null;
+  const save = AI.shouldSaveWeak(s, res);
+  if (save) AI.saveWeak(localStorage, AI.upsertWeak(weakList(), { category_id: s.categoryId, id: s.situationId, situation: s.situation, en: s.en, ko: s.ko }));
+  SPK.result = { ...res, saved: save };
+  updateSpeakUi(); renderDemo();
 }
 
 const ACT = {
@@ -1185,6 +1324,9 @@ const ACT = {
   'demo-toggle': () => { S.demoClosed = !S.demoClosed; renderDemo(); },
   'set-today': el => { S.today = el.dataset.date; S.justCompleted = null; render(); toast(`오늘을 ${Dt.full(S.today)}로 바꿨어요.`); },
   preset: el => preset(el.dataset.kind),
+  'weak-demo': () => { AI.saveWeak(localStorage, DEMO_WEAK.reduce((l, w) => AI.upsertWeak(l, w), weakList())); renderDemo(); toast('데모 학습 기록을 불러왔어요. 실제 학습에서 생긴 기록이 아니에요.'); },
+  'weak-clear': () => { AI.saveWeak(localStorage, []); renderDemo(); toast('저장된 취약 상황을 비웠어요.'); },
+  'speak-rec': () => toggleSpeak(),
 
   login: () => { S.user = DEMO_USER; toast('Google 계정으로 로그인했어요.'); ACT['after-login'](); },
   'after-login': () => go(S.trip && !S.trip.archived ? (S.plan ? 'u-home' : S.places.length ? 'u-report' : 'u-gen') : 'u-input'),
@@ -1249,8 +1391,8 @@ const ACT = {
     if (el.classList.contains('flipped')) { S.card.flipped.add(S.card.i); updateStudyLive(); }
     else if (ttsSupported()) speechSynthesis.cancel();
   },
-  'card-prev': () => { S.card.i = Math.max(0, S.card.i - 1); render(); },
-  'card-next': () => { const r = pickRow(); S.card.i = Math.min(r.ids.length - 1, S.card.i + 1); render(); },
+  'card-prev': () => { cancelSpeak(); S.card.i = Math.max(0, S.card.i - 1); render(); },
+  'card-next': () => { cancelSpeak(); const r = pickRow(); S.card.i = Math.min(r.ids.length - 1, S.card.i + 1); render(); },
   'speak-card': el => { const r = pickRow(); speak(S.smap[r.ids[S.card.i]].en, el); },
   speak: el => speak(S.smap[el.dataset.id].en, el),
   rate: el => { S.ttsRate = S.ttsRate < 0.9 ? 0.95 : 0.75; el.textContent = S.ttsRate < 0.9 ? '느리게' : '보통 속도'; },
