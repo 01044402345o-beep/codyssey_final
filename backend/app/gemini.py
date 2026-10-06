@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -24,10 +25,18 @@ from typing import Any, Callable, Generic, TypeVar
 
 T = TypeVar("T")
 
+log = logging.getLogger("app.gemini")
+
 MIN_ATTEMPTS = 30
 
 # 생성(generateContent)을 지원해도 이 서비스의 텍스트·오디오 입력 + JSON 출력에 맞지 않는 모델
-_EXCLUDE = ("embedding", "aqa", "imagen", "veo", "tts", "image", "live", "native-audio", "gemma")
+# (임베딩·이미지·영상·음성 합성/받아쓰기 전용·실시간·로봇·컴퓨터 조작·도구 전용·Gemma)
+_EXCLUDE = (
+    "embedding", "aqa", "imagen", "veo", "tts", "image", "banana", "live", "native-audio",
+    "transcribe", "robotics", "computer-use", "customtools", "gemma",
+)
+
+ERROR_MAX_CHARS = 300   # 응답·로그에 남기는 오류 문구 길이 (API 오류 본문이 길다)
 
 _sleep: Callable[[float], None] = time.sleep          # 테스트에서 바꿔 끼운다
 _client_factory: Callable[[], Any] | None = None      # 테스트에서 가짜 클라이언트를 넣는다
@@ -62,33 +71,51 @@ def backoff(attempt: int) -> float:
     return min(cap, base * (2 ** min(attempt - 1, 16)))
 
 
+def failure(attempt: int, exc: BaseException, model: str | None = None) -> dict[str, Any]:
+    """실패한 시도 1건. 응답의 failures[] 와 서버 로그에 같은 내용이 남는다."""
+    msg = " ".join(str(exc).split())
+    if len(msg) > ERROR_MAX_CHARS:
+        msg = msg[:ERROR_MAX_CHARS] + "…"
+    return {"attempt": attempt, "model": model, "error": type(exc).__name__, "detail": msg}
+
+
 class AttemptsExhausted(RuntimeError):
     """최소 시도 횟수를 모두 채운 뒤에도 성공하지 못함."""
 
-    def __init__(self, what: str, attempts: int, errors: list[str]) -> None:
+    def __init__(self, what: str, attempts: int, failures: list[dict[str, Any]]) -> None:
         self.what = what
         self.attempts = attempts
-        self.last_error = errors[-1] if errors else ""
+        self.failures = failures
+        last = failures[-1] if failures else None
+        self.last_error = f"{last['error']}: {last['detail']}" if last else ""
         super().__init__(f"{what}: {attempts}회 시도 후 실패 — {self.last_error}")
 
 
-def retry(what: str, fn: Callable[[int], T]) -> tuple[T, int]:
+def retry(
+    what: str,
+    fn: Callable[[int], T],
+    model_of: Callable[[int], str | None] = lambda _a: None,
+) -> tuple[T, int, list[dict[str, Any]]]:
     """fn(attempt) 를 성공할 때까지 부른다. 실패 확정은 min_attempts() 회를 채운 뒤에만 한다.
 
-    반환: (결과, 실제 시도 횟수)
+    반환: (결과, 실제 시도 횟수, 성공 전 실패 목록)
+    실패한 시도는 모두 WARNING 으로 로그에 남긴다 — 성공해도 앞선 실패 원인을 볼 수 있게.
     """
     floor = min_attempts()
-    errors: list[str] = []
+    failures: list[dict[str, Any]] = []
     attempt = 0
     while True:
         attempt += 1
         try:
-            return fn(attempt), attempt
+            return fn(attempt), attempt, failures
         except Exception as exc:  # noqa: BLE001 — 어떤 오류든 하한 전에는 포기하지 않는다
-            errors.append(f"#{attempt} {type(exc).__name__}: {exc}")
-            del errors[:-3]
+            f = failure(attempt, exc, model_of(attempt))
+            failures.append(f)
+            log.warning("%s 시도 %d/%d 실패 model=%s %s: %s",
+                        what, attempt, floor, f["model"], f["error"], f["detail"])
         if attempt >= floor:
-            raise AttemptsExhausted(what, attempt, errors)
+            log.error("%s %d회 시도 후 최종 실패", what, attempt)
+            raise AttemptsExhausted(what, attempt, failures)
         _sleep(backoff(attempt))
 
 
@@ -108,15 +135,18 @@ def make_client() -> Any:
     )
 
 
-def _version_key(name: str) -> tuple[float, ...]:
-    """'gemini-2.5-flash' → (-2.0, -5.0). 새 버전이 앞에 오도록 음수."""
+def _version_key(name: str) -> tuple[int, tuple[float, ...]]:
+    """'gemini-2.5-flash' → (0, (-2.0, -5.0)). 새 버전이 앞에 오도록 음수.
+
+    버전 번호가 없는 이름('gemini-omni-1.1-flash' 등 낯선 계열)은 버전 있는 모델 뒤로 보낸다.
+    """
     rest = name.split("gemini-", 1)[-1]
     nums: list[float] = []
     for part in rest.split("-")[0].split("."):
         if not part.isdigit():
             break
         nums.append(-float(part))
-    return tuple(nums)
+    return (0 if nums else 1, tuple(nums))
 
 
 def rank(name: str) -> tuple[Any, ...]:
@@ -179,7 +209,7 @@ def available_models(client: Any | None = None, *, refresh: bool = False) -> lis
             raise RuntimeError("사용 가능한 Gemini 생성 모델이 목록에 없습니다")
         return names
 
-    names, _ = retry("models.list", once)
+    names, _, _ = retry("models.list", once)
     with _models_lock:
         _models_cache = (time.time(), names)
     return list(names)
@@ -202,21 +232,21 @@ class Result(Generic[T]):
     value: T
     attempts: int
     model: str
+    failures: list[dict[str, Any]]
 
 
 def run(what: str, fn: Callable[[Any, str, int], T]) -> Result[T]:
     """fn(client, model, attempt) 를 최소 시도 규칙으로 실행한다. 시도마다 모델을 돌아가며 쓴다."""
     client = make_client()
     models = available_models(client)
-    used: dict[str, str] = {}
 
-    def once(attempt: int) -> T:
-        model = models[(attempt - 1) % len(models)]
-        used["model"] = model
-        return fn(client, model, attempt)
+    def model_of(attempt: int) -> str:
+        return models[(attempt - 1) % len(models)]
 
-    value, attempts = retry(what, once)
-    return Result(value=value, attempts=attempts, model=used["model"])
+    value, attempts, failures = retry(
+        what, lambda attempt: fn(client, model_of(attempt), attempt), model_of
+    )
+    return Result(value=value, attempts=attempts, model=model_of(attempts), failures=failures)
 
 
 def generate_text(client: Any, model: str, contents: Any, **config: Any) -> str:

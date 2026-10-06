@@ -80,8 +80,10 @@ python scripts/check_negatives.py
 **모델 이름을 코드에 고정하지 않습니다.** Gemini 모델은 수시로 추가·폐기되고 별칭이 바뀌므로,
 서버가 `models.list()` 로 지금 쓸 수 있는 목록을 받아(10분 캐시) 고릅니다.
 
-- 대상: `gemini*` 이면서 `generateContent` 지원. 임베딩·이미지·TTS·Live·Gemma 는 제외
-- 순서: 안정 버전 → flash → flash-lite → pro, 같은 계열은 `-latest` 별칭·최신 버전 우선
+- 대상: `gemini*` 이면서 `generateContent` 지원. 임베딩·이미지(`image`·`banana`)·TTS·받아쓰기(`transcribe`)·Live·
+  로봇(`robotics`)·컴퓨터 조작(`computer-use`)·도구 전용(`customtools`)·Gemma 는 제외
+- 순서: 안정 버전 → flash → flash-lite → pro, 같은 계열은 `-latest` 별칭·최신 버전 우선,
+  버전 번호가 없는 낯선 계열(`gemini-omni-…`)은 버전 있는 모델 뒤
 - 시도마다 목록을 순서대로 돌아가며 씁니다. 한 모델의 장애·할당량 초과를 다른 모델로 흡수합니다.
 
 **AI API 호출 하나당 최소 30회 시도합니다.** (`/generate`, `/speak-check`, 모델 목록 조회 각각)
@@ -97,6 +99,22 @@ python scripts/check_negatives.py
 > ⚠️ 모두 실패하면 대기만 약 1분 48초(0.5+1+2+4×26=107.5초)에 요청 시간이 더해집니다.
 > 프론트 제한 시간(`/generate` 90초, `/speak-check` 60초)이 먼저 끝나면 화면은 대체 결과를 보여 주지만,
 > 서버는 30회를 끝까지 채웁니다. 시도 횟수는 `backend/tests/test_gemini_retry.py` 가 검증합니다.
+
+### 실패 원인 보기
+
+실패한 시도는 **성공한 요청이라도** 모두 남깁니다.
+
+- 응답의 `failures[]`: `{ "attempt": 3, "model": "gemini-3.7-flash", "error": "ClientError", "detail": "429 RESOURCE_EXHAUSTED …" }`
+  (`detail` 은 300자까지)
+- Render 로그: `WARNING app.gemini: generate 시도 3/30 실패 model=gemini-3.7-flash ClientError: 429 …`
+
+| `error` | 흔한 원인 |
+|---|---|
+| `ClientError` + `429` | 해당 모델 무료 할당량 초과 → 다음 모델로 넘어감 |
+| `ClientError` + `404`/`400` | 목록에는 있으나 이 키·요청 형식으로 못 쓰는 모델 |
+| `ServerError` + `503` | Google 측 일시 장애 |
+| `ValueError` | 빈 응답 또는 JSON 아님 |
+| `BlockedResult` | 응답은 왔지만 검증 block (`detail` 에 block 코드) |
 
 지금 쓸 수 있는 모델은 GitHub Actions **"Gemini 모델 목록"** 워크플로(수동 실행 + 매주 월요일)나
 `python scripts/list_gemini_models.py` 로 확인합니다. Actions 에는 저장소 Secret `GEMINI_API_KEY` 가 필요합니다.
