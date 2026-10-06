@@ -1242,12 +1242,15 @@ function speakHtml(s) {
     const r = SPK.result;
     const parts = r.error ? [r.error]
       : r.usable !== true ? [r.mock ? '샘플 응답이에요(채점 안 됨).' : (r.reason || '평가하지 못했어요. 다시 시도해 주세요.'), '약점으로 저장하지 않았어요.']
-      : [typeof r.score === 'number' ? `점수 ${r.score}` : '', r.heard ? `들린 문장: ${r.heard}` : '', r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? '취약 상황으로 저장했어요' : ''];
+      : [typeof r.score === 'number' ? `점수 ${r.score}` : '', r.heard ? `들린 문장: ${r.heard}` : '', r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? '취약 상황으로 저장했어요' : '',
+         r.offer && r.coverage !== null ? `참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)` : ''];
     res = `<div class="speak-res">${parts.filter(Boolean).map(esc).join(' · ')}</div>`;
+    if (r.offer) res += `<button class="speak-btn" data-act="weak-save">이 상황을 복습 목록에 저장</button>`;
   }
   return `<button class="speak-btn ${st === 'recording' ? 'rec' : ''}" data-act="speak-rec" ${st === 'requesting' || st === 'uploading' ? 'disabled' : ''}>${label}</button>${res}
     <div class="speak-note">녹음은 채점을 위해 ${esc(host)} 서버와 AI 서비스로 전송돼요.</div>`;
 }
+const weakItem = s => ({ category_id: s.categoryId, id: s.situationId, situation: s.situation, en: s.en, ko: s.ko });
 function updateSpeakUi() {
   const el = $('[data-live=speak]'); const r = S.screen === 'u-study' && pickRow();
   if (!el || !r) return;
@@ -1304,9 +1307,10 @@ async function uploadSpeech(tok, blob, s) {
   }
   if (tok !== SPK.tok) return;                                               // 늦은 응답: 표시도 저장도 하지 않는다
   SPK.state = 'idle'; SPK.ctl = null;
-  const save = AI.shouldSaveWeak(s, res);
-  if (save) AI.saveWeak(localStorage, AI.upsertWeak(weakList(), { category_id: s.categoryId, id: s.situationId, situation: s.situation, en: s.en, ko: s.ko }));
-  SPK.result = { ...res, saved: save };
+  const decision = AI.weakDecision(s, res);
+  const save = decision === 'auto';
+  if (save) AI.saveWeak(localStorage, AI.upsertWeak(weakList(), weakItem(s)));
+  SPK.result = { ...res, saved: save, offer: decision === 'ask', coverage: typeof res.heard === 'string' ? AI.heardCoverage(s.en, res.heard) : null };
   updateSpeakUi(); renderDemo();
 }
 
@@ -1327,6 +1331,12 @@ const ACT = {
   'weak-demo': () => { AI.saveWeak(localStorage, DEMO_WEAK.reduce((l, w) => AI.upsertWeak(l, w), weakList())); renderDemo(); toast('데모 학습 기록을 불러왔어요. 실제 학습에서 생긴 기록이 아니에요.'); },
   'weak-clear': () => { AI.saveWeak(localStorage, []); renderDemo(); toast('저장된 취약 상황을 비웠어요.'); },
   'speak-rec': () => toggleSpeak(),
+  'weak-save': () => {
+    const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]];
+    if (!s || SPK.sid !== s.id || !SPK.result || !SPK.result.offer) return;       // 다른 카드·취소된 결과에는 저장하지 않는다
+    AI.saveWeak(localStorage, AI.upsertWeak(weakList(), weakItem(s)));
+    SPK.result = { ...SPK.result, offer: false, saved: true }; updateSpeakUi(); renderDemo(); toast('복습 목록에 저장했어요.');
+  },
 
   login: () => { S.user = DEMO_USER; toast('Google 계정으로 로그인했어요.'); ACT['after-login'](); },
   'after-login': () => go(S.trip && !S.trip.archived ? (S.plan ? 'u-home' : S.places.length ? 'u-report' : 'u-gen') : 'u-input'),
