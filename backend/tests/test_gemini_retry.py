@@ -131,8 +131,10 @@ class MinAttemptsTest(Base):
                 raise RuntimeError("fail")
             return "ok"
 
-        self.assertEqual(ai.retry("x", fn), ("ok", 7))
+        value, attempts, failures = ai.retry("x", fn)
+        self.assertEqual((value, attempts), ("ok", 7))
         self.assertEqual(n, 7)
+        self.assertEqual([f["attempt"] for f in failures], [1, 2, 3, 4, 5, 6])
 
     def test_success_on_30th(self) -> None:
         def fn(attempt: int) -> str:
@@ -140,7 +142,22 @@ class MinAttemptsTest(Base):
                 raise RuntimeError("fail")
             return "ok"
 
-        self.assertEqual(ai.retry("x", fn), ("ok", 30))
+        value, attempts, failures = ai.retry("x", fn)
+        self.assertEqual((value, attempts, len(failures)), ("ok", 30, 29))
+
+    def test_every_failure_is_recorded_and_logged(self) -> None:
+        def fn(attempt: int) -> None:
+            raise RuntimeError("x" * 1000 if attempt == 1 else f"fail {attempt}")
+
+        with self.assertLogs("app.gemini", "WARNING") as logs, \
+                self.assertRaises(ai.AttemptsExhausted) as cm:
+            ai.retry("x", fn, lambda a: f"m{a}")
+        exc = cm.exception
+        self.assertEqual(len(exc.failures), 30)
+        self.assertEqual(exc.failures[1], {"attempt": 2, "model": "m2", "error": "RuntimeError", "detail": "fail 2"})
+        self.assertLessEqual(len(exc.failures[0]["detail"]), ai.ERROR_MAX_CHARS + 1)
+        self.assertEqual(exc.last_error, "RuntimeError: fail 30")
+        self.assertEqual(sum("실패 model=" in line for line in logs.output), 30)
 
 
 class ModelListTest(Base):
@@ -157,11 +174,22 @@ class ModelListTest(Base):
             model("gemini-2.5-flash-image"),
             model("gemma-3-27b-it"),
             model("text-embedding-004", ["embedContent"]),
+            # 실제 배포에서 목록에 나온 용도 전용 모델들
+            model("gemini-nano-banana-2.1"),
+            model("gemini-3.5-transcribe"),
+            model("gemini-robotics-er-2-preview"),
+            model("gemini-2.5-computer-use-preview-10-2025"),
+            model("gemini-3.1-pro-preview-customtools"),
         ]
         self.assertEqual(ai.pick_models(raw), [
             "gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash",
             "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-2.5-flash-preview-09-2025",
         ])
+
+    def test_unversioned_family_goes_after_versioned(self) -> None:
+        raw = [model("gemini-omni-1.1-flash"), model("gemini-2.5-flash"), model("gemini-flash-latest")]
+        self.assertEqual(ai.pick_models(raw),
+                         ["gemini-flash-latest", "gemini-2.5-flash", "gemini-omni-1.1-flash"])
 
     def test_preferred_model_only_if_listed(self) -> None:
         os.environ["GEMINI_MODEL"] = "gemini-2.5-pro"
@@ -226,6 +254,8 @@ class EndpointTest(Base):
         self.assertEqual(d["attempts"], 30)
         self.assertEqual(d["usable"], "rejected")
         self.assertTrue(d["degraded"])
+        self.assertEqual(len(d["failures"]), 30)
+        self.assertEqual(d["failures"][0]["error"], "ConnectionError")
 
     def test_generate_bad_json_tried_30_times(self) -> None:
         fake = self.install(gen_fn=lambda *_: "not json")
@@ -239,6 +269,8 @@ class EndpointTest(Base):
         d = self.http.post("/generate", json=self.body()).json()
         self.assertEqual(len(fake.gen_calls), 30)
         self.assertEqual(d["usable"], "rejected")
+        self.assertEqual({f["error"] for f in d["failures"]}, {"BlockedResult"})
+        self.assertIn("category_mismatch", d["failures"][0]["detail"])
 
     def test_generate_success_after_failures(self) -> None:
         fake = self.install(gen_fn=lambda n, _m: json.dumps(GOOD_PACK) if n == 4 else "oops")
@@ -247,6 +279,8 @@ class EndpointTest(Base):
         self.assertEqual(d["attempts"], 4)
         self.assertEqual(d["usable"], "ok")
         self.assertEqual(d["model"], fake.gen_calls[-1])
+        self.assertEqual([f["model"] for f in d["failures"]], fake.gen_calls[:3])
+        self.assertEqual({f["error"] for f in d["failures"]}, {"ValueError"})
 
     def test_generate_model_list_failure(self) -> None:
         fake = self.install(list_fn=boom)
@@ -275,6 +309,7 @@ class EndpointTest(Base):
         self.assertEqual(len(fake.gen_calls), 9)
         self.assertEqual(d["attempts"], 9)
         self.assertEqual(d["heard"], "Hello.")
+        self.assertEqual(len(d["failures"]), 8)
 
     def test_health_reports_dynamic_selection(self) -> None:
         d = self.http.get("/health").json()
