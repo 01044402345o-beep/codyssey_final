@@ -1,5 +1,7 @@
 # PRD: 여행 영어 학습 서비스 (MVP)
 
+> **이력 문서(초기 기획, Firebase 기준).** 현재 구현·범위는 [`docs/requirements.md`](docs/requirements.md) 와 [`README.md`](README.md) 를 따른다.
+
 | 항목 | 내용 |
 |------|------|
 | 문서 상태 | 초안 v2 (검토 반영) |
