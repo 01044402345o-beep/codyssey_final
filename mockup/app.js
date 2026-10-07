@@ -606,12 +606,12 @@ function renderDemo() {
   $('#demo').classList.toggle('closed', !!S.demoClosed);
   $('#demo').innerHTML = `
     <h4>데모 조작 <span><button data-act="reset">전체 초기화</button> · <button data-act="demo-toggle">${S.demoClosed ? '펼치기 ▴' : '접기 ▾'}</button></span></h4>
-    <div class="demo-date"><span style="color:#9aa0ad">오늘</span><input type="date" id="demo-date" value="${S.today}"></div>
+    <div class="demo-date"><span style="color:var(--inv-text-3)">오늘</span><input type="date" id="demo-date" value="${S.today}"></div>
     <div class="demo-chips">${chips.map(([l, d]) => `<button data-act="set-today" data-date="${d}">${l} ${Dt.md(d)}</button>`).join('')}</div>
     ${tg('fail', 'AI 생성 실패')}${tg('stuck', '생성 멈춤 (응답 없음)')}${tg('routeInvalid', '방문 순서 AI 규칙 위반')}${tg('noTts', 'TTS 미지원 브라우저')}
     <div class="demo-actions"><button data-act="preset" data-kind="short">짧은 학습 3일</button><button data-act="preset" data-kind="zero">당일 시작 0일</button></div>
     <div class="demo-actions"><button data-act="weak-demo">데모 학습 기록 불러오기</button><button data-act="weak-clear">복습 목록 비우기</button></div>
-    <div class="small" style="margin-top:6px;color:#9aa0ad">복습 목록 ${weakList().length}개 (데모 ${weakList().filter(w => w.demo).length}개) · 데모 기록은 실제 학습 기억이 아니에요</div>`;
+    <div class="small" style="margin-top:6px;color:var(--inv-text-3)">복습 목록 ${weakList().length}개 (데모 ${weakList().filter(w => w.demo).length}개) · 데모 기록은 실제 학습 기억이 아니에요</div>`;
 }
 function updateSideActive() {
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.id === S.screen));
@@ -695,7 +695,7 @@ function userScreen() {
 /* SCR-01 */
 function scrLogin() {
   const body = S.user
-    ? `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:50%;background:var(--sea);color:#fff;display:grid;place-items:center;font-weight:700">김</div>
+    ? `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:50%;background:var(--sea);color:var(--on-sea);display:grid;place-items:center;font-weight:700">김</div>
         <div style="flex:1"><b>${DEMO_USER.name}</b><div class="small">${DEMO_USER.email}</div></div></div>
        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn soft" style="flex:1" data-act="logout">로그아웃</button><button class="btn primary" style="flex:2" data-act="after-login">계속하기</button></div>`
     : `<button class="gbtn" data-act="login">${I.google}Google로 계속하기</button>`;
@@ -769,7 +769,7 @@ function scrGen() {
   const t = S.trip;
   if (!t || !/_(requested|generating|failed)$/.test(t.status)) {
     return frame(`<div class="app-pad"><div class="empty" style="padding-top:120px"><div class="ico">${I.info}</div>
-      <b style="color:var(--ink);font-size:16px">진행 중인 생성 작업이 없어요</b><p>보고서, 방문 순서, 문장을 만드는 동안 이 화면이 나타나요. (맛집 문장은 AI가 만들어요)<br>오른쪽 데모 버튼으로 생성·실패·멈춤 화면을 확인할 수 있어요.</p>
+      <b style="color:var(--text);font-size:16px">진행 중인 생성 작업이 없어요</b><p>보고서, 방문 순서, 문장을 만드는 동안 이 화면이 나타나요. (맛집 문장은 AI가 만들어요)<br>오른쪽 데모 버튼으로 생성·실패·멈춤 화면을 확인할 수 있어요.</p>
       ${t ? `<button class="btn soft" data-act="tab" data-id="${t.status === 'studying' ? 'u-home' : t.status === 'report_done' ? 'u-report' : 'u-input'}">현재 단계로 돌아가기</button>` : `<button class="btn soft" data-act="tab" data-id="u-input">여행 입력으로</button>`}
       </div></div>`);
   }
@@ -844,7 +844,7 @@ function placeCard(p, locked) {
     <div class="check">${p.selected ? I.check : ''}</div>
     <div><div class="nm"><span class="kind ${p.kind}">${p.kind === 'attraction' ? '관광지' : '맛집'}</span>${esc(p.name)}${p.isCandidate ? '<span class="badge b-only">후보</span>' : ''}</div>
       <div class="meta">${esc(p.area)}${p.cuisine ? ` · ${esc(p.cuisine)}` : ''}</div>
-      <div class="desc">${esc(p.desc)} <span style="color:var(--muted)">— ${esc(p.reason)}</span></div>
+      <div class="desc">${esc(p.desc)} <span style="color:var(--text-3)">— ${esc(p.reason)}</span></div>
       ${p.menuKo ? `<div class="menu">대표 메뉴 · ${esc(p.menuKo)}</div>` : ''}
       <div class="src">${src}</div></div></div>`;
 }
@@ -856,15 +856,15 @@ function scrRoute() {
   const groups = {}; p.per.forEach(n => (groups[n] = (groups[n] || 0) + 1));
   const perTxt = Object.entries(groups).sort((a, b) => b[0] - a[0]).map(([n, c]) => `${n}문장 ${c}곳`).join(' · ');
   const inner = `<div class="app-pad">
-    <div class="card" style="background:var(--ink);color:#fff;border:0">
+    <div class="card" style="background:var(--inv-bg);color:var(--inv-text);border:0">
       <div class="eyebrow" style="color:var(--sun)">Plan summary</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;font-size:12.5px;color:#c8c3b7">
-        <div>전체 문장<b style="display:block;color:#fff;font-size:20px;font-family:var(--display)">${p.T}개</b>공통 30 + 장소 ${p.T - 30}</div>
-        <div>하루 학습량<b style="display:block;color:#fff;font-size:20px;font-family:var(--display)">${p.A ? p.A + '문장' : '없음'}</b>${p.A ? `새 문장 ${p.usedNew}일` : '여행 전 학습 없음'}</div>
-        <div>여행 전 학습<b style="display:block;color:#fff;font-size:16px">${p.N}일</b>복습 ${p.review} · 총복습 ${p.final}</div>
-        <div>여행 중 새 문장<b style="display:block;color:#fff;font-size:16px">${p.tripNew}개</b>문장 모음 전용 ${p.none}개</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;font-size:12.5px;color:var(--inv-text-2)">
+        <div>전체 문장<b style="display:block;color:var(--inv-text);font-size:20px;font-family:var(--display)">${p.T}개</b>공통 30 + 장소 ${p.T - 30}</div>
+        <div>하루 학습량<b style="display:block;color:var(--inv-text);font-size:20px;font-family:var(--display)">${p.A ? p.A + '문장' : '없음'}</b>${p.A ? `새 문장 ${p.usedNew}일` : '여행 전 학습 없음'}</div>
+        <div>여행 전 학습<b style="display:block;color:var(--inv-text);font-size:16px">${p.N}일</b>복습 ${p.review} · 총복습 ${p.final}</div>
+        <div>여행 중 새 문장<b style="display:block;color:var(--inv-text);font-size:16px">${p.tripNew}개</b>문장 모음 전용 ${p.none}개</div>
       </div>
-      <div style="margin-top:10px;font-size:12px;color:#9aa0ad">장소당 ${perTxt}</div>
+      <div style="margin-top:10px;font-size:12px;color:var(--inv-text-3)">장소당 ${perTxt}</div>
     </div>
     <div class="stack" style="margin:12px 0 16px">
       ${notice('지도 기반 최적 경로가 아니라, 장소의 지역을 기준으로 정한 <b>추천 방문 순서</b>예요.')}
@@ -929,7 +929,7 @@ function scrHome() {
 }
 function ring(rate) {
   const r = 40, c = 2 * Math.PI * r;
-  return `<div class="ring"><svg width="96" height="96"><circle cx="48" cy="48" r="${r}" fill="none" stroke="#efeadf" stroke-width="9"/>
+  return `<div class="ring"><svg width="96" height="96"><circle cx="48" cy="48" r="${r}" fill="none" stroke="var(--surface-seg)" stroke-width="9"/>
     <circle cx="48" cy="48" r="${r}" fill="none" stroke="var(--accent)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - rate)}"/></svg>
     <div class="v"><div><b>${Math.round(rate * 100)}%</b><span>완료율</span></div></div></div>`;
 }
@@ -953,7 +953,7 @@ function scrSched() {
   const inner = `<div class="app-pad">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div class="seg"><button class="${S.schedFilter === 'all' ? 'on' : ''}" data-act="sched-filter" data-v="all">전체</button><button class="${S.schedFilter === 'miss' ? 'on' : ''}" data-act="sched-filter" data-v="miss">미완료 ${pr.miss}</button></div>
-      <span class="small">완료율 <b style="color:var(--ink)">${Math.round(pr.rate * 100)}%</b> (${pr.done}/${pr.den})</span></div>
+      <span class="small">완료율 <b style="color:var(--text)">${Math.round(pr.rate * 100)}%</b> (${pr.done}/${pr.den})</span></div>
     ${pre.length ? `<div class="phase-label">여행 전 · ${S.plan.N}일</div>${pre.map(srow).join('')}` : ''}
     ${trip.length ? `<div class="phase-label">여행 중</div>${trip.map(srow).join('')}` : ''}
     ${!rows.length ? `<div class="empty"><div class="ico">${I.check}</div>미완료 날짜가 없어요</div>` : ''}
@@ -976,7 +976,7 @@ function scrStudy() {
   else if (st === 'miss') banner = notice('지난 날짜예요. 지금 학습하면 완료로 기록돼요.', 'warn');
 
   if (r.kind === 'free') {
-    return frame(`<div class="app-pad">${head}<div class="empty" style="padding-top:70px"><div class="ico">☼</div><b style="color:var(--ink);font-size:17px">오늘은 자유 일정이에요</b>
+    return frame(`<div class="app-pad">${head}<div class="empty" style="padding-top:70px"><div class="ico">☼</div><b style="color:var(--text);font-size:17px">오늘은 자유 일정이에요</b>
       <p>배치된 장소가 없어 카드가 없어요.<br>문장 모음에서 복습해 보세요. (완료율 계산에서 제외돼요)</p><button class="btn soft" data-act="tab" data-id="u-coll">문장 모음 열기</button></div></div>`,
       { appbar: appbar('학습', { back: 'u-sched' }), tabbar: true, tab: 'u-study' });
   }
@@ -1110,7 +1110,7 @@ function admMetrics() {
     <div class="grid2">
       <div class="panel funnel"><h3>단계별 도달 (여행 ${n1}건)</h3>${funnel.map(([l, k]) => `<div class="fr-row"><span>${l}</span><div class="bar"><i style="width:${cnt(k) / n1 * 100}%"></i></div><span class="n">${cnt(k)}</span></div>`).join('')}
         <p class="small" style="margin:8px 0 0">여행 입력(input_done)에 도달한 여행 기준. 데모 여행이 맨 위 행으로 포함돼요.</p></div>
-      <div class="panel"><h3>최근 최종 실패</h3>${failedRows.length ? failedRows.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1ece2;font-size:12.5px">
+      <div class="panel"><h3>최근 최종 실패</h3>${failedRows.length ? failedRows.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-faint);font-size:12.5px">
         <span><b>${esc(r.route)}</b><br><span class="small">${r.user}</span></span><span class="st-chip fail">${r.status}</span></div>`).join('') : '<div class="empty">실패한 작업이 없어요</div>'}
         <p class="small" style="margin:10px 0 0">실패율은 사용자 요청 기준이에요. 서버 자동 재요청(최대 2번)은 따로 세지 않아요.</p></div>
     </div>`;
@@ -1126,7 +1126,7 @@ function admJobs() {
   return `<h2>생성 작업 모니터</h2><p class="desc">생성 중 15분이 지나면 멈춘 작업으로 봐요 (FR-GEN-02). 여행 1개에는 동시에 하나의 작업만 있어서 여행 상태가 곧 작업 상태예요.</p>
     <div class="filters">${[['all', `전체 ${rows.length}`], ['gen', `생성 중 ${count('gen')}`], ['stale', `멈춤 ${count('stale')}`], ['fail', `실패 ${count('fail')}`]].map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-act="job-filter" data-v="${k}">${l}</button>`).join('')}</div>
     <div class="panel" style="padding:6px 8px"><table class="tbl"><thead><tr><th>여행</th><th>사용자</th><th>상태</th><th>경과</th><th>failStreak</th><th>다시 생성</th><th></th></tr></thead><tbody>
-    ${list.map(r => `<tr class="${stale(r) ? 'stale' : ''} ${r.me ? 'me' : ''}"><td><b>${esc(r.route)}</b><div class="mono" style="color:var(--muted)">${r.id}${r.me ? ' · 데모 여행' : ''}</div></td>
+    ${list.map(r => `<tr class="${stale(r) ? 'stale' : ''} ${r.me ? 'me' : ''}"><td><b>${esc(r.route)}</b><div class="mono" style="color:var(--text-3)">${r.id}${r.me ? ' · 데모 여행' : ''}</div></td>
       <td class="mono">${r.user}</td><td>${chip(r)}</td><td class="mono">${isGen(r) && r.genMinAgo != null ? r.genMinAgo + '분' : '—'}</td>
       <td class="mono">${r.failStreak}</td><td class="mono">${r.regen}/3</td>
       <td>${stale(r) ? `<button class="btn soft sm" data-act="job-fail" data-id="${r.id}">실패로 처리</button>` : /_failed$/.test(r.status) ? '<span class="small">사용자 재시도 대기</span>' : ''}</td></tr>`).join('') || `<tr><td colspan="7"><div class="empty">해당하는 작업이 없어요</div></td></tr>`}
@@ -1142,7 +1142,7 @@ function admCommon() {
     ${notice('이름·목적지는 <b>[name]</b>, <b>[destination]</b> 빈칸으로 적어요. 듣기에서는 "your name", "your destination"으로 읽어요.')}
     <div style="height:14px"></div>
     ${S.commonsDraft.map((g, gi) => `<div class="cs-group panel"><h4>${g.label} <span class="small">${g.key}</span></h4>
-      <div class="cs-row" style="font-size:11px;color:var(--muted)"><span>#</span><span>상황</span><span>영어 문장</span><span>한국어 뜻</span><span></span></div>
+      <div class="cs-row" style="font-size:11px;color:var(--text-3)"><span>#</span><span>상황</span><span>영어 문장</span><span>한국어 뜻</span><span></span></div>
       ${g.items.map((it, ii) => { const o = S.commons[gi].items[ii]; return `<div class="cs-row"><span class="i">${ii + 1}</span>
         <input data-cs="${gi}.${ii}.situation" value="${esc(it.situation)}" class="${it.situation !== o.situation ? 'dirty' : ''}">
         <input data-cs="${gi}.${ii}.en" value="${esc(it.en)}" class="${it.en !== o.en ? 'dirty' : ''}">
@@ -1158,8 +1158,8 @@ function admUsers() {
   const users = [{ email: DEMO_USER.email, name: DEMO_USER.name + ' (데모)', trips: demoTrips, me: true }, ...MOCK_USERS];
   return `<h2>사용자 · 여행</h2><p class="desc">현재 여행 = <code>archived = false</code>인 내 여행 (FR-TRIP-05). 새 여행을 만들면 이전 여행은 삭제하지 않고 보관해요 (FR-TRIP-04).</p>
     <div class="panel" style="padding:4px 10px">
-      <div class="user-row" style="font-size:11.5px;color:var(--muted)"><span>이름</span><span>이메일</span><span>여행</span></div>
-      ${users.map(u => `<div class="user-row" style="${u.me ? 'background:#f4fbfa' : ''}"><b>${esc(u.name)}</b><span class="mono" style="font-family:var(--mono);font-size:12px">${esc(u.email)}</span>
+      <div class="user-row" style="font-size:11.5px;color:var(--text-3)"><span>이름</span><span>이메일</span><span>여행</span></div>
+      ${users.map(u => `<div class="user-row" style="${u.me ? 'background:var(--me-bg)' : ''}"><b>${esc(u.name)}</b><span class="mono" style="font-family:var(--mono);font-size:12px">${esc(u.email)}</span>
         <div class="trips">${u.trips.length ? u.trips.map((tr, i) => `<span class="trip-chip ${tr.state === '보관' ? 'arch' : 'cur'}">${esc(tr.route)} · ${tr.state}</span>`).join('') : '<span class="small">여행 없음</span>'}</div></div>`).join('')}
     </div>`;
 }

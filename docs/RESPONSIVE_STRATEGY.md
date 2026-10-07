@@ -347,11 +347,21 @@ L+ 일정표 선택 시 "사이드 상세 vs 화면 이동"(초안 미결 2번)�
 
 각 단계는 별도 커밋. P0이 가장 큰 작업(색 148곳 + 인라인 77곳)이고 시각 회귀 위험이 가장 크다.
 
+### 10.2-1 P0 구현 결과 (2026-10-07)
+
+- `styles.css` 색 리터럴 148곳 → `:root` 토큰으로 이동 (규칙 안에는 색 리터럴 0). `app.js` 인라인 색은 토큰으로 교체(남은 건 Google 로고 브랜드색 4개).
+- 토큰 이름은 §7.2 와 약간 다르다: 일반(`--bg --surface --text --text-2 --text-soft --text-3 --border --border-strong --fill-strong --on-fill --accent --accent-text --on-accent` …)과 **inverse**(`--inv-*`: 히어로·카드 뒷면·관리자 사이드·데모 패널처럼 *다크 모드에서도 어두운 면*). 구 이름(`--ink --muted --line --line-2 --cream --paper --card`)은 제거했다.
+- **라이트 값은 기존 리터럴과 동일**하게 유지했다. 대비 미달 값(`--text-3` 3.05:1, `--accent-text` 3.55:1)은 의도적으로 그대로이며 §9-1 팀 결정 뒤 P3 에서 보정한다.
+- 검증 [측정]: `mockup/audit/visual_snapshot.js` 로 14화면 × (1280, 390) + 뒷면·로그인 재진입 = 32장을 변경 전/후 **바이트 단위 비교 → 32/32 동일**. `mockup/tokens.test.js`(3 tests)가 색 리터럴 재유입·미정의 토큰 참조를 막는다.
+- 한계: 스냅샷은 정적 상태만 본다. hover·focus·모달·녹음 중 같은 상호작용 상태의 색은 비교하지 않았다(규칙 단위로 같은 값으로 치환했으므로 동일해야 하지만 눈으로 확인한 것은 아니다).
+- 남은 인라인 `style=""`(레이아웃용, 색 아님)은 P1 에서 클래스로 옮긴다.
+
 ### 10.3 자동 검사 (저장소에 포함)
 
 `mockup/audit/responsive_audit.js` — 폭 [320, 360, 390, 768, 1024, 1280, 1920] × 12 화면:
 - 문서 `scrollWidth > clientWidth` → 실패
 - (제품 모드 이후) 44px 미만 터치 대상 / 12px 미만 텍스트 개수 보고
+- `visual_snapshot.js` — 시각 회귀 비교용 (`node mockup/audit/visual_snapshot.js <폴더> [light|dark]`, `--compare A B`).
 - 현재 코드(P0 이전)에서는 **실패가 정상**(기준선 기록). 결과를 PR에 첨부해 단계별 개선을 숫자로 본다.
 - **기준선 [측정, 01c6944, 사용자 8화면+관리자 4화면 합산]**: 320/360/390px 가로 스크롤 12/12, 768px 이상 0/12 · 44px 미만 타깃 209개 · 12px 미만 텍스트 352/781개 (§1의 37%는 사용자 화면만의 값이라 분모가 다르다).
 - 실행: `node mockup/audit/responsive_audit.js` (Playwright와 Chromium 경로는 `PW_PATH`, `CHROME_PATH` 환경 변수; 서버 `BASE_URL` 기본 `http://localhost:8000`).
