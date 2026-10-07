@@ -13,6 +13,11 @@
    - SDK 자체 재시도는 끈다(attempts=1). 그래야 시도 횟수 = 실제 API 요청 수다.
    - 성공하면 그 자리에서 멈춘다. '최소'는 실패를 확정하기 전까지의 하한이다.
    - 시도마다 모델 목록을 순서대로 돌아가며 쓴다. 한 모델의 장애·할당량 초과를 다른 모델로 흡수한다.
+
+3. 모델 상태를 기억한다 (프로세스 메모리).
+   - 마지막으로 성공한 모델을 다음 요청에서 먼저 쓴다.
+   - 404(제공 중단)·429(할당량)·5xx(과부하) 로 실패한 모델은 일정 시간 순서의 뒤로 미룬다.
+   - 미루는 것이지 빼는 것이 아니다. 모든 모델이 미뤄져 있어도 30회는 그대로 시도한다.
 """
 from __future__ import annotations
 
@@ -43,6 +48,13 @@ _client_factory: Callable[[], Any] | None = None      # 테스트에서 가짜 �
 
 _models_lock = threading.Lock()
 _models_cache: tuple[float, list[str]] | None = None
+
+# 모델 상태: 마지막 성공 모델 + 실패로 뒤로 미룬 모델 {이름: (해제 시각, 사유)}
+_state_lock = threading.Lock()
+# 마지막 성공 모델은 모델 묶음(pool)별로 기억한다 — Gemini 와 STT 공급자가 서로 덮어쓰지 않게.
+# STT 모델은 "groq:whisper-large-v3" 처럼 공급자를 붙인 이름으로 다뤄 쿨다운도 섞이지 않는다.
+_last_good: dict[str, str] = {}
+_cooldown: dict[str, tuple[float, str]] = {}
 
 
 def _env_int(key: str, default: int) -> int:
@@ -225,6 +237,73 @@ def reset_cache() -> None:
     global _models_cache
     with _models_lock:
         _models_cache = None
+    with _state_lock:
+        _last_good.clear()
+        _cooldown.clear()
+
+
+def cooldown_for(exc: BaseException) -> tuple[float, str] | None:
+    """실패 종류별로 그 모델을 얼마나 뒤로 미룰지. 모델 탓이 아닌 실패(빈 응답·JSON·검증)는 None."""
+    code = getattr(exc, "code", None)
+    if not isinstance(code, int):
+        if isinstance(exc, TimeoutError) or "timeout" in type(exc).__name__.lower():
+            return _env_float("AI_COOLDOWN_BUSY", 60.0), "timeout"
+        return None
+    if code in (403, 404):
+        return _env_float("AI_COOLDOWN_GONE", 6 * 3600.0), f"{code} 사용 불가"
+    if code == 400:   # 요청 형식 문제일 수도 있어(예: 오디오 미지원) 길게 미루지 않는다
+        return _env_float("AI_COOLDOWN_QUOTA", 600.0), "400 요청 거부"
+    if code == 429:
+        return _env_float("AI_COOLDOWN_QUOTA", 600.0), "429 할당량"
+    if code >= 500:
+        return _env_float("AI_COOLDOWN_BUSY", 60.0), f"{code} 과부하"
+    return None
+
+
+def note_failure(model: str, exc: BaseException) -> None:
+    cd = cooldown_for(exc)
+    if cd is None:
+        return
+    seconds, reason = cd
+    with _state_lock:
+        _cooldown[model] = (time.time() + max(0.0, seconds), reason)
+
+
+def note_success(model: str, pool: str = "gemini") -> None:
+    with _state_lock:
+        _last_good[pool] = model
+        _cooldown.pop(model, None)
+
+
+def attempt_order(models: list[str], pool: str = "gemini") -> list[str]:
+    """이번 요청의 시도 순서. 마지막 성공 모델 → 정상 모델(원래 순서) → 미룬 모델(빨리 풀리는 순).
+
+    목록의 모델은 하나도 빠지지 않는다. 순서만 바뀐다.
+    """
+    now = time.time()
+    with _state_lock:
+        cooling = {m: until for m, (until, _r) in _cooldown.items() if until > now and m in models}
+        last = _last_good.get(pool)
+    healthy = [m for m in models if m not in cooling]
+    if last in healthy:
+        healthy.remove(last)
+        healthy.insert(0, last)
+    return healthy + sorted(cooling, key=lambda m: (cooling[m], models.index(m)))
+
+
+def model_health() -> dict[str, Any]:
+    """/health 용 — 마지막 성공 모델과 지금 뒤로 미뤄 둔 모델."""
+    now = time.time()
+    with _state_lock:
+        return {
+            "last_good": _last_good.get("gemini"),
+            "last_good_by_pool": dict(sorted(_last_good.items())),
+            "cooling": {
+                m: {"reason": r, "seconds_left": int(until - now)}
+                for m, (until, r) in sorted(_cooldown.items())
+                if until > now
+            },
+        }
 
 
 @dataclass
@@ -236,16 +315,41 @@ class Result(Generic[T]):
 
 
 def run(what: str, fn: Callable[[Any, str, int], T]) -> Result[T]:
-    """fn(client, model, attempt) 를 최소 시도 규칙으로 실행한다. 시도마다 모델을 돌아가며 쓴다."""
+    """Gemini 호출: fn(client, model, attempt) 를 최소 시도 규칙으로 실행한다."""
     client = make_client()
-    models = available_models(client)
+    return run_on(what, client, available_models(client), fn)
+
+
+def run_on(
+    what: str,
+    client: Any,
+    models: list[str],
+    fn: Callable[[Any, str, int], T],
+    pool: str = "gemini",
+) -> Result[T]:
+    """어떤 공급자든 공통: 최소 시도 규칙 + 시도마다 모델 회전 + 실패 모델 쿨다운 + 마지막 성공 모델 우선.
+
+    models 는 쿨다운·기억에 쓰는 이름이다(STT 는 "groq:whisper-large-v3" 처럼 공급자를 붙인다).
+    """
+    if not models:
+        raise AttemptsExhausted(what, 0, [{"attempt": 0, "model": None, "error": "NoModels",
+                                           "detail": "사용 가능한 모델이 없습니다"}])
+    order = attempt_order(models, pool)
 
     def model_of(attempt: int) -> str:
-        return models[(attempt - 1) % len(models)]
+        return order[(attempt - 1) % len(order)]
 
-    value, attempts, failures = retry(
-        what, lambda attempt: fn(client, model_of(attempt), attempt), model_of
-    )
+    def once(attempt: int) -> T:
+        model = model_of(attempt)
+        try:
+            value = fn(client, model, attempt)
+        except Exception as exc:
+            note_failure(model, exc)
+            raise
+        note_success(model, pool)
+        return value
+
+    value, attempts, failures = retry(what, once, model_of)
     return Result(value=value, attempts=attempts, model=model_of(attempts), failures=failures)
 
 

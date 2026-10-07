@@ -19,8 +19,10 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 from collections import defaultdict, deque
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -32,12 +34,15 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from . import gemini as ai
+from . import speech_compare as compare
+from . import speech_vad as vad
+from . import stt_providers as stt
+from . import stt_selftest as selftest
 
 from .validators import (
     SCHEMA_CHECKER_AVAILABLE,
     has_blocking,
     validate_pack,
-    validate_speak_result,
 )
 
 # main.py 는 backend/app/ 에 있다. 저장소 루트의 agent_contract/ 를 본다.
@@ -64,7 +69,20 @@ logging.getLogger("httpx").setLevel(logging.WARNING)   # Gemini 요청마다 찍
 
 PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 
-app = FastAPI(title="Codyssey Final API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Silero VAD(onnx)를 미리 불러 첫 녹음이 모델 로드를 기다리지 않게 한다. 실패해도 요청 때 다시 시도.
+    def warm() -> None:
+        try:
+            vad.warmup()
+        except Exception:  # noqa: BLE001
+            logging.getLogger("app.vad").exception("VAD warmup 실패")
+    threading.Thread(target=warm, name="vad-warmup", daemon=True).start()
+    selftest.start()
+    yield
+
+
+app = FastAPI(title="Codyssey Final API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=(os.getenv("ALLOW_ORIGINS") or "*").split(","),
@@ -73,6 +91,7 @@ app.add_middleware(
 )
 
 _hits: dict[str, deque[float]] = defaultdict(deque)
+
 
 
 def rate_limit(request: Request) -> None:
@@ -240,6 +259,13 @@ def health() -> dict[str, Any]:
         "models": ai.cached_models(),
         "preferred_model": os.getenv("GEMINI_MODEL") or None,
         "min_attempts": ai.min_attempts(),
+        "model_health": ai.model_health(),
+        "vad": "silero (faster-whisper), min_silence 500ms, pad 200ms",
+        "stt_providers": {pid: bool(stt.api_key(pid)) for pid in stt.ORDER},
+        "speech_detectors": ["silero (faster-whisper)", "pyannote segmentation-3.0 (local onnx)"],
+        "cross_validation_ready": bool(stt.configured_primary() and stt.api_key(stt.CHECKER)),
+        "stt_models": stt.cached_models(),
+        "stt_selftest": selftest.status(),
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
         # 배포된 코드가 어느 커밋인지 응답 한 번으로 알 수 있게 한다. Render 가 빌드·런타임에 주는 기본 환경변수이고,
         # 로컬 실행처럼 값이 없으면 null 이다. (SHA 는 비밀이 아니다.)
@@ -346,16 +372,61 @@ def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     }
 
 
-SPEAK_PROMPT = (
-    "You are an English pronunciation and speaking coach for Korean travelers. "
-    "Listen to the audio and compare it to the target.\n"
-    'Return JSON only: {"heard": "what you actually heard", '
-    '"fix_one": "the single most important thing to fix, in Korean", '
-    '"issues": [{"word": "...", "note": "..."}], '
-    '"tip": "one short Korean tip", "score": optional 0-100}.\n'
-    "If the audio is silent or unintelligible, set heard to \"\" and leave score out.\n"
-    "TARGET: "
+# ---------------------------------------------------------------- 말하기 판정
+# 원칙: AI 에게는 최소 권한만 준다 (docs/research/speak-hallucination.md).
+#   1) 말소리 여부는 Silero 신경망 VAD 가 정한다(데시벨 아님). 말이 없으면 외부 API 를 부르지 않는다.
+#   2) 전사는 전용 STT(Groq Whisper 등, app/stt_providers.py)가 하고, 목표 문장을 모른다.
+#      목표 문장을 함께 준 LLM 은 무음에도 목표 문장을 들었다고 지어냈다(배포 실측 10/10, 95~100점).
+#   3) 환각 세그먼트 제거·점수·빠진 단어는 코드가 정한다 (app/speech_compare.py).
+#   4) 피드백 AI 는 오디오 없이 코드가 낸 비교 결과만 받아 문장을 쓴다. 점수는 바꿀 수 없다.
+
+FEEDBACK_PROMPT = (
+    "You are a friendly English speaking coach for Korean travelers.\n"
+    "A learner practiced saying the TARGET sentence in the given SITUATION. Two independent speech recognizers "
+    "(not you) transcribed what they said as HEARD and HEARD_BY_SECOND_RECOGNIZER, and code compared them with "
+    "the TARGET word by word (DIFF). Only words that BOTH recognizers heard count as correct. "
+    "The SCORE was computed by code; you cannot change it and must not output a score.\n"
+    "Base your feedback ONLY on the TARGET, the two HEARD texts and DIFF below. You did not hear the audio, so do not "
+    "comment on accent, intonation or sounds that are not visible in the DIFF.\n"
+    "Write in Korean:\n"
+    '- "fix_one": the single most useful thing to fix next time (one sentence). If nothing differs, '
+    "praise briefly and suggest one natural variation useful in this situation.\n"
+    '- "tip": one short practical tip for using this sentence in this situation.\n'
+    'Return JSON only: {"fix_one": "...", "tip": "..."}\n\n'
 )
+
+
+def feedback_input(situation: str, target: str, heard: str, diff: dict[str, Any], second_heard: str = "") -> str:
+    facts = {
+        "SITUATION": situation or "(unknown)",
+        "TARGET": target,
+        "HEARD": heard,
+        "HEARD_BY_SECOND_RECOGNIZER": second_heard,
+        "SCORE": diff["score"],
+        "DIFF": {k: diff[k] for k in ("missing", "extra", "replaced")},
+    }
+    return FEEDBACK_PROMPT + json.dumps(facts, ensure_ascii=False, indent=2)
+
+
+def _run_parallel(tasks: dict[str, Any]) -> dict[str, Any]:
+    """여러 외부 AI 호출을 동시에 돌린다. 예외도 값으로 돌려준다(어느 쪽이 실패했는지 판정에 쓴다)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=len(tasks)) as ex:
+        futures = {k: ex.submit(fn) for k, fn in tasks.items()}
+        out: dict[str, Any] = {}
+        for k, f in futures.items():
+            try:
+                out[k] = f.result()
+            except Exception as exc:  # noqa: BLE001
+                out[k] = exc
+        return out
+
+
+def no_speech(reason: str, **extra: Any) -> dict[str, Any]:
+    """말이 없거나 받아쓰기에 실패한 경우. 점수·피드백을 만들지 않는다."""
+    return {"usable": False, "reason": reason, "score": None, "heard": "", "issues": [],
+            "fix_one": "", "tip": "", **extra}
 
 
 @app.post("/speak-check")
@@ -363,6 +434,7 @@ async def speak_check(
     request: Request,
     target: str = Form(..., max_length=200),
     file: UploadFile = File(...),
+    situation: str = Form("", max_length=120),
 ) -> dict[str, Any]:
     rate_limit(request)
 
@@ -377,46 +449,115 @@ async def speak_check(
     if not mime.startswith("audio/"):
         raise HTTPException(status_code=415, detail=f"지원하지 않는 형식입니다: {mime}")
 
-    if not os.getenv("GEMINI_API_KEY"):
-        return {
-            "usable": False,
-            "reason": "API 키가 없어 목업으로 응답했습니다.",
-            "score": None, "heard": "", "issues": [], "fix_one": "", "tip": "",
-            "mock": True,
-        }
-
-    def once(client: Any, model: str, attempt: int) -> dict[str, Any]:
-        from google.genai import types
-
-        raw = ai.generate_text(
-            client, model,
-            [types.Part.from_bytes(data=audio, mime_type=mime), SPEAK_PROMPT + target],
-            temperature=0.2,
-        )
-        return parse_json_object(raw)
-
+    # 1) 말소리 검출 — 키가 없어도 동작한다. 말이 없으면 여기서 끝(외부 API 0회).
     try:
-        # 최소 30회 시도 + 대기가 이벤트 루프를 막지 않도록 스레드에서 돌린다.
-        res = await run_in_threadpool(ai.run, "speak-check", once)
-    except ai.AttemptsExhausted as exc:
-        # 평가 실패는 점수·약점으로 저장되면 안 된다.
+        samples = vad.decode(audio)
+    except vad.AudioDecodeError:
+        raise HTTPException(status_code=400, detail="녹음 파일을 읽을 수 없습니다. 다시 녹음해 주세요.")
+    speech = await run_in_threadpool(vad.detect, samples)
+    if not speech.has_speech:
+        return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요.", vad=speech.summary())
+    # 두 번째 말소리 검출기(로컬 pyannote, Silero 와 다른 신경망). 둘 다 말소리를 찾아야 외부 AI 를 부른다.
+    speech2 = await run_in_threadpool(vad.detect_pyannote, samples)
+    detector = speech2.summary("pyannote segmentation-3.0 (local onnx)")
+    if not speech2.has_speech:
+        return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요. (두 번째 말소리 검출기가 말소리를 찾지 못함)",
+                         vad=speech.summary(), cross_validation={"detector": detector})
+
+    if not stt.configured():
         return {
             "usable": False,
-            "reason": "채점 중 오류가 발생했습니다. 다시 시도해 주세요.",
-            "error": exc.last_error,
-            "attempts": exc.attempts if exc.what == "speak-check" else 0,
-            "failed_at": exc.what,
-            "failures": exc.failures,
+            "reason": "전사 API 키가 없어 목업으로 응답했습니다.",
             "score": None, "heard": "", "issues": [], "fix_one": "", "tip": "",
+            "mock": True, "vad": speech.summary(),
         }
-    parsed = res.value
 
-    norm, usable, reason = validate_speak_result(parsed)
-    norm["usable"] = usable
-    norm["attempts"], norm["model"], norm["failures"] = res.attempts, res.model, res.failures
-    if reason:
-        norm["reason"] = reason
-    return norm
+    # 교차검증 필수화: 다른 모델 계열의 전사(AssemblyAI)가 없으면 채점하지 않는다.
+    if not stt.api_key(stt.CHECKER):
+        return no_speech(
+            "교차검증에 필요한 AI 키가 없어 채점하지 않았습니다.",
+            failed_at="cross_validation", cross_validation={"required": [stt.CHECKER],
+                                                             "missing_keys": [stt.CHECKER], "detector": detector},
+            vad=speech.summary(),
+        )
+
+    # 2) 말소리 구간만, 목표 문장 없이 두 전사 AI 에 동시에 보낸다(지연 시간 = 느린 쪽).
+    #    1차 전사(Whisper 계열 체인) · 교차검증 전사(AssemblyAI). 각각 최소 30회.
+    wav = vad.speech_only_wav(samples, speech)
+    jobs = await run_in_threadpool(_run_parallel, {
+        "primary": lambda: stt.transcribe(wav),
+        "checker": lambda: stt.transcribe_with(stt.CHECKER, wav),
+    })
+    base = {"vad": speech.summary()}
+    if isinstance(jobs["primary"], Exception):
+        exc = jobs["primary"]
+        # 평가 실패는 점수·약점으로 저장되면 안 된다.
+        return no_speech("채점 중 오류가 발생했습니다. 다시 시도해 주세요.", failed_at="stt",
+                         error=getattr(exc, "last_error", str(exc)), attempts=getattr(exc, "attempts", 0),
+                         failures=getattr(exc, "failures", []), **base)
+    tr = jobs["primary"]
+    base.update(attempts=tr.attempts, model=tr.model, failures=tr.failures, stt=tr.meta())
+    broken = {k: jobs[k] for k in ("checker",) if isinstance(jobs[k], Exception)}
+    if broken:
+        return no_speech(
+            "교차검증 AI 가 응답하지 않아 채점하지 않았습니다. 잠시 후 다시 시도해 주세요.",
+            failed_at="cross_validation",
+            cross_validation={k: {"error": getattr(e, "last_error", str(e)), "attempts": getattr(e, "attempts", 0)}
+                              for k, e in broken.items()},
+            **base,
+        )
+    ck = jobs["checker"]
+    base["cross_validation"] = {"checker": ck.meta(), "detector": detector}
+
+    # 3) 판정 — 모두 코드가 한다. 두 전사(Whisper 계열·AssemblyAI) 모두 환각 세그먼트 제거 뒤 비어 있지 않아야 한다.
+    heard, dropped = compare.filter_segments(tr.text, tr.segments)
+    heard_ck, dropped_ck = compare.filter_segments(ck.text, ck.segments)
+    base["dropped_segments"] = dropped + [dict(d, provider=stt.CHECKER) for d in dropped_ck]
+    if compare.is_placeholder(heard) or compare.is_placeholder(heard_ck):
+        return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요.",
+                         heard_raw=tr.text, heard_checker_raw=ck.text, **base)
+    meta = base
+    # 두 전사 모두에서 들린 목표 단어만 점수가 된다.
+    diff = compare.compare_consensus(target, heard, heard_ck)
+    issues = [{"word": w, "note": "빠짐"} for w in diff["missing"]] + \
+             [{"word": a, "note": f"'{b}'(으)로 들림"} for a, b in diff["replaced"]] + \
+             [{"word": w, "note": "목표 문장에 없음"} for w in diff["extra"]]
+
+    # 3) 피드백 문장 — 오디오 없이 비교 결과만 준다. 응답의 다른 키(score 등)는 버린다.
+    prompt = feedback_input(situation, target, heard, diff, heard_ck)
+
+    def write_feedback(client: Any, model: str, attempt: int) -> tuple[str, str]:
+        data = parse_json_object(ai.generate_text(client, model, prompt, temperature=0.4))
+        fix_one, tip = data.get("fix_one"), data.get("tip")
+        if not (isinstance(fix_one, str) and fix_one.strip() and isinstance(tip, str)):
+            raise ValueError("fix_one/tip 형식 오류")
+        return fix_one.strip(), tip.strip()
+
+    if not os.getenv("GEMINI_API_KEY"):
+        fix_one, tip = compare.template_feedback(diff)
+        feedback = {"source": "template", "attempts": 0, "error": "GEMINI_API_KEY 없음"}
+    else:
+        try:
+            fb = await run_in_threadpool(ai.run, "speak-feedback", write_feedback)
+            (fix_one, tip), feedback = fb.value, {"source": "ai", "attempts": fb.attempts, "model": fb.model}
+        except ai.AttemptsExhausted as exc:
+            # 점수는 코드가 이미 정했으므로 결과는 쓸 수 있다. 문구만 사실 기반 문장 틀로 대신한다.
+            fix_one, tip = compare.template_feedback(diff)
+            feedback = {"source": "template", "attempts": exc.attempts, "error": exc.last_error}
+
+    return {
+        "usable": True,
+        "score": diff["score"],
+        "score_kind": "word_match_consensus",   # 발음 점수가 아니라, 두 전사 모두에서 들린 단어 일치율
+        "heard": heard,
+        "heard_checker": heard_ck,
+        "issues": issues,
+        "diff": diff,
+        "fix_one": fix_one,
+        "tip": tip,
+        "feedback": feedback,
+        **meta,
+    }
 
 
 # 화면(목업)을 같은 서비스에서 서빙한다. 반드시 모든 API 라우트 등록 뒤에 마운트한다.

@@ -4,6 +4,9 @@
   'use strict';
 
   const WEAK_KEY = 'cd_weak';
+  /* 말하기 연습 동의. 문구를 바꾸면 CONSENT_VERSION 을 올려 다시 동의를 받는다. */
+  const CONSENT_KEY = 'cd_consent';
+  const CONSENT_VERSION = 6;   // v2 Gemini 무료 등급·민감정보 / v3 2단계 처리 / v4 서버 VAD + 전용 STT / v5 교차검증 전송 / v6 말소리 재확인은 서버 안(pyannoteAI 미전송)
   /* 임시 제품 규칙: 이 점수 미만이면 "취약 상황" 후보로 저장한다. 검증된 학습 기준이 아니다. */
   const WEAK_THRESHOLD = 70;
   /* 참고 신호: 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 "다르게 들렸어요"로 표시한다 (저장 판정에 쓰지 않음). */
@@ -11,8 +14,6 @@
   const MAX_AUDIO_BYTES = 8 * 1024 * 1024; // backend/app/main.py MAX_AUDIO_BYTES 와 같다
   const GEN_TIMEOUT_MS = 90 * 1000;
   const ID_RE = /^[a-z][a-z0-9_]*$/;
-  const CONSENT_KEY = 'cd_consent';
-  const CONSENT_VERSION = 2;   // 동의 문구가 바뀌면 올려서 다시 동의를 받는다
 
   const str = v => typeof v === 'string' && v.trim().length > 0;
   const norm = v => String(v ?? '').trim().toLowerCase();
@@ -161,6 +162,28 @@
   function saveWeak(storage, list) {
     try { storage.setItem(WEAK_KEY, JSON.stringify(cleanWeak(list))); return true; } catch (e) { return false; }
   }
+  /* 동의는 '현재 버전 + voice === true + 시각' 이 모두 맞을 때만 유효하다. 손상·구버전·차단은 미동의로 본다. */
+  function loadConsent(storage) {
+    try {
+      const c = JSON.parse(storage.getItem(CONSENT_KEY) || 'null');
+      if (c && c.version === CONSENT_VERSION && c.voice === true && typeof c.at === 'string' && !Number.isNaN(Date.parse(c.at))) return { voice: true, at: c.at };
+    } catch (e) { /* 손상·차단 */ }
+    return { voice: false, at: null };
+  }
+  function saveConsent(storage, voice, now = new Date()) {
+    try {
+      if (voice) storage.setItem(CONSENT_KEY, JSON.stringify({ version: CONSENT_VERSION, voice: true, at: now.toISOString() }));
+      else storage.removeItem(CONSENT_KEY);
+      return true;
+    } catch (e) { return false; }
+  }
+  /* 동의 철회: 동의 기록과, 동의 아래에서 쌓인 복습 목록을 함께 지운다. 둘 다 지워졌을 때만 true. */
+  function withdrawConsent(storage) {
+    let ok = saveConsent(storage, false);
+    try { storage.removeItem(WEAK_KEY); } catch (e) { ok = false; }
+    return ok;
+  }
+
   /* 요청에는 해당 카테고리의 취약 상황 id 만 보낸다 (서버가 현재 유효한 id 로 다시 거른다). */
   function weakIdsFor(list, categoryId) {
     return cleanWeak(list).filter(w => w.category_id === categoryId).map(w => w.id);
@@ -210,38 +233,23 @@
     if (m.includes('wav')) return 'wav';
     return 'webm';
   }
-  async function speakCheck({ fetchImpl, base, blob, target, signal, timeoutMs = 60 * 1000 }) {
+  /* 서버가 말소리 검출(Silero VAD) → 전사(전용 STT) → 피드백(AI)을 한다. situation 은 피드백 AI 가 맥락을 알도록 보낸다. */
+  async function speakCheck({ fetchImpl, base, blob, target, situation = '', signal, timeoutMs = 90 * 1000 }) {
     if (base === null || base === undefined) throw new Error('no-api');
     if (!blob || !blob.size) throw new Error('empty-audio');
     if (blob.size > MAX_AUDIO_BYTES) throw new Error('too-large');
     const mime = blob.type || 'audio/webm';
     const fd = new FormData();
     fd.append('target', target);
+    fd.append('situation', String(situation || '').slice(0, 120));
     fd.append('file', blob, 'speech.' + extFor(mime));
     const t = withTimeout(signal, timeoutMs);
     try { return await httpJson(fetchImpl, base + '/speak-check', { method: 'POST', body: fd }, t.signal); }
     finally { t.done(); }
   }
 
-  /* ---------- 개인정보 수집·이용 동의 기록 (이 브라우저의 localStorage) ---------- */
-  function loadConsent(storage) {
-    try {
-      const c = JSON.parse(storage.getItem(CONSENT_KEY) || 'null');
-      if (c && c.version === CONSENT_VERSION && typeof c.at === 'string' && !Number.isNaN(Date.parse(c.at))) return { version: c.version, at: c.at };
-    } catch (e) { /* 저장소 차단·깨진 값은 동의 없음으로 본다 */ }
-    return null;
-  }
-  function saveConsent(storage, now) {
-    const rec = { version: CONSENT_VERSION, at: (now || new Date()).toISOString() };
-    try { storage.setItem(CONSENT_KEY, JSON.stringify(rec)); return rec; } catch (e) { return null; }
-  }
-  function clearConsent(storage) {
-    try { storage.removeItem(CONSENT_KEY); return true; } catch (e) { return false; }
-  }
-
   const api = {
-    CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, clearConsent,
-    WEAK_KEY, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
+    WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
   };

@@ -183,24 +183,6 @@ test('heardCoverage 한계(문서화): 부정문은 같은 문장으로, 자연�
   assert.ok(AI.heardCoverage("I'd like a coffee, please.", 'Could I have a coffee, please?') < AI.HEARD_MATCH_MIN);
 });
 
-test('동의 기록: 버전·시각이 맞을 때만 동의로 인정, 철회하면 사라진다', () => {
-  const mem = () => { const m = {}; return { getItem: k => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = v; }, removeItem: k => { delete m[k]; } }; };
-  const st = mem();
-  assert.equal(AI.loadConsent(st), null);
-  const rec = AI.saveConsent(st, new Date('2026-10-07T01:00:00Z'));
-  assert.deepEqual(rec, { version: AI.CONSENT_VERSION, at: '2026-10-07T01:00:00.000Z' });
-  assert.deepEqual(AI.loadConsent(st), rec);
-  st.setItem(AI.CONSENT_KEY, JSON.stringify({ version: AI.CONSENT_VERSION - 1, at: rec.at }));  // 옛 문구 버전 → 다시 동의
-  assert.equal(AI.loadConsent(st), null);
-  st.setItem(AI.CONSENT_KEY, JSON.stringify({ version: AI.CONSENT_VERSION, at: 'x' }));
-  assert.equal(AI.loadConsent(st), null);
-  st.setItem(AI.CONSENT_KEY, '{oops');
-  assert.equal(AI.loadConsent(st), null);
-  AI.saveConsent(st); assert.ok(AI.loadConsent(st)); assert.equal(AI.clearConsent(st), true); assert.equal(AI.loadConsent(st), null);
-  const blocked = { getItem() { throw new Error('x'); }, setItem() { throw new Error('x'); }, removeItem() { throw new Error('x'); } };
-  assert.equal(AI.loadConsent(blocked), null); assert.equal(AI.saveConsent(blocked), null); assert.equal(AI.clearConsent(blocked), false);
-});
-
 test('speakCheck: 빈 오디오·용량 초과·API 없음은 업로드 전에 거절, MIME→확장자', async () => {
   const f = async () => { throw new Error('should not call'); };
   await assert.rejects(AI.speakCheck({ fetchImpl: f, base: '', blob: { size: 0 }, target: 't' }), /empty-audio/);
@@ -210,4 +192,58 @@ test('speakCheck: 빈 오디오·용량 초과·API 없음은 업로드 전에 �
   assert.equal(AI.extFor('audio/mp4'), 'm4a');
   assert.equal(AI.extFor('audio/ogg; codecs=opus'), 'ogg');
   assert.equal(AI.extFor(''), 'webm');
+});
+
+const memStorage = (init = {}) => {
+  const m = new Map(Object.entries(init));
+  return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k), m };
+};
+const brokenStorage = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); } };
+
+test('동의: 기본은 미동의, 저장하면 시각과 함께 유효', () => {
+  const st = memStorage();
+  assert.deepEqual(AI.loadConsent(st), { voice: false, at: null });
+  assert.equal(AI.saveConsent(st, true, new Date('2026-10-07T01:02:03Z')), true);
+  assert.deepEqual(AI.loadConsent(st), { voice: true, at: '2026-10-07T01:02:03.000Z' });
+  AI.saveConsent(st, false);
+  assert.equal(AI.loadConsent(st).voice, false);
+});
+
+test('동의: 구버전·손상·형식 불일치·저장소 차단은 미동의', () => {
+  const v = AI.CONSENT_VERSION;
+  for (const raw of [JSON.stringify({ version: v - 1, voice: true, at: 'x' }), JSON.stringify({ version: v, voice: 'yes', at: 'x' }),
+                     JSON.stringify({ version: v, voice: true }), JSON.stringify({ version: v, voice: true, at: 'x' }),
+                     JSON.stringify({ version: v, at: '2026-10-07T00:00:00Z' }),   // 로그인 동의 방식(voice 없음) 기록 → 다시 동의
+                     '{broken', 'null', '[]']) {
+    assert.equal(AI.loadConsent(memStorage({ [AI.CONSENT_KEY]: raw })).voice, false, raw);
+  }
+  assert.equal(AI.loadConsent(brokenStorage).voice, false);
+  assert.equal(AI.saveConsent(brokenStorage, true), false);
+});
+
+test('동의 철회: 동의와 복습 목록을 함께 지운다', () => {
+  const st = memStorage();
+  AI.saveConsent(st, true);
+  AI.saveWeak(st, [{ category_id: 'restaurant', id: 'allergy_notice', situation: '알레르기', en: 'I am allergic.', ko: '알레르기' }]);
+  assert.equal(AI.loadWeak(st).length, 1);
+  assert.equal(AI.withdrawConsent(st), true);
+  assert.equal(AI.loadConsent(st).voice, false);
+  assert.equal(AI.loadWeak(st).length, 0);
+  assert.equal(st.m.size, 0);
+  assert.equal(AI.withdrawConsent(brokenStorage), false);
+});
+
+test('speakCheck: 목표 문장과 상황 이름을 보낸다 (상황은 120자 제한)', async () => {
+  let sent = null;
+  const f = async (url, opt) => { sent = opt.body; return { ok: true, status: 200, json: async () => ({ usable: true }) }; };
+  await AI.speakCheck({ fetchImpl: f, base: '', blob: new Blob(['x'], { type: 'audio/webm' }), target: 'I have a peanut allergy.', situation: '알레르기·재료 고지' + 'x'.repeat(200) });
+  assert.equal(sent.get('target'), 'I have a peanut allergy.');
+  assert.equal(sent.get('situation').length, 120);
+  assert.ok(sent.get('situation').startsWith('알레르기·재료 고지'));
+  await AI.speakCheck({ fetchImpl: f, base: '', blob: new Blob(['x'], { type: 'audio/webm' }), target: 't' });
+  assert.equal(sent.get('situation'), '');
+});
+
+test('무음 판정은 서버(Silero VAD) 몫 — 브라우저 음량(데시벨) 판정 함수가 없다', () => {
+  for (const k of ['isSilent', 'SILENCE_RMS', 'MIN_VOICED_MS']) assert.equal(k in AI, false, k);
 });
