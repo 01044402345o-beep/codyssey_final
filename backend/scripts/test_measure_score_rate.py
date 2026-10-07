@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from measure_score_rate import classify, is_valid_score, summarize  # noqa: E402
+from measure_score_rate import classify, is_valid_score, latency_stats, outcome, summarize  # noqa: E402
 
 
 class T(unittest.TestCase):
@@ -51,6 +51,33 @@ class T(unittest.TestCase):
         self.assertEqual(s["2 usable:true / 실제 응답"], (2, 3))
         self.assertEqual(s["3 유효 score / usable:true"], (1, 2))
         self.assertEqual(s["4 점수 누락(null)+heard 있음 / usable:true"], (1, 2))
+
+    def test_outcome_matches_server_shapes(self):
+        """main.py /speak-check 의 반환 모양 하나씩 (no_speech() 의 키 구성 그대로)."""
+        base = {"usable": False, "score": None, "heard": "", "issues": [], "fix_one": "", "tip": ""}
+        cases = {
+            "scored": {"usable": True, "score": 100, "heard": "x", "score_kind": "word_match_consensus"},
+            "vad_silero": {**base, "reason": "음성이 인식되지 않았습니다.", "vad": {"speech_sec": 0.0}},
+            "vad_pyannote": {**base, "reason": "...", "vad": {"speech_sec": 1.3},
+                             "cross_validation": {"detector": {"speech_sec": 0.0}}},
+            "no_keys": {**base, "failed_at": "cross_validation", "vad": {},
+                        "cross_validation": {"required": ["assemblyai"], "missing_keys": ["assemblyai"]}},
+            "cross_failed": {**base, "failed_at": "cross_validation",
+                             "cross_validation": {"checker": {"error": "x", "attempts": 30}}},
+            "stt_failed": {**base, "failed_at": "stt", "error": "e", "attempts": 30},
+            "placeholder": {**base, "heard_raw": "you", "heard_checker_raw": "", "vad": {}},
+            "mock": {**base, "mock": True, "vad": {}},
+        }
+        for want, res in cases.items():
+            self.assertEqual(outcome(200, res), want, want)
+        self.assertEqual(outcome(200, {"usable": True, "score": 150}), "other")   # usable 인데 점수 무효
+        for st, res, err in ((None, None, "TimeoutError"), (429, None, "HTTP 429"), (200, None, "invalid JSON")):
+            self.assertEqual(outcome(st, res, err), "http_error")
+
+    def test_latency_stats(self):
+        self.assertIsNone(latency_stats([]))
+        self.assertEqual(latency_stats([3, 1, 2]), {"min": 1, "median": 2, "max": 3})
+        self.assertEqual(latency_stats([1, 2, 3, 10])["median"], 2.5)
 
 
 if __name__ == "__main__":

@@ -85,6 +85,29 @@ python3 backend/scripts/measure_score_rate.py \
 
 ---
 
+## 2-1. 현재 서버 구조에 맞춘 읽는 법 (먼저 읽을 것)
+
+아래 §3·§4 의 1~4번 지표는 **AI 가 점수를 줄 수도 생략할 수도 있던 구조** 기준이다. 지금 서버(`main`)는 말소리 검출 2종 →
+전사 2종 교차검증 → **점수는 코드가 계산**하므로, `usable:true` 이면 점수는 항상 숫자다. 의미 있는 출력은 맨 위의 **0번 `outcome` 분포**와 **응답 시간**이다.
+
+| outcome | 뜻 | 서버 응답 단서 |
+|---|---|---|
+| `scored` | 채점됨 | `usable:true`, 유효 `score` |
+| `vad_silero` | 첫 검출기(Silero)에서 말소리 0초 → 외부 AI 호출 없음 | `vad` 만 있음 |
+| `vad_pyannote` | Silero 는 통과, 로컬 pyannote 가 말소리 없음 | `cross_validation.detector` 만 있음 |
+| `placeholder` | 전사가 환각/빈 문장이라 거부 | `heard_raw` / `heard_checker_raw` |
+| `no_keys` | 교차검증 키(AssemblyAI) 없음 | `failed_at:"cross_validation"` + `missing_keys` |
+| `cross_failed` | 교차검증 AI 30회 실패 | `failed_at:"cross_validation"` |
+| `stt_failed` | 1차 전사 실패 | `failed_at:"stt"` |
+| `mock` | 전사 키가 하나도 없음 | `mock:true` |
+| `http_error` / `other` | 네트워크·HTTP 오류 / 분류 밖 | |
+
+- **silent**: `scored` 가 **0** 이어야 정상(0 이 아니면 스크립트가 "결함"을 출력). 말소리 검출은 키 없이 동작하므로 **키 없는 로컬 서버에서도 측정 가능**하다. `vad_silero` 가 아니라 `vad_pyannote`/`placeholder` 로 걸러진 비율은 "첫 방어선을 뚫은 정도"로 따로 기록한다.
+- **good / bad**: `mock`·`no_keys` 이면 측정이 무의미하므로 `exit 2` 로 중단한다(silent 는 계속). good 의 **`scored` 가 아닌 비율 = 정상 발화 오거부율**이며, 이것이 지금 가장 모르는 숫자다(실제 학습자 녹음 필요).
+- 호출별 JSONL 에 `seconds`(응답 시간)·`outcome` 이 추가됐다. 콜드스타트는 `i=1` 로 구분한다.
+
+---
+
 ## 3. 출력 읽기
 
 ```
@@ -158,7 +181,8 @@ python3 backend/scripts/measure_score_rate.py \
 
 | 항목 | 결과 |
 |---|---|
-| 분류 규칙 단위 테스트 (`test_measure_score_rate.py`) | 4 tests OK (이 저장소 작업 세션에서 실행 확인) |
+| 분류 규칙 단위 테스트 (`test_measure_score_rate.py`) | 6 tests OK — outcome 8종을 `main.py` 반환 모양 그대로 검증 (이 저장소 작업 세션에서 실행 확인) |
+| 로컬 서버(키 없음, 말소리 검출 2종 내장)에 1초 무음 WAV ×3 | 3/3 `vad_silero`, `scored` 0, 응답 0.08~0.09초 (실행 확인). good.wav 는 `mock` 으로 `exit 2` 중단 (의도대로) |
 | 가짜 로컬 서버에 응답 5종(정상 점수 · 점수 없음 · `usable:false` · 깨진 JSON · 429)을 보내 집계·원본 JSONL 기록 확인 | 분모별 집계가 의도대로 나옴 (실행 확인) |
 | 연결 불가 서버 대상 실행 | 중단 없이 분모 0으로 종료 (실행 확인) |
 | good·bad·silent 스텁 서버 3조건 실행 | **다른 작업 세션의 실행 보고** (good → 3번 100%, bad → 4번 100%, silent → heard 비어 있음 100%). 재현 자료(명령·로그) 미첨부 |
