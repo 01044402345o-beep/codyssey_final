@@ -54,7 +54,7 @@ with sync_playwright() as p:
 
     page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(300)
     check("동의 창", page.locator(".modal").count() == 1)
-    check("동의 창에 '말소리가 있을 때만' 전송 안내", "말소리가 있을 때만" in page.locator(".modal").inner_text())
+    check("동의 창에 '서버 안의 두 신경망이 모두 말소리를 찾으면' 전송 안내", "서버 안의 두 신경망" in page.locator(".modal").inner_text())
     page.locator('[data-act="modal-ok"]').click(); page.wait_for_timeout(1500)   # 1.5초 무음 녹음
     check("녹음 시작 (무음 마이크)", "녹음 끝내기" in page.locator('[data-act="speak-rec"]').first.inner_text())
     page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(1500)
