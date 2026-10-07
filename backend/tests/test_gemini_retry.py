@@ -363,7 +363,8 @@ class EndpointTest(Base):
         self.assertNotIn("model", d)
         self.assertEqual(d["model_health"], {"last_good": None, "last_good_by_pool": {}, "cooling": {}})
         self.assertIn("silero", d["vad"])
-        self.assertEqual(set(d["stt_providers"]), {"groq", "openai", "assemblyai", "pyannoteai"})
+        self.assertEqual(set(d["stt_providers"]), {"groq", "openai", "assemblyai"})
+        self.assertEqual(len(d["speech_detectors"]), 2)
         self.assertFalse(d["cross_validation_ready"])
 
 

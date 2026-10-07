@@ -6,7 +6,7 @@
   const WEAK_KEY = 'cd_weak';
   /* 말하기 연습 동의. 문구를 바꾸면 CONSENT_VERSION 을 올려 다시 동의를 받는다. */
   const CONSENT_KEY = 'cd_consent';
-  const CONSENT_VERSION = 5;   // v2 Gemini 무료 등급·민감정보 / v3 2단계 처리 / v4 서버 VAD + 전용 STT / v5 교차검증(AssemblyAI·pyannoteAI)에도 녹음 전송
+  const CONSENT_VERSION = 6;   // v2 Gemini 무료 등급·민감정보 / v3 2단계 처리 / v4 서버 VAD + 전용 STT / v5 교차검증 전송 / v6 말소리 재확인은 서버 안(pyannoteAI 미전송)
   /* 임시 제품 규칙: 이 점수 미만이면 "취약 상황" 후보로 저장한다. 검증된 학습 기준이 아니다. */
   const WEAK_THRESHOLD = 70;
   /* 참고 신호: 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 "다르게 들렸어요"로 표시한다 (저장 판정에 쓰지 않음). */

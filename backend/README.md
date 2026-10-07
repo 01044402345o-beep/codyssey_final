@@ -66,7 +66,6 @@ python scripts/check_negatives.py
 | `GROQ_API_KEY` | console.groq.com | 말하기 전사 1순위(Whisper). STT 키가 하나도 없으면 말하기는 목업 |
 | `OPENAI_API_KEY` | platform.openai.com | 전사 보충(whisper 계열만, gpt-4o-transcribe 제외) |
 | `ASSEMBLYAI_API_KEY` | assemblyai.com | **교차검증 전사(필수)**. `speech_models` 미전송 → 계정 기본 모델. `ASSEMBLY_AI_API_KEY` 도 인식 |
-| `PYANNOTEAI_API_KEY` | pyannote.ai | **두 번째 말소리 검출(필수)**. `model` 미전송. `PYANNOTE_API_KEY` 도 인식 |
 | `GROQ_STT_MODEL` / `OPENAI_STT_MODEL` | 비워 둠 | 고정이 아니라 우선 선호(목록에 있을 때만) |
 | `STT_SELFTEST` | 비워 둠 | `1` 이면 시작 시 공급자별 실제 호출 점검 → `/health` `stt_selftest`. **검증 뒤 지운다**(콜드스타트마다 비용) |
 | `GEMINI_MODEL` | 비워 둠 | **고정이 아니라 우선 선호.** 실행 중 받은 목록에 있을 때만 맨 앞에 둔다 |
@@ -143,8 +142,10 @@ seongbin45/transcribe_app 의 방식을 따랐다(정독·커밋 교차검증 �
 #### 교차검증 (필수)
 - 배포 자가 점검: Groq·OpenAI(둘 다 Whisper)는 1초 무음에 같은 "you"를 지어냈고 AssemblyAI 는 "" 를 냈다.
   그래서 1차 전사(Groq→OpenAI)와 **다른 계열**인 AssemblyAI 를 교차검증자로 쓴다. OpenAI 는 검증자로 인정하지 않는다.
-- pyannoteAI 로 말소리를 한 번 더 확인한다(Silero 와 다른 신경망). 둘 다 말소리를 찾아야 채점한다.
-- 세 호출은 동시에(각각 최소 30회). 교차검증 키(`ASSEMBLYAI_API_KEY`·`PYANNOTEAI_API_KEY`)가 없거나 실패하면 **채점하지 않는다**.
+- **서버 안의 pyannote segmentation-3.0**(ONNX, MIT, `app/models/`)으로 말소리를 한 번 더 확인한다(Silero 와 다른 신경망).
+  둘 다 말소리를 찾아야 외부 AI 를 부른다. pyannoteAI 클라우드는 계정 크레딧 없음(HTTP 402)으로 모든 요청이 실패해
+  로컬 모델로 바꿨다(2026-10-08) — 네트워크·크레딧이 필요 없다. 단독으로는 브라우저 녹음 신호음 일부를 말소리로 보지만 Silero 와의 AND 로 걸러진다.
+- 두 전사 호출은 동시에(각각 최소 30회). 교차검증 키(`ASSEMBLYAI_API_KEY`)가 없거나 실패하면 **채점하지 않는다**.
 - 점수 `100 × 2·M_both / (T + H_max)` — 각 전사 단독 점수보다 크지 않다. 응답 `cross_validation`, `heard_checker`, `diff.per_stt`, `diff.agreement`.
 - 근거·한계: `docs/research/references.md`.
 
