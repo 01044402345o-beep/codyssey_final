@@ -93,19 +93,14 @@ def run() -> None:
         out["tts_expected"] = FIXTURE_TEXT
         with _lock:
             _state["results"][pid] = out
-    if stt.api_key(stt.DETECTOR):
-        det: dict[str, Any] = {}
-        for label, wav in (("silence_1s", silence_wav()), ("tts", tts)):
-            if wav is None:
-                continue
-            t0 = time.time()
-            try:
-                r = stt.detect_speech(wav)
-                det[label] = {"ok": True, **r.meta(), "seconds": round(time.time() - t0, 1)}
-            except ai.AttemptsExhausted as exc:
-                det[label] = {"ok": False, "attempts": exc.attempts, "error": exc.last_error}
-        with _lock:
-            _state["results"][stt.DETECTOR] = det
+    from . import speech_vad as vad   # 로컬 두 검출기(Silero·pyannote)도 같은 fixture 로 기록
+    det: dict[str, Any] = {}
+    for label, wav in (("silence_1s", silence_wav()), ("tts", tts)):
+        if wav is not None:
+            a = vad.decode(wav)
+            det[label] = {"silero": vad.detect(a).speech_sec, "pyannote": vad.detect_pyannote(a).speech_sec}
+    with _lock:
+        _state["results"]["local_detectors"] = det
     with _lock:
         _state["status"] = "done"
 

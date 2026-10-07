@@ -131,7 +131,9 @@ AssemblyAI 는 같은 무음에 빈 결과를 냈다(문헌 B3 과 일치).
      → 교차검증 키가 없거나 30회 실패 → 채점하지 않음
 ```
 - 같은 Whisper 계열(OpenAI)은 교차검증자로 인정하지 않는다.
-- pyannoteAI 는 `model` 을 보내지 않는다(transcribe_app 은 화자 수 힌트 때문에 `precision-2` 고정 — 우리는 힌트 불필요, 하드코딩 금지).
+- 2차 말소리 검출: 처음엔 pyannoteAI 클라우드(`model` 미전송)였으나 배포 자가 점검에서 **HTTP 402 "No credit or active subscription"** 으로
+  30회 모두 실패 → 말하기 한 번에 114초가 걸리고 채점이 전부 막혔다. 사용자 결정으로 **서버 안의 pyannote segmentation-3.0(ONNX)** 으로 교체.
+  로컬 실측(10초 창·argmax): 무음·큰 백색잡음 0초, 합성 440Hz 0.02초, TTS 전체 검출, **브라우저 녹음 신호음 1.29/1.50초(오탐)** — Silero 가 0초라 AND 에서 걸러진다.
 - 문헌 근거·한계: `references.md`. 특히 두 검출기 AND 는 오탐을 줄이는 대신 작은·서툰 발화를 놓칠 수 있다(A9) — 실제 학습자 녹음으로 거부율을 재야 한다.
 
 ## 4. 한계 (정직하게)

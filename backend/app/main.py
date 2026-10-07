@@ -261,9 +261,9 @@ def health() -> dict[str, Any]:
         "min_attempts": ai.min_attempts(),
         "model_health": ai.model_health(),
         "vad": "silero (faster-whisper), min_silence 500ms, pad 200ms",
-        "stt_providers": {pid: bool(stt.api_key(pid)) for pid in (*stt.ORDER, stt.DETECTOR)},
-        "cross_validation_ready": bool(stt.configured_primary() and stt.api_key(stt.CHECKER)
-                                       and stt.api_key(stt.DETECTOR)),
+        "stt_providers": {pid: bool(stt.api_key(pid)) for pid in stt.ORDER},
+        "speech_detectors": ["silero (faster-whisper)", "pyannote segmentation-3.0 (local onnx)"],
+        "cross_validation_ready": bool(stt.configured_primary() and stt.api_key(stt.CHECKER)),
         "stt_models": stt.cached_models(),
         "stt_selftest": selftest.status(),
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
@@ -457,6 +457,12 @@ async def speak_check(
     speech = await run_in_threadpool(vad.detect, samples)
     if not speech.has_speech:
         return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요.", vad=speech.summary())
+    # 두 번째 말소리 검출기(로컬 pyannote, Silero 와 다른 신경망). 둘 다 말소리를 찾아야 외부 AI 를 부른다.
+    speech2 = await run_in_threadpool(vad.detect_pyannote, samples)
+    detector = speech2.summary("pyannote segmentation-3.0 (local onnx)")
+    if not speech2.has_speech:
+        return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요. (두 번째 말소리 검출기가 말소리를 찾지 못함)",
+                         vad=speech.summary(), cross_validation={"detector": detector})
 
     if not stt.configured():
         return {
@@ -466,23 +472,21 @@ async def speak_check(
             "mock": True, "vad": speech.summary(),
         }
 
-    # 교차검증 필수화: 다른 모델 계열의 전사(AssemblyAI)와 두 번째 말소리 검출기(pyannoteAI)가 없으면 채점하지 않는다.
-    missing = [pid for pid in (stt.CHECKER, stt.DETECTOR) if not stt.api_key(pid)]
-    if missing:
+    # 교차검증 필수화: 다른 모델 계열의 전사(AssemblyAI)가 없으면 채점하지 않는다.
+    if not stt.api_key(stt.CHECKER):
         return no_speech(
             "교차검증에 필요한 AI 키가 없어 채점하지 않았습니다.",
-            failed_at="cross_validation", cross_validation={"required": [stt.CHECKER, stt.DETECTOR],
-                                                             "missing_keys": missing},
+            failed_at="cross_validation", cross_validation={"required": [stt.CHECKER],
+                                                             "missing_keys": [stt.CHECKER], "detector": detector},
             vad=speech.summary(),
         )
 
-    # 2) 말소리 구간만, 목표 문장 없이 세 AI 에 동시에 보낸다(지연 시간 = 가장 느린 하나).
-    #    1차 전사(Whisper 계열 체인) · 교차검증 전사(AssemblyAI) · 2차 말소리 검출(pyannoteAI). 각각 최소 30회.
+    # 2) 말소리 구간만, 목표 문장 없이 두 전사 AI 에 동시에 보낸다(지연 시간 = 느린 쪽).
+    #    1차 전사(Whisper 계열 체인) · 교차검증 전사(AssemblyAI). 각각 최소 30회.
     wav = vad.speech_only_wav(samples, speech)
     jobs = await run_in_threadpool(_run_parallel, {
         "primary": lambda: stt.transcribe(wav),
         "checker": lambda: stt.transcribe_with(stt.CHECKER, wav),
-        "detector": lambda: stt.detect_speech(wav),
     })
     base = {"vad": speech.summary()}
     if isinstance(jobs["primary"], Exception):
@@ -493,7 +497,7 @@ async def speak_check(
                          failures=getattr(exc, "failures", []), **base)
     tr = jobs["primary"]
     base.update(attempts=tr.attempts, model=tr.model, failures=tr.failures, stt=tr.meta())
-    broken = {k: jobs[k] for k in ("checker", "detector") if isinstance(jobs[k], Exception)}
+    broken = {k: jobs[k] for k in ("checker",) if isinstance(jobs[k], Exception)}
     if broken:
         return no_speech(
             "교차검증 AI 가 응답하지 않아 채점하지 않았습니다. 잠시 후 다시 시도해 주세요.",
@@ -502,15 +506,10 @@ async def speak_check(
                               for k, e in broken.items()},
             **base,
         )
-    ck, det = jobs["checker"], jobs["detector"]
-    base["cross_validation"] = {"checker": ck.meta(), "detector": det.meta()}
+    ck = jobs["checker"]
+    base["cross_validation"] = {"checker": ck.meta(), "detector": detector}
 
-    # 3) 판정 — 모두 코드가 한다.
-    #    두 말소리 검출기(Silero·pyannoteAI)가 모두 말소리를 찾아야 하고,
-    #    두 전사(Whisper 계열·AssemblyAI) 모두 비어 있지 않아야 한다(환각 세그먼트 제거 뒤).
-    if det.speech_sec <= 0:
-        return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요. (두 번째 말소리 검출기가 말소리를 찾지 못함)",
-                         heard_raw=tr.text, **base)
+    # 3) 판정 — 모두 코드가 한다. 두 전사(Whisper 계열·AssemblyAI) 모두 환각 세그먼트 제거 뒤 비어 있지 않아야 한다.
     heard, dropped = compare.filter_segments(tr.text, tr.segments)
     heard_ck, dropped_ck = compare.filter_segments(ck.text, ck.segments)
     base["dropped_segments"] = dropped + [dict(d, provider=stt.CHECKER) for d in dropped_ck]

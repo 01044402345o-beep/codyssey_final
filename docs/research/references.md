@@ -12,7 +12,7 @@
 | A2 | Sohn, J., Kim, N. S., & Sung, W. (1999). A statistical model-based voice activity detection. *IEEE SPL*, 6(1). (초록만) | 에너지 방식의 소음 취약성을 통계 모델로 보완하려 한 고전 |
 | A3 | Silero Team. *Silero VAD* 와 Wiki "Quality Metrics". https://github.com/snakers4/silero-vad/wiki/Quality-Metrics | ROC-AUC v6 0.97 / WebRTC 0.73, 환경소음만 있는 ESC-50 정확도 v6 0.87 / WebRTC 0. **벤더 자체 평가**. 우리 실측(큰 잡음·신호음 → 말소리 0초)과 같은 방향 |
 | A4 | Jia, F., Majumdar, S., & Ginsburg, B. (2021). MarbleNet. *ICASSP 2021*. https://arxiv.org/abs/2010.13886 (초록만) | 경량 신경망 VAD 의 다른 예 |
-| A5 | Bredin, H. et al. (2020). pyannote.audio. *ICASSP 2020*. https://arxiv.org/abs/1911.01255 (초록만) | 두 번째 검출기로 쓴 pyannote 계열의 기반 |
+| A5 | Bredin, H. et al. (2020). pyannote.audio. *ICASSP 2020*. https://arxiv.org/abs/1911.01255 (초록만) | 두 번째 검출기로 쓴 pyannote 계열의 기반. 실제로는 segmentation-3.0 ONNX(onnx-community, MIT)를 서버에서 실행 |
 | A6 | Plaquet, A., & Bredin, H. (2023). Powerset multi-class cross entropy loss for neural speaker diarization. *Interspeech 2023*. https://arxiv.org/abs/2310.13025 (초록만) | segmentation-3.0, 검출 임계값 하이퍼파라미터 불필요 |
 | A7 | Bain, M. et al. (2023). WhisperX. *Interspeech 2023*. https://arxiv.org/abs/2303.00747 | VAD 로 자른 뒤 Whisper → TED-LIUM WER 10.52→9.70, "무음 구간 환각 회피" |
 | A8 | Aliyev, A. (2024). DISPLACE 2023 system description. https://arxiv.org/abs/2406.15516 | Silero 임계값 0.15/0.5/0.75 에서 놓침 17.3/30.5/35.4%, 오탐 5.4/2.1/1.7% — 임계값은 놓침과 오탐의 맞교환 |
