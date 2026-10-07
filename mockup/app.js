@@ -1249,7 +1249,7 @@ function speakHtml(s) {
     if (r.offer) res += `<button class="speak-btn" data-act="weak-save">이 상황을 복습 목록에 저장</button>`;
   }
   return `<button class="speak-btn ${st === 'recording' ? 'rec' : ''}" data-act="speak-rec" ${st === 'requesting' || st === 'uploading' ? 'disabled' : ''}>${label}</button>${res}
-    <div class="speak-note">녹음은 ${esc(host)} 서버로 가고, 말소리가 있을 때만 전사 AI(Groq Whisper 등)로 전송돼요.${voiceConsent().voice ? ' (동의함 · 홈에서 철회)' : ' 처음 녹음할 때 동의를 받아요.'}</div>`;
+    <div class="speak-note">녹음은 ${esc(host)} 서버로 가고, 말소리가 있을 때만 전사·교차검증 AI(Groq·AssemblyAI·pyannoteAI)로 전송돼요.${voiceConsent().voice ? ' (동의함 · 홈에서 철회)' : ' 처음 녹음할 때 동의를 받아요.'}</div>`;
 }
 /* 말하기 연습 동의 — 녹음이 서버와 Google 로 나가고 복습 목록이 쌓이므로 첫 녹음 전에 받는다.
    저장소가 막힌 브라우저에서는 이번 접속 동안만 기억한다(consentMem). */
@@ -1259,8 +1259,8 @@ function askVoiceConsent() {
   const host = esc(API.host || location.host);
   confirmBox('말하기 연습 전에 확인해 주세요',
     `<b>보내는 것</b> · 녹음한 목소리(최대 15초)와 연습 중인 영어 문장<br>
-     <b>받는 곳</b> · ① 이 서비스 서버(${host}) — 말소리가 있는지 신경망(VAD)으로 확인 ② <b>말소리가 있을 때만</b> 그 구간의 녹음이 전사 AI(Groq Whisper, 실패 시 OpenAI Whisper·AssemblyAI)로 ③ 받아쓴 문장·목표 문장·상황 이름(글만)이 피드백용 Google Gemini API로<br>
-     <b>처리</b> · 전사 AI는 목표 문장을 모른 채 <b>받아쓰기만</b> 하고, 일치율은 코드가 계산해요.<br>
+     <b>받는 곳</b> · ① 이 서비스 서버(${host}) — 말소리가 있는지 신경망(VAD)으로 확인 ② <b>말소리가 있을 때만</b> 그 구간의 녹음이 서로 다른 AI 셋에 동시에: 전사 AI(Groq Whisper, 실패 시 OpenAI Whisper), 교차검증 전사 AI(AssemblyAI), 말소리 재확인 AI(pyannoteAI) ③ 받아쓴 문장·목표 문장·상황 이름(글만)이 피드백용 Google Gemini API로<br>
+     <b>처리</b> · 전사 AI들은 목표 문장을 모른 채 <b>받아쓰기만</b> 하고, 두 전사에서 <b>모두</b> 들린 단어만 코드가 점수로 계산해요. 교차검증이 안 되면 채점하지 않아요.<br>
      <b>목적</b> · 말하기 연습 피드백 (피드백 문장은 AI가 만든 결과예요)<br>
      <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요. 전사 AI 회사의 처리·보관은 각 회사 약관을 따라요.<br>
      <b>Google 처리</b> · 무료 등급 API에서는 Google이 전송된 내용을 제품 개선에 사용하고 사람 검토자가 읽을 수 있어요(계정·키와는 분리돼요). <b>민감한 개인정보는 말하지 마세요.</b><br>

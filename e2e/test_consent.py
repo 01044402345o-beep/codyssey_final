@@ -73,7 +73,7 @@ with sync_playwright() as p:
     page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(300)
     page.locator('[data-act="modal-ok"]').click(); page.wait_for_timeout(3000)   # 가짜 장치 신호음이 300ms 이상 쌓이도록
     c = json.loads(ls("cd_consent") or "null")
-    check("동의 저장 (version 4·voice·at)", c and c.get("voice") is True and c.get("version") == 4 and c.get("at"), str(c))
+    check("동의 저장 (version 5·voice·at)", c and c.get("voice") is True and c.get("version") == 5 and c.get("at"), str(c))
     check("동의 후 getUserMedia 1회", gum() == 1, f"gum={gum()}")
     check("녹음 중 표시", "녹음 끝내기" in page.locator('[data-act="speak-rec"]').first.inner_text())
     page.screenshot(path=f"{OUT}/2_recording.png")

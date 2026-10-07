@@ -10,14 +10,19 @@ transcribe_app 커밋 교차검증에서 찾은 빈틈을 여기서 메운다:
   - AssemblyAI 요청 timeout 없음 → 모든 요청에 timeout
   - 환각 필터가 로컬 엔진에만 있음 → 모든 공급자 결과에 공통 적용(app/speech_compare.filter_segments)
 
-공급자 순서: groq(주) → openai → assemblyai. 키가 없는 공급자는 건너뛴다.
-한 공급자가 최소 시도 횟수를 다 채워도 실패해야 다음 공급자로 넘어간다.
+역할 (교차검증 필수화, 2026-10-07):
+  - 1차 전사(Whisper 계열): groq → openai. 앞 공급자가 최소 시도를 다 실패해야 다음으로 넘어간다.
+  - 교차검증 전사(다른 모델 계열): assemblyai. Groq·OpenAI 는 같은 Whisper 계열이라 무음에서 같은 "you"를
+    지어냈다(배포 자가 점검) → 서로의 검증자가 될 수 없다. AssemblyAI(Universal)는 같은 무음에 "" 를 냈다.
+  - 2차 말소리 검출: pyannoteai (Silero 와 다른 신경망). Silero 와 둘 다 말소리를 찾아야 통과.
+교차검증 공급자나 pyannoteAI 가 없거나 실패하면 채점하지 않는다(사용자 결정).
 """
 from __future__ import annotations
 
 import os
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -47,8 +52,13 @@ PROVIDERS: dict[str, ProviderSpec] = {
                            "https://api.openai.com/v1", "OPENAI_STT_MODEL"),
     "assemblyai": ProviderSpec("assemblyai", ("ASSEMBLYAI_API_KEY", "ASSEMBLY_AI_API_KEY"), "assemblyai",
                                "https://api.assemblyai.com/v2"),
+    "pyannoteai": ProviderSpec("pyannoteai", ("PYANNOTEAI_API_KEY", "PYANNOTE_API_KEY"), "pyannote",
+                               "https://api.pyannote.ai/v1"),
 }
-ORDER = ("groq", "openai", "assemblyai")
+ORDER = ("groq", "openai", "assemblyai")   # /health 표시·자가 점검 순서(전사 공급자)
+PRIMARY = ("groq", "openai")               # 1차 전사 — Whisper 계열
+CHECKER = "assemblyai"                     # 교차검증 전사 — 다른 모델 계열
+DETECTOR = "pyannoteai"                    # 2차 말소리 검출
 
 _session_factory: Callable[[], Any] | None = None   # 테스트에서 가짜 세션을 넣는다
 _models_lock = threading.Lock()
@@ -101,6 +111,10 @@ def configured() -> list[str]:
     return [pid for pid in ORDER if api_key(pid)]
 
 
+def configured_primary() -> list[str]:
+    return [pid for pid in PRIMARY if api_key(pid)]
+
+
 def session() -> Any:
     return _session_factory() if _session_factory is not None else requests.Session()
 
@@ -126,9 +140,11 @@ def rank_stt(model_id: str) -> tuple[int, str]:
 
 
 def pick_stt_models(pid: str, ids: list[str]) -> list[str]:
-    """whisper 계열만 쓴다. gpt-4o-transcribe 같은 LLM 기반 전사는 제외한다
-    (프롬프트 텍스트가 무음 구간에 새어 나온다는 보고가 있고, verbose_json 의 no_speech_prob 이 없다)."""
-    names = sorted({i for i in ids if "whisper" in i.lower()}, key=rank_stt)
+    """whisper 로 시작하는 전사 모델만 쓴다(distil-whisper 포함).
+    gpt-4o-transcribe 같은 LLM 기반 전사는 제외한다(프롬프트 텍스트가 무음 구간에 새어 나온다는 보고, no_speech_prob 없음).
+    이름에 whisper 가 들어 있어도 'gpt-realtime-whisper' 처럼 전사 엔드포인트가 아닌 모델은 제외한다
+    (배포 실측: /audio/transcriptions 에 404 "Invalid URL")."""
+    names = sorted({i for i in ids if i.lower().startswith(("whisper", "distil-whisper"))}, key=rank_stt)
     env = PROVIDERS[pid].model_env
     preferred = (os.getenv(env) or "").strip() if env else ""
     if preferred in names:
@@ -229,9 +245,9 @@ def transcribe_with(pid: str, wav: bytes, sess: Any | None = None) -> SttResult:
 
 
 def transcribe(wav: bytes) -> SttResult:
-    """공급자 체인: 앞 공급자가 최소 시도를 모두 실패해야 다음으로 넘어간다."""
+    """1차 전사(Whisper 계열) 체인: 앞 공급자가 최소 시도를 모두 실패해야 다음으로 넘어간다."""
     failed: dict[str, ai.AttemptsExhausted] = {}
-    for pid in configured():
+    for pid in configured_primary():
         try:
             out = transcribe_with(pid, wav)
         except ai.AttemptsExhausted as exc:
@@ -243,3 +259,60 @@ def transcribe(wav: bytes) -> SttResult:
         out.attempts += sum(e.attempts for e in failed.values())
         return out
     raise SttChainExhausted(failed)
+
+
+# ---------------------------------------------------------------- 2차 말소리 검출 (pyannoteAI)
+# transcribe_app core/engines/pyannoteai_engine.py 의 흐름을 따른다:
+#   POST /media/input(사전 서명 URL) → PUT 오디오 → POST /diarize → GET /jobs/{id} 폴링 → output.diarization
+# transcribe_app 은 화자 수 힌트 때문에 model="precision-2" 를 고정했지만, 여기서는 힌트를 쓰지 않으므로
+# model 을 보내지 않는다(하드코딩 금지 — 계정 기본 모델). 응답의 화자 구간 = 말소리 구간으로 쓴다.
+
+@dataclass
+class DetectResult:
+    speech_sec: float
+    segments: list[list[float]]
+    attempts: int = 0
+    failures: list[dict[str, Any]] = field(default_factory=list)
+
+    def meta(self) -> dict[str, Any]:
+        return {"provider": DETECTOR, "speech_sec": round(self.speech_sec, 2),
+                "segments": self.segments[:20], "attempts": self.attempts}
+
+
+def _pyannote_once(sess: Any, wav: bytes) -> list[dict[str, Any]]:
+    spec = PROVIDERS[DETECTOR]
+    h = {"Authorization": f"Bearer {api_key(DETECTOR)}"}
+    key = f"media://codyssey-{uuid.uuid4().hex}"
+    up = _check(DETECTOR, sess.post(f"{spec.base_url}/media/input", headers=h, json={"url": key},
+                                    timeout=REQUEST_TIMEOUT))
+    put = sess.put(up["url"], data=wav, timeout=REQUEST_TIMEOUT)
+    if put.status_code >= 400:
+        raise SttHTTPError(DETECTOR, put.status_code, put.text)
+    job = _check(DETECTOR, sess.post(f"{spec.base_url}/diarize", headers=h, json={"url": key},
+                                     timeout=REQUEST_TIMEOUT))
+    deadline = time.time() + POLL_MAX_SECONDS
+    while True:
+        data = _check(DETECTOR, sess.get(f"{spec.base_url}/jobs/{job['jobId']}", headers=h,
+                                         timeout=REQUEST_TIMEOUT))
+        status = data.get("status")
+        if status == "succeeded":
+            out = data.get("output") or {}
+            segs = out.get("diarization") if isinstance(out, dict) else None
+            if not isinstance(segs, list):
+                raise ValueError("pyannoteai: output.diarization 이 없습니다")
+            return [s for s in segs if isinstance(s, dict)]
+        if status in ("failed", "canceled"):
+            raise RuntimeError(f"pyannoteai 작업 실패: {data.get('warning') or status}")
+        if time.time() > deadline:
+            raise TimeoutError(f"pyannoteai 폴링 {POLL_MAX_SECONDS}초 초과")
+        ai._sleep(POLL_INTERVAL)
+
+
+def detect_speech(wav: bytes, sess: Any | None = None) -> DetectResult:
+    """pyannoteAI 로 말소리 구간을 찾는다 — 최소 시도 규칙(app/gemini.run_on)."""
+    s = sess or session()
+    res = ai.run_on("detect:pyannoteai", s, [f"{DETECTOR}:default"],
+                    lambda c, _k, _a: _pyannote_once(c, wav), pool="detect:pyannoteai")
+    segs = [[round(float(x.get("start", 0)), 2), round(float(x.get("end", 0)), 2)] for x in res.value]
+    total = sum(max(0.0, e - b) for b, e in segs)
+    return DetectResult(speech_sec=total, segments=segs, attempts=res.attempts, failures=res.failures)
