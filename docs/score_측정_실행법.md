@@ -193,4 +193,20 @@ python3 backend/scripts/measure_score_rate.py \
 
 원자료: 측정 스크립트 jsonl(로컬 보관). 교차검증 필수화(다음 PR) 뒤 같은 표를 다시 잰다.
 
+### 교차검증 필수화 + 로컬 pyannote (`6e46f10`, 2026-10-08)
+
+Silero·로컬 pyannote 두 검출기 AND → Groq whisper-large-v3 + AssemblyAI universal-3-5-pro 동시 전사 → 두 전사 모두에서 들린 단어만 점수.
+
+| 입력 | n | usable:true | 점수 | 1차 전사 / 교차검증 전사 | 비고 |
+|---|---:|---:|---|---|---|
+| 1초 완전 무음 WAV | 10 | **0** | 없음 | – | 두 검출기 0초, 외부 API 0회, 요청당 약 0.2초 |
+| 맞게 읽음 (TTS) | 3 | 3 | 100·100·100 | 같은 문장 / 같은 문장 (일치도 1.0) | 전사·교차검증 각 1회 시도 |
+| 다른 문장 (TTS) | 3 | 3 | 0·0·0 | "Where is the subway station?" 둘 다 (일치도 1.0) | 요청당 약 5초 |
+
+- 응답 시간: 정상 상태에서 요청당 약 5초(동시 전사 + Gemini 피드백).
+- **재배포 직후 첫 요청**은 Gemini 피드백이 8번째 시도에야 성공해 매우 오래 걸렸다(서버 재시작으로 '마지막 성공 모델' 기억이 사라짐, `/health` cooling: gemini-2.5-flash 404, gemini-omni-1.1-flash 429). 두 번째부터 1회.
+  → 시연·사용자 테스트 전에는 `/health` 로 깨운 뒤 말하기를 한 번 해 두면 이후 요청이 빠르다.
+- 자가 점검(`/health` `stt_selftest.results.local_detectors`): 서버에서도 무음 Silero 0·pyannote 0, TTS 둘 다 1.32초 — 로컬과 같음.
+- pyannoteAI 클라우드는 402(크레딧 없음)로 쓰지 않는다 — PR #14.
+
 > 수정 후 점수는 **단어 일치율**(`score_kind: "word_match"`)이다. 수정 전 점수(AI 가 매긴 발음 점수)와 뜻이 다르므로 숫자를 직접 비교하지 않는다. 비교할 것은 무음에 점수가 나오는지와 heard 를 지어내는지다.
