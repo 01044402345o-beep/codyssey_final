@@ -586,13 +586,15 @@ const SCREENS = [
 const SCR = Object.fromEntries(SCREENS.map(s => [s.id, s]));
 
 /* ================= 렌더링: 셸 ================= */
+const MODE = document.documentElement.dataset.mode || 'product';   // product | demo | legacy (index.html 인라인 스크립트)
+const LEGACY = MODE === 'legacy';
 function renderSide() {
   let html = `<div class="side-brand"><div class="mark"><i>EN</i>여행영어 목업</div><p>prd.md v2 기준 · 왼쪽 메뉴로 화면을 고르고, 화면 안 버튼으로 실제 흐름을 따라가 보세요.</p></div><nav class="side-nav">`;
   SCREENS.forEach(s => {
     if (s.group) html += `<div class="nav-group">${s.group}${s.tag ? `<span class="tag">${s.tag}</span>` : ''}</div>`;
     html += `<button class="nav-item" data-act="nav" data-id="${s.id}"><span class="no">${s.no}</span><span>${s.name}</span></button>`;
   });
-  html += `</nav><div class="demo" id="demo"></div>`;
+  html += `</nav><div id="side-notes"></div><div class="demo" id="demo"></div>`;
   $('#side').innerHTML = html;
 }
 function renderDemo() {
@@ -619,7 +621,8 @@ function updateSideActive() {
 
 function render() {
   if (S.screen !== 'u-study' && SPK.state !== 'idle') cancelSpeak();
-  const app = $('.app'), prevTop = app ? app.scrollTop : 0, same = S.lastScreen === S.screen;
+  const app = $('.app'), same = S.lastScreen === S.screen;
+  const prevTop = LEGACY ? (app ? app.scrollTop : 0) : window.scrollY;   // 제품·데모 모드는 문서 스크롤
   updateSideActive(); renderDemo();
   const sc = SCR[S.screen];
   const t = S.trip;
@@ -631,8 +634,12 @@ function render() {
     ${API.external ? `<span class="pill bad" title="?api= 로 지정한 외부 서버에 요청하고 녹음을 전송합니다"><span class="dot"></span>외부 서버 <b>${esc(API.host)}</b></span>` : ''}`;
   const body = S.screen.startsWith('a-') ? adminScreen() : userScreen();
   $('#stage').className = 'stage ' + (S.screen.startsWith('a-') ? 'is-admin' : 'is-user');
-  $('#stage').innerHTML = body + notes(sc);
-  const na = $('.app'); if (na && same) na.scrollTop = prevTop;
+  $('#stage').innerHTML = body + (LEGACY ? notes(sc) : '');
+  if (MODE === 'demo') $('#side-notes').innerHTML = notes(sc);
+  const ab = $('#api-banner');
+  if (ab) { ab.hidden = !API.external; if (API.external) ab.innerHTML = `외부 서버 연결 중: <b>${esc(API.host)}</b> — 이 주소로 요청하고 녹음을 전송합니다`; }
+  if (LEGACY) { const na = $('.app'); if (na && same) na.scrollTop = prevTop; }
+  else window.scrollTo(0, same ? prevTop : 0);
   S.lastScreen = S.screen;
 }
 
@@ -655,6 +662,7 @@ function planNote() {
 
 /* ================= 렌더링: 사용자 화면 ================= */
 function frame(inner, o = {}) {
+  if (!LEGACY) return pframe(inner, o);
   const tabs = [['u-home', '홈', I.home], ['u-sched', '일정표', I.cal], ['u-study', '학습', I.cards], ['u-coll', '문장 모음', I.book]];
   const tabActive = o.tab || S.screen;
   return `<div class="device"><div class="screen">
@@ -665,6 +673,17 @@ function frame(inner, o = {}) {
     ${o.tabbar ? `<nav class="tabbar">${tabs.map(([id, l, ic]) => `<button class="${tabActive === id ? 'on' : ''}" data-act="tab" data-id="${id}">${ic}${l}</button>`).join('')}</nav>` : ''}
     ${modalHtml()}
   </div></div>`;
+}
+/* 제품 셸: 폰 프레임·상태바 없이 뷰포트 전체를 쓴다. 내비는 CSS 가 탭바 → 레일 → 사이드로 바꾼다(docs/RESPONSIVE_STRATEGY.md §3). */
+function pframe(inner, o = {}) {
+  const tabs = [['u-home', '홈', I.home], ['u-sched', '일정표', I.cal], ['u-study', '학습', I.cards], ['u-coll', '문장 모음', I.book]];
+  const tabActive = o.tab || S.screen;
+  const nav = o.tabbar ? `<nav class="pnav" aria-label="주 메뉴">${tabs.map(([id, l, ic]) => `<button class="${tabActive === id ? 'on' : ''}" data-act="tab" data-id="${id}" ${tabActive === id ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></button>`).join('')}</nav>` : '';
+  return `<div class="pframe ${o.tabbar ? 'has-nav' : ''}">${nav}<div class="pmain"><div class="pcol">
+    ${o.appbar || ''}
+    <div class="app">${inner}</div>
+    ${o.bottom ? `<div class="bottombar">${o.bottom}</div>` : ''}
+  </div></div>${modalHtml()}</div>`;
 }
 const appbar = (title, o = {}) => `<div class="appbar">${o.back ? `<button class="back" data-act="tab" data-id="${o.back}">${I.back}</button>` : ''}<h2>${title}</h2>${o.step ? `<span class="step">${o.step}</span>` : ''}</div>`;
 const notice = (html, kind = '') => `<div class="notice ${kind}">${kind === 'warn' || kind === 'bad' ? I.alert : I.info}<div>${html}</div></div>`;
@@ -1071,6 +1090,7 @@ function adminScreen() {
   const nav = SCREENS.filter(s => s.id.startsWith('a-')).map(s => `<button class="${S.screen === s.id ? 'on' : ''}" data-act="nav" data-id="${s.id}">${s.name}</button>`).join('');
   const path = { 'a-metrics': 'metrics', 'a-jobs': 'jobs', 'a-common': 'common-sentences', 'a-users': 'users' }[S.screen];
   const body = { 'a-metrics': admMetrics, 'a-jobs': admJobs, 'a-common': admCommon, 'a-users': admUsers }[S.screen]();
+  if (!LEGACY) return `<div class="admin-shell"><div class="admin"><nav class="admin-nav"><div class="brand">여행영어 <span>ADMIN</span></div>${nav}</nav><div class="admin-main">${body}</div></div>${modalHtml(true)}</div>`;
   return `<div class="window"><div class="win-bar"><i></i><i></i><i></i><div class="url">admin.trip-english.web.app/${path}</div></div>
     <div class="admin"><nav class="admin-nav"><div class="brand">여행영어 <span>ADMIN</span></div>${nav}</nav><div class="admin-main">${body}</div></div>${modalHtml(true)}</div>`;
 }
@@ -1125,12 +1145,12 @@ function admJobs() {
   const count = k => rows.filter(r => (k === 'gen' ? isGen(r) && !stale(r) : k === 'stale' ? stale(r) : /_failed$/.test(r.status))).length;
   return `<h2>생성 작업 모니터</h2><p class="desc">생성 중 15분이 지나면 멈춘 작업으로 봐요 (FR-GEN-02). 여행 1개에는 동시에 하나의 작업만 있어서 여행 상태가 곧 작업 상태예요.</p>
     <div class="filters">${[['all', `전체 ${rows.length}`], ['gen', `생성 중 ${count('gen')}`], ['stale', `멈춤 ${count('stale')}`], ['fail', `실패 ${count('fail')}`]].map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-act="job-filter" data-v="${k}">${l}</button>`).join('')}</div>
-    <div class="panel" style="padding:6px 8px"><table class="tbl"><thead><tr><th>여행</th><th>사용자</th><th>상태</th><th>경과</th><th>failStreak</th><th>다시 생성</th><th></th></tr></thead><tbody>
+    <div class="panel" style="padding:6px 8px"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>여행</th><th>사용자</th><th>상태</th><th>경과</th><th>failStreak</th><th>다시 생성</th><th></th></tr></thead><tbody>
     ${list.map(r => `<tr class="${stale(r) ? 'stale' : ''} ${r.me ? 'me' : ''}"><td><b>${esc(r.route)}</b><div class="mono" style="color:var(--text-3)">${r.id}${r.me ? ' · 데모 여행' : ''}</div></td>
       <td class="mono">${r.user}</td><td>${chip(r)}</td><td class="mono">${isGen(r) && r.genMinAgo != null ? r.genMinAgo + '분' : '—'}</td>
       <td class="mono">${r.failStreak}</td><td class="mono">${r.regen}/3</td>
       <td>${stale(r) ? `<button class="btn soft sm" data-act="job-fail" data-id="${r.id}">실패로 처리</button>` : /_failed$/.test(r.status) ? '<span class="small">사용자 재시도 대기</span>' : ''}</td></tr>`).join('') || `<tr><td colspan="7"><div class="empty">해당하는 작업이 없어요</div></td></tr>`}
-    </tbody></table></div>
+    </tbody></table></div></div>
     <p class="small" style="margin-top:10px">데모: 사이드바에서 "생성 멈춤"을 켜고 여행을 만든 뒤, SCR-03의 "16분 경과시키기"를 누르면 데모 여행이 멈춤으로 표시돼요.</p>`;
 }
 function admCommon() {
@@ -1352,7 +1372,8 @@ async function uploadSpeech(tok, blob, s) {
 }
 
 const ACT = {
-  nav: el => navFromMenu(el.dataset.id),
+  nav: el => { navFromMenu(el.dataset.id); if (!LEGACY) $('#side').classList.remove('open'); },
+  drawer: () => $('#side').classList.toggle('open'),
   tab: el => {
     const id = el.dataset.id;
     if (['u-home', 'u-sched', 'u-study', 'u-coll', 'u-route'].includes(id) && !S.plan) { navFromMenu(id); return; }
@@ -1541,6 +1562,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) rend
 
 initState();
 renderSide();
+$('#demo-fab').hidden = MODE !== 'demo';
 render();
 /* index.html#u-home 처럼 주소 뒤에 화면 ID를 붙이면 그 화면으로 바로 열림 */
 if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));

@@ -603,3 +603,109 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .api-note { font-size: 12px; color: var(--bad); }
 
 .gbtn:disabled, .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* =====================================================================
+   제품 셸 (반응형 전략 P1) — html[data-mode=product|demo] 에서만 적용. legacy(?demo=1&frame=1)는 위 규칙 그대로.
+   브레이크포인트: base <600 하단 탭 · md ≥600 레일 72px · lg ≥900 · xl ≥1200 사이드 240px
+   ===================================================================== */
+:root {
+  --gutter: clamp(16px, 4vw, 32px);
+  --nav-rail: 72px;
+  --nav-side: 240px;
+  --read-max: 40rem;
+  --nav-h: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+}
+html:not([data-mode=legacy]) { scroll-behavior: auto; }
+html:not([data-mode=legacy]) body { background: var(--bg); min-height: 100dvh; height: auto; overflow-x: hidden; }
+html:not([data-mode=legacy]) .shell { display: block; height: auto; }
+html:not([data-mode=legacy]) .main { display: block; }
+html:not([data-mode=legacy]) .topbar { display: none; }
+html:not([data-mode=legacy]) .stage { display: block; padding: 0; background: none; overflow: visible; }
+html[data-mode=product] .side { display: none; }
+html[data-mode=legacy] .api-banner, html[data-mode=legacy] .demo-fab { display: none; }
+.api-banner { background: var(--bad-soft); color: var(--on-bad-soft); font-size: 12.5px; padding: 8px var(--gutter); text-align: center; }
+.api-banner[hidden], .demo-fab[hidden] { display: none; }
+
+/* 데모 서랍: 데모 모드에서 사이드 패널을 화면 밖 서랍으로 쓴다 */
+html[data-mode=demo] .side { position: fixed; inset: 0 auto 0 0; width: min(320px, 88vw); z-index: 200; transform: translateX(-102%); transition: transform .2s; }
+html[data-mode=demo] .side.open { transform: none; box-shadow: 0 0 0 100vmax var(--scrim); }
+html[data-mode=demo] .side .notes { width: auto; position: static; padding: 0 12px 12px; }
+html[data-mode=demo] .side .note-card { box-shadow: none; }
+.demo-fab { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(var(--nav-h) + 12px); z-index: 210; min-width: 44px; height: 44px; padding: 0 14px; border-radius: 999px; background: var(--inv-bg); color: var(--inv-text); font-size: 13px; font-weight: 700; box-shadow: var(--shadow); }
+@media (min-width: 600px) { .demo-fab { bottom: 16px; } }
+
+/* 프레임: [nav][main] */
+.pframe { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "main" "nav"; background: var(--bg); position: relative; }
+.pframe:not(.has-nav) { grid-template-rows: minmax(0, 1fr); grid-template-areas: "main"; }
+.pmain { grid-area: main; min-width: 0; display: flex; flex-direction: column; }
+.pcol { width: 100%; max-width: var(--read-max); margin-inline: auto; display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.pframe .app { flex: 1; overflow: visible; min-width: 0; scroll-behavior: auto; }
+.pframe .app-pad { padding: 8px var(--gutter) 28px; }
+.pframe .appbar { position: sticky; top: 0; z-index: 10; background: var(--bg); padding: max(6px, env(safe-area-inset-top, 0px)) var(--gutter) 10px; }
+.pframe .appbar h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pframe .bottombar { position: sticky; bottom: 0; z-index: 9; padding: 12px var(--gutter) calc(12px + env(safe-area-inset-bottom, 0px)); }
+.pframe.has-nav .bottombar { bottom: var(--nav-h); padding-bottom: 12px; }
+
+/* 내비: base 하단 탭바 */
+.pnav { grid-area: nav; position: sticky; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; min-height: var(--nav-h); background: var(--surface); border-top: 1px solid var(--border); padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
+.pnav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0; min-height: 44px; padding: 6px 2px; font-size: 12px; color: var(--text-3); border-radius: 12px; }
+.pnav button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pnav button svg { width: 24px; height: 24px; flex: none; }
+.pnav button.on { color: var(--text); font-weight: 600; }
+.pnav button.on svg { color: var(--accent-text); }
+@media (hover: hover) { .pnav button:hover { background: var(--surface-2); } }
+
+/* md ≥600: 레일 */
+@media (min-width: 600px) {
+  .pframe.has-nav { grid-template-columns: var(--nav-rail) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); grid-template-areas: "nav main"; }
+  .pnav { position: sticky; top: 0; bottom: auto; height: 100dvh; align-self: start; display: flex; flex-direction: column; justify-content: flex-start; gap: 4px; min-height: 0; overflow-y: auto; border-top: 0; border-right: 1px solid var(--border); padding: 12px 6px; padding-left: max(6px, env(safe-area-inset-left, 0px)); }
+  .pframe.has-nav .bottombar { bottom: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+}
+/* xl ≥1200: 사이드 */
+@media (min-width: 1200px) {
+  .pframe.has-nav { grid-template-columns: var(--nav-side) minmax(0, 1fr); }
+  .pnav { padding: 16px 12px; }
+  .pnav button { flex-direction: row; justify-content: flex-start; gap: 12px; font-size: 15px; padding: 10px 14px; }
+  .pnav button.on { background: var(--surface-2); }
+}
+
+/* 모달: 뷰포트 기준. base 는 바텀시트, md 이상은 중앙 */
+.pframe .modal-wrap { position: fixed; z-index: 300; }
+.pframe .modal { max-height: calc(100dvh - 2rem); overflow-y: auto; padding-bottom: calc(30px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 600px) {
+  .pframe .modal-wrap { align-items: center; justify-content: center; }
+  .pframe .modal { width: min(420px, calc(100% - 2 * var(--gutter))); border-radius: 18px; padding-bottom: 22px; }
+}
+
+/* 토스트: 사이드 패널 가정 제거 */
+html:not([data-mode=legacy]) .toast { left: 50%; bottom: calc(var(--nav-h) + 20px); max-width: min(520px, calc(100vw - 2 * var(--gutter))); }
+@media (min-width: 600px) { html:not([data-mode=legacy]) .toast { bottom: 24px; } }
+
+/* 화면별 고정 치수 해제 */
+.pframe .flip { height: clamp(360px, 56dvh, 520px); }
+.pframe .login { height: auto; min-height: 100dvh; padding: max(30px, env(safe-area-inset-top, 0px)) var(--gutter) max(40px, env(safe-area-inset-bottom, 0px)); }
+.pframe .login h1 { margin-top: clamp(64px, 18dvh, 150px); }
+.pframe .login .stamp { width: clamp(140px, 50vw, 220px); height: clamp(140px, 50vw, 220px); }
+.pframe .gen { min-height: 70dvh; }
+.pframe .city-card .row2 { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.pframe .dots { max-width: 100%; }
+
+/* 관리자 (제품·데모 모드: 가짜 브라우저 창 없이 전체 폭) */
+.admin-shell { min-height: 100dvh; background: var(--surface-admin); }
+.admin-shell .admin { min-height: 100dvh; grid-template-columns: 190px minmax(0, 1fr); }
+.admin-shell .admin-main { padding: clamp(16px, 3vw, 28px); }
+.admin-shell .kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.admin-shell .tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.admin-shell .modal-wrap { position: fixed; z-index: 300; }
+@media (max-width: 899px) { .admin-shell .grid2 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 767px) {
+  .admin-shell .admin { grid-template-columns: minmax(0, 1fr); }
+  .admin-shell .admin-nav { display: flex; gap: 4px; overflow-x: auto; position: sticky; top: 0; z-index: 10; padding: 10px var(--gutter); }
+  .admin-shell .admin-nav .brand { padding: 0 8px; flex: none; }
+  .admin-shell .admin-nav button { width: auto; flex: none; white-space: nowrap; margin: 0; min-height: 44px; }
+  .admin-shell .cs-row { grid-template-columns: 22px minmax(0, 1fr) 34px; }
+  .admin-shell .cs-row > :nth-child(2), .admin-shell .cs-row > :nth-child(4) { grid-column: 2; }
+  .admin-shell .user-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .admin-shell .funnel .fr-row { grid-template-columns: 96px minmax(0, 1fr) 48px; }
+}
+.pframe .srow .ct .line2 { display: block; }   /* inline span 은 ellipsis 가 동작하지 않아 긴 문장이 가로로 넘쳤다 */

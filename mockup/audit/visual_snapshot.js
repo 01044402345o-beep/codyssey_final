@@ -24,7 +24,7 @@ const VIEWPORTS = [[1280, 900], [390, 844]];
     const page = await ctx.newPage();
     await page.addInitScript(() => { let x = 12345; Math.random = () => (x = (x * 1664525 + 1013904223) % 4294967296) / 4294967296; });   // 여행 id 등 난수 고정
     await page.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, r => r.abort());   // 외부 폰트 CDN 차단 → 로드 타이밍에 따른 흔들림 제거
-    await page.goto(BASE + '/');
+    await page.goto(BASE + (process.env.QS || '/'));
     await page.evaluate(() => document.fonts.ready);
     await page.addStyleTag({ content: '*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}.toast{display:none!important}' });
     await page.evaluate(() => preset('default'));

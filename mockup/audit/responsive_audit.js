@@ -11,7 +11,7 @@ const SCREENS = ['u-login', 'u-input', 'u-report', 'u-route', 'u-home', 'u-sched
   const rows = [];
   for (const [w, h] of WIDTHS) {
     const page = await b.newPage({ viewport: { width: w, height: h } });
-    await page.goto(BASE + '/');
+    await page.goto(BASE + (process.env.QS || '/'));
     await page.evaluate(() => preset('default'));
     for (const id of SCREENS) {
       await page.evaluate(i => {
@@ -21,15 +21,17 @@ const SCREENS = ['u-login', 'u-input', 'u-report', 'u-route', 'u-home', 'u-sched
       }, id);
       const m = await page.evaluate(() => {
         const de = document.documentElement;
-        const scope = document.querySelector('.device') || document.querySelector('.window') || document.body;
+        const scope = document.querySelector('.pframe') || document.querySelector('.admin-shell') || document.querySelector('.device') || document.querySelector('.window') || document.body;
         let small = 0, tiny = 0, texts = 0;
         scope.querySelectorAll('button,a,input,select,[data-act]').forEach(e => { const q = e.getBoundingClientRect(); if (q.width && q.height && (q.height < 44 || q.width < 44)) small++; });
         scope.querySelectorAll('*').forEach(e => {
           if ([...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) { texts++; if (parseFloat(getComputedStyle(e).fontSize) < 12) tiny++; }
         });
-        return { hscroll: de.scrollWidth > de.clientWidth, scrollWidth: de.scrollWidth, clientWidth: de.clientWidth, small, tiny, texts };
+        const wide = [...document.querySelectorAll('body *')].filter(e => { const q = e.getBoundingClientRect(); return q.width && q.right > de.clientWidth + 1 && !e.closest('.tbl-wrap,.chips,.city-tabs,.admin-nav'); }).slice(0, 3).map(e => e.tagName + '.' + String(e.className).split(' ')[0] + '@' + Math.round(e.getBoundingClientRect().right));
+        return { wide, hscroll: de.scrollWidth > de.clientWidth, scrollWidth: de.scrollWidth, clientWidth: de.clientWidth, small, tiny, texts };
       });
       rows.push({ w, id, ...m });
+      if (m.hscroll || m.wide.length) console.log(`  ! w=${w} ${id} scrollWidth=${m.scrollWidth} 넘침 요소: ${m.wide.join(', ')}`);
     }
     await page.close();
   }
