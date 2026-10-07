@@ -45,9 +45,9 @@ class SpeechResult:
     def has_speech(self) -> bool:
         return bool(self.segments)
 
-    def summary(self) -> dict[str, Any]:
+    def summary(self, engine: str = "silero (faster-whisper)") -> dict[str, Any]:
         return {
-            "engine": "silero (faster-whisper)",
+            "engine": engine,
             "duration_sec": round(self.duration_sec, 2),
             "speech_sec": round(self.speech_sec, 2),
             "segments": [[round(s["start"] / SAMPLE_RATE, 2), round(s["end"] / SAMPLE_RATE, 2)]
@@ -100,5 +100,72 @@ def speech_only_wav(audio: np.ndarray, result: SpeechResult) -> bytes:
 
 
 def warmup() -> None:
-    """콜드스타트 뒤 첫 요청이 모델 로드를 기다리지 않도록 미리 불러 둔다."""
+    """콜드스타트 뒤 첫 요청이 모델 로드를 기다리지 않도록 두 검출기를 미리 불러 둔다."""
     detect(np.zeros(SAMPLE_RATE // 2, dtype=np.float32))
+    detect_pyannote(np.zeros(SAMPLE_RATE // 2, dtype=np.float32))
+
+
+# ---------------------------------------------------------------- 두 번째 말소리 검출기: pyannote segmentation-3.0 (로컬 ONNX)
+# Silero 와 다른 신경망으로 말소리를 한 번 더 확인한다. 두 검출기가 모두 말소리를 찾아야 채점한다.
+# pyannoteAI 클라우드 API 는 계정 크레딧 없음(HTTP 402)이라 로컬 모델로 바꿨다 — 네트워크·크레딧이 필요 없다.
+# 모델 출처·라이선스(MIT)·SHA256: app/models/README.md
+# 추론 방식은 pyannote 와 같다: 10초 창, 남는 부분은 0 으로 채우고, 프레임별 powerset argmax ≠ 0 을 말소리로 본다.
+# 실측(로컬): 무음·큰 백색잡음 → 0초, 합성 440Hz 신호음 0.02초, TTS 음성 전체 검출.
+#   단, 브라우저로 녹음한 신호음은 1.29/1.50초를 말소리로 본다 — Silero 는 0초라 AND 판정에서 걸러진다.
+
+import hashlib  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+PYANNOTE_MODEL = Path(__file__).resolve().parent / "models" / "pyannote-segmentation-3.0.onnx"
+PYANNOTE_SHA256 = "057ee564753071c0b09b5b611648b50ac188d50846bff5f01e9f7bbf1591ea25"
+PYANNOTE_WINDOW = SAMPLE_RATE * 10
+
+_pyannote_session: Any = None
+_pyannote_lock = threading.Lock()
+
+
+def _pyannote() -> Any:
+    global _pyannote_session
+    with _pyannote_lock:
+        if _pyannote_session is None:
+            data = PYANNOTE_MODEL.read_bytes()
+            digest = hashlib.sha256(data).hexdigest()
+            if digest != PYANNOTE_SHA256:
+                raise RuntimeError(f"pyannote 모델 SHA256 불일치: {digest}")
+            import onnxruntime as ort
+
+            opts = ort.SessionOptions()
+            opts.inter_op_num_threads = 1
+            opts.intra_op_num_threads = 1
+            opts.log_severity_level = 4
+            _pyannote_session = ort.InferenceSession(data, sess_options=opts, providers=["CPUExecutionProvider"])
+        return _pyannote_session
+
+
+def detect_pyannote(audio: np.ndarray) -> SpeechResult:
+    """pyannote segmentation-3.0 으로 말소리 구간을 찾는다. 구간은 샘플 단위 {"start","end"}."""
+    if len(audio) == 0:
+        return SpeechResult(duration_sec=0.0, segments=[])
+    sess = _pyannote()
+    segments: list[dict[str, int]] = []
+    for off in range(0, len(audio), PYANNOTE_WINDOW):
+        chunk = audio[off:off + PYANNOTE_WINDOW].astype(np.float32)
+        x = np.zeros(PYANNOTE_WINDOW, dtype=np.float32)
+        x[:len(chunk)] = chunk
+        with _pyannote_lock:
+            logits = sess.run(None, {"input_values": x.reshape(1, 1, -1)})[0][0]
+        step = PYANNOTE_WINDOW / logits.shape[0]          # 프레임당 샘플 수(약 17ms)
+        speech = logits.argmax(-1) != 0
+        valid = int(np.ceil(len(chunk) / step))
+        start = None
+        for i, is_speech in enumerate(list(speech[:valid]) + [False]):
+            if is_speech and start is None:
+                start = i
+            elif not is_speech and start is not None:
+                s, e = off + int(start * step), off + min(len(chunk), int(i * step))
+                if segments and s - segments[-1]["end"] <= int(step):
+                    segments[-1]["end"] = e                  # 창 경계에서 이어지는 구간은 합친다
+                else:
+                    segments.append({"start": s, "end": e})
+                start = None
+    return SpeechResult(duration_sec=len(audio) / SAMPLE_RATE, segments=segments)

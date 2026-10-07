@@ -14,15 +14,15 @@ transcribe_app 커밋 교차검증에서 찾은 빈틈을 여기서 메운다:
   - 1차 전사(Whisper 계열): groq → openai. 앞 공급자가 최소 시도를 다 실패해야 다음으로 넘어간다.
   - 교차검증 전사(다른 모델 계열): assemblyai. Groq·OpenAI 는 같은 Whisper 계열이라 무음에서 같은 "you"를
     지어냈다(배포 자가 점검) → 서로의 검증자가 될 수 없다. AssemblyAI(Universal)는 같은 무음에 "" 를 냈다.
-  - 2차 말소리 검출: pyannoteai (Silero 와 다른 신경망). Silero 와 둘 다 말소리를 찾아야 통과.
-교차검증 공급자나 pyannoteAI 가 없거나 실패하면 채점하지 않는다(사용자 결정).
+  - 2차 말소리 검출: 로컬 pyannote segmentation-3.0 (app/speech_vad.py). pyannoteAI 클라우드는 크레딧 없음(402)으로
+    모든 요청이 실패해 로컬 모델로 바꿨다(2026-10-08).
+교차검증 공급자가 없거나 실패하면 채점하지 않는다(사용자 결정).
 """
 from __future__ import annotations
 
 import os
 import threading
 import time
-import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -52,13 +52,11 @@ PROVIDERS: dict[str, ProviderSpec] = {
                            "https://api.openai.com/v1", "OPENAI_STT_MODEL"),
     "assemblyai": ProviderSpec("assemblyai", ("ASSEMBLYAI_API_KEY", "ASSEMBLY_AI_API_KEY"), "assemblyai",
                                "https://api.assemblyai.com/v2"),
-    "pyannoteai": ProviderSpec("pyannoteai", ("PYANNOTEAI_API_KEY", "PYANNOTE_API_KEY"), "pyannote",
-                               "https://api.pyannote.ai/v1"),
 }
 ORDER = ("groq", "openai", "assemblyai")   # /health 표시·자가 점검 순서(전사 공급자)
 PRIMARY = ("groq", "openai")               # 1차 전사 — Whisper 계열
 CHECKER = "assemblyai"                     # 교차검증 전사 — 다른 모델 계열
-DETECTOR = "pyannoteai"                    # 2차 말소리 검출
+# 2차 말소리 검출은 외부 API 가 아니라 서버 안의 pyannote segmentation-3.0(app/speech_vad.detect_pyannote).
 
 _session_factory: Callable[[], Any] | None = None   # 테스트에서 가짜 세션을 넣는다
 _models_lock = threading.Lock()
@@ -260,59 +258,3 @@ def transcribe(wav: bytes) -> SttResult:
         return out
     raise SttChainExhausted(failed)
 
-
-# ---------------------------------------------------------------- 2차 말소리 검출 (pyannoteAI)
-# transcribe_app core/engines/pyannoteai_engine.py 의 흐름을 따른다:
-#   POST /media/input(사전 서명 URL) → PUT 오디오 → POST /diarize → GET /jobs/{id} 폴링 → output.diarization
-# transcribe_app 은 화자 수 힌트 때문에 model="precision-2" 를 고정했지만, 여기서는 힌트를 쓰지 않으므로
-# model 을 보내지 않는다(하드코딩 금지 — 계정 기본 모델). 응답의 화자 구간 = 말소리 구간으로 쓴다.
-
-@dataclass
-class DetectResult:
-    speech_sec: float
-    segments: list[list[float]]
-    attempts: int = 0
-    failures: list[dict[str, Any]] = field(default_factory=list)
-
-    def meta(self) -> dict[str, Any]:
-        return {"provider": DETECTOR, "speech_sec": round(self.speech_sec, 2),
-                "segments": self.segments[:20], "attempts": self.attempts}
-
-
-def _pyannote_once(sess: Any, wav: bytes) -> list[dict[str, Any]]:
-    spec = PROVIDERS[DETECTOR]
-    h = {"Authorization": f"Bearer {api_key(DETECTOR)}"}
-    key = f"media://codyssey-{uuid.uuid4().hex}"
-    up = _check(DETECTOR, sess.post(f"{spec.base_url}/media/input", headers=h, json={"url": key},
-                                    timeout=REQUEST_TIMEOUT))
-    put = sess.put(up["url"], data=wav, timeout=REQUEST_TIMEOUT)
-    if put.status_code >= 400:
-        raise SttHTTPError(DETECTOR, put.status_code, put.text)
-    job = _check(DETECTOR, sess.post(f"{spec.base_url}/diarize", headers=h, json={"url": key},
-                                     timeout=REQUEST_TIMEOUT))
-    deadline = time.time() + POLL_MAX_SECONDS
-    while True:
-        data = _check(DETECTOR, sess.get(f"{spec.base_url}/jobs/{job['jobId']}", headers=h,
-                                         timeout=REQUEST_TIMEOUT))
-        status = data.get("status")
-        if status == "succeeded":
-            out = data.get("output") or {}
-            segs = out.get("diarization") if isinstance(out, dict) else None
-            if not isinstance(segs, list):
-                raise ValueError("pyannoteai: output.diarization 이 없습니다")
-            return [s for s in segs if isinstance(s, dict)]
-        if status in ("failed", "canceled"):
-            raise RuntimeError(f"pyannoteai 작업 실패: {data.get('warning') or status}")
-        if time.time() > deadline:
-            raise TimeoutError(f"pyannoteai 폴링 {POLL_MAX_SECONDS}초 초과")
-        ai._sleep(POLL_INTERVAL)
-
-
-def detect_speech(wav: bytes, sess: Any | None = None) -> DetectResult:
-    """pyannoteAI 로 말소리 구간을 찾는다 — 최소 시도 규칙(app/gemini.run_on)."""
-    s = sess or session()
-    res = ai.run_on("detect:pyannoteai", s, [f"{DETECTOR}:default"],
-                    lambda c, _k, _a: _pyannote_once(c, wav), pool="detect:pyannoteai")
-    segs = [[round(float(x.get("start", 0)), 2), round(float(x.get("end", 0)), 2)] for x in res.value]
-    total = sum(max(0.0, e - b) for b, e in segs)
-    return DetectResult(speech_sec=total, segments=segs, attempts=res.attempts, failures=res.failures)

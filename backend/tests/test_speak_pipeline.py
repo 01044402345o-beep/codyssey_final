@@ -149,11 +149,11 @@ class Base(unittest.TestCase):
         ai.reset_cache()
         stt.reset_cache()
 
-    CROSS = ("ASSEMBLYAI_API_KEY", "PYANNOTEAI_API_KEY")
+    CROSS = ("ASSEMBLYAI_API_KEY",)
 
     def install(self, transcribe: dict[str, Callable[[int], Resp]], keys: tuple[str, ...] = ("GROQ_API_KEY",),
                 feedback: Callable[[int], str] = fb_ok) -> tuple[FakeSTT, GeminiFake]:
-        for k in keys + self.CROSS:     # 교차검증 필수 — 기본으로 AssemblyAI·pyannoteAI 키를 넣는다
+        for k in keys + self.CROSS:     # 교차검증 필수 — 기본으로 AssemblyAI 키를 넣는다
             os.environ[k] = "k"
         fake = FakeSTT(transcribe)
         gem = GeminiFake(feedback)
@@ -300,7 +300,7 @@ class ProviderChainTest(Base):
                                 "openai": lambda n: Resp(200, stt_ok(TARGET))},
                                keys=("GROQ_API_KEY", "OPENAI_API_KEY"))
         _, d = self.speak(GOOD)
-        self.assertEqual(fake.calls, {"groq": 30, "openai": 1, "assemblyai": 1, "pyannoteai": 1})
+        self.assertEqual(fake.calls, {"groq": 30, "openai": 1, "assemblyai": 1})
         self.assertEqual((d["stt"]["provider"], d["stt"]["skipped_providers"]), ("openai", ["groq"]))
         self.assertEqual(d["attempts"], 31)
         self.assertTrue(d["usable"])
@@ -317,7 +317,7 @@ class ProviderChainTest(Base):
         fake, _ = self.install({"openai": lambda n: Resp(200, stt_ok(TARGET))}, keys=("OPENAI_API_KEY",))
         _, d = self.speak(GOOD)
         self.assertEqual((d["stt"]["provider"], fake.calls),
-                         ("openai", {"openai": 1, "assemblyai": 1, "pyannoteai": 1}))
+                         ("openai", {"openai": 1, "assemblyai": 1}))
 
     def test_assemblyai_checker_no_speech_models_and_language(self) -> None:
         fake, _ = self.install({"groq": lambda n: Resp(200, stt_ok(TARGET))})
@@ -374,13 +374,19 @@ class CrossValidationTest(Base):
         self.assertLessEqual(d["score"], min(d["diff"]["per_stt"]))
         self.assertEqual(d["heard_checker"], "I have a allergy")
 
-    def test_pyannote_no_speech_blocks_scoring(self) -> None:
+    def test_local_pyannote_no_speech_blocks_before_any_api(self) -> None:
+        """Silero 는 말소리라 했지만 두 번째 검출기(로컬 pyannote)가 아니라고 하면 외부 AI 를 부르지 않는다."""
+        from app import speech_vad as vad
         fake, gem = self.install(self.ok())
-        fake.pyannote_segments = []
-        _, d = self.speak(GOOD)
+        orig = vad.detect_pyannote
+        vad.detect_pyannote = lambda a: vad.SpeechResult(duration_sec=len(a) / 16000, segments=[])
+        try:
+            _, d = self.speak(GOOD)
+        finally:
+            vad.detect_pyannote = orig
         self.assertFalse(d["usable"])
         self.assertIn("두 번째 말소리 검출기", d["reason"])
-        self.assertEqual(gem.texts, [])
+        self.assertEqual((fake.posts, gem.texts), ([], []))
 
     def test_checker_failure_means_no_score_after_floor(self) -> None:
         fake, gem = self.install(self.ok())
@@ -391,14 +397,6 @@ class CrossValidationTest(Base):
         self.assertEqual(fake.calls["assemblyai"], 30)          # 교차검증자도 최소 30회
         self.assertEqual(d["cross_validation"]["checker"]["attempts"], 30)
         self.assertEqual(gem.texts, [])
-
-    def test_detector_failure_means_no_score_after_floor(self) -> None:
-        fake, _ = self.install(self.ok())
-        fake.pyannote_fail = True
-        _, d = self.speak(GOOD)
-        self.assertFalse(d["usable"])
-        self.assertEqual(fake.calls["pyannoteai"], 30)
-        self.assertIn("detector", d["cross_validation"])
 
     def test_missing_cross_keys_means_no_score(self) -> None:
         for k in self.CROSS:
@@ -420,12 +418,13 @@ class CrossValidationTest(Base):
         self.assertFalse(d["usable"])
         self.assertIn("assemblyai", d["cross_validation"]["missing_keys"])
 
-    def test_pyannote_sends_no_model_and_polls(self) -> None:
+    def test_local_detector_reported(self) -> None:
         fake, _ = self.install(self.ok())
         _, d = self.speak(GOOD)
-        dia = [p for p in fake.posts if p["url"].endswith("/diarize")][0]["json"]
-        self.assertEqual(set(dia), {"url"})                      # model 하드코딩 없음
-        self.assertGreater(d["cross_validation"]["detector"]["speech_sec"], 0)
+        det = d["cross_validation"]["detector"]
+        self.assertIn("pyannote", det["engine"])
+        self.assertGreater(det["speech_sec"], 0.8)
+        self.assertFalse(any("pyannote" in p["url"] for p in fake.posts))   # 외부 pyannoteAI 호출 없음
 
 
 class ConsensusUnitTest(unittest.TestCase):

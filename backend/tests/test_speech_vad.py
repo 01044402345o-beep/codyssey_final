@@ -113,3 +113,48 @@ class VadTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PyannoteLocalTest(unittest.TestCase):
+    """두 번째 검출기(로컬 pyannote segmentation-3.0). 단독으로는 신호음 일부를 말소리로 보지만,
+    Silero 와의 AND 판정은 모든 비음성 입력을 거른다."""
+
+    def both(self, data: bytes) -> tuple[bool, bool]:
+        a = vad.decode(data)
+        return vad.detect(a).has_speech, vad.detect_pyannote(a).has_speech
+
+    def test_model_checksum(self) -> None:
+        import hashlib
+        self.assertEqual(hashlib.sha256(vad.PYANNOTE_MODEL.read_bytes()).hexdigest(), vad.PYANNOTE_SHA256)
+
+    def test_speech_detected_by_both(self) -> None:
+        self.assertEqual(self.both(GOOD), (True, True))
+
+    def test_noise_and_silence_rejected_by_pyannote(self) -> None:
+        rng = np.random.default_rng(0)
+        for name, x in (("silence", np.zeros(SR)), ("noise_0.3", rng.normal(0, 0.3, SR * 2))):
+            with self.subTest(name):
+                self.assertFalse(vad.detect_pyannote(vad.decode(wav_bytes(x))).has_speech)
+
+    def test_and_rule_rejects_every_non_speech_input(self) -> None:
+        rng = np.random.default_rng(0)
+        t = np.arange(SR * 2) / SR
+        fx = Path(__file__).parent / "fixtures"
+        inputs = {
+            "silence": wav_bytes(np.zeros(SR)),
+            "noise": wav_bytes(rng.normal(0, 0.3, SR * 2)),
+            "tone_440": wav_bytes(0.5 * np.sin(2 * np.pi * 440 * t)),
+            "pulsed": wav_bytes(0.5 * np.sin(2 * np.pi * 1000 * t) * ((t % 1) < 0.15)),
+            "browser_tone_webm": (fx / "tone_440hz.webm").read_bytes(),
+            "no_frames_webm": (fx / "no_frames.webm").read_bytes(),
+        }
+        for name, data in inputs.items():
+            with self.subTest(name):
+                silero, pyannote = self.both(data)
+                self.assertFalse(silero and pyannote)
+
+    def test_segment_across_window_boundary_is_merged(self) -> None:
+        pcm = np.concatenate([np.zeros(SR * 9, dtype=np.float32), vad.decode(GOOD), np.zeros(SR * 3, dtype=np.float32)])
+        r = vad.detect_pyannote(pcm)
+        self.assertEqual(len(r.segments), 1)
+        self.assertGreater(r.speech_sec, 1.0)
