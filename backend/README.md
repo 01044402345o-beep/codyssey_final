@@ -253,6 +253,7 @@ Long-term Memory의 실제 완료 기준:
 |---|---|---|
 | 호출 제한 | 20회/60초 (IP 기준) | `RATE_LIMIT` / `RATE_WINDOW` 환경변수 |
 | 입력 길이 | `city` 80자, `places` 20개, `weak_expressions` 20개, `target` 200자 | Pydantic → 초과 시 422 |
+| 장소 종류 | `places[].place_type` 은 그 카테고리 계약의 `place_types` 중 하나(대소문자·앞뒤 공백 무시, 생략 가능) | 밖이면 422 + `allowed` 목록. 프롬프트에 자유 문자열이 들어가지 않게 한다 |
 | 오디오 | 8MB, `audio/*` 만 | 초과 시 413, 형식 오류 415, 빈 파일 400 |
 
 > ⚠️ **Google Cloud 예산 알림은 지출을 자동으로 차단하는 상한이 아닙니다.** 알림만으로는
