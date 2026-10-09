@@ -284,6 +284,9 @@ function placeSentences(p, n) {
   return [...ai, ...rest];
 }
 
+/* AI 풀 키: 도시 + 카테고리 (카테고리가 없으면 AI 대상 아님) */
+const aiKey = (city, cat) => cat ? city + '|' + cat : null;
+
 function buildPlan() {
   const t = S.trip;
   const ordered = S.places.filter(p => p.selected).sort((a, b) => a.visitDate.localeCompare(b.visitDate) || a.visitOrder - b.visitOrder);
@@ -296,8 +299,9 @@ function buildPlan() {
   const cityPools = {};
   S.aiBy = {};
   ordered.forEach(p => {
-    const e = S.aiPools[p.city]; if (!e || p.kind !== 'restaurant') return;
-    const pools = cityPools[p.city] ??= { byPlace: e.pools.byPlace, common: e.pools.common.slice() };
+    const key = aiKey(p.city, AI.categoryOfKind(p.kind));
+    const e = S.aiPools[key]; if (!e) return;
+    const pools = cityPools[key] ??= { byPlace: e.pools.byPlace, common: e.pools.common.slice() };
     S.aiBy[p.id] = AI.takeForPlace(pools, p.id, p.count).map(s => ({ ...s, kind: e.kind }));
   });
 
@@ -408,19 +412,23 @@ async function runAi(tok) {
   if (genAbort) genAbort.abort();
   const ctl = genAbort = new AbortController();
   S.aiPools = {}; S.aiBy = {};                 // 새 생성 시작: 이전 결과 폐기
-  const byCity = {};
-  S.places.filter(p => p.selected && p.kind === 'restaurant').forEach(p => (byCity[p.city] ??= []).push({ id: p.id, name: p.name, en: p.en }));
-  const cities = Object.entries(byCity).map(([name, places]) => ({ name, places }));
+  // 한 도시에 맛집과 숙소가 섞일 수 있으니 (도시, 카테고리)마다 따로 요청한다.
+  const groups = {};
+  S.places.filter(p => p.selected && AI.categoryOfKind(p.kind)).forEach(p => {
+    const cat = AI.categoryOfKind(p.kind);
+    (groups[aiKey(p.city, cat)] ??= { name: p.city, categoryId: cat, places: [] }).places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind });
+  });
+  const cities = Object.values(groups);
   if (!cities.length) return;
   const slow = setTimeout(() => {
     if (tok === genToken && S.gen) { S.gen.waitNote = '첫 요청은 시간이 걸릴 수 있어요. 서버를 깨우는 중일 수 있어요.'; if (S.screen === 'u-gen') render(); }
   }, 10000);
   let out = [];
   try {
-    out = await AI.generateByCity({ fetchImpl: (u, o) => fetch(u, o), base: API.base, cities, weakIds: AI.weakIdsFor(weakList(), 'restaurant'), signal: ctl.signal, timeoutMs: AI.GEN_TIMEOUT_MS });
+    out = await AI.generateByCity({ fetchImpl: (u, o) => fetch(u, o), base: API.base, cities, weakIds: AI.weakIdsFor(weakList(), cities.map(c => c.categoryId)), signal: ctl.signal, timeoutMs: AI.GEN_TIMEOUT_MS });
   } finally { clearTimeout(slow); }
   if (tok !== genToken || ctl.signal.aborted) return;   // 오래된 요청은 상태를 덮어쓰지 못한다
-  out.forEach(o => { if (o.pools) S.aiPools[o.city] = { kind: o.kind, pools: o.pools }; });
+  out.forEach(o => { if (o.pools) S.aiPools[aiKey(o.city, o.categoryId)] = { kind: o.kind, pools: o.pools }; });
 }
 function failStage(stage) {
   const t = S.trip; cancelGen();

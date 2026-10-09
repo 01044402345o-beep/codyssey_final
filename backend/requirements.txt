@@ -8,3 +8,7 @@ jsonschema==4.26.0
 # 말소리 검출(Silero VAD)과 브라우저 녹음 디코드(PyAV)용. Whisper 모델은 로드하지 않는다.
 # transcribe_app 과 같은 faster_whisper.vad.get_speech_timestamps 를 쓴다. 10/7 1.2.1 기준 확인.
 faster-whisper==1.2.1
+# speech_vad.py 가 pyannote 검출기를 돌릴 때 직접 import 한다.
+# faster-whisper 의 전이 의존에만 기대면, 그 의존이 바뀌는 순간 pyannote 가 깨진다.
+# 교차검증이 필수라 /speak-check 전체가 실패한다. 배포 로그에서 확인한 버전으로 못박는다.
+onnxruntime==1.23.2
