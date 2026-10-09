@@ -519,9 +519,96 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .demo.closed > :not(h4) { display: none; }
 .demo.closed h4 { margin: 0; }
 
+/* ============ 반응형 ============
+   좁은 화면에서는 데모 껍데기(사이드바·노트·기기 프레임)를 접고 앱(.device > .screen)만 꽉 채운다.
+   껍데기는 전시용이고, 실제 사용자는 앱 화면만 보면 된다. JS 없이 체크박스로 서랍을 연다. */
+
+.nav-btn, .nav-scrim { display: none; }
+
+/* 1180px 이하: 노트 카드를 기기 아래로 내린다 */
 @media (max-width: 1180px) {
-  .stage { flex-direction: column; align-items: center; }
-  .notes { width: 392px; position: static; }
+  .stage { flex-direction: column; align-items: center; padding: 20px; gap: 20px; }
+  .notes { width: min(392px, 100%); position: static; }
+}
+
+/* 900px 이하: 태블릿 세로 · 폰 */
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; height: 100dvh; }
+
+  .side {
+    position: fixed; top: 0; bottom: 0; left: 0;
+    width: min(288px, 86vw); z-index: 60;
+    transform: translateX(-100%); transition: transform .22s ease;
+  }
+  .nav-toggle:checked ~ .shell .side { transform: none; }
+
+  .nav-btn {
+    display: grid; place-items: center;
+    position: fixed; top: 10px; left: 10px; z-index: 70;
+    width: 44px; height: 44px; border-radius: 12px;
+    background: var(--ink); color: #fff; font-size: 18px; line-height: 1;
+    box-shadow: var(--shadow);
+  }
+  .nav-toggle:checked ~ .nav-btn { background: var(--accent); }
+
+  .nav-scrim { position: fixed; inset: 0; z-index: 55; }
+  .nav-toggle:checked ~ .nav-scrim { display: block; }
+
+  .topbar { padding: 10px 14px 10px 62px; flex-wrap: wrap; gap: 8px; }
+  .topbar h1 { font-size: 16px; }
+  .topbar .pill { font-size: 11.5px; padding: 4px 9px; }
+
+  .stage { padding: 12px; }
+
+  /* 기기 목업 프레임을 벗겨내고 앱을 화면에 직접 붙인다 */
+  .device {
+    width: 100%; max-width: 100%;
+    height: calc(100dvh - 84px);
+    border-radius: 0; padding: 0; background: none; box-shadow: none;
+  }
+  .device::before { display: none; }
+  .screen { border-radius: 0; }
+  .app-pad { padding: 8px 16px 24px; }
+  .statusbar { height: 34px; padding: 0 16px 4px; font-size: 12px; }
+
+  /* 앱 안쪽 글자·여백을 좁은 화면에 맞춘다 */
+  .login { padding: 22px 20px 30px; }
+  .login h1 { font-size: 32px; margin: 56px 0 12px; }
+  .login .stamp { width: 150px; height: 150px; right: -52px; }
+  .hero .big { font-size: 34px; }
+  .hero { padding: 16px; }
+  .face .en { font-size: 24px; }
+  .face .ko { font-size: 21px; }
+  .face { padding: 18px; }
+  .flip { height: 320px; }
+  .title-lg { font-size: 22px; }
+
+  /* 잘림 · 가로 넘침 방지 */
+  .modal-wrap.center .modal { width: auto; max-width: calc(100% - 24px); }
+  .toast { left: 50%; max-width: calc(100% - 24px); }
+  .window { max-width: 100%; }
+  .admin { grid-template-columns: 1fr; min-height: 0; }
+  .admin-nav { display: flex; gap: 6px; overflow-x: auto; padding: 10px; }
+  .admin-nav .brand { padding: 0 10px 0 0; white-space: nowrap; }
+  .admin-nav button { width: auto; white-space: nowrap; margin: 0; }
+  .admin-main { padding: 16px; }
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .grid2 { grid-template-columns: 1fr; }
+  .cs-row { grid-template-columns: 20px 1fr 1fr 34px; }
+  .user-row { grid-template-columns: 1fr; gap: 6px; }
+  .funnel .fr-row { grid-template-columns: 84px 1fr 44px; }
+  .stat3 { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* 420px 이하: 아주 좁은 폰 */
+@media (max-width: 420px) {
+  .stage { padding: 8px; }
+  .summary-strip { flex-direction: column; }
+  .progress-row { grid-template-columns: 72px 1fr; gap: 10px; }
+  .ring { width: 72px; height: 72px; }
+  .kpis { grid-template-columns: 1fr; }
+  .login h1 { font-size: 28px; }
+  .hero .big { font-size: 28px; }
 }
 
 .speak { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
