@@ -520,8 +520,10 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .demo.closed h4 { margin: 0; }
 
 /* ============ 반응형 ============
-   좁은 화면에서는 데모 껍데기(사이드바·노트·기기 프레임)를 접고 앱(.device > .screen)만 꽉 채운다.
-   껍데기는 전시용이고, 실제 사용자는 앱 화면만 보면 된다. JS 없이 체크박스로 서랍을 연다. */
+   좁은 화면(900px 이하)에서는 전시용 껍데기(사이드바·상단바·설명 카드·기기 프레임·가짜 상태바)를
+   전부 숨기고 앱(.device > .screen > .app)만 화면에 꽉 채운다.
+   스크롤은 .app 하나뿐이다 — 문서(body)는 스크롤하지 않는다.
+   팀 시연용 껍데기는 주소에 ?menu=1 을 붙였을 때만 나온다. */
 
 .nav-btn, .nav-scrim { display: none; }
 
@@ -531,9 +533,19 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .notes { width: min(392px, 100%); position: static; }
 }
 
-/* 900px 이하: 태블릿 세로 · 폰 */
+/* 900px 이하: 태블릿 세로 · 폰 — 앱 화면만 남긴다 */
 @media (max-width: 900px) {
-  .shell { grid-template-columns: 1fr; height: 100dvh; }
+  html, body { height: 100%; overflow: hidden; }
+
+  .shell { grid-template-columns: 1fr; height: 100vh; height: 100dvh; }
+
+  /* 전시용 껍데기는 숨긴다 */
+  .topbar, .notes, .statusbar { display: none; }
+
+  /* ---- 시연 모드(?menu=1)에서만: 상단바 + 화면 목록 서랍 ---- */
+  .menu-on .topbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 56px 10px 14px; }
+  .menu-on .topbar h1 { font-size: 16px; }
+  .menu-on .topbar .pill { font-size: 11.5px; padding: 4px 9px; }
 
   .side {
     position: fixed; top: 0; bottom: 0; left: 0;
@@ -542,44 +554,39 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   }
   .nav-toggle:checked ~ .shell .side { transform: none; }
 
-  .nav-btn {
+  .menu-on .nav-btn {
     display: grid; place-items: center;
-    position: fixed; top: 10px; left: 10px; z-index: 70;
-    width: 44px; height: 44px; border-radius: 12px;
-    background: var(--ink); color: #fff; font-size: 18px; line-height: 1;
-    box-shadow: var(--shadow);
+    position: fixed; top: 8px; right: 8px; z-index: 70;
+    width: 40px; height: 40px; border-radius: 12px;
+    background: rgba(22,27,38,.72); color: #fff; font-size: 17px; line-height: 1;
   }
-  .nav-toggle:checked ~ .nav-btn { background: var(--accent); }
+  .menu-on .nav-toggle:checked ~ .nav-btn { background: var(--accent); }
 
-  .nav-scrim { position: fixed; inset: 0; z-index: 55; }
-  .nav-toggle:checked ~ .nav-scrim { display: block; }
+  .menu-on .nav-scrim { position: fixed; inset: 0; z-index: 55; }
+  .menu-on .nav-toggle:checked ~ .nav-scrim { display: block; }
 
-  .topbar { padding: 10px 14px 10px 62px; flex-wrap: wrap; gap: 8px; }
-  .topbar h1 { font-size: 16px; }
-  .topbar .pill { font-size: 11.5px; padding: 4px 9px; }
-
-  .stage { padding: 12px; }
-
-  /* 기기 목업 프레임을 벗겨내고 앱을 화면에 직접 붙인다 */
+  /* ---- 기기 목업 프레임을 벗겨내고 앱을 화면에 직접 붙인다 ---- */
+  .stage { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .stage.is-admin { padding: 14px; overflow: auto; }   /* 관리자 화면만 예외 */
   .device {
-    width: 100%; max-width: 100%;
-    height: calc(100dvh - 84px);
+    width: 100%; max-width: 100%; flex: 1; min-height: 0;
     border-radius: 0; padding: 0; background: none; box-shadow: none;
+    display: flex;
   }
   .device::before { display: none; }
-  .screen { border-radius: 0; }
+  .screen { border-radius: 0; flex: 1; min-height: 0; }
   .app-pad { padding: 8px 16px 24px; }
-  .statusbar { height: 34px; padding: 0 16px 4px; font-size: 12px; }
+  .appbar { padding: 6px 14px 10px; }
 
   /* 앱 안쪽 글자·여백을 좁은 화면에 맞춘다 */
   .login { padding: 22px 20px 30px; }
   .login h1 { font-size: 32px; margin: 56px 0 12px; }
   .login .stamp { width: 150px; height: 150px; right: -52px; }
-  .hero .big { font-size: 34px; }
   .hero { padding: 16px; }
+  .hero .big { font-size: 34px; }
+  .face { padding: 18px; }
   .face .en { font-size: 24px; }
   .face .ko { font-size: 21px; }
-  .face { padding: 18px; }
   .flip { height: 320px; }
   .title-lg { font-size: 22px; }
 
@@ -597,12 +604,11 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .cs-row { grid-template-columns: 20px 1fr 1fr 34px; }
   .user-row { grid-template-columns: 1fr; gap: 6px; }
   .funnel .fr-row { grid-template-columns: 84px 1fr 44px; }
-  .stat3 { grid-template-columns: repeat(3, 1fr); }
 }
 
 /* 420px 이하: 아주 좁은 폰 */
 @media (max-width: 420px) {
-  .stage { padding: 8px; }
+  .stage { padding: 0; }
   .summary-strip { flex-direction: column; }
   .progress-row { grid-template-columns: 72px 1fr; gap: 10px; }
   .ring { width: 72px; height: 72px; }
