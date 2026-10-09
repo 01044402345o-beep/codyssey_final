@@ -25,7 +25,7 @@
 | 최성빈 | 통합 / Backend | 생성 함수·검증 코드·말하기 채점 파이프라인, 배포(Render)·CI, 통합 |
 | 이영애 | AI 콘텐츠 | 식당·카페 카테고리 계약(`agent_contract/categories/restaurant.json`) |
 | 이창진 | AI 콘텐츠 | 교통·공항 카테고리 계약(`transport.json`) |
-| 함명자 | AI 콘텐츠 | 숙소·체크인 카테고리 계약(`lodging.json`, 진행 중) |
+| 함명자 | AI 콘텐츠 | 숙소·체크인 카테고리 계약(`agent_contract/categories/lodging.json`) |
 | 이주란 | 검증 | 전 카테고리 실패 케이스(`negative_cases`)·측정 |
 | 한재정 | 리뷰 | 전체 리뷰 |
 
@@ -158,7 +158,7 @@ python ../e2e/test_silence.py http://localhost:8000 && python ../e2e/test_consen
 - 점수는 '두 전사 모두에서 들린 단어 일치율'이다. 음소·억양 같은 발음 품질은 재지 않는다.
 - Whisper 가 학습자 오류를 교정해 받아쓸 수 있다.
 - 두 검출기 AND 는 작게 말하거나 서툰 발화를 놓칠 수 있다.
-- 화면 생성은 식당 카테고리만 연결돼 있다(교통 계약은 서버에 있음).
+- 화면 생성은 식당 카테고리만 연결돼 있다(교통·숙소 계약도 서버에 있으나 화면 코드가 카테고리를 `restaurant` 로 고정).
 - Render 무료 플랜은 콜드스타트가 있다. 서버를 재시작하면 모델 상태 기억이 사라진다.
 
 ## 10. 문서
