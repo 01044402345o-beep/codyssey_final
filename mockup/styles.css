@@ -180,6 +180,19 @@ a { color: inherit; }
 
 .bottombar { flex: none; padding: 12px 16px 26px; background: linear-gradient(to top, var(--cream) 70%, rgba(251,248,241,0)); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
 
+/* ============ 유동 폭 (넘침 방지) ============
+   그리드·flex 자식의 min-width 기본값은 auto 다. 그래서 <input type=date> 같은 내용이
+   자기 고유 폭을 주장하며 칸을 밀어내고, 그 결과 옆 버튼이 잘린다.
+   0 으로 낮춰야 %·fr·1fr 대로 줄어든다. (데스크톱에서는 시각 변화 없음) */
+.stage, .main, .app, .app-pad, .screen, .device, .city-card, .city-card .row2, .summary-strip,
+.mini-stats, .stat3, .kpis, .grid2, .progress-row, .study-head, .card-nav, .tts-row,
+.modal .acts, .sent, .sent .tags, .admin, .admin-main, .panel, .funnel .fr-row, .user-row, .cs-row { min-width: 0; }
+.city-card .row2 > *, .summary-strip > *, .mini-stats > *, .stat3 > *, .kpis > *,
+.grid2 > *, .modal .acts > *, .sent > *, .srow > *, .place > *, .tl-day .pl > *,
+.admin > *, .admin-nav > *, .funnel .fr-row > * { min-width: 0; }
+.btn, .input, .gbtn, .seg, .city-tabs, .chips, table.tbl, .toast { min-width: 0; max-width: 100%; }
+input, select, textarea { min-width: 0; max-width: 100%; }
+
 /* ============ App components ============ */
 .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
 .h-display { font-family: var(--display); font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; }
@@ -575,20 +588,42 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   }
   .device::before { display: none; }
   .screen { border-radius: 0; flex: 1; min-height: 0; }
+  .app { min-height: 0; }                                  /* 앱만 스크롤한다 */
+  .bottombar { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }   /* 홈 인디케이터 */
+  .tabbar { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
   .app-pad { padding: 8px 16px 24px; }
   .appbar { padding: 6px 14px 10px; }
 
-  /* 앱 안쪽 글자·여백을 좁은 화면에 맞춘다 */
-  .login { padding: 22px 20px 30px; }
-  .login h1 { font-size: 32px; margin: 56px 0 12px; }
-  .login .stamp { width: 150px; height: 150px; right: -52px; }
-  .hero { padding: 16px; }
+  /* 여백·글자를 화면 폭에 비례해 줄인다(%) */
+  .app-pad { padding: 2% 4% 7%; }
+  .appbar { padding: 1.5% 4% 2.5%; }
+  .login { padding: 6% 5% 8%; }
+  .login h1 { font-size: 32px; margin: 14% 0 12px; }
+  .login .stamp { width: 40vw; height: 40vw; right: -14vw; }
+  .hero { padding: 4.5%; }
   .hero .big { font-size: 34px; }
-  .face { padding: 18px; }
+  .face { padding: 4.5%; }
   .face .en { font-size: 24px; }
   .face .ko { font-size: 21px; }
   .flip { height: 320px; }
   .title-lg { font-size: 22px; }
+  .card, .today-card { padding: 4%; }
+
+  /* 버튼은 글자 길이에 따라 줄바꿔도 잘리지 않게 (높이는 내용에 맞춘다) */
+  .btn { height: auto; min-height: 46px; padding: 10px 3.5%; white-space: normal; text-align: center; line-height: 1.35; }
+  .btn.sm { height: auto; min-height: 34px; padding: 7px 3%; }
+  .btn.ghost { height: auto; min-height: 38px; }
+  .modal .acts { flex-wrap: wrap; }
+  .modal .acts .btn { flex: 1 1 44%; }
+  .city-card { padding: 3.5%; }
+  .city-card .row2 { gap: 3%; }
+  .city-card .row2 .input { font-size: 12.5px; padding: 0 4%; }
+  .sent { grid-template-columns: 1fr 34px; gap: 3%; padding: 3.5%; }
+  .srow { grid-template-columns: 48px 1fr auto; gap: 3%; padding: 3%; }
+  .seg button { padding: 6px 4%; }
+  .stat3 { gap: 3%; }
+  .summary-strip { gap: 3%; }
+  .statusbar { display: none; }
 
   /* 잘림 · 가로 넘침 방지 */
   .modal-wrap.center .modal { width: auto; max-width: calc(100% - 24px); }
@@ -606,15 +641,24 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .funnel .fr-row { grid-template-columns: 84px 1fr 44px; }
 }
 
+/* 480px 이하: 날짜 입력 등 2단 구성을 세로로 편다 */
+@media (max-width: 480px) {
+  .city-card .row2 { grid-template-columns: 1fr; gap: 8px; }
+  .summary-strip { flex-direction: column; }
+  .mini-stats { grid-template-columns: 1fr; }
+  .stat3 { grid-template-columns: 1fr; }
+  .tbl { font-size: 11.5px; }
+}
+
 /* 420px 이하: 아주 좁은 폰 */
 @media (max-width: 420px) {
-  .stage { padding: 0; }
-  .summary-strip { flex-direction: column; }
+  .login h1 { font-size: 28px; }
+  .hero .big { font-size: 28px; }
   .progress-row { grid-template-columns: 72px 1fr; gap: 10px; }
   .ring { width: 72px; height: 72px; }
   .kpis { grid-template-columns: 1fr; }
-  .login h1 { font-size: 28px; }
-  .hero .big { font-size: 28px; }
+  .face .en { font-size: 21px; }
+  .face .ko { font-size: 19px; }
 }
 
 .speak { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
