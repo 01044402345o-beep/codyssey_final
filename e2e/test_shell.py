@@ -114,6 +114,32 @@ with sync_playwright() as p:
     check("frame=1 390px: 가로 스크롤 없음", hscroll(page) <= 0)
     ctx.close()
 
+    # --- P2: 글자·입력·터치 ---
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True)
+    page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(BASE + "/#u-input"); page.wait_for_timeout(700)
+    check("입력 글자 16px 이상(iOS 확대 방지)", page.evaluate("[...document.querySelectorAll('.app input, .app select')].every(e => parseFloat(getComputedStyle(e).fontSize) >= 16)"))
+    check("한글 줄바꿈 keep-all", page.evaluate("getComputedStyle(document.body).wordBreak") == "keep-all")
+    for scr in ("u-input", "u-report", "u-home", "u-sched", "u-study", "u-coll"):
+        page.evaluate(f"S.user = DEMO_USER; preset('default'); go('{scr}')"); page.wait_for_timeout(250)
+        small = page.evaluate("""[...document.querySelectorAll('.pframe button, .pframe a, .pframe input, .pframe select')]
+          .filter(e => { const q = e.getBoundingClientRect(); return q.width && q.height && (q.height < 43.5 || q.width < 43.5) && !e.matches('.del') && !e.closest('.place .src'); })
+          .map(e => e.tagName + '.' + e.className + ' ' + Math.round(e.getBoundingClientRect().width) + 'x' + Math.round(e.getBoundingClientRect().height)).slice(0, 4)""")
+        check(f"터치 기기 {scr}: 44px 미만 조작 요소 없음", not small, "; ".join(small))
+        tiny = page.evaluate("""[...document.querySelectorAll('.pframe *')].filter(e => e.getBoundingClientRect().width && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 12).length""")
+        check(f"{scr}: 12px 미만 글자 없음", tiny == 0, str(tiny))
+    page.evaluate("preset('default'); go('u-input')"); page.wait_for_timeout(250)
+    d = page.evaluate("(() => { const del = document.querySelector('.city-card .del'); const r = del.getBoundingClientRect(); const el = document.elementFromPoint(r.left - 7, r.top - 7); return el === del; })()")
+    check("삭제 버튼: 보이는 크기는 작아도 눌리는 영역은 44px(바깥 7px 에서도 눌림)", d)
+    ctx.close()
+    # 마우스 기기에서는 터치용 크기를 강제하지 않는다
+    ctx = b.new_context(viewport={"width": 1280, "height": 800})
+    page = ctx.new_page()
+    page.goto(BASE + "/#u-coll"); page.wait_for_timeout(600)
+    h = page.evaluate("Math.round(document.querySelector('.chips button').getBoundingClientRect().height)")
+    check("마우스 기기: 칩 높이 기존 크기 유지(<44)", h < 44, str(h))
+    ctx.close()
+
     # --- 외부 서버 배너 ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page()

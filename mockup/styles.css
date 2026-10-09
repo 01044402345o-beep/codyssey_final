@@ -737,6 +737,16 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
    브레이크포인트: base <600 하단 탭 · md ≥600 레일 72px · lg ≥900 · xl ≥1200 사이드 240px
    ===================================================================== */
 :root {
+  /* 타입 스케일 (docs/RESPONSIVE_STRATEGY.md §6). rem 기반 — 사용자의 브라우저 글자 크기 설정이 그대로 반영된다.
+     본문·캡션은 고정(vw 항이 1px 도 안 움직여 의미가 없었다), 제목·학습 문장·표시용만 폭에 따라 변한다. */
+  --fs-caption: .75rem;                                   /* 12px 하한 */
+  --fs-small: .8125rem;                                   /* 13px */
+  --fs-body: .9375rem;                                    /* 15px */
+  --fs-card-title: clamp(1.125rem, 1rem + .5vw, 1.375rem);
+  --fs-title: clamp(1.375rem, 1.1rem + 1.2vw, 1.875rem);
+  --fs-study-ko: clamp(1.375rem, 1.1rem + 1.1vw, 1.75rem);
+  --fs-study-en: clamp(1.625rem, 1.3rem + 1.4vw, 2.25rem);
+  --fs-display: clamp(2.25rem, 1.5rem + 3vw, 3.25rem);
   --gutter: clamp(16px, 4vw, 32px);
   --nav-rail: 72px;
   --nav-side: 240px;
@@ -811,7 +821,8 @@ html:not([data-mode=legacy]) .toast { left: 50%; bottom: calc(var(--nav-h) + 20p
 @media (min-width: 600px) { html:not([data-mode=legacy]) .toast { bottom: 24px; } }
 
 /* 화면별 고정 치수 해제 */
-.pframe .flip { height: clamp(360px, 56dvh, 520px); }
+.pframe .flip { height: max(clamp(360px, 56dvh, 520px), 22.5rem); }   /* rem 하한: 브라우저 글자 200% 에서도 내용이 들어간다 */
+.pframe .face { overflow-y: auto; }
 .pframe .login { height: auto; min-height: 100dvh; padding: max(30px, env(safe-area-inset-top, 0px)) var(--gutter) max(40px, env(safe-area-inset-bottom, 0px)); }
 .pframe .login h1 { margin-top: clamp(64px, 18dvh, 150px); }
 .pframe .login .stamp { width: clamp(140px, 50vw, 220px); height: clamp(140px, 50vw, 220px); }
@@ -832,8 +843,12 @@ html:not([data-mode=legacy]) .toast { left: 50%; bottom: calc(var(--nav-h) + 20p
   .admin-shell .admin-nav { display: flex; gap: 4px; overflow-x: auto; position: sticky; top: 0; z-index: 10; padding: 10px var(--gutter); }
   .admin-shell .admin-nav .brand { padding: 0 8px; flex: none; }
   .admin-shell .admin-nav button { width: auto; flex: none; white-space: nowrap; margin: 0; min-height: 44px; }
-  .admin-shell .cs-row { grid-template-columns: 22px minmax(0, 1fr) 34px; }
-  .admin-shell .cs-row > :nth-child(2), .admin-shell .cs-row > :nth-child(4) { grid-column: 2; }
+  /* 공통 문장 한 줄 = (번호·상황·듣기) / 영어 / 한국어 세 줄 */
+  .admin-shell .cs-row { grid-template-columns: 22px minmax(0, 1fr) 34px; row-gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .admin-shell .cs-row > :nth-child(1) { grid-area: 1 / 1; }
+  .admin-shell .cs-row > :nth-child(2) { grid-area: 1 / 2; }
+  .admin-shell .cs-row > :nth-child(5) { grid-area: 1 / 3; }
+  .admin-shell .cs-row > :nth-child(3), .admin-shell .cs-row > :nth-child(4) { grid-column: 2 / 4; }
   .admin-shell .user-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .admin-shell .cs-head { display: none; }
   .admin-shell .adm-head { flex-wrap: wrap; }
@@ -841,3 +856,48 @@ html:not([data-mode=legacy]) .toast { left: 50%; bottom: calc(var(--nav-h) + 20p
   .admin-shell .funnel .fr-row { grid-template-columns: 96px minmax(0, 1fr) 48px; }
 }
 .pframe .srow .ct .line2 { display: block; }   /* inline span 은 ellipsis 가 동작하지 않아 긴 문장이 가로로 넘쳤다 */
+
+/* =====================================================================
+   P2 — 글자·입력·터치 (제품·데모 모드만. legacy 는 그대로)
+   ===================================================================== */
+html:not([data-mode=legacy]) body { font-size: var(--fs-body); line-height: 1.55; word-break: keep-all; overflow-wrap: break-word; }
+html:not([data-mode=legacy]) :is(.title-lg, .face .ko, .face .en, .hero .big, .login h1, .h-display) { text-wrap: balance; }
+html:not([data-mode=legacy]) :is(.sub, .place .desc, .notice) { text-wrap: pretty; }
+
+/* 제목·학습 문장: 폭에 따라 변하는 토큰 */
+html:not([data-mode=legacy]) .title-lg { font-size: var(--fs-title); }
+html:not([data-mode=legacy]) .face .ko { font-size: var(--fs-study-ko); }
+html:not([data-mode=legacy]) .face .en { font-size: var(--fs-study-en); }
+html:not([data-mode=legacy]) .hero .big { font-size: var(--fs-display); }
+html:not([data-mode=legacy]) .login h1 { font-size: var(--fs-display); }
+html:not([data-mode=legacy]) .today-card h3 { font-size: var(--fs-card-title); }
+html:not([data-mode=legacy]) .sub { font-size: var(--fs-body); }
+
+/* 12px 하한: 10~11.5px 였던 글자를 캡션 크기로 */
+html:not([data-mode=legacy]) :is(.eyebrow, .appbar .step, .city-card .num, .city-card .lbl, .kind, .badge, .st, .st-chip, .trip-chip,
+  .ring .v span, .srow .dt small, .tl-day .pl div .ar, .tbl th, .tbl .mono, .tbl td.mono, .speak-note, .hero .dates, .place .src a, .place .src span,
+  .summary-strip span, .stat3 span, .mini-stats span, .cs-row .i, .city-tabs button b, .kpi .tg, .kpi .tg span, .user-row, .user-row span, .fr, .admin-nav .brand span, .small, .pnav button) { font-size: var(--fs-caption); }
+html:not([data-mode=legacy]) :is(.sent .tags, .srow .ct .line2, .place .meta, .field .hint, .notice, .dots) { font-size: var(--fs-small); }
+
+html:not([data-mode=legacy]) :is(.cs-head, .cs-head span, .user-row) { font-size: var(--fs-caption) !important; }   /* 인라인 style 의 11px 를 덮는다 */
+
+/* 입력: 16px 미만이면 iOS Safari 가 포커스 때 화면을 확대한다 */
+html:not([data-mode=legacy]) :is(.app, .admin-main, .modal) :is(input, select, textarea, .input) { font-size: max(16px, 1rem); }
+
+/* 터치 우선 기기: 44px 이상 (WCAG 2.5.5 AAA · Apple HIG). 마우스(pointer:fine)는 기존 크기 유지 */
+@media (pointer: coarse) {
+  html:not([data-mode=legacy]) :is(.btn.sm, .btn.ghost, .chips button, .city-tabs button, .seg button, .filters button, .cand-toggle, .add-city,
+    .speak-btn, .sec-title button, .appbar .back, .round, .tts-btn, .tts-rate, .admin-nav button) { min-height: 44px; }
+  html:not([data-mode=legacy]) :is(.appbar .back, .round, .play) { min-width: 44px; }
+  html:not([data-mode=legacy]) .appbar .back { width: 44px; height: 44px; }
+  html:not([data-mode=legacy]) .play, html:not([data-mode=legacy]) .cs-row .play { width: 44px; height: 44px; }
+  html:not([data-mode=legacy]) .sent { grid-template-columns: minmax(0, 1fr) 44px; }
+  html:not([data-mode=legacy]) :is(.input, .city-card .row2 .input, .city-card .name-input, .cs-row input) { min-height: 44px; }
+  html:not([data-mode=legacy]) .cs-row { grid-template-columns: 26px 110px minmax(0, 1.4fr) minmax(0, 1fr) 44px; }
+  /* 보이는 크기는 그대로 두고 눌리는 영역만 넓힌다 */
+  html:not([data-mode=legacy]) .city-card .del::after { content: ''; position: absolute; inset: -9px; }
+  html:not([data-mode=legacy]) .place .src a { display: inline-flex; align-items: center; min-height: 44px; }
+}
+@media (pointer: coarse) and (max-width: 767px) {
+  html:not([data-mode=legacy]) .admin-shell .cs-row { grid-template-columns: 22px minmax(0, 1fr) 44px; }
+}

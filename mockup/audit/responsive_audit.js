@@ -25,7 +25,7 @@ const SCREENS = ['u-login', 'u-input', 'u-report', 'u-route', 'u-home', 'u-sched
         let small = 0, tiny = 0, texts = 0;
         scope.querySelectorAll('button,a,input,select,[data-act]').forEach(e => { const q = e.getBoundingClientRect(); if (q.width && q.height && (q.height < 44 || q.width < 44)) small++; });
         scope.querySelectorAll('*').forEach(e => {
-          if ([...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) { texts++; if (parseFloat(getComputedStyle(e).fontSize) < 12) tiny++; }
+          if (e.getBoundingClientRect().width && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) { texts++; if (parseFloat(getComputedStyle(e).fontSize) < 12) tiny++; }
         });
         const wide = [...document.querySelectorAll('body *')].filter(e => { const q = e.getBoundingClientRect(); return q.width && q.right > de.clientWidth + 1 && !e.closest('.tbl-wrap,.chips,.city-tabs,.admin-nav'); }).slice(0, 3).map(e => e.tagName + '.' + String(e.className).split(' ')[0] + '@' + Math.round(e.getBoundingClientRect().right));
         return { wide, hscroll: de.scrollWidth > de.clientWidth, scrollWidth: de.scrollWidth, clientWidth: de.clientWidth, small, tiny, texts };
