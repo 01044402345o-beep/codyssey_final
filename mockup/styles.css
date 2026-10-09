@@ -250,6 +250,19 @@ a { color: inherit; }
 
 .bottombar { flex: none; padding: 12px 16px 26px; background: linear-gradient(to top, var(--bg) 70%, transparent); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 
+/* ============ 유동 폭 (넘침 방지) ============
+   그리드·flex 자식의 min-width 기본값은 auto 다. 그래서 <input type=date> 같은 내용이
+   자기 고유 폭을 주장하며 칸을 밀어내고, 그 결과 옆 버튼이 잘린다.
+   0 으로 낮춰야 %·fr·1fr 대로 줄어든다. (데스크톱에서는 시각 변화 없음) */
+.stage, .main, .app, .app-pad, .screen, .device, .city-card, .city-card .row2, .summary-strip,
+.mini-stats, .stat3, .kpis, .grid2, .progress-row, .study-head, .card-nav, .tts-row,
+.modal .acts, .sent, .sent .tags, .admin, .admin-main, .panel, .funnel .fr-row, .user-row, .cs-row { min-width: 0; }
+.city-card .row2 > *, .summary-strip > *, .mini-stats > *, .stat3 > *, .kpis > *,
+.grid2 > *, .modal .acts > *, .sent > *, .srow > *, .place > *, .tl-day .pl > *,
+.admin > *, .admin-nav > *, .funnel .fr-row > * { min-width: 0; }
+.btn, .input, .gbtn, .seg, .city-tabs, .chips, table.tbl, .toast { min-width: 0; max-width: 100%; }
+input, select, textarea { min-width: 0; max-width: 100%; }
+
 /* ============ App components ============ */
 .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-text); }
 .h-display { font-family: var(--display); font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; }
@@ -589,9 +602,124 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .demo.closed > :not(h4) { display: none; }
 .demo.closed h4 { margin: 0; }
 
+/* ============ 예전 데모 레이아웃(?demo=1&frame=1)의 좁은 화면 규칙 ============
+   폰 프레임을 벗겨 앱을 채우는 방식이다. 제품·데모 모드(제품 셸)는 아래 "제품 셸" 구역을 쓰므로
+   이 구역의 모든 규칙은 html[data-mode=legacy] 에만 적용한다. */
+
+/* 1180px 이하: 노트 카드를 기기 아래로 내린다 */
 @media (max-width: 1180px) {
-  .stage { flex-direction: column; align-items: center; }
-  .notes { width: 392px; position: static; }
+  html[data-mode=legacy] .stage { flex-direction: column; align-items: center; padding: 20px; gap: 20px; }
+  html[data-mode=legacy] .notes { width: min(392px, 100%); position: static; }
+}
+
+/* 900px 이하: 태블릿 세로 · 폰 — 앱 화면만 남긴다 */
+@media (max-width: 900px) {
+  html[data-mode=legacy], html[data-mode=legacy] body { height: 100%; overflow: hidden; }
+
+  html[data-mode=legacy] .shell { grid-template-columns: 1fr; height: 100vh; height: 100dvh; }
+
+  /* 전시용 껍데기는 숨긴다 */
+  html[data-mode=legacy] .topbar, html[data-mode=legacy] .notes, html[data-mode=legacy] .statusbar { display: none; }
+
+  /* 사이드 패널은 화면 밖 서랍. 우하단 "데모" 버튼(data-act=drawer)이 .open 을 토글한다 */
+  html[data-mode=legacy] .side { position: fixed; top: 0; bottom: 0; left: 0; width: min(288px, 86vw); z-index: 200; transform: translateX(-100%); transition: transform .22s ease; }
+  html[data-mode=legacy] .side.open { transform: none; }
+  html[data-mode=legacy] .demo-fab { display: block; bottom: 12px; }
+
+  /* ---- 기기 목업 프레임을 벗겨내고 앱을 화면에 직접 붙인다 ---- */
+  html[data-mode=legacy] .stage { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+  html[data-mode=legacy] .stage.is-admin { padding: 14px; overflow: auto; }   /* 관리자 화면만 예외 */
+  html[data-mode=legacy] .device {
+    width: 100%; max-width: 100%; flex: 1; min-height: 0;
+    border-radius: 0; padding: 0; background: none; box-shadow: none;
+    display: flex;
+  }
+  html[data-mode=legacy] .device::before { display: none; }
+  html[data-mode=legacy] .screen { border-radius: 0; flex: 1; min-height: 0; }
+  html[data-mode=legacy] .app { min-height: 0; }                                  /* 앱만 스크롤한다 */
+  html[data-mode=legacy] .bottombar { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }   /* 홈 인디케이터 */
+  html[data-mode=legacy] .tabbar { padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  html[data-mode=legacy] .app-pad { padding: 8px 16px 24px; }
+  html[data-mode=legacy] .appbar { padding: 6px 14px 10px; }
+
+  /* 여백·글자를 화면 폭에 비례해 줄인다(%) */
+  html[data-mode=legacy] .app-pad { padding: 2% 4% 7%; }
+  html[data-mode=legacy] .appbar { padding: 1.5% 4% 2.5%; }
+  html[data-mode=legacy] .login { padding: 6% 5% 8%; }
+  html[data-mode=legacy] .login h1 { font-size: 32px; margin: 14% 0 12px; }
+  html[data-mode=legacy] .login .stamp { width: 40vw; height: 40vw; right: -14vw; }
+  html[data-mode=legacy] .hero { padding: 4.5%; }
+  html[data-mode=legacy] .hero .big { font-size: 34px; }
+  html[data-mode=legacy] .face { padding: 4.5%; }
+  html[data-mode=legacy] .face .en { font-size: 24px; }
+  html[data-mode=legacy] .face .ko { font-size: 21px; }
+  html[data-mode=legacy] .flip { height: 320px; }
+  html[data-mode=legacy] .title-lg { font-size: 22px; }
+  html[data-mode=legacy] .card, html[data-mode=legacy] .today-card { padding: 4%; }
+
+  /* 버튼은 글자 길이에 따라 줄바꿔도 잘리지 않게 (높이는 내용에 맞춘다) */
+  html[data-mode=legacy] .btn { height: auto; min-height: 46px; padding: 10px 3.5%; white-space: normal; text-align: center; line-height: 1.35; }
+  html[data-mode=legacy] .btn.sm { height: auto; min-height: 34px; padding: 7px 3%; }
+  html[data-mode=legacy] .btn.ghost { height: auto; min-height: 38px; }
+  html[data-mode=legacy] .modal .acts { flex-wrap: wrap; }
+  html[data-mode=legacy] .modal .acts .btn { flex: 1 1 44%; }
+  html[data-mode=legacy] .city-card { padding: 3.5%; }
+  html[data-mode=legacy] .city-card .row2 { gap: 3%; }
+  html[data-mode=legacy] .city-card .row2 .input { font-size: 12.5px; padding: 0 4%; }
+  html[data-mode=legacy] .sent { grid-template-columns: 1fr 34px; gap: 3%; padding: 3.5%; }
+  html[data-mode=legacy] .srow { grid-template-columns: 48px 1fr auto; gap: 3%; padding: 3%; }
+  html[data-mode=legacy] .seg button { padding: 6px 4%; white-space: nowrap; }
+  html[data-mode=legacy] .stat3 { gap: 3%; }
+  html[data-mode=legacy] .summary-strip { gap: 3%; }
+  html[data-mode=legacy] .statusbar { display: none; }
+
+  /* 잘림 · 가로 넘침 방지 */
+  html[data-mode=legacy] .modal-wrap.center .modal { width: auto; max-width: calc(100% - 24px); }
+  html[data-mode=legacy] .toast { left: 50%; max-width: calc(100% - 24px); }
+  html[data-mode=legacy] .window { max-width: 100%; }
+  html[data-mode=legacy] .admin { grid-template-columns: 1fr; min-height: 0; }
+  html[data-mode=legacy] .admin-nav { display: flex; gap: 6px; overflow-x: auto; padding: 10px; }
+  html[data-mode=legacy] .admin-nav .brand { padding: 0 10px 0 0; white-space: nowrap; }
+  html[data-mode=legacy] .admin-nav button { width: auto; white-space: nowrap; margin: 0; }
+  /* 위의 유동 폭 규칙(min-width: 0)이 탭을 글자보다 좁게 눌러 겹치게 한다. 탭은 줄이지 않고 가로로 스크롤한다. */
+  html[data-mode=legacy] .admin-nav > * { flex: none; }
+  html[data-mode=legacy] .admin-main { padding: 16px; }
+  html[data-mode=legacy] .kpis { grid-template-columns: repeat(2, 1fr); }
+  html[data-mode=legacy] .grid2 { grid-template-columns: 1fr; }
+  /* 공통 문장 한 줄 = 번호·상황·듣기 / 영어 / 한국어 세 줄. 칸 이름 줄은 숨기고 입력마다 aria-label 을 단다. */
+  html[data-mode=legacy] .cs-row { grid-template-columns: 20px 1fr 34px; row-gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  html[data-mode=legacy] .cs-row > :nth-child(1) { grid-area: 1 / 1; }
+  html[data-mode=legacy] .cs-row > :nth-child(2) { grid-area: 1 / 2; }
+  html[data-mode=legacy] .cs-row > :nth-child(5) { grid-area: 1 / 3; }
+  html[data-mode=legacy] .cs-row > :nth-child(3), html[data-mode=legacy] .cs-row > :nth-child(4) { grid-column: 2 / 4; }
+  html[data-mode=legacy] .cs-head { display: none; }
+  html[data-mode=legacy] .adm-head { flex-wrap: wrap; }
+  html[data-mode=legacy] .adm-head .btn { white-space: nowrap; flex: none; padding: 7px 12px; }
+  /* 넓은 표는 패널 안에서 가로로 스크롤한다(바깥 창은 overflow: hidden 이라 잘린다). 한글은 글자 단위로 꺾지 않는다. */
+  html[data-mode=legacy] .panel:has(> table.tbl) { overflow-x: auto; }
+  html[data-mode=legacy] table.tbl { word-break: keep-all; }
+  html[data-mode=legacy] .user-row { grid-template-columns: 1fr; gap: 6px; }
+  html[data-mode=legacy] .funnel .fr-row { grid-template-columns: 84px 1fr 44px; }
+}
+
+/* 480px 이하: 날짜 입력 등 2단 구성을 세로로 편다 */
+@media (max-width: 480px) {
+  html[data-mode=legacy] .city-card .row2 { grid-template-columns: 1fr; gap: 8px; }
+  html[data-mode=legacy] .summary-strip { flex-direction: column; }
+  html[data-mode=legacy] .mini-stats { grid-template-columns: 1fr; }
+  html[data-mode=legacy] .stat3 { grid-template-columns: 1fr; }
+  html[data-mode=legacy] .tbl { font-size: 11.5px; }
+}
+
+/* 420px 이하: 아주 좁은 폰 */
+@media (max-width: 420px) {
+  html[data-mode=legacy] .login h1 { font-size: 28px; }
+  html[data-mode=legacy] .hero .big { font-size: 28px; }
+  html[data-mode=legacy] .progress-row { grid-template-columns: 72px 1fr; gap: 10px; }
+  html[data-mode=legacy] .ring { width: 72px; height: 72px; }
+  html[data-mode=legacy] .kpis { grid-template-columns: 1fr; }
+  html[data-mode=legacy] .face .en { font-size: 21px; }
+  html[data-mode=legacy] .face .ko { font-size: 19px; }
 }
 
 .speak { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
@@ -622,7 +750,8 @@ html:not([data-mode=legacy]) .main { display: block; }
 html:not([data-mode=legacy]) .topbar { display: none; }
 html:not([data-mode=legacy]) .stage { display: block; padding: 0; background: none; overflow: visible; }
 html[data-mode=product] .side { display: none; }
-html[data-mode=legacy] .api-banner, html[data-mode=legacy] .demo-fab { display: none; }
+html[data-mode=legacy] .api-banner { display: none; }
+@media (min-width: 901px) { html[data-mode=legacy] .demo-fab { display: none; } }   /* 좁은 화면에서만 사이드 서랍 버튼 */
 .api-banner { background: var(--bad-soft); color: var(--on-bad-soft); font-size: 12.5px; padding: 8px var(--gutter); text-align: center; }
 .api-banner[hidden], .demo-fab[hidden] { display: none; }
 
@@ -706,6 +835,9 @@ html:not([data-mode=legacy]) .toast { left: 50%; bottom: calc(var(--nav-h) + 20p
   .admin-shell .cs-row { grid-template-columns: 22px minmax(0, 1fr) 34px; }
   .admin-shell .cs-row > :nth-child(2), .admin-shell .cs-row > :nth-child(4) { grid-column: 2; }
   .admin-shell .user-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .admin-shell .cs-head { display: none; }
+  .admin-shell .adm-head { flex-wrap: wrap; }
+  .admin-shell .adm-head .btn { white-space: nowrap; flex: none; }
   .admin-shell .funnel .fr-row { grid-template-columns: 96px minmax(0, 1fr) 48px; }
 }
 .pframe .srow .ct .line2 { display: block; }   /* inline span 은 ellipsis 가 동작하지 않아 긴 문장이 가로로 넘쳤다 */

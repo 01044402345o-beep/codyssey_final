@@ -105,6 +105,15 @@ with sync_playwright() as p:
     check("frame=1: 폰 프레임·사이드 패널 유지", page.locator(".device").count() == 1 and page.locator(".side").is_visible())
     ctx.close()
 
+    # --- 예전 레이아웃 좁은 화면: 폰 프레임을 벗기고, 서랍은 "데모" 버튼으로 ---
+    ctx = b.new_context(viewport={"width": 390, "height": 844})
+    page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(BASE + "/?demo=1&frame=1#u-home"); page.wait_for_timeout(600)
+    check("frame=1 390px: 폰 프레임 모양 해제(테두리 둥근 기기 아님)", page.evaluate("getComputedStyle(document.querySelector('.device')).borderRadius") == "0px")
+    check("frame=1 390px: 데모 버튼으로 서랍 열림", page.locator("#demo-fab").is_visible() and (page.locator("#demo-fab").click() or True) and (page.wait_for_timeout(350) or True) and box(page, ".side")["x"] >= -1)
+    check("frame=1 390px: 가로 스크롤 없음", hscroll(page) <= 0)
+    ctx.close()
+
     # --- 외부 서버 배너 ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page()
