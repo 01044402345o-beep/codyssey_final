@@ -169,6 +169,23 @@ def config_problems() -> list[str]:
     return problems
 
 
+def check_place_types(cfg: dict[str, Any], req: GenerateRequest) -> None:
+    """장소 종류는 계약의 place_types 중 하나여야 한다(생략은 허용).
+
+    맛집 카테고리에 hotel 을 보내는 식의 잘못된 짝을 조용히 생성하지 않는다.
+    place_type 은 프롬프트에 그대로 들어가므로 허용 목록 밖의 문자열을 받지 않는다.
+    """
+    allowed = {str(t).strip().lower() for t in cfg.get("place_types") or []}
+    bad = sorted({p.place_type for p in req.places
+                  if p.place_type is not None and p.place_type.strip().lower() not in allowed})
+    if bad:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": f"{cfg['category_id']} 카테고리에서 쓸 수 없는 장소 종류입니다.",
+                    "place_types": bad, "allowed": sorted(allowed)},
+        )
+
+
 def build_prompt(cfg: dict[str, Any], req: GenerateRequest) -> str:
     """system_prompt 의 {키} 를 rules 의 같은 키 값으로 치환한다."""
     rules = cfg.get("rules", {})
@@ -290,6 +307,7 @@ def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
             detail={"message": "설정이 갖춰지지 않아 생성을 거부했습니다.", "problems": config_problems()},
         )
     cfg = load_category(req.category_id)
+    check_place_types(cfg, req)
     schema = load_schema()
 
     if not os.getenv("GEMINI_API_KEY"):
