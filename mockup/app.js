@@ -1144,17 +1144,17 @@ function admJobs() {
 function admCommon() {
   S.commonsDraft ??= JSON.parse(JSON.stringify(S.commons));
   const dirty = JSON.stringify(S.commonsDraft) !== JSON.stringify(S.commons);
-  return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div><h2>공통 상황 문장 관리</h2>
+  return `<div class="adm-head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div><h2>공통 상황 문장 관리</h2>
     <p class="desc">6개 상황 × 5문장 = 30개. 모든 여행에 똑같이 들어가요 (FR-SENT-01). 저장하면 <b>다음 문장 생성부터</b> 반영돼요.</p></div>
     <div style="display:flex;gap:6px;flex:none"><button class="btn soft sm" data-act="cs-reset" ${dirty ? '' : 'disabled'}>되돌리기</button><button class="btn primary sm" data-act="cs-save" ${dirty ? '' : 'disabled'}>변경 사항 저장</button></div></div>
     ${notice('이름·목적지는 <b>[name]</b>, <b>[destination]</b> 빈칸으로 적어요. 듣기에서는 "your name", "your destination"으로 읽어요.')}
     <div style="height:14px"></div>
     ${S.commonsDraft.map((g, gi) => `<div class="cs-group panel"><h4>${g.label} <span class="small">${g.key}</span></h4>
-      <div class="cs-row" style="font-size:11px;color:var(--muted)"><span>#</span><span>상황</span><span>영어 문장</span><span>한국어 뜻</span><span></span></div>
+      <div class="cs-row cs-head" style="font-size:11px;color:var(--muted)"><span>#</span><span>상황</span><span>영어 문장</span><span>한국어 뜻</span><span></span></div>
       ${g.items.map((it, ii) => { const o = S.commons[gi].items[ii]; return `<div class="cs-row"><span class="i">${ii + 1}</span>
-        <input data-cs="${gi}.${ii}.situation" value="${esc(it.situation)}" class="${it.situation !== o.situation ? 'dirty' : ''}">
-        <input data-cs="${gi}.${ii}.en" value="${esc(it.en)}" class="${it.en !== o.en ? 'dirty' : ''}">
-        <input data-cs="${gi}.${ii}.ko" value="${esc(it.ko)}" class="${it.ko !== o.ko ? 'dirty' : ''}">
+        <input data-cs="${gi}.${ii}.situation" aria-label="상황" value="${esc(it.situation)}" class="${it.situation !== o.situation ? 'dirty' : ''}">
+        <input data-cs="${gi}.${ii}.en" aria-label="영어 문장" value="${esc(it.en)}" class="${it.en !== o.en ? 'dirty' : ''}">
+        <input data-cs="${gi}.${ii}.ko" aria-label="한국어 뜻" value="${esc(it.ko)}" class="${it.ko !== o.ko ? 'dirty' : ''}">
         <button class="play" data-act="cs-play" data-k="${gi}.${ii}">${I.speaker}</button></div>`; }).join('')}</div>`).join('')}`;
 }
 function admUsers() {

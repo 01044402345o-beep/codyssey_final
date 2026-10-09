@@ -620,7 +620,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .city-card .row2 .input { font-size: 12.5px; padding: 0 4%; }
   .sent { grid-template-columns: 1fr 34px; gap: 3%; padding: 3.5%; }
   .srow { grid-template-columns: 48px 1fr auto; gap: 3%; padding: 3%; }
-  .seg button { padding: 6px 4%; }
+  .seg button { padding: 6px 4%; white-space: nowrap; }
   .stat3 { gap: 3%; }
   .summary-strip { gap: 3%; }
   .statusbar { display: none; }
@@ -633,10 +633,23 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .admin-nav { display: flex; gap: 6px; overflow-x: auto; padding: 10px; }
   .admin-nav .brand { padding: 0 10px 0 0; white-space: nowrap; }
   .admin-nav button { width: auto; white-space: nowrap; margin: 0; }
+  /* 위의 유동 폭 규칙(min-width: 0)이 탭을 글자보다 좁게 눌러 겹치게 한다. 탭은 줄이지 않고 가로로 스크롤한다. */
+  .admin-nav > * { flex: none; }
   .admin-main { padding: 16px; }
   .kpis { grid-template-columns: repeat(2, 1fr); }
   .grid2 { grid-template-columns: 1fr; }
-  .cs-row { grid-template-columns: 20px 1fr 1fr 34px; }
+  /* 공통 문장 한 줄 = 번호·상황·듣기 / 영어 / 한국어 세 줄. 칸 이름 줄은 숨기고 입력마다 aria-label 을 단다. */
+  .cs-row { grid-template-columns: 20px 1fr 34px; row-gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .cs-row > :nth-child(1) { grid-area: 1 / 1; }
+  .cs-row > :nth-child(2) { grid-area: 1 / 2; }
+  .cs-row > :nth-child(5) { grid-area: 1 / 3; }
+  .cs-row > :nth-child(3), .cs-row > :nth-child(4) { grid-column: 2 / 4; }
+  .cs-head { display: none; }
+  .adm-head { flex-wrap: wrap; }
+  .adm-head .btn { white-space: nowrap; flex: none; padding: 7px 12px; }
+  /* 넓은 표는 패널 안에서 가로로 스크롤한다(바깥 창은 overflow: hidden 이라 잘린다). 한글은 글자 단위로 꺾지 않는다. */
+  .panel:has(> table.tbl) { overflow-x: auto; }
+  table.tbl { word-break: keep-all; }
   .user-row { grid-template-columns: 1fr; gap: 6px; }
   .funnel .fr-row { grid-template-columns: 84px 1fr 44px; }
 }
