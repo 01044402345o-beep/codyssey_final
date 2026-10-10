@@ -9,7 +9,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.9"
-      - key: GEMINI_MODEL
-        value: "gemini-flash-latest"
       - key: GEMINI_API_KEY
         sync: false
+      # 말하기 전사(전용 STT). 순서: groq → openai → assemblyai, 키가 있는 것만 쓴다.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ASSEMBLYAI_API_KEY
+        sync: false
+      # 교차검증 필수: AssemblyAI(다른 모델 계열 전사). 두 번째 말소리 검출은 로컬 pyannote 모델이라 키가 필요 없다.

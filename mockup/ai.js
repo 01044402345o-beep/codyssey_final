@@ -4,9 +4,12 @@
   'use strict';
 
   const WEAK_KEY = 'cd_weak';
+  /* 말하기 연습 동의. 문구를 바꾸면 CONSENT_VERSION 을 올려 다시 동의를 받는다. */
+  const CONSENT_KEY = 'cd_consent';
+  const CONSENT_VERSION = 6;   // v2 Gemini 무료 등급·민감정보 / v3 2단계 처리 / v4 서버 VAD + 전용 STT / v5 교차검증 전송 / v6 말소리 재확인은 서버 안(pyannoteAI 미전송)
   /* 임시 제품 규칙: 이 점수 미만이면 "취약 상황" 후보로 저장한다. 검증된 학습 기준이 아니다. */
   const WEAK_THRESHOLD = 70;
-  /* 임시 제품 규칙: 서버가 점수를 주지 않을 때(score 선택 항목), 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 후보로 저장한다. */
+  /* 참고 신호: 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 "다르게 들렸어요"로 표시한다 (저장 판정에 쓰지 않음). */
   const HEARD_MATCH_MIN = 0.8;
   const MAX_AUDIO_BYTES = 8 * 1024 * 1024; // backend/app/main.py MAX_AUDIO_BYTES 와 같다
   const GEN_TIMEOUT_MS = 90 * 1000;
@@ -105,31 +108,36 @@
   const postJson = (fetchImpl, url, body, signal) =>
     httpJson(fetchImpl, url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, signal);
   /* cities: [{ name, places:[{id,name,en}] }] → [{ city, kind, pools }] */
-  async function generateByCity({ fetchImpl, base, cities, weakIds, signal, timeoutMs = GEN_TIMEOUT_MS, categoryId = 'restaurant', placeType = 'restaurant' }) {
-    const allFallback = () => cities.map(c => ({ city: c.name, kind: 'fallback', pools: null }));
+  async function generateByCity({ fetchImpl, base, cities, weakIds, signal, timeoutMs = GEN_TIMEOUT_MS, categoryId, placeType }) {
+    const allFallback = () => cities.map(c => ({ city: c.name, categoryId: c.categoryId, kind: 'fallback', pools: null }));
     if (base === null || base === undefined) return allFallback();
     const t = withTimeout(signal, timeoutMs);        // /health 와 /generate 가 하나의 제한 시간을 공유한다
     try {
       // /health 로 서버를 깨우고, 이 카테고리의 현재 유효한 상황 id 만 취약 상황으로 보낸다.
       let health;
       try { health = await httpJson(fetchImpl, base + '/health', {}, t.signal); } catch (e) { return allFallback(); }
-      const valid = health && health.situations && Array.isArray(health.situations[categoryId]) ? health.situations[categoryId] : null;
-      const weak = valid ? weakIds.filter(w => valid.includes(w)) : weakIds;
-      const jobs = cities.map(c => postJson(fetchImpl, base + '/generate', {
-        category_id: categoryId, city: c.name,
-        places: c.places.map(p => ({ name: p.en || p.name, place_type: placeType })),
-        weak_expressions: weak,
-      }, t.signal));
+      // 카테고리는 도시마다 장소에서 끌어낸다(없으면 인자, 그다음 restaurant).
+      const jobs = cities.map(c => {
+        const cat = c.categoryId || categoryId || categoryOfKind(c.placeType) || categoryOfKind(placeType) || 'restaurant';
+        const valid = health && health.situations && Array.isArray(health.situations[cat]) ? health.situations[cat] : null;
+        const weak = valid ? weakIds.filter(w => valid.includes(w)) : weakIds;
+        return postJson(fetchImpl, base + '/generate', {
+          category_id: cat, city: c.name,
+          places: c.places.map(p => ({ name: p.en || p.name, place_type: p.kind || cat })),
+          weak_expressions: weak,
+        }, t.signal);
+      });
       return collect(cities, await Promise.allSettled(jobs));
     } finally { t.done(); }
   }
   function collect(cities, settled) {
     return settled.map((r, i) => {
       const c = cities[i];
-      if (r.status !== 'fulfilled') return { city: c.name, kind: 'fallback', pools: null };
+      const base = { city: c.name, categoryId: c.categoryId };
+      if (r.status !== 'fulfilled') return { ...base, kind: 'fallback', pools: null };
       const n = normalizeAiResponse(r.value);
-      if (n.kind === 'fallback') return { city: c.name, kind: 'fallback', pools: null };
-      return { city: c.name, kind: n.kind, pools: buildPools(n.sentences, c.places) };
+      if (n.kind === 'fallback') return { ...base, kind: 'fallback', pools: null };
+      return { ...base, kind: n.kind, pools: buildPools(n.sentences, c.places) };
     });
   }
 
@@ -159,9 +167,46 @@
   function saveWeak(storage, list) {
     try { storage.setItem(WEAK_KEY, JSON.stringify(cleanWeak(list))); return true; } catch (e) { return false; }
   }
+  /* 동의는 '현재 버전 + voice === true + 시각' 이 모두 맞을 때만 유효하다. 손상·구버전·차단은 미동의로 본다. */
+  function loadConsent(storage) {
+    try {
+      const c = JSON.parse(storage.getItem(CONSENT_KEY) || 'null');
+      if (c && c.version === CONSENT_VERSION && c.voice === true && typeof c.at === 'string' && !Number.isNaN(Date.parse(c.at))) return { voice: true, at: c.at };
+    } catch (e) { /* 손상·차단 */ }
+    return { voice: false, at: null };
+  }
+  function saveConsent(storage, voice, now = new Date()) {
+    try {
+      if (voice) storage.setItem(CONSENT_KEY, JSON.stringify({ version: CONSENT_VERSION, voice: true, at: now.toISOString() }));
+      else storage.removeItem(CONSENT_KEY);
+      return true;
+    } catch (e) { return false; }
+  }
+  /* 동의 철회: 동의 기록과, 동의 아래에서 쌓인 복습 목록을 함께 지운다. 둘 다 지워졌을 때만 true. */
+  function withdrawConsent(storage) {
+    let ok = saveConsent(storage, false);
+    try { storage.removeItem(WEAK_KEY); } catch (e) { ok = false; }
+    return ok;
+  }
+
+  /* 장소 종류 → 카테고리 계약 id. 서버 계약(agent_contract/categories/*.json)의 place_types 와 맞춘다.
+     화면에 카테고리를 박아두지 않고 장소에서 끌어낸다. 계약에 없는 종류는 null(생성 대상 아님). */
+  const KIND_CATEGORY = {
+    restaurant: 'restaurant', cafe: 'restaurant',
+    airport: 'transport', train_station: 'transport', bus_station: 'transport',
+    subway_station: 'transport', taxi_stand: 'transport',
+    hotel: 'lodging', hostel: 'lodging', guesthouse: 'lodging', airbnb: 'lodging',
+  };
+  function categoryOfKind(kind) { return KIND_CATEGORY[String(kind == null ? '' : kind).trim().toLowerCase()] || null; }
+
   /* 요청에는 해당 카테고리의 취약 상황 id 만 보낸다 (서버가 현재 유효한 id 로 다시 거른다). */
   function weakIdsFor(list, categoryId) {
-    return cleanWeak(list).filter(w => w.category_id === categoryId).map(w => w.id);
+    const cats = Array.isArray(categoryId) ? categoryId : [categoryId];
+    const ids = [];
+    cats.forEach(cat => cleanWeak(list).forEach(w => {
+      if (w.category_id === cat && ids.indexOf(w.id) < 0) ids.push(w.id);
+    }));
+    return ids;
   }
   /* 복습 표시는 AI 가 만든 문장이 저장된 (카테고리, 상황)과 모두 일치하고 그 상황을 겨냥했다고 표시했을 때만. */
   function weakReviewOf(sentence, list) {
@@ -179,19 +224,25 @@
   }
 
   /* ---------- 말하기 결과 → 약점 저장 여부 ----------
-     공통: 서버가 쓸 수 있다고 판정(usable:true) ∧ 목업 아님 ∧ 파싱 실패·점수 폐기 아님 ∧ 실제 AI 문장(유효한 카테고리·상황).
+     이 규칙은 "따라 말하기에서 목표 단어가 빠졌는가"를 보는 임시 저장 규칙이다. 과업 성공·발음·영어 능력 판정이 아니다.
+     (heardCoverage 는 단어 포함 비율일 뿐이라 부정문 "I don't have…"을 같은 문장으로, 자연스러운 대체 표현을 누락으로 볼 수 있다.)
+     공통: 서버가 쓸 수 있다고 판정(usable:true) ∧ 목업 아님 ∧ 파싱 실패·점수 폐기 아님 ∧ 들린 내용(heard) 있음 ∧ 실제 AI 문장(유효한 카테고리·상황).
      점수가 있으면: 0~100 ∧ 임계값 미만.
-     점수가 없으면(모델이 생략): 들린 문장이 있고 목표와 충분히 다를 때만. 무음·인식 실패(heard 없음)는 저장하지 않는다. */
-  function shouldSaveWeak(sentence, res) {
-    if (!sentence || sentence.ai !== true || !str(sentence.categoryId) || !str(sentence.situationId)) return false;
-    if (!ID_RE.test(sentence.categoryId) || !ID_RE.test(sentence.situationId)) return false;
-    if (!res || typeof res !== 'object' || res.usable !== true || res.mock === true || res.score_discarded === true || 'raw' in res) return false;
+     점수가 없으면(모델이 생략): 자동 저장하지 않고 'ask'(사용자 선택). heardCoverage 는 그때 보여주는 참고 신호일 뿐이다.
+     무음·인식 실패(heard 없음)·폐기된 점수는 'none'. 결과: 'auto' | 'ask' | 'none'. */
+  function weakDecision(sentence, res) {
+    if (!sentence || sentence.ai !== true || !str(sentence.categoryId) || !str(sentence.situationId)) return 'none';
+    if (!ID_RE.test(sentence.categoryId) || !ID_RE.test(sentence.situationId)) return 'none';
+    if (!res || typeof res !== 'object' || res.usable !== true || res.mock === true || res.score_discarded === true || 'raw' in res) return 'none';
+    // 무음·인식 실패(heard 없음)는 점수가 낮게 와도 실력 부족이 아니다.
+    if (typeof res.heard !== 'string' || !res.heard.trim()) return 'none';
     const s = res.score;
-    if (s === null || s === undefined) {
-      return typeof res.heard === 'string' && res.heard.trim().length > 0 && heardCoverage(sentence.en, res.heard) < HEARD_MATCH_MIN;
-    }
-    return typeof s === 'number' && Number.isFinite(s) && s >= 0 && s <= 100 && s < WEAK_THRESHOLD;
+    // 점수가 없으면 단어 일치율만으로 자동 저장하지 않는다. 사용자에게 저장할지 묻는다 (일치율은 참고 신호).
+    if (s === null || s === undefined) return 'ask';
+    return typeof s === 'number' && Number.isFinite(s) && s >= 0 && s <= 100 && s < WEAK_THRESHOLD ? 'auto' : 'none';
   }
+  /* 자동 저장(점수 기반 임시 규칙)만 true. 점수가 없는 경우는 weakDecision()이 'ask' 를 돌려주고 사용자가 선택한다. */
+  function shouldSaveWeak(sentence, res) { return weakDecision(sentence, res) === 'auto'; }
 
   /* ---------- 말하기 업로드 ---------- */
   function extFor(mime) {
@@ -202,13 +253,15 @@
     if (m.includes('wav')) return 'wav';
     return 'webm';
   }
-  async function speakCheck({ fetchImpl, base, blob, target, signal, timeoutMs = 60 * 1000 }) {
+  /* 서버가 말소리 검출(Silero VAD) → 전사(전용 STT) → 피드백(AI)을 한다. situation 은 피드백 AI 가 맥락을 알도록 보낸다. */
+  async function speakCheck({ fetchImpl, base, blob, target, situation = '', signal, timeoutMs = 90 * 1000 }) {
     if (base === null || base === undefined) throw new Error('no-api');
     if (!blob || !blob.size) throw new Error('empty-audio');
     if (blob.size > MAX_AUDIO_BYTES) throw new Error('too-large');
     const mime = blob.type || 'audio/webm';
     const fd = new FormData();
     fd.append('target', target);
+    fd.append('situation', String(situation || '').slice(0, 120));
     fd.append('file', blob, 'speech.' + extFor(mime));
     const t = withTimeout(signal, timeoutMs);
     try { return await httpJson(fetchImpl, base + '/speak-check', { method: 'POST', body: fd }, t.signal); }
@@ -216,9 +269,10 @@
   }
 
   const api = {
-    WEAK_KEY, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
+    WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
+    categoryOfKind,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
-    cleanWeak, upsertWeak, loadWeak, saveWeak, weakIdsFor, weakReviewOf, shouldSaveWeak, extFor, speakCheck,
+    cleanWeak, upsertWeak, loadWeak, saveWeak, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AI = api;

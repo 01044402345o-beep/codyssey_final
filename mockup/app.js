@@ -194,7 +194,9 @@ const R = {
 let S;
 let genTimer = null, genToken = 0, placeSeq = 0, genAbort = null;
 const API = AI.apiBase(location);            // 서버 주소(저장하지 않음). base === null 이면 폴백 전용
-const weakList = () => AI.loadWeak(localStorage);
+/* window.localStorage 는 사이트 데이터 차단 시 접근만 해도 SecurityError 를 던진다. 그러면 null — AI.* 저장 함수는 null 을 "저장 불가"로 처리한다 */
+const STORE = (() => { try { return window.localStorage; } catch (e) { return null; } })();
+const weakList = () => AI.loadWeak(STORE);
 /* 생성 취소: 토큰을 올려 오래된 응답이 상태를 덮어쓰지 못하게 하고, 진행 중 요청도 중단한다 */
 function cancelGen() { genToken++; clearTimeout(genTimer); if (genAbort) { genAbort.abort(); genAbort = null; } }
 
@@ -284,6 +286,9 @@ function placeSentences(p, n) {
   return [...ai, ...rest];
 }
 
+/* AI 풀 키: 도시 + 카테고리 (카테고리가 없으면 AI 대상 아님) */
+const aiKey = (city, cat) => cat ? city + '|' + cat : null;
+
 function buildPlan() {
   const t = S.trip;
   const ordered = S.places.filter(p => p.selected).sort((a, b) => a.visitDate.localeCompare(b.visitDate) || a.visitOrder - b.visitOrder);
@@ -296,8 +301,9 @@ function buildPlan() {
   const cityPools = {};
   S.aiBy = {};
   ordered.forEach(p => {
-    const e = S.aiPools[p.city]; if (!e || p.kind !== 'restaurant') return;
-    const pools = cityPools[p.city] ??= { byPlace: e.pools.byPlace, common: e.pools.common.slice() };
+    const key = aiKey(p.city, AI.categoryOfKind(p.kind));
+    const e = S.aiPools[key]; if (!e) return;
+    const pools = cityPools[key] ??= { byPlace: e.pools.byPlace, common: e.pools.common.slice() };
     S.aiBy[p.id] = AI.takeForPlace(pools, p.id, p.count).map(s => ({ ...s, kind: e.kind }));
   });
 
@@ -370,7 +376,7 @@ function makeRoute() {
 /* ================= 생성 흐름 (FR-GEN-01~03) ================= */
 function stepsFor(stage) {
   const t = S.trip, cs = t.cities.map(c => c.name);
-  if (stage === 'report') return [`${t.country} 여행 정보를 확인하고 있어요`, ...cs.flatMap(c => [`${josa(c, '의', '의')} 관광지를 웹에서 찾고 있어요`, `${josa(c, '의', '의')} 맛집과 대표 메뉴를 찾고 있어요`]), '출처와 응답 형식을 확인하고 있어요'];
+  if (stage === 'report') return [`${t.country} 여행 정보를 확인하고 있어요`, ...cs.flatMap(c => [`${josa(c, '의', '의')} 관광지를 고르고 있어요`, `${josa(c, '의', '의')} 맛집과 대표 메뉴를 고르고 있어요`]), '출처를 정리하고 있어요'];
   if (stage === 'route') return ['선택한 장소의 지역을 확인하고 있어요', '날짜별로 장소를 배치하고 있어요', '방문 순서 규칙을 검사하고 있어요'];
   return ['문장 수를 계산하고 있어요', '장소별 영어 문장을 만들고 있어요', '맛집 대표 메뉴 주문 문장을 확인하고 있어요', '학습 일정표를 계산하고 있어요'];
 }
@@ -408,19 +414,23 @@ async function runAi(tok) {
   if (genAbort) genAbort.abort();
   const ctl = genAbort = new AbortController();
   S.aiPools = {}; S.aiBy = {};                 // 새 생성 시작: 이전 결과 폐기
-  const byCity = {};
-  S.places.filter(p => p.selected && p.kind === 'restaurant').forEach(p => (byCity[p.city] ??= []).push({ id: p.id, name: p.name, en: p.en }));
-  const cities = Object.entries(byCity).map(([name, places]) => ({ name, places }));
+  // 한 도시에 맛집과 숙소가 섞일 수 있으니 (도시, 카테고리)마다 따로 요청한다.
+  const groups = {};
+  S.places.filter(p => p.selected && AI.categoryOfKind(p.kind)).forEach(p => {
+    const cat = AI.categoryOfKind(p.kind);
+    (groups[aiKey(p.city, cat)] ??= { name: p.city, categoryId: cat, places: [] }).places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind });
+  });
+  const cities = Object.values(groups);
   if (!cities.length) return;
   const slow = setTimeout(() => {
     if (tok === genToken && S.gen) { S.gen.waitNote = '첫 요청은 시간이 걸릴 수 있어요. 서버를 깨우는 중일 수 있어요.'; if (S.screen === 'u-gen') render(); }
   }, 10000);
   let out = [];
   try {
-    out = await AI.generateByCity({ fetchImpl: (u, o) => fetch(u, o), base: API.base, cities, weakIds: AI.weakIdsFor(weakList(), 'restaurant'), signal: ctl.signal, timeoutMs: AI.GEN_TIMEOUT_MS });
+    out = await AI.generateByCity({ fetchImpl: (u, o) => fetch(u, o), base: API.base, cities, weakIds: AI.weakIdsFor(weakList(), cities.map(c => c.categoryId)), signal: ctl.signal, timeoutMs: AI.GEN_TIMEOUT_MS });
   } finally { clearTimeout(slow); }
   if (tok !== genToken || ctl.signal.aborted) return;   // 오래된 요청은 상태를 덮어쓰지 못한다
-  out.forEach(o => { if (o.pools) S.aiPools[o.city] = { kind: o.kind, pools: o.pools }; });
+  out.forEach(o => { if (o.pools) S.aiPools[aiKey(o.city, o.categoryId)] = { kind: o.kind, pools: o.pools }; });
 }
 function failStage(stage) {
   const t = S.trip; cancelGen();
@@ -586,13 +596,33 @@ const SCREENS = [
 const SCR = Object.fromEntries(SCREENS.map(s => [s.id, s]));
 
 /* ================= 렌더링: 셸 ================= */
+/* ================= 화면 테마 (P3) ================= */
+const THEME_KEY = 'cd_theme';   // 'light' | 'dark' — 없으면 시스템. 개인정보가 아닌 화면 설정이다.
+function getTheme() { try { const t = localStorage.getItem(THEME_KEY); return t === 'light' || t === 'dark' ? t : 'system'; } catch (e) { return document.documentElement.dataset.theme || 'system'; } }
+function themeIsDark() { const t = getTheme(); return t === 'dark' || (t === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches); }
+const THEME_COLOR = { light: '#fbf8f1', dark: '#12151c' };   // 브라우저 주소창 색(meta theme-color). CSS 토큰 --bg 와 같은 값이어야 한다
+function syncThemeColor() { const m = document.getElementById('theme-color'); if (m) m.setAttribute('content', themeIsDark() ? THEME_COLOR.dark : THEME_COLOR.light); }
+function setTheme(v) {
+  try { if (v === 'light' || v === 'dark') localStorage.setItem(THEME_KEY, v); else localStorage.removeItem(THEME_KEY); } catch (e) { /* 저장 불가(시크릿 모드 등): 이번 접속에서만 적용 */ }
+  if (v === 'light' || v === 'dark') document.documentElement.dataset.theme = v; else delete document.documentElement.dataset.theme;
+  syncThemeColor();
+}
+if (window.matchMedia) { const mq = matchMedia('(prefers-color-scheme: dark)'); (mq.addEventListener ? mq.addEventListener.bind(mq, 'change') : mq.addListener.bind(mq))(() => { syncThemeColor(); }); }
+function themeCard() {
+  const t = getTheme(), b = (v, l) => `<button class="${t === v ? 'on' : ''}" data-act="theme" data-v="${v}" aria-pressed="${t === v}">${l}</button>`;
+  return `<div class="sec-title"><h4>화면 모드</h4></div><div class="card theme-card"><div class="seg" role="group" aria-label="화면 모드">${b('system', '시스템')}${b('light', '라이트')}${b('dark', '다크')}</div>
+    <p class="small" style="margin-top:8px">시스템은 기기의 라이트·다크 설정을 따라요. 이 선택은 이 브라우저에만 저장돼요.</p></div>`;
+}
+
+const MODE = document.documentElement.dataset.mode || 'product';   // product | demo | legacy (index.html 인라인 스크립트)
+const LEGACY = MODE === 'legacy';
 function renderSide() {
   let html = `<div class="side-brand"><div class="mark"><i>EN</i>여행영어 목업</div><p>prd.md v2 기준 · 왼쪽 메뉴로 화면을 고르고, 화면 안 버튼으로 실제 흐름을 따라가 보세요.</p></div><nav class="side-nav">`;
   SCREENS.forEach(s => {
     if (s.group) html += `<div class="nav-group">${s.group}${s.tag ? `<span class="tag">${s.tag}</span>` : ''}</div>`;
     html += `<button class="nav-item" data-act="nav" data-id="${s.id}"><span class="no">${s.no}</span><span>${s.name}</span></button>`;
   });
-  html += `</nav><div class="demo" id="demo"></div>`;
+  html += `</nav><div id="side-notes"></div><div class="demo" id="demo"></div>`;
   $('#side').innerHTML = html;
 }
 function renderDemo() {
@@ -606,12 +636,12 @@ function renderDemo() {
   $('#demo').classList.toggle('closed', !!S.demoClosed);
   $('#demo').innerHTML = `
     <h4>데모 조작 <span><button data-act="reset">전체 초기화</button> · <button data-act="demo-toggle">${S.demoClosed ? '펼치기 ▴' : '접기 ▾'}</button></span></h4>
-    <div class="demo-date"><span style="color:#9aa0ad">오늘</span><input type="date" id="demo-date" value="${S.today}"></div>
+    <div class="demo-date"><span style="color:var(--inv-text-3)">오늘</span><input type="date" id="demo-date" value="${S.today}"></div>
     <div class="demo-chips">${chips.map(([l, d]) => `<button data-act="set-today" data-date="${d}">${l} ${Dt.md(d)}</button>`).join('')}</div>
     ${tg('fail', 'AI 생성 실패')}${tg('stuck', '생성 멈춤 (응답 없음)')}${tg('routeInvalid', '방문 순서 AI 규칙 위반')}${tg('noTts', 'TTS 미지원 브라우저')}
     <div class="demo-actions"><button data-act="preset" data-kind="short">짧은 학습 3일</button><button data-act="preset" data-kind="zero">당일 시작 0일</button></div>
-    <div class="demo-actions"><button data-act="weak-demo">데모 학습 기록 불러오기</button><button data-act="weak-clear">취약 상황 비우기</button></div>
-    <div class="small" style="margin-top:6px;color:#9aa0ad">저장된 취약 상황 ${weakList().length}개 (데모 ${weakList().filter(w => w.demo).length}개) · 데모 기록은 실제 학습 기억이 아니에요</div>`;
+    <div class="demo-actions"><button data-act="weak-demo">데모 학습 기록 불러오기</button><button data-act="weak-clear">복습 목록 비우기</button></div>
+    <div class="small" style="margin-top:6px;color:var(--inv-text-3)">복습 목록 ${weakList().length}개 (데모 ${weakList().filter(w => w.demo).length}개) · 데모 기록은 실제 학습 기억이 아니에요</div>`;
 }
 function updateSideActive() {
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.id === S.screen));
@@ -619,7 +649,8 @@ function updateSideActive() {
 
 function render() {
   if (S.screen !== 'u-study' && SPK.state !== 'idle') cancelSpeak();
-  const app = $('.app'), prevTop = app ? app.scrollTop : 0, same = S.lastScreen === S.screen;
+  const app = $('.app'), same = S.lastScreen === S.screen;
+  const prevTop = LEGACY ? (app ? app.scrollTop : 0) : window.scrollY;   // 제품·데모 모드는 문서 스크롤
   updateSideActive(); renderDemo();
   const sc = SCR[S.screen];
   const t = S.trip;
@@ -631,8 +662,12 @@ function render() {
     ${API.external ? `<span class="pill bad" title="?api= 로 지정한 외부 서버에 요청하고 녹음을 전송합니다"><span class="dot"></span>외부 서버 <b>${esc(API.host)}</b></span>` : ''}`;
   const body = S.screen.startsWith('a-') ? adminScreen() : userScreen();
   $('#stage').className = 'stage ' + (S.screen.startsWith('a-') ? 'is-admin' : 'is-user');
-  $('#stage').innerHTML = body + notes(sc);
-  const na = $('.app'); if (na && same) na.scrollTop = prevTop;
+  $('#stage').innerHTML = body + (LEGACY ? notes(sc) : '');
+  if (MODE === 'demo') $('#side-notes').innerHTML = notes(sc);
+  const ab = $('#api-banner');
+  if (ab) { ab.hidden = !API.external; if (API.external) ab.innerHTML = `외부 서버 연결 중: <b>${esc(API.host)}</b> — 이 주소로 요청하고 녹음을 전송합니다`; }
+  if (LEGACY) { const na = $('.app'); if (na && same) na.scrollTop = prevTop; }
+  else window.scrollTo(0, same ? prevTop : 0);
   S.lastScreen = S.screen;
 }
 
@@ -655,6 +690,7 @@ function planNote() {
 
 /* ================= 렌더링: 사용자 화면 ================= */
 function frame(inner, o = {}) {
+  if (!LEGACY) return pframe(inner, o);
   const tabs = [['u-home', '홈', I.home], ['u-sched', '일정표', I.cal], ['u-study', '학습', I.cards], ['u-coll', '문장 모음', I.book]];
   const tabActive = o.tab || S.screen;
   return `<div class="device"><div class="screen">
@@ -665,6 +701,17 @@ function frame(inner, o = {}) {
     ${o.tabbar ? `<nav class="tabbar">${tabs.map(([id, l, ic]) => `<button class="${tabActive === id ? 'on' : ''}" data-act="tab" data-id="${id}">${ic}${l}</button>`).join('')}</nav>` : ''}
     ${modalHtml()}
   </div></div>`;
+}
+/* 제품 셸: 폰 프레임·상태바 없이 뷰포트 전체를 쓴다. 내비는 CSS 가 탭바 → 레일 → 사이드로 바꾼다(docs/RESPONSIVE_STRATEGY.md §3). */
+function pframe(inner, o = {}) {
+  const tabs = [['u-home', '홈', I.home], ['u-sched', '일정표', I.cal], ['u-study', '학습', I.cards], ['u-coll', '문장 모음', I.book]];
+  const tabActive = o.tab || S.screen;
+  const nav = o.tabbar ? `<nav class="pnav" aria-label="주 메뉴">${tabs.map(([id, l, ic]) => `<button class="${tabActive === id ? 'on' : ''}" data-act="tab" data-id="${id}" ${tabActive === id ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></button>`).join('')}</nav>` : '';
+  return `<div class="pframe ${o.tabbar ? 'has-nav' : ''}">${nav}<div class="pmain"><div class="pcol">
+    ${o.appbar || ''}
+    <div class="app">${inner}</div>
+    ${o.bottom ? `<div class="bottombar">${o.bottom}</div>` : ''}
+  </div></div>${modalHtml()}</div>`;
 }
 const appbar = (title, o = {}) => `<div class="appbar">${o.back ? `<button class="back" data-act="tab" data-id="${o.back}">${I.back}</button>` : ''}<h2>${title}</h2>${o.step ? `<span class="step">${o.step}</span>` : ''}</div>`;
 const notice = (html, kind = '') => `<div class="notice ${kind}">${kind === 'warn' || kind === 'bad' ? I.alert : I.info}<div>${html}</div></div>`;
@@ -695,17 +742,17 @@ function userScreen() {
 /* SCR-01 */
 function scrLogin() {
   const body = S.user
-    ? `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:50%;background:var(--sea);color:#fff;display:grid;place-items:center;font-weight:700">김</div>
+    ? `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:50%;background:var(--sea);color:var(--on-sea);display:grid;place-items:center;font-weight:700">김</div>
         <div style="flex:1"><b>${DEMO_USER.name}</b><div class="small">${DEMO_USER.email}</div></div></div>
        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn soft" style="flex:1" data-act="logout">로그아웃</button><button class="btn primary" style="flex:2" data-act="after-login">계속하기</button></div>`
     : `<button class="gbtn" data-act="login">${I.google}Google로 계속하기</button>`;
   return frame(`<div class="login">
-    <div class="stamp">TRIP · ENGLISH<br>PASSPORT<br>— 2026 —</div>
+    <div class="stamp" aria-hidden="true">TRIP · ENGLISH<br>PASSPORT<br>— 2026 —</div>
     <div class="eyebrow" style="margin-top:130px">Travel English, planned</div>
     <h1 style="margin-top:10px">Speak where<br>you'll <em>actually</em><br>be.</h1>
     <p class="sub">여행지와 일정을 입력하면, 실제로 갈 관광지와 맛집에서 쓸 영어 문장을 만들어 출발 전부터 매일 학습하게 해 드려요.</p>
     <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">로그인하지 않으면 다른 화면에 들어갈 수 없어요.</p>
-      <p class="small" style="text-align:center;margin-top:8px">일부 문장은 AI가 만들어요 · 학습 기록은 이 브라우저에만 저장돼요 · 말하기 연습을 쓰면 녹음이 채점 서버로 전송돼요.</p></div>
+      <p class="small" style="text-align:center;margin-top:8px">맛집 문장은 AI가 만들고 'AI 생성' 표시가 붙어요 · 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API로 전송돼요 · 장소 목록은 예시 데이터예요 · 학습 기록은 이 브라우저에만 저장돼요 · 말하기 연습은 동의한 뒤에만 녹음을 채점 서버로 보내요.</p></div>
   </div>`);
 }
 
@@ -769,7 +816,7 @@ function scrGen() {
   const t = S.trip;
   if (!t || !/_(requested|generating|failed)$/.test(t.status)) {
     return frame(`<div class="app-pad"><div class="empty" style="padding-top:120px"><div class="ico">${I.info}</div>
-      <b style="color:var(--ink);font-size:16px">진행 중인 생성 작업이 없어요</b><p>AI가 보고서, 방문 순서, 문장을 만드는 동안 이 화면이 나타나요.<br>오른쪽 데모 버튼으로 생성·실패·멈춤 화면을 확인할 수 있어요.</p>
+      <b style="color:var(--text);font-size:16px">진행 중인 생성 작업이 없어요</b><p>보고서, 방문 순서, 문장을 만드는 동안 이 화면이 나타나요. (맛집 문장은 AI가 만들어요)<br>오른쪽 데모 버튼으로 생성·실패·멈춤 화면을 확인할 수 있어요.</p>
       ${t ? `<button class="btn soft" data-act="tab" data-id="${t.status === 'studying' ? 'u-home' : t.status === 'report_done' ? 'u-report' : 'u-input'}">현재 단계로 돌아가기</button>` : `<button class="btn soft" data-act="tab" data-id="u-input">여행 입력으로</button>`}
       </div></div>`);
   }
@@ -783,13 +830,13 @@ function scrGen() {
   let head, extra = '', bottom = '';
   if (failed) {
     head = `<div class="orbit failed stopped"><div class="plane"><i></i></div><div class="core">FAIL</div></div>
-      <div class="eyebrow" style="text-align:center;color:var(--bad)">Generation failed</div><div class="title-lg" style="text-align:center">${josa(STAGE_NAME[stage], '을', '를')} 만들지 못했어요</div>`;
+      <div class="eyebrow" style="text-align:center;color:var(--bad-text)">Generation failed</div><div class="title-lg" style="text-align:center">${josa(STAGE_NAME[stage], '을', '를')} 만들지 못했어요</div>`;
     extra = notice(esc(t.error), 'bad') + (t.failStreak >= 3 ? '<div style="height:8px"></div>' + notice(`같은 단계에서 ${t.failStreak}번 연속 실패했어요. <b>잠시 후 다시 시도해 주세요.</b>`, 'warn') : '') +
       '<div style="height:8px"></div>' + notice('이전 단계까지의 결과는 그대로 남아 있어요.', 'plain');
     bottom = `<button class="btn primary block" data-act="retry">다시 시도</button>`;
   } else if (stale) {
     head = `<div class="orbit stopped"><div class="plane"><i></i></div><div class="core">15:00+</div></div>
-      <div class="eyebrow" style="text-align:center;color:var(--bad)">Stalled</div><div class="title-lg" style="text-align:center">생성이 멈춘 것 같아요</div>`;
+      <div class="eyebrow" style="text-align:center;color:var(--bad-text)">Stalled</div><div class="title-lg" style="text-align:center">생성이 멈춘 것 같아요</div>`;
     extra = notice(`생성을 시작한 지 15분이 지났어요. 서버 작업이 중간에 멈췄을 수 있어요. 다시 시도할 수 있어요.`, 'bad');
     bottom = `<button class="btn primary block" data-act="retry">다시 시도</button>`;
   } else {
@@ -822,7 +869,7 @@ function scrReport() {
     <div class="city-tabs">${t.cities.map(c => `<button class="${c.name === city ? 'on' : ''}" data-act="city-tab" data-city="${esc(c.name)}">${esc(c.name)} <b>${selCount(c.name)}/${S.reportMeta[c.name].base}</b></button>`).join('')}</div>
     <div class="stack" style="margin-bottom:14px">
       ${locked ? notice('장소를 확정했어요. 이제 선택을 바꿀 수 없어요.', 'plain') : ''}
-      ${notice('웹 검색으로 최신 정보를 모았지만, 영업시간과 메뉴는 바뀔 수 있어요.')}
+      ${notice('이 장소 목록은 <b>미리 준비한 예시 데이터</b>예요. (AI 웹 검색은 아직 연결 전이에요) 영업시간과 메뉴는 바뀔 수 있으니 방문 전에 확인해 주세요.')}
       ${nonEng ? notice('현지에서 영어가 통하지 않을 수 있어요.', 'warn') : ''}
       ${meta.found < meta.base ? notice(`추천할 장소를 충분히 찾지 못했어요. 기본 ${meta.base}곳 중 ${meta.found}곳만 찾았어요. 후보로 채울 수 있어요.`, 'warn') : ''}
       ${sel < meta.base / 2 ? notice('장소가 적어 비어 있는 날(자유 일정)이 생길 수 있어요.', 'warn') : ''}
@@ -844,7 +891,7 @@ function placeCard(p, locked) {
     <div class="check">${p.selected ? I.check : ''}</div>
     <div><div class="nm"><span class="kind ${p.kind}">${p.kind === 'attraction' ? '관광지' : '맛집'}</span>${esc(p.name)}${p.isCandidate ? '<span class="badge b-only">후보</span>' : ''}</div>
       <div class="meta">${esc(p.area)}${p.cuisine ? ` · ${esc(p.cuisine)}` : ''}</div>
-      <div class="desc">${esc(p.desc)} <span style="color:var(--muted)">— ${esc(p.reason)}</span></div>
+      <div class="desc">${esc(p.desc)} <span style="color:var(--text-3)">— ${esc(p.reason)}</span></div>
       ${p.menuKo ? `<div class="menu">대표 메뉴 · ${esc(p.menuKo)}</div>` : ''}
       <div class="src">${src}</div></div></div>`;
 }
@@ -856,20 +903,20 @@ function scrRoute() {
   const groups = {}; p.per.forEach(n => (groups[n] = (groups[n] || 0) + 1));
   const perTxt = Object.entries(groups).sort((a, b) => b[0] - a[0]).map(([n, c]) => `${n}문장 ${c}곳`).join(' · ');
   const inner = `<div class="app-pad">
-    <div class="card" style="background:var(--ink);color:#fff;border:0">
+    <div class="card" style="background:var(--inv-bg);color:var(--inv-text);border:0">
       <div class="eyebrow" style="color:var(--sun)">Plan summary</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;font-size:12.5px;color:#c8c3b7">
-        <div>전체 문장<b style="display:block;color:#fff;font-size:20px;font-family:var(--display)">${p.T}개</b>공통 30 + 장소 ${p.T - 30}</div>
-        <div>하루 학습량<b style="display:block;color:#fff;font-size:20px;font-family:var(--display)">${p.A ? p.A + '문장' : '없음'}</b>${p.A ? `새 문장 ${p.usedNew}일` : '여행 전 학습 없음'}</div>
-        <div>여행 전 학습<b style="display:block;color:#fff;font-size:16px">${p.N}일</b>복습 ${p.review} · 총복습 ${p.final}</div>
-        <div>여행 중 새 문장<b style="display:block;color:#fff;font-size:16px">${p.tripNew}개</b>문장 모음 전용 ${p.none}개</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;font-size:12.5px;color:var(--inv-text-2)">
+        <div>전체 문장<b style="display:block;color:var(--inv-text);font-size:20px;font-family:var(--display)">${p.T}개</b>공통 30 + 장소 ${p.T - 30}</div>
+        <div>하루 학습량<b style="display:block;color:var(--inv-text);font-size:20px;font-family:var(--display)">${p.A ? p.A + '문장' : '없음'}</b>${p.A ? `새 문장 ${p.usedNew}일` : '여행 전 학습 없음'}</div>
+        <div>여행 전 학습<b style="display:block;color:var(--inv-text);font-size:16px">${p.N}일</b>복습 ${p.review} · 총복습 ${p.final}</div>
+        <div>여행 중 새 문장<b style="display:block;color:var(--inv-text);font-size:16px">${p.tripNew}개</b>문장 모음 전용 ${p.none}개</div>
       </div>
-      <div style="margin-top:10px;font-size:12px;color:#9aa0ad">장소당 ${perTxt}</div>
+      <div style="margin-top:10px;font-size:12px;color:var(--inv-text-3)">장소당 ${perTxt}</div>
     </div>
     <div class="stack" style="margin:12px 0 16px">
       ${notice('지도 기반 최적 경로가 아니라, 장소의 지역을 기준으로 정한 <b>추천 방문 순서</b>예요.')}
       ${t.routeFallback ? notice('AI가 만든 방문 순서가 규칙을 2번 어겨 <b>코드 규칙으로 배치</b>했어요. (같은 지역끼리 묶어 날짜 순서대로 채움)', 'warn') : ''}
-      ${errs.length ? notice('검증 실패: ' + errs.join(', '), 'bad') : `<div class="small" style="display:flex;gap:6px;align-items:center;color:var(--ok)">${I.check} 검증 통과 · 도시 일치 · 하루 장소 수 · 누락·중복 없음</div>`}
+      ${errs.length ? notice('검증 실패: ' + errs.join(', '), 'bad') : `<div class="small" style="display:flex;gap:6px;align-items:center;color:var(--ok-text)">${I.check} 검증 통과 · 도시 일치 · 하루 장소 수 · 누락·중복 없음</div>`}
     </div>
     <div class="timeline">${S.days.map(d => `
       <div class="tl-day ${d.placeIds.length ? '' : 'free'}">
@@ -884,7 +931,7 @@ function scrRoute() {
 /* SCR-06 */
 function scrHome() {
   const t = S.trip, ph = phase();
-  if (ph === 'ended') return frame(`<div class="app-pad">${endBody()}</div>`, { tabbar: true });
+  if (ph === 'ended') return frame(`<div class="app-pad">${endBody()}${themeCard()}${privacyCard()}</div>`, { tabbar: true });
   const pr = progress();
   let hero;
   if (ph === 'trip') {
@@ -923,12 +970,14 @@ function scrHome() {
       <div class="mini-stats"><div><span>완료한 날</span><b>${pr.done}일</b></div><div><span>학습 날짜</span><b>${pr.den}일</b></div>
       <div class="${pr.miss ? 'bad' : ''}"><span>미완료</span><b>${pr.miss}일</b></div><div><span>자유 일정 (제외)</span><b>${pr.free}일</b></div></div></div>
     ${upcoming.length ? `<div class="sec-title"><h4>다가오는 일정</h4></div>${upcoming.map(srow).join('')}` : ''}
+    ${themeCard()}
+    ${privacyCard()}
   </div>`;
   return frame(inner, { tabbar: true });
 }
 function ring(rate) {
   const r = 40, c = 2 * Math.PI * r;
-  return `<div class="ring"><svg width="96" height="96"><circle cx="48" cy="48" r="${r}" fill="none" stroke="#efeadf" stroke-width="9"/>
+  return `<div class="ring"><svg width="96" height="96"><circle cx="48" cy="48" r="${r}" fill="none" stroke="var(--surface-seg)" stroke-width="9"/>
     <circle cx="48" cy="48" r="${r}" fill="none" stroke="var(--accent)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - rate)}"/></svg>
     <div class="v"><div><b>${Math.round(rate * 100)}%</b><span>완료율</span></div></div></div>`;
 }
@@ -952,7 +1001,7 @@ function scrSched() {
   const inner = `<div class="app-pad">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div class="seg"><button class="${S.schedFilter === 'all' ? 'on' : ''}" data-act="sched-filter" data-v="all">전체</button><button class="${S.schedFilter === 'miss' ? 'on' : ''}" data-act="sched-filter" data-v="miss">미완료 ${pr.miss}</button></div>
-      <span class="small">완료율 <b style="color:var(--ink)">${Math.round(pr.rate * 100)}%</b> (${pr.done}/${pr.den})</span></div>
+      <span class="small">완료율 <b style="color:var(--text)">${Math.round(pr.rate * 100)}%</b> (${pr.done}/${pr.den})</span></div>
     ${pre.length ? `<div class="phase-label">여행 전 · ${S.plan.N}일</div>${pre.map(srow).join('')}` : ''}
     ${trip.length ? `<div class="phase-label">여행 중</div>${trip.map(srow).join('')}` : ''}
     ${!rows.length ? `<div class="empty"><div class="ico">${I.check}</div>미완료 날짜가 없어요</div>` : ''}
@@ -975,7 +1024,7 @@ function scrStudy() {
   else if (st === 'miss') banner = notice('지난 날짜예요. 지금 학습하면 완료로 기록돼요.', 'warn');
 
   if (r.kind === 'free') {
-    return frame(`<div class="app-pad">${head}<div class="empty" style="padding-top:70px"><div class="ico">☼</div><b style="color:var(--ink);font-size:17px">오늘은 자유 일정이에요</b>
+    return frame(`<div class="app-pad">${head}<div class="empty" style="padding-top:70px"><div class="ico">☼</div><b style="color:var(--text);font-size:17px">오늘은 자유 일정이에요</b>
       <p>배치된 장소가 없어 카드가 없어요.<br>문장 모음에서 복습해 보세요. (완료율 계산에서 제외돼요)</p><button class="btn soft" data-act="tab" data-id="u-coll">문장 모음 열기</button></div></div>`,
       { appbar: appbar('학습', { back: 'u-sched' }), tabbar: true, tab: 'u-study' });
   }
@@ -995,7 +1044,7 @@ function scrStudy() {
     ? `<div class="tts-row"><button class="tts-btn" data-act="speak-card">${I.speaker}듣기</button><button class="tts-rate" data-act="rate">${S.ttsRate < 0.9 ? '느리게' : '보통 속도'}</button></div>`
     : `<div class="tts-off">이 브라우저는 듣기를 지원하지 않아요. 카드 학습은 계속할 수 있어요.</div>`;
   const inner = `<div class="app-pad">${head}${banner ? banner + '<div style="height:10px"></div>' : ''}
-    <div class="flip" data-act="flip">
+    <div class="flip ${S.card.back === S.card.i ? 'flipped' : ''}" data-act="flip">
       <div class="flip-inner">
         <div class="face front"><div class="ctx">${tag}${aiBadges(s)}${isNew ? '<span class="badge b-new">새 문장</span>' : ''}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
           <div class="ko">${phHtml(s.ko)}</div><div class="hint">탭해서 영어 문장 보기 ↻</div></div>
@@ -1030,7 +1079,7 @@ function updateStudyLive() {
 function scrColl() {
   const tab = S.coll.tab, f = S.coll.filter;
   const learnBadge = s => s.learnPhase === 'none' ? '<span class="badge b-only">문장 모음 전용</span>' : s.learnPhase === 'trip' ? '<span class="badge b-new">여행 중 새 문장</span>' : '';
-  const item = s => `<div class="sent"><div><div class="tags">${learnBadge(s)}<span class="small">${esc(s.situation)}</span></div><div class="en">${phHtml(s.en)}</div><div class="ko">${phHtml(s.ko)}</div></div>
+  const item = s => `<div class="sent"><div><div class="tags">${learnBadge(s)}${aiBadges(s)}<span class="small">${esc(s.situation)}</span></div><div class="en">${phHtml(s.en)}</div><div class="ko">${phHtml(s.ko)}</div></div>
     <button class="play" data-act="speak" data-id="${s.id}">${I.speaker}</button></div>`;
   let body;
   if (tab === 'common') {
@@ -1070,6 +1119,7 @@ function adminScreen() {
   const nav = SCREENS.filter(s => s.id.startsWith('a-')).map(s => `<button class="${S.screen === s.id ? 'on' : ''}" data-act="nav" data-id="${s.id}">${s.name}</button>`).join('');
   const path = { 'a-metrics': 'metrics', 'a-jobs': 'jobs', 'a-common': 'common-sentences', 'a-users': 'users' }[S.screen];
   const body = { 'a-metrics': admMetrics, 'a-jobs': admJobs, 'a-common': admCommon, 'a-users': admUsers }[S.screen]();
+  if (!LEGACY) return `<div class="admin-shell"><div class="admin"><nav class="admin-nav"><div class="brand">여행영어 <span>ADMIN</span></div>${nav}</nav><div class="admin-main">${body}</div></div>${modalHtml(true)}</div>`;
   return `<div class="window"><div class="win-bar"><i></i><i></i><i></i><div class="url">admin.trip-english.web.app/${path}</div></div>
     <div class="admin"><nav class="admin-nav"><div class="brand">여행영어 <span>ADMIN</span></div>${nav}</nav><div class="admin-main">${body}</div></div>${modalHtml(true)}</div>`;
 }
@@ -1109,7 +1159,7 @@ function admMetrics() {
     <div class="grid2">
       <div class="panel funnel"><h3>단계별 도달 (여행 ${n1}건)</h3>${funnel.map(([l, k]) => `<div class="fr-row"><span>${l}</span><div class="bar"><i style="width:${cnt(k) / n1 * 100}%"></i></div><span class="n">${cnt(k)}</span></div>`).join('')}
         <p class="small" style="margin:8px 0 0">여행 입력(input_done)에 도달한 여행 기준. 데모 여행이 맨 위 행으로 포함돼요.</p></div>
-      <div class="panel"><h3>최근 최종 실패</h3>${failedRows.length ? failedRows.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1ece2;font-size:12.5px">
+      <div class="panel"><h3>최근 최종 실패</h3>${failedRows.length ? failedRows.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-faint);font-size:12.5px">
         <span><b>${esc(r.route)}</b><br><span class="small">${r.user}</span></span><span class="st-chip fail">${r.status}</span></div>`).join('') : '<div class="empty">실패한 작업이 없어요</div>'}
         <p class="small" style="margin:10px 0 0">실패율은 사용자 요청 기준이에요. 서버 자동 재요청(최대 2번)은 따로 세지 않아요.</p></div>
     </div>`;
@@ -1124,28 +1174,28 @@ function admJobs() {
   const count = k => rows.filter(r => (k === 'gen' ? isGen(r) && !stale(r) : k === 'stale' ? stale(r) : /_failed$/.test(r.status))).length;
   return `<h2>생성 작업 모니터</h2><p class="desc">생성 중 15분이 지나면 멈춘 작업으로 봐요 (FR-GEN-02). 여행 1개에는 동시에 하나의 작업만 있어서 여행 상태가 곧 작업 상태예요.</p>
     <div class="filters">${[['all', `전체 ${rows.length}`], ['gen', `생성 중 ${count('gen')}`], ['stale', `멈춤 ${count('stale')}`], ['fail', `실패 ${count('fail')}`]].map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-act="job-filter" data-v="${k}">${l}</button>`).join('')}</div>
-    <div class="panel" style="padding:6px 8px"><table class="tbl"><thead><tr><th>여행</th><th>사용자</th><th>상태</th><th>경과</th><th>failStreak</th><th>다시 생성</th><th></th></tr></thead><tbody>
-    ${list.map(r => `<tr class="${stale(r) ? 'stale' : ''} ${r.me ? 'me' : ''}"><td><b>${esc(r.route)}</b><div class="mono" style="color:var(--muted)">${r.id}${r.me ? ' · 데모 여행' : ''}</div></td>
+    <div class="panel" style="padding:6px 8px"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>여행</th><th>사용자</th><th>상태</th><th>경과</th><th>failStreak</th><th>다시 생성</th><th></th></tr></thead><tbody>
+    ${list.map(r => `<tr class="${stale(r) ? 'stale' : ''} ${r.me ? 'me' : ''}"><td><b>${esc(r.route)}</b><div class="mono" style="color:var(--text-3)">${r.id}${r.me ? ' · 데모 여행' : ''}</div></td>
       <td class="mono">${r.user}</td><td>${chip(r)}</td><td class="mono">${isGen(r) && r.genMinAgo != null ? r.genMinAgo + '분' : '—'}</td>
       <td class="mono">${r.failStreak}</td><td class="mono">${r.regen}/3</td>
       <td>${stale(r) ? `<button class="btn soft sm" data-act="job-fail" data-id="${r.id}">실패로 처리</button>` : /_failed$/.test(r.status) ? '<span class="small">사용자 재시도 대기</span>' : ''}</td></tr>`).join('') || `<tr><td colspan="7"><div class="empty">해당하는 작업이 없어요</div></td></tr>`}
-    </tbody></table></div>
+    </tbody></table></div></div>
     <p class="small" style="margin-top:10px">데모: 사이드바에서 "생성 멈춤"을 켜고 여행을 만든 뒤, SCR-03의 "16분 경과시키기"를 누르면 데모 여행이 멈춤으로 표시돼요.</p>`;
 }
 function admCommon() {
   S.commonsDraft ??= JSON.parse(JSON.stringify(S.commons));
   const dirty = JSON.stringify(S.commonsDraft) !== JSON.stringify(S.commons);
-  return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div><h2>공통 상황 문장 관리</h2>
+  return `<div class="adm-head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div><h2>공통 상황 문장 관리</h2>
     <p class="desc">6개 상황 × 5문장 = 30개. 모든 여행에 똑같이 들어가요 (FR-SENT-01). 저장하면 <b>다음 문장 생성부터</b> 반영돼요.</p></div>
     <div style="display:flex;gap:6px;flex:none"><button class="btn soft sm" data-act="cs-reset" ${dirty ? '' : 'disabled'}>되돌리기</button><button class="btn primary sm" data-act="cs-save" ${dirty ? '' : 'disabled'}>변경 사항 저장</button></div></div>
     ${notice('이름·목적지는 <b>[name]</b>, <b>[destination]</b> 빈칸으로 적어요. 듣기에서는 "your name", "your destination"으로 읽어요.')}
     <div style="height:14px"></div>
     ${S.commonsDraft.map((g, gi) => `<div class="cs-group panel"><h4>${g.label} <span class="small">${g.key}</span></h4>
-      <div class="cs-row" style="font-size:11px;color:var(--muted)"><span>#</span><span>상황</span><span>영어 문장</span><span>한국어 뜻</span><span></span></div>
+      <div class="cs-row cs-head" style="font-size:11px;color:var(--text-3)"><span>#</span><span>상황</span><span>영어 문장</span><span>한국어 뜻</span><span></span></div>
       ${g.items.map((it, ii) => { const o = S.commons[gi].items[ii]; return `<div class="cs-row"><span class="i">${ii + 1}</span>
-        <input data-cs="${gi}.${ii}.situation" value="${esc(it.situation)}" class="${it.situation !== o.situation ? 'dirty' : ''}">
-        <input data-cs="${gi}.${ii}.en" value="${esc(it.en)}" class="${it.en !== o.en ? 'dirty' : ''}">
-        <input data-cs="${gi}.${ii}.ko" value="${esc(it.ko)}" class="${it.ko !== o.ko ? 'dirty' : ''}">
+        <input data-cs="${gi}.${ii}.situation" aria-label="상황" value="${esc(it.situation)}" class="${it.situation !== o.situation ? 'dirty' : ''}">
+        <input data-cs="${gi}.${ii}.en" aria-label="영어 문장" value="${esc(it.en)}" class="${it.en !== o.en ? 'dirty' : ''}">
+        <input data-cs="${gi}.${ii}.ko" aria-label="한국어 뜻" value="${esc(it.ko)}" class="${it.ko !== o.ko ? 'dirty' : ''}">
         <button class="play" data-act="cs-play" data-k="${gi}.${ii}">${I.speaker}</button></div>`; }).join('')}</div>`).join('')}`;
 }
 function admUsers() {
@@ -1157,8 +1207,8 @@ function admUsers() {
   const users = [{ email: DEMO_USER.email, name: DEMO_USER.name + ' (데모)', trips: demoTrips, me: true }, ...MOCK_USERS];
   return `<h2>사용자 · 여행</h2><p class="desc">현재 여행 = <code>archived = false</code>인 내 여행 (FR-TRIP-05). 새 여행을 만들면 이전 여행은 삭제하지 않고 보관해요 (FR-TRIP-04).</p>
     <div class="panel" style="padding:4px 10px">
-      <div class="user-row" style="font-size:11.5px;color:var(--muted)"><span>이름</span><span>이메일</span><span>여행</span></div>
-      ${users.map(u => `<div class="user-row" style="${u.me ? 'background:#f4fbfa' : ''}"><b>${esc(u.name)}</b><span class="mono" style="font-family:var(--mono);font-size:12px">${esc(u.email)}</span>
+      <div class="user-row" style="font-size:11.5px;color:var(--text-3)"><span>이름</span><span>이메일</span><span>여행</span></div>
+      ${users.map(u => `<div class="user-row" style="${u.me ? 'background:var(--me-bg)' : ''}"><b>${esc(u.name)}</b><span class="mono" style="font-family:var(--mono);font-size:12px">${esc(u.email)}</span>
         <div class="trips">${u.trips.length ? u.trips.map((tr, i) => `<span class="trip-chip ${tr.state === '보관' ? 'arch' : 'cur'}">${esc(tr.route)} · ${tr.state}</span>`).join('') : '<span class="small">여행 없음</span>'}</div></div>`).join('')}
     </div>`;
 }
@@ -1170,7 +1220,7 @@ function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
-function go(id) { cancelSpeak(); S.screen = id; S.modal = null; render(); }
+function go(id) { cancelSpeak(); S.card.back = null; S.screen = id; S.modal = null; render(); }
 
 function navFromMenu(id) {
   S.modal = null;
@@ -1228,7 +1278,7 @@ function aiBadges(s) {
   if (s.ai) h += '<span class="badge b-ai">AI 생성</span>';
   else if (s.sample) h += '<span class="badge b-sample">샘플</span>';
   const w = AI.weakReviewOf(s, weakList());
-  if (w) h += `<span class="badge b-weak">저장된 취약 상황 복습${w.demo ? ' · 데모 학습 기록' : ''}</span>`;
+  if (w) h += `<span class="badge b-weak">복습 목록 상황${w.demo ? ' · 데모 학습 기록' : ''}</span>`;
   return h;
 }
 function speakHtml(s) {
@@ -1241,13 +1291,50 @@ function speakHtml(s) {
   if (mine && SPK.result) {
     const r = SPK.result;
     const parts = r.error ? [r.error]
-      : r.usable !== true ? [r.mock ? '샘플 응답이에요(채점 안 됨).' : (r.reason || '평가하지 못했어요. 다시 시도해 주세요.'), '약점으로 저장하지 않았어요.']
-      : [typeof r.score === 'number' ? `점수 ${r.score}` : '', r.heard ? `들린 문장: ${r.heard}` : '', r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? '취약 상황으로 저장했어요' : ''];
+      : r.usable !== true ? [r.mock ? '샘플 응답이에요(채점 안 됨).' : (r.reason || '평가하지 못했어요. 다시 시도해 주세요.'), '복습 목록에 저장하지 않았어요.']
+      : [typeof r.score === 'number' ? (r.score_kind === 'word_match' ? `단어 일치 ${r.score}% (발음 점수 아님)` : `점수 ${r.score}`) : '', r.heard ? `들린 문장: ${r.heard}` : '', r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '',
+         r.offer && r.coverage !== null ? `참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)` : ''];
     res = `<div class="speak-res">${parts.filter(Boolean).map(esc).join(' · ')}</div>`;
+    if (r.offer) res += `<button class="speak-btn" data-act="weak-save">이 상황을 복습 목록에 저장</button>`;
   }
   return `<button class="speak-btn ${st === 'recording' ? 'rec' : ''}" data-act="speak-rec" ${st === 'requesting' || st === 'uploading' ? 'disabled' : ''}>${label}</button>${res}
-    <div class="speak-note">녹음은 채점을 위해 ${esc(host)} 서버와 AI 서비스로 전송돼요.</div>`;
+    <div class="speak-note">녹음은 ${esc(host)} 서버로 가고, 말소리가 있을 때만 전사·교차검증 AI(Groq·AssemblyAI)로 전송돼요.${voiceConsent().voice ? ' (동의함 · 홈에서 철회)' : ' 처음 녹음할 때 동의를 받아요.'}</div>`;
 }
+/* 말하기 연습 동의 — 녹음이 서버와 Google 로 나가고 복습 목록이 쌓이므로 첫 녹음 전에 받는다.
+   저장소가 막힌 브라우저에서는 이번 접속 동안만 기억한다(consentMem). */
+let consentMem = false;
+const voiceConsent = () => { const c = AI.loadConsent(STORE); return c.voice ? c : consentMem ? { voice: true, at: null } : c; };
+function askVoiceConsent() {
+  const host = esc(API.host || location.host);
+  confirmBox('말하기 연습 전에 확인해 주세요',
+    `<b>보내는 것</b> · 녹음한 목소리(최대 15초)와 연습 중인 영어 문장<br>
+     <b>받는 곳</b> · ① 이 서비스 서버(${host}) — 말소리가 있는지 신경망(VAD)으로 확인 서버 안의 두 신경망(Silero·pyannote)이 <b>모두</b> 말소리를 찾으면 ② 그 구간의 녹음이 서로 다른 전사 AI 둘에 동시에: Groq Whisper(실패 시 OpenAI Whisper), 교차검증용 AssemblyAI ③ 받아쓴 문장·목표 문장·상황 이름(글만)이 피드백용 Google Gemini API로<br>
+     <b>처리</b> · 전사 AI들은 목표 문장을 모른 채 <b>받아쓰기만</b> 하고, 두 전사에서 <b>모두</b> 들린 단어만 코드가 점수로 계산해요. 교차검증이 안 되면 채점하지 않아요.<br>
+     <b>목적</b> · 말하기 연습 피드백 (피드백 문장은 AI가 만든 결과예요)<br>
+     <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요. 전사 AI 회사의 처리·보관은 각 회사 약관을 따라요.<br>
+     <b>Google 처리</b> · 무료 등급 API에서는 Google이 전송된 내용을 제품 개선에 사용하고 사람 검토자가 읽을 수 있어요(계정·키와는 분리돼요). <b>민감한 개인정보는 말하지 마세요.</b><br>
+     <b>이 브라우저에 저장</b> · 채점 결과로 고른 '어려워한 상황'(복습 목록). 다음 문장을 만들 때 상황 이름만 서버로 보내요.<br><br>
+     동의하지 않아도 카드 학습과 듣기는 그대로 쓸 수 있어요. 동의는 홈 화면에서 언제든 철회할 수 있고, 철회하면 복습 목록도 지워져요.`,
+    '동의하고 녹음하기', () => {
+      S.modal = null;
+      if (!AI.saveConsent(STORE, true)) consentMem = true;
+      render(); toggleSpeak();
+    }, { cancel: '동의하지 않기' });
+}
+function privacyCard() {
+  const c = voiceConsent(), n = weakList().length;
+  const when = c.at ? Dt.full(c.at.slice(0, 10)) : '이번 접속';
+  return `<div class="sec-title"><h4>AI · 개인정보</h4></div><div class="card">
+    <p class="small" style="line-height:1.7">· 'AI 생성' 표시가 붙은 문장과 말하기 채점은 AI가 만든 결과예요. 틀릴 수 있어요.<br>
+      · AI 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API로 전송돼요.<br>
+      · 말하기 연습 동의: <b>${c.voice ? `동의함 (${when})` : '동의하지 않음'}</b>${c.voice ? '' : ' — 처음 녹음할 때 물어봐요'}<br>
+      · 복습 목록: <b>${n}개</b> · 이 브라우저에만 저장돼요</p>
+    ${c.voice || n ? `<div style="display:flex;gap:8px;margin-top:10px">
+      ${c.voice ? '<button class="btn soft" style="flex:1" data-act="consent-withdraw">동의 철회</button>' : ''}
+      ${n ? '<button class="btn soft" style="flex:1" data-act="weak-delete">복습 목록 삭제</button>' : ''}</div>` : ''}
+  </div>`;
+}
+const weakItem = s => ({ category_id: s.categoryId, id: s.situationId, situation: s.situation, en: s.en, ko: s.ko });
 function updateSpeakUi() {
   const el = $('[data-live=speak]'); const r = S.screen === 'u-study' && pickRow();
   if (!el || !r) return;
@@ -1266,6 +1353,7 @@ function stopSpeak() { clearTimeout(SPK.timer); SPK.timer = null; if (SPK.rec &&
 async function toggleSpeak() {
   if (SPK.state === 'requesting' || SPK.state === 'uploading') return;      // 중복 요청 방지
   if (SPK.state === 'recording') { stopSpeak(); return; }
+  if (!voiceConsent().voice) { askVoiceConsent(); return; }                 // 동의 전에는 마이크도 열지 않는다
   const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]]; if (!s) return;
   cancelSpeak();
   const tok = SPK.tok; SPK.sid = s.id; SPK.state = 'requesting'; updateSpeakUi();
@@ -1286,6 +1374,7 @@ async function toggleSpeak() {
   rec.onstop = () => {
     stopTracks(stream);
     if (tok !== SPK.tok || rec.cancelled) return;                            // 취소는 업로드하지 않는다
+    // 말소리 여부는 서버의 Silero 신경망 VAD 가 판정한다(음량·데시벨 기준이 아님). 말이 없으면 외부 AI 로 보내지 않는다.
     uploadSpeech(tok, new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' }), s);
   };
   rec.start();
@@ -1295,7 +1384,7 @@ async function uploadSpeech(tok, blob, s) {
   SPK.state = 'uploading'; SPK.rec = null; SPK.stream = null; updateSpeakUi();
   const ctl = SPK.ctl = new AbortController();
   let res;
-  try { res = await AI.speakCheck({ fetchImpl: (u, o) => fetch(u, o), base: API.base, blob, target: s.en, signal: ctl.signal }); }
+  try { res = await AI.speakCheck({ fetchImpl: (u, o) => fetch(u, o), base: API.base, blob, target: s.en, situation: s.situation, signal: ctl.signal }); }
   catch (e) {
     if (tok !== SPK.tok) return;
     SPK.state = 'idle'; SPK.ctl = null;
@@ -1304,14 +1393,17 @@ async function uploadSpeech(tok, blob, s) {
   }
   if (tok !== SPK.tok) return;                                               // 늦은 응답: 표시도 저장도 하지 않는다
   SPK.state = 'idle'; SPK.ctl = null;
-  const save = AI.shouldSaveWeak(s, res);
-  if (save) AI.saveWeak(localStorage, AI.upsertWeak(weakList(), { category_id: s.categoryId, id: s.situationId, situation: s.situation, en: s.en, ko: s.ko }));
-  SPK.result = { ...res, saved: save };
+  const decision = AI.weakDecision(s, res);
+  const save = decision === 'auto';
+  if (save) AI.saveWeak(STORE, AI.upsertWeak(weakList(), weakItem(s)));
+  SPK.result = { ...res, saved: save, savedBy: save ? 'auto' : null, offer: decision === 'ask', coverage: typeof res.heard === 'string' ? AI.heardCoverage(s.en, res.heard) : null };
   updateSpeakUi(); renderDemo();
 }
 
 const ACT = {
-  nav: el => navFromMenu(el.dataset.id),
+  nav: el => { navFromMenu(el.dataset.id); if (!LEGACY) $('#side').classList.remove('open'); },
+  drawer: () => $('#side').classList.toggle('open'),
+  theme: el => { setTheme(el.dataset.v); render(); },
   tab: el => {
     const id = el.dataset.id;
     if (['u-home', 'u-sched', 'u-study', 'u-coll', 'u-route'].includes(id) && !S.plan) { navFromMenu(id); return; }
@@ -1324,9 +1416,30 @@ const ACT = {
   'demo-toggle': () => { S.demoClosed = !S.demoClosed; renderDemo(); },
   'set-today': el => { S.today = el.dataset.date; S.justCompleted = null; render(); toast(`오늘을 ${Dt.full(S.today)}로 바꿨어요.`); },
   preset: el => preset(el.dataset.kind),
-  'weak-demo': () => { AI.saveWeak(localStorage, DEMO_WEAK.reduce((l, w) => AI.upsertWeak(l, w), weakList())); renderDemo(); toast('데모 학습 기록을 불러왔어요. 실제 학습에서 생긴 기록이 아니에요.'); },
-  'weak-clear': () => { AI.saveWeak(localStorage, []); renderDemo(); toast('저장된 취약 상황을 비웠어요.'); },
+  'weak-demo': () => { AI.saveWeak(STORE, DEMO_WEAK.reduce((l, w) => AI.upsertWeak(l, w), weakList())); renderDemo(); toast('데모 학습 기록을 불러왔어요. 실제 학습에서 생긴 기록이 아니에요.'); },
+  'weak-clear': () => { AI.saveWeak(STORE, []); renderDemo(); toast('복습 목록을 비웠어요.'); },
   'speak-rec': () => toggleSpeak(),
+  'consent-withdraw': () => confirmBox('동의를 철회할까요?',
+    `말하기 연습을 다시 쓰려면 새로 동의해야 해요. 이 브라우저에 저장된 복습 목록 ${weakList().length}개도 함께 지워요.`,
+    '철회하고 지우기', () => {
+      S.modal = null; cancelSpeak(); consentMem = false;
+      const ok = AI.withdrawConsent(STORE);
+      render(); renderDemo();
+      toast(ok ? '동의를 철회하고 복습 목록을 지웠어요.' : '브라우저 저장소에 접근하지 못했어요. 브라우저 설정에서 이 사이트 데이터를 지워 주세요.');
+    }, { danger: true }),
+  'weak-delete': () => confirmBox('복습 목록을 지울까요?',
+    `이 브라우저에 저장된 어려워한 상황 ${weakList().length}개를 지워요. 다음 문장 생성부터 반영돼요.`,
+    '지우기', () => {
+      S.modal = null;
+      const ok = AI.saveWeak(STORE, []);
+      render(); renderDemo(); toast(ok ? '복습 목록을 지웠어요.' : '브라우저 저장소에 접근하지 못했어요.');
+    }, { danger: true }),
+  'weak-save': () => {
+    const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]];
+    if (!s || SPK.sid !== s.id || !SPK.result || !SPK.result.offer) return;       // 다른 카드·취소된 결과에는 저장하지 않는다
+    AI.saveWeak(STORE, AI.upsertWeak(weakList(), weakItem(s)));
+    SPK.result = { ...SPK.result, offer: false, saved: true, savedBy: 'user' }; updateSpeakUi(); renderDemo(); toast('복습 목록에 저장했어요.');
+  },
 
   login: () => { S.user = DEMO_USER; toast('Google 계정으로 로그인했어요.'); ACT['after-login'](); },
   'after-login': () => go(S.trip && !S.trip.archived ? (S.plan ? 'u-home' : S.places.length ? 'u-report' : 'u-gen') : 'u-input'),
@@ -1388,6 +1501,8 @@ const ACT = {
   'study-date': el => { S.studyDate = el.dataset.date; S.justCompleted = null; go('u-study'); },
   flip: el => {
     el.classList.toggle('flipped');
+    // 보고 있는 면을 기억한다. 동의 창 등으로 화면을 다시 그려도 카드가 앞면으로 돌아가지 않게.
+    S.card.back = el.classList.contains('flipped') ? S.card.i : null;
     if (el.classList.contains('flipped')) { S.card.flipped.add(S.card.i); updateStudyLive(); }
     else if (ttsSupported()) speechSynthesis.cancel();
   },
@@ -1477,6 +1592,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) rend
 
 initState();
 renderSide();
+$('#demo-fab').hidden = MODE === 'product';
 render();
 /* index.html#u-home 처럼 주소 뒤에 화면 ID를 붙이면 그 화면으로 바로 열림 */
 if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));

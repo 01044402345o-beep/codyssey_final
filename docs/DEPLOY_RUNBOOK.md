@@ -13,7 +13,7 @@
    구현자가 1명인 팀에서는 ③이 가장 빠르고 안전한 경우가 많습니다. 배포 없이 스위치만 바꿉니다.
 2. **"동작하는 척"과 "동작"을 구분합니다.** 목업은 `usable: "sample"`로 표시됩니다.
    목업으로 돌면서 "AI가 동작한다"고 말하면 그 순간 프로젝트가 무너집니다. **차라리 시연을 줄이세요.**
-3. **배포는 먼저, 프론트는 나중.** URL이 없으면 프론트 디버깅이 불가능합니다.
+3. **프론트 연동 코드는 구현돼 있고(`mockup/ai.js`), 없는 것은 실환경 검증입니다.** 현재 상태는 **"연동 구현 완료, 실환경 검증 대기"**. 배포 URL 확보 → 실제 생성·말하기 1회 → score 빈도 측정(`backend/scripts/measure_score_rate.py`) 순서로 검증합니다.
 4. 모든 조치는 **기록**합니다 (9장 양식). 같은 장애가 두 번 나면 문서가 틀린 것입니다.
 
 ---
@@ -30,7 +30,7 @@
 | `/health` 확인 URL | `https://____________.onrender.com/health` | |
 | 프론트 주소 | **기본: 위 배포 URL 과 동일** (`mockup/` 을 같은 서비스의 `/` 에서 서빙) | 별도 프론트를 쓸 때만 CORS `ALLOW_ORIGINS` 에 추가 |
 | Gemini API 키 발급처 | Google AI Studio (`aistudio.google.com/apikey`) | |
-| 키 보관 위치 | Render → Environment → `GEMINI_API_KEY` | **코드·깃에 절대 넣지 않음** |
+| 키 보관 위치 | Render → Environment → `GEMINI_API_KEY`, `GROQ_API_KEY`(전사), 보충 `OPENAI_API_KEY`·`ASSEMBLYAI_API_KEY` | **코드·깃에 절대 넣지 않음** |
 | 담당(배포) | 최성빈 | |
 | 담당(대리) | ____________ | 한 사람이 막히면 여기서 멈춥니다 — 반드시 지정 |
 | 비상 연락 채널 | Discord `#일반` | |
@@ -78,7 +78,11 @@ curl -s https://<앱>.onrender.com/health | python3 -m json.tool
 | `situations` | restaurant 10개 | 비었으면 카테고리 파일 문제 |
 | `contract_dir` | `.../codyssey_final/agent_contract` | `backend/agent_contract`면 경로 버그 (F02) |
 | `has_api_key` | `true` | `false` → F04 |
-| `model` | `gemini-flash-latest` | 스펙과 다르면 기록 |
+| `stt_providers.groq` | `true` | `false` → 말하기가 목업. Render 에 `GROQ_API_KEY` |
+| `vad` | `silero (faster-whisper)…` | 없으면 배포 코드가 옛 버전 |
+| `model_selection` | `"dynamic"` | 모델은 고정하지 않음. `models` 는 첫 AI 호출 전 `null`, 이후 실제 목록 |
+| `min_attempts` | `30` 이상 | 30 미만이면 코드 이상 — 배포 중단 |
+| `deploy.commit` / `deploy.branch` / `deploy.repo` | 배포한 커밋·브랜치·저장소와 일치 | 값이 `null` 이면 Render 환경변수(`RENDER_GIT_*`)가 없는 환경. 다르면 **낡은 배포** — 재배포 전에 이 값부터 기록 |
 
 **게이트 규칙: 하나라도 어긋나면 배포 실패로 간주하고 F0X 절차로 갑니다. 프론트를 붙이지 않습니다.**
 
@@ -175,8 +179,8 @@ curl -s https://<앱>.onrender.com/health | python3 -m json.tool
 - **원인**: Google 측 일시 장애 (내 코드 문제가 아님)
 - **확인**: [Google Cloud 상태 페이지](https://status.cloud.google.com/) 확인
 - **즉시 조치**
-  1. **기다린다.** 5~15분 내 회복되는 경우가 많습니다. 우리 재시도(3회)는 이미 돌았습니다
-  2. 다른 모델명으로 우회: Render → `GEMINI_MODEL`을 AI Studio에서 확인한 현재 모델명으로 변경
+  1. **기다린다.** 5~15분 내 회복되는 경우가 많습니다. 우리 재시도(최소 30회, 모델을 돌아가며)는 이미 돌았습니다
+  2. 특정 모델로 우선 시도: Render → `GEMINI_MODEL`에 Actions "Gemini 모델 목록"에서 확인한 이름을 넣음 (목록에 있을 때만 맨 앞에 쓰임)
   3. 그래도 안 되면 **시연 축소** — 미리 생성해 둔 결과(스냅샷)로 카드 학습·음성 연습만 시연합니다
      > 이때 화면에 **"실시간 생성은 현재 불가하여 저장된 결과로 시연합니다"**를 명시하세요.
      > 숨기면 더 나쁩니다.
@@ -245,6 +249,17 @@ curl -s https://<앱>.onrender.com/health | python3 -m json.tool
 - **롤백**: 불가 (월 단위 제약)
 - **재발 방지**: 테스트는 **짧은 기간에 몰아서**. 상시 크론·헬스체크 봇을 두지 않습니다
   (**주기적 핑은 시간을 소진시켜 정지를 앞당깁니다** — 시연 직전 예열만 수동으로)
+
+### F11-a. 알려진 위험 — 재시도 정책 현행 유지 (결정: 2026-10-07)
+
+- **현황(코드 기준)**: Gemini 호출은 **최소 30회** 시도하고 전체 제한 시간이 없으며, 시도당 최대 60초(`AI_CALL_TIMEOUT`)다.
+  계속 실패하면 대기만 약 107.5초, 최악은 약 **31분**(30×60 + 107.5초). 화면(`GEN_TIMEOUT_MS`)은 **90초**에 포기하고 로컬 문장으로 폴백한다.
+- **위험**: 클라이언트가 끊어도 서버 호출은 멈추지 않는다(`/generate`는 동기 `def`). 도시가 N개면 `/generate`가 **동시에 N개** 나가므로 한 번의 화면 요청이 최대 `N × 30`회의 Gemini 호출이 될 수 있다.
+  → 화면 증상은 없고 **할당량(F05)·비용(F11)·인스턴스 시간(F10)** 만 새는 형태다. 로그의 `시도 n/30 실패` 반복으로만 보인다.
+- **결정**: 정책은 **현행 유지**. 위험은 이 문서에 기록하고 코드는 바꾸지 않는다.
+- **완화 수단(코드 변경 없이)**: Render Environment의 `RATE_LIMIT` 하향(IP당 `/generate` 동시 유입 제한), 필요하면 `GEMINI_API_KEY` 제거로 목업 전환(→ F04 주의), 키 재발급(F11).
+  `AI_MIN_ATTEMPTS`는 **올리기만** 할 수 있고 30 미만으로 줄일 수 없다.
+- **시연 전 점검**: Gemini 429/503이 계속 나는 상태(F05·F06)에서 화면을 여러 번 열지 않는다. 로그에 `시도 n/30` 이 반복되면 그 요청이 아직 서버에서 돌고 있는 것이다.
 
 ### F11. 비용 폭주 / API 키 노출 의심
 
@@ -325,8 +340,8 @@ git push origin main
 
 구현자가 1명일 때 **가장 빠른 복구**입니다. Render → Environment → 값 변경 → 자동 재시작.
 
-> **기본값 주의 (코드 기준)**: `RATE_LIMIT=20`, `RATE_WINDOW=60`, `CONFIG_STRICT=0`, `ALLOW_ORIGINS=*`, `MAX_RETRIES=2`.
-> 현재 `render.yaml` 에는 `PYTHON_VERSION`, `GEMINI_MODEL`, `GEMINI_API_KEY` 만 정의돼 있습니다.
+> **기본값 주의 (코드 기준)**: `RATE_LIMIT=20`, `RATE_WINDOW=60`, `CONFIG_STRICT=0`, `ALLOW_ORIGINS=*`, `AI_MIN_ATTEMPTS=30`(하한, 낮출 수 없음).
+> 현재 `render.yaml` 에는 `PYTHON_VERSION`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `ASSEMBLYAI_API_KEY` 가 정의돼 있습니다. 모델은 실행 중 목록에서 고릅니다. `STT_SELFTEST=1` 은 검증할 때만 넣고 끝나면 지웁니다.
 > 아래 표의 "평상시" 값은 **Render Environment 에 직접 추가해야** 적용됩니다.
 > 교육장처럼 한 공용 IP 에서 여러 명이 테스트하면 `RATE_LIMIT=20/60s` 에 걸릴 수 있으니 테스트 전에 올려 두세요.
 
@@ -336,8 +351,8 @@ git push origin main
 | `RATE_WINDOW` | `60` | `60` | 유지 |
 | `CONFIG_STRICT` | 기본 `0` → 발표 전 `1`로 설정 | `0` | 설정 누락이어도 200 (시연 우선) |
 | `ALLOW_ORIGINS` | 기본 `*` (같은 서비스 서빙이면 불필요) | `*` | 별도 프론트를 쓸 때만 좁힘. CORS 문제 즉시 해소 (**임시**) |
-| `GEMINI_MODEL` | `gemini-flash-latest` | AI Studio의 현재 모델명 | 모델 장애·별칭 변경 우회 |
-| `MAX_RETRIES` | `2` | `3` | 일시 오류 흡수 (응답 느려짐) |
+| `GEMINI_MODEL` | 비워 둠 (동적 선택) | 목록에 있는 모델명 | 특정 모델 우선 시도 (고정 아님) |
+| `AI_MIN_ATTEMPTS` | `30` | `40` 등 | 일시 오류 흡수 (응답 느려짐). 30 미만은 무시됨 |
 | `GEMINI_API_KEY` | 등록됨 | (제거) | **최후 수단** — 목업 전환. 4장 F04 주의사항 참조 |
 
 > ⚠️ **키 제거로 목업 전환은 "복구"가 아닙니다.** 서비스가 죽는 것보다는 낫지만,
