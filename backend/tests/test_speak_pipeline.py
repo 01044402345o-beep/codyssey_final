@@ -198,6 +198,27 @@ class SilenceGateTest(Base):
         self.assertEqual(code, 400)
 
 
+class AudioLimitTest(Base):
+    """8MB 는 압축 녹음이면 30분이 넘는다. 길이(MAX_AUDIO_SECONDS)로도 막고, 외부 API 는 부르지 않는다."""
+
+    def test_longer_than_limit_is_413_before_any_api(self) -> None:
+        fake, gem = self.install({"groq": lambda n: Resp(200, stt_ok(TARGET))})
+        code, d = self.speak(wav_of(np.zeros((main.MAX_AUDIO_SECONDS + 1) * 16000)))
+        self.assertEqual(code, 413)
+        self.assertIn(f"{main.MAX_AUDIO_SECONDS}초", d["detail"])
+        self.assertEqual(fake.posts, [])
+        self.assertEqual(gem.texts, [])
+
+    def test_exactly_at_limit_is_judged(self) -> None:
+        code, d = self.speak(wav_of(np.zeros(main.MAX_AUDIO_SECONDS * 16000)))
+        self.assertEqual(code, 200)
+        self.assertFalse(d["usable"])                   # 무음이라 VAD 가 거절 — 길이로는 막지 않음
+
+    def test_over_byte_limit_is_413(self) -> None:
+        code, _ = self.speak(b"\0" * (main.MAX_AUDIO_BYTES + 1))
+        self.assertEqual(code, 413)
+
+
 class SttTest(Base):
     def test_request_has_no_target_and_only_speech_audio(self) -> None:
         fake, _ = self.install({"groq": lambda n: Resp(200, stt_ok(TARGET))})
