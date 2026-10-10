@@ -555,7 +555,7 @@ function speak(text, btn) {
 }
 if (ttsSupported()) {
   loadVoices();
-  speechSynthesis.onvoiceschanged = () => { loadVoices(); if (['u-study', 'u-coll'].includes(S?.screen)) render(); };
+  speechSynthesis.onvoiceschanged = () => { loadVoices(); if (['u-study', 'u-sched', 'u-coll'].includes(S?.screen)) render(); };
 }
 
 /* ================= 화면 정의 ================= */
@@ -616,6 +616,11 @@ function themeCard() {
 
 const MODE = document.documentElement.dataset.mode || 'product';   // product | demo | legacy (index.html 인라인 스크립트)
 const LEGACY = MODE === 'legacy';
+/* P4 마스터-디테일: 900px 이상(제품·데모 모드)에서 일정표·학습·문장 모음은 2열(목록 + 상세)로 그린다. 폭이 바뀌면 다시 그린다. */
+const wideMq = window.matchMedia ? window.matchMedia('(min-width: 900px)') : null;
+const isWide = () => !LEGACY && !!wideMq && wideMq.matches;
+if (wideMq) { const onWide = () => { try { if (typeof S !== 'undefined' && S && S.plan) render(); } catch (e) { /* 첫 렌더 전 */ } }; (wideMq.addEventListener ? wideMq.addEventListener.bind(wideMq, 'change') : wideMq.addListener.bind(wideMq))(onWide); }
+const studyShown = () => S.screen === 'u-study' || (S.screen === 'u-sched' && isWide());   // 학습 카드가 화면에 있는가(말하기·TTS 상태 갱신 대상)
 function renderSide() {
   let html = `<div class="side-brand"><div class="mark"><i>EN</i>여행영어 목업</div><p>prd.md v2 기준 · 왼쪽 메뉴로 화면을 고르고, 화면 안 버튼으로 실제 흐름을 따라가 보세요.</p></div><nav class="side-nav">`;
   SCREENS.forEach(s => {
@@ -648,9 +653,10 @@ function updateSideActive() {
 }
 
 function render() {
-  if (S.screen !== 'u-study' && SPK.state !== 'idle') cancelSpeak();
+  if (!studyShown() && SPK.state !== 'idle') cancelSpeak();
   const app = $('.app'), same = S.lastScreen === S.screen;
   const prevTop = LEGACY ? (app ? app.scrollTop : 0) : window.scrollY;   // 제품·데모 모드는 문서 스크롤
+  const prevList = $('.split-list'), prevListTop = prevList ? prevList.scrollTop : 0;   // 마스터-디테일 목록의 스크롤
   updateSideActive(); renderDemo();
   const sc = SCR[S.screen];
   const t = S.trip;
@@ -668,6 +674,7 @@ function render() {
   if (ab) { ab.hidden = !API.external; if (API.external) ab.innerHTML = `외부 서버 연결 중: <b>${esc(API.host)}</b> — 이 주소로 요청하고 녹음을 전송합니다`; }
   if (LEGACY) { const na = $('.app'); if (na && same) na.scrollTop = prevTop; }
   else window.scrollTo(0, same ? prevTop : 0);
+  { const nl = $('.split-list'); if (nl && prevListTop) nl.scrollTop = prevListTop; }
   S.lastScreen = S.screen;
 }
 
@@ -707,7 +714,7 @@ function pframe(inner, o = {}) {
   const tabs = [['u-home', '홈', I.home], ['u-sched', '일정표', I.cal], ['u-study', '학습', I.cards], ['u-coll', '문장 모음', I.book]];
   const tabActive = o.tab || S.screen;
   const nav = o.tabbar ? `<nav class="pnav" aria-label="주 메뉴">${tabs.map(([id, l, ic]) => `<button class="${tabActive === id ? 'on' : ''}" data-act="tab" data-id="${id}" ${tabActive === id ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></button>`).join('')}</nav>` : '';
-  return `<div class="pframe ${o.tabbar ? 'has-nav' : ''}">${nav}<div class="pmain"><div class="pcol">
+  return `<div class="pframe ${o.tabbar ? 'has-nav' : ''}">${nav}<div class="pmain"><div class="pcol ${o.wide ? 'wide' : ''}">
     ${o.appbar || ''}
     <div class="app">${inner}</div>
     ${o.bottom ? `<div class="bottombar">${o.bottom}</div>` : ''}
@@ -981,11 +988,11 @@ function ring(rate) {
     <circle cx="48" cy="48" r="${r}" fill="none" stroke="var(--accent)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - rate)}"/></svg>
     <div class="v"><div><b>${Math.round(rate * 100)}%</b><span>완료율</span></div></div></div>`;
 }
-function srow(r) {
+function srow(r, sel = false) {
   const st = rowStatus(r);
   const stLabel = { done: '완료', miss: '미완료', today: '오늘', future: '예정', free: '—' }[st];
   const extra = r.phase === 'trip' ? `${r.day.types.map(ty => `<span class="badge ${DAYTYPE[ty].cls}">${DAYTYPE[ty].label}</span>`).join('')}<span class="small">${esc(r.day.city)}</span>` : '';
-  return `<button class="srow ${r.date === S.today ? 'today' : ''}" data-act="study-date" data-date="${r.date}">
+  return `<button class="srow ${r.date === S.today ? 'today' : ''} ${sel ? 'sel' : ''}" data-act="study-date" data-date="${r.date}" ${sel ? 'aria-current="true"' : ''}>
     <span class="dt">${Dt.md(r.date)}<small>${Dt.dow(r.date)}요일</small></span>
     <span class="ct"><span class="line1"><span class="badge ${KIND[r.kind].cls}">${KIND[r.kind].label}</span>${extra}${r.newIds.length ? `<span class="badge b-new">새 ${r.newIds.length}</span>` : ''}</span>
       <span class="line2">${r.kind === 'free' ? '자유 일정 · 완료율 계산 제외' : `${r.ids.length}문장 · ${esc(describe(r))}`}</span></span>
@@ -993,26 +1000,34 @@ function srow(r) {
 }
 
 /* SCR-07 */
-function scrSched() {
+function schedListHtml(selDate = null) {
   const pr = progress();
   let rows = S.sched;
   if (S.schedFilter === 'miss') rows = rows.filter(r => rowStatus(r) === 'miss');
   const pre = rows.filter(r => r.phase === 'pre'), trip = rows.filter(r => r.phase === 'trip');
-  const inner = `<div class="app-pad">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+  const one = r => srow(r, r.date === selDate);
+  return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div class="seg"><button class="${S.schedFilter === 'all' ? 'on' : ''}" data-act="sched-filter" data-v="all">전체</button><button class="${S.schedFilter === 'miss' ? 'on' : ''}" data-act="sched-filter" data-v="miss">미완료 ${pr.miss}</button></div>
       <span class="small">완료율 <b style="color:var(--text)">${Math.round(pr.rate * 100)}%</b> (${pr.done}/${pr.den})</span></div>
-    ${pre.length ? `<div class="phase-label">여행 전 · ${S.plan.N}일</div>${pre.map(srow).join('')}` : ''}
-    ${trip.length ? `<div class="phase-label">여행 중</div>${trip.map(srow).join('')}` : ''}
-    ${!rows.length ? `<div class="empty"><div class="ico">${I.check}</div>미완료 날짜가 없어요</div>` : ''}
-  </div>`;
-  return frame(inner, { appbar: appbar('일정표'), tabbar: true });
+    ${pre.length ? `<div class="phase-label">여행 전 · ${S.plan.N}일</div>${pre.map(one).join('')}` : ''}
+    ${trip.length ? `<div class="phase-label">여행 중</div>${trip.map(one).join('')}` : ''}
+    ${!rows.length ? `<div class="empty"><div class="ico">${I.check}</div>미완료 날짜가 없어요</div>` : ''}`;
+}
+function scrSched() {
+  if (isWide()) return scrSplit('u-sched');
+  return frame(`<div class="app-pad">${schedListHtml()}</div>`, { appbar: appbar('일정표'), tabbar: true });
+}
+/* P4: 넓은 화면의 일정표·학습 = 왼쪽 일정 목록 + 오른쪽 선택한 날의 학습 카드. 날짜를 눌러도 화면은 그대로이고 오른쪽만 바뀐다. */
+function scrSplit(tab) {
+  const r = pickRow();
+  let detail = `<div class="empty">일정이 없어요</div>`;
+  if (r) { const v = studyView(r); detail = `${v.inner}${v.bottom ? `<div class="bottombar">${v.bottom}</div>` : ''}`; }
+  return frame(`<div class="split"><div class="split-list">${schedListHtml(r ? r.date : null)}</div><div class="split-detail">${detail}</div></div>`,
+    { appbar: appbar(tab === 'u-study' ? '학습' : '일정표'), tabbar: true, tab, wide: true });
 }
 
 /* SCR-08 */
-function scrStudy() {
-  const r = pickRow();
-  if (!r) return frame(`<div class="empty">일정이 없어요</div>`, { tabbar: true });
+function studyView(r) {
   if (S.card.date !== r.date) resetCard(r.date);
   const st = rowStatus(r), ended = S.today > S.trip.tripEnd;
   const head = `<div class="study-head"><div><div class="small">${r.phase === 'trip' ? `${esc(r.day.city)} · ${r.day.types.map(ty => DAYTYPE[ty].label).join('·')}` : '여행 전 학습'}</div>
@@ -1024,16 +1039,15 @@ function scrStudy() {
   else if (st === 'miss') banner = notice('지난 날짜예요. 지금 학습하면 완료로 기록돼요.', 'warn');
 
   if (r.kind === 'free') {
-    return frame(`<div class="app-pad">${head}<div class="empty" style="padding-top:70px"><div class="ico">☼</div><b style="color:var(--text);font-size:17px">오늘은 자유 일정이에요</b>
-      <p>배치된 장소가 없어 카드가 없어요.<br>문장 모음에서 복습해 보세요. (완료율 계산에서 제외돼요)</p><button class="btn soft" data-act="tab" data-id="u-coll">문장 모음 열기</button></div></div>`,
-      { appbar: appbar('학습', { back: 'u-sched' }), tabbar: true, tab: 'u-study' });
+    return { inner: `<div class="app-pad">${head}<div class="empty" style="padding-top:70px"><div class="ico">☼</div><b style="color:var(--text);font-size:17px">오늘은 자유 일정이에요</b>
+      <p>배치된 장소가 없어 카드가 없어요.<br>문장 모음에서 복습해 보세요. (완료율 계산에서 제외돼요)</p><button class="btn soft" data-act="tab" data-id="u-coll">문장 모음 열기</button></div></div>`, bottom: '', tabbar: true };
   }
   if (S.justCompleted === r.date) {
     const pr = progress();
-    return frame(`<div class="app-pad">${head}<div class="done-banner"><div class="seal">DONE<br>${Dt.md(r.date)}</div>
+    return { inner: `<div class="app-pad">${head}<div class="done-banner"><div class="seal">DONE<br>${Dt.md(r.date)}</div>
       <div class="title-lg">학습 완료!</div><p class="sub">문장 ${r.ids.length}개를 모두 확인했어요. 완료율이 <b>${Math.round(pr.rate * 100)}%</b>로 갱신됐어요.</p></div>
       <button class="btn primary block" data-act="tab" data-id="u-home">홈으로</button><div style="height:8px"></div>
-      <button class="btn soft block" data-act="restudy">다시 보기</button></div>`, { appbar: appbar('학습', { back: 'u-sched' }), tabbar: true, tab: 'u-study' });
+      <button class="btn soft block" data-act="restudy">다시 보기</button></div>`, bottom: '', tabbar: true };
   }
   const i = Math.min(S.card.i, r.ids.length - 1), s = S.smap[r.ids[i]];
   const isNew = r.kind === 'new' || r.newIds.includes(s.id);
@@ -1057,7 +1071,14 @@ function scrStudy() {
       <div class="small" style="margin-top:6px" data-live="flipcount">${i + 1} / ${r.ids.length} · 뒤집은 카드 ${S.card.flipped.size}</div></div>
       <button class="round" data-act="card-next" ${i === r.ids.length - 1 ? 'disabled' : ''}>${I.next}</button></div>
   </div>`;
-  return frame(inner, { appbar: appbar('학습', { back: 'u-sched' }), bottom: completeBtn(r), tabbar: false });
+  return { inner, bottom: completeBtn(r), tabbar: false };
+}
+function scrStudy() {
+  if (isWide()) return scrSplit('u-study');
+  const r = pickRow();
+  if (!r) return frame(`<div class="empty">일정이 없어요</div>`, { tabbar: true });
+  const v = studyView(r);
+  return frame(v.inner, { appbar: appbar('학습', { back: 'u-sched' }), bottom: v.bottom || undefined, tabbar: v.tabbar, tab: 'u-study' });
 }
 function completeBtn(r) {
   const all = S.card.flipped.size >= r.ids.length;
@@ -1081,25 +1102,26 @@ function scrColl() {
   const learnBadge = s => s.learnPhase === 'none' ? '<span class="badge b-only">문장 모음 전용</span>' : s.learnPhase === 'trip' ? '<span class="badge b-new">여행 중 새 문장</span>' : '';
   const item = s => `<div class="sent"><div><div class="tags">${learnBadge(s)}${aiBadges(s)}<span class="small">${esc(s.situation)}</span></div><div class="en">${phHtml(s.en)}</div><div class="ko">${phHtml(s.ko)}</div></div>
     <button class="play" data-act="speak" data-id="${s.id}">${I.speaker}</button></div>`;
-  let body;
+  let chipsHtml, listHtml;
   if (tab === 'common') {
     const chips = [['all', '전체'], ...SIT_ORDER.map(k => [k, S.commons.find(g => g.key === k).label])];
     const list = S.sents.filter(s => s.source === 'common' && (f === 'all' || s.sit === f));
-    body = `<div class="chips">${chips.map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-act="coll-filter" data-v="${k}">${l}</button>`).join('')}</div>
-      ${SIT_ORDER.filter(k => f === 'all' || k === f).map(k => { const g = list.filter(s => s.sit === k); return g.length ? `<div class="phase-label">${g[0].sitLabel}</div>${g.map(item).join('')}` : ''; }).join('')}`;
+    chipsHtml = `<div class="chips">${chips.map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-act="coll-filter" data-v="${k}">${l}</button>`).join('')}</div>`;
+    listHtml = `${SIT_ORDER.filter(k => f === 'all' || k === f).map(k => { const g = list.filter(s => s.sit === k); return g.length ? `<div class="phase-label">${g[0].sitLabel}</div>${g.map(item).join('')}` : ''; }).join('')}`;
   } else {
     const cities = S.trip.cities.map(c => c.name);
     const cf = cities.includes(f) ? f : 'all';
     const places = S.places.filter(p => p.selected && (cf === 'all' || p.city === cf)).sort((a, b) => a.visitDate.localeCompare(b.visitDate) || a.visitOrder - b.visitOrder);
-    body = `<div class="chips">${[['all', '전체'], ...cities.map(c => [c, c])].map(([k, l]) => `<button class="${cf === k ? 'on' : ''}" data-act="coll-filter" data-v="${esc(k)}">${esc(l)}</button>`).join('')}</div>
-      ${places.map(p => `<div class="phase-label">${esc(p.name)} · ${Dt.md(p.visitDate)} 방문</div>${S.sents.filter(s => s.placeId === p.id).map(item).join('')}`).join('')}`;
+    chipsHtml = `<div class="chips">${[['all', '전체'], ...cities.map(c => [c, c])].map(([k, l]) => `<button class="${cf === k ? 'on' : ''}" data-act="coll-filter" data-v="${esc(k)}">${esc(l)}</button>`).join('')}</div>`;
+    listHtml = `${places.map(p => `<div class="phase-label">${esc(p.name)} · ${Dt.md(p.visitDate)} 방문</div>${S.sents.filter(s => s.placeId === p.id).map(item).join('')}`).join('')}`;
   }
   const ts = ttsState();
-  const inner = `<div class="app-pad">
-    <div class="seg" style="margin-bottom:12px"><button class="${tab === 'common' ? 'on' : ''}" data-act="coll-tab" data-v="common">공통 상황 30</button><button class="${tab === 'place' ? 'on' : ''}" data-act="coll-tab" data-v="place">장소별 ${S.sents.length - 30}</button></div>
-    ${ts !== 'ok' ? notice('이 브라우저는 듣기를 지원하지 않아요.', 'warn') + '<div style="height:10px"></div>' : ''}
-    ${body}</div>`;
-  return frame(inner, { appbar: appbar('문장 모음'), tabbar: true });
+  const segHtml = `<div class="seg" style="margin-bottom:12px"><button class="${tab === 'common' ? 'on' : ''}" data-act="coll-tab" data-v="common">공통 상황 30</button><button class="${tab === 'place' ? 'on' : ''}" data-act="coll-tab" data-v="place">장소별 ${S.sents.length - 30}</button></div>`;
+  const ttsNote = ts !== 'ok' ? notice('이 브라우저는 듣기를 지원하지 않아요.', 'warn') + '<div style="height:10px"></div>' : '';
+  if (isWide()) {   // P4: 왼쪽 = 탭·상황/도시 필터, 오른쪽 = 문장
+    return frame(`<div class="split coll"><div class="split-list">${segHtml}${chipsHtml}</div><div class="split-detail">${ttsNote}${listHtml}</div></div>`, { appbar: appbar('문장 모음'), tabbar: true, wide: true });
+  }
+  return frame(`<div class="app-pad">${segHtml}${ttsNote}${chipsHtml}${listHtml}</div>`, { appbar: appbar('문장 모음'), tabbar: true });
 }
 
 /* SCR-06 (종료) */
@@ -1336,7 +1358,7 @@ function privacyCard() {
 }
 const weakItem = s => ({ category_id: s.categoryId, id: s.situationId, situation: s.situation, en: s.en, ko: s.ko });
 function updateSpeakUi() {
-  const el = $('[data-live=speak]'); const r = S.screen === 'u-study' && pickRow();
+  const el = $('[data-live=speak]'); const r = studyShown() && pickRow();
   if (!el || !r) return;
   const s = S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]];
   if (s) el.innerHTML = speakHtml(s);
@@ -1498,7 +1520,11 @@ const ACT = {
     confirmBox('장소를 확정할까요?', `선택한 ${n}곳으로 방문 순서와 문장을 만들어요. 확정한 뒤에는 장소를 바꿀 수 없어요.`, '확정하기', () => { S.modal = null; S.trip.status = 'route_requested'; request('route'); });
   },
 
-  'study-date': el => { S.studyDate = el.dataset.date; S.justCompleted = null; go('u-study'); },
+  'study-date': el => {
+    S.studyDate = el.dataset.date; S.justCompleted = null;
+    if (isWide() && (S.screen === 'u-sched' || S.screen === 'u-study')) { go(S.screen); window.scrollTo(0, 0); }   // 2열: 화면은 그대로, 오른쪽 상세만 바뀐다
+    else go('u-study');
+  },
   flip: el => {
     el.classList.toggle('flipped');
     // 보고 있는 면을 기억한다. 동의 창 등으로 화면을 다시 그려도 카드가 앞면으로 돌아가지 않게.

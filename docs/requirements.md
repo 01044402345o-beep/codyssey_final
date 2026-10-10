@@ -42,7 +42,7 @@
 | NFR-05 | 개인정보 | 서버는 녹음을 저장하지 않음, 말소리 없으면 외부 전송 없음, 학습 기록은 브라우저에만 | 완료 | `/speak-check`, `e2e/test_silence.py` |
 | NFR-06 | 남용·비용 방어 | IP당 20회/60초, 입력 길이(도시 80자·장소 20개·목표 200자), 오디오 8MB·`audio/*` | 완료 | `backend/app/main.py` |
 | NFR-07 | 보안 | API 키는 Render 환경변수에만, 코드·저장소에 없음 | 완료 | `render.yaml` `sync: false` |
-| NFR-08 | 화면 | 휴대폰·태블릿·PC 폭 대응(반응형), 화면 문구 한국어·학습 문장 영어 | **부분** | 제품 셸(탭바→레일→사이드, 문서 스크롤)로 320~1920px 12개 화면 가로 넘침 0 (`mockup/audit/responsive_audit.js`), e2e `test_shell.py` 29개. P2 반영(12px 하한·입력 16px·터치 44px·keep-all, e2e 45개). P3 반영(라이트·다크·시스템, 글자 대비 AA 계산·측정 통과, e2e 57개). **미완**: 마스터-디테일(P4), 실기기(iOS Safari 등) 미검증, 다크 팀 디자인 검수. 설계: `docs/RESPONSIVE_STRATEGY.md` |
+| NFR-08 | 화면 | 휴대폰·태블릿·PC 폭 대응(반응형), 화면 문구 한국어·학습 문장 영어 | **부분** | 제품 셸(탭바→레일→사이드, 문서 스크롤)로 320~1920px 12개 화면 가로 넘침 0 (`mockup/audit/responsive_audit.js`), e2e `test_shell.py` 29개. P2 반영(12px 하한·입력 16px·터치 44px·keep-all, e2e 45개). P3 반영(라이트·다크·시스템, 글자 대비 AA 계산·측정 통과, e2e 57개). P4 반영(≥900px 일정표·학습·문장 모음 2열, e2e 86개). **미완**: 실기기(iOS Safari·iPad 등) 미검증, 다크 팀 디자인 검수, 브라우저 뒤로가기와 날짜 선택 연동. 설계: `docs/RESPONSIVE_STRATEGY.md` |
 | NFR-09 | 품질 | PR 마다 CI(백엔드 85·프론트 22 단위 테스트, 브라우저 E2E 51개 확인) | 완료 | `.github/workflows/ci.yml` |
 | NFR-10 | 관측 | `/health` 에 배포 커밋, 키 상태, 모델 상태, 교차검증 준비 여부 | 완료 | `GET /health` |
 

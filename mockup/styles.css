@@ -1038,3 +1038,23 @@ html:not([data-mode=legacy]) :where(.input, .cs-row input, .check) { border-colo
 input[type="date"] { -webkit-appearance: none; appearance: none; display: block; inline-size: 100%; min-inline-size: 0; max-inline-size: 100%; margin: 0; text-align: start; }
 input[type="date"]::-webkit-date-and-time-value { text-align: start; min-width: 0; margin: 0; }
 input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
+
+/* =====================================================================
+   P4 — 마스터-디테일 (≥900px, 제품·데모 모드): 일정표·학습·문장 모음
+   JS(isWide)가 2열 마크업(.split)을 그린다. 폭이 좁으면 .split 이 없으므로 기존 1열 화면이 그대로다.
+   ===================================================================== */
+:root { --wide-max: 70rem; }   /* 1120px */
+.pframe .pcol.wide { max-width: var(--wide-max); }
+.split { display: grid; grid-template-columns: minmax(18.75rem, 5fr) minmax(0, 7fr); gap: clamp(16px, 2.5vw, 32px); align-items: start; padding: 8px var(--gutter) 28px; }
+.split-list { position: sticky; top: 3.5rem; max-height: calc(100dvh - 4.5rem); overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; min-width: 0; }
+.split-detail { min-width: 0; }
+.split .app-pad { padding-inline: 0; }
+.split-detail .bottombar { position: sticky; bottom: 0; padding-inline: 0; background: linear-gradient(to top, var(--bg) 70%, transparent); }
+.split-detail .flip { height: max(clamp(360px, 60dvh, 560px), 22.5rem); }
+.srow.sel { border-color: var(--accent-text); box-shadow: 0 0 0 1px var(--accent-text); }
+.srow.today.sel { border-color: var(--accent-text); }
+/* 문장 모음: 왼쪽 필터는 세로 목록 */
+.split.coll .split-list .chips { flex-direction: column; overflow: visible; gap: 6px; }
+.split.coll .split-list .chips button { width: 100%; text-align: left; border-radius: 12px; padding: 10px 14px; }
+.split.coll .split-list .seg { display: flex; width: 100%; }
+.split.coll .split-list .seg button { flex: 1; }
