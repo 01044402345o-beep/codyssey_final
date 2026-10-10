@@ -271,3 +271,11 @@ test('speakCheck: 목표 문장과 상황 이름을 보낸다 (상황은 120자 
 test('무음 판정은 서버(Silero VAD) 몫 — 브라우저 음량(데시벨) 판정 함수가 없다', () => {
   for (const k of ['isSilent', 'SILENCE_RMS', 'MIN_VOICED_MS']) assert.equal(k in AI, false, k);
 });
+
+test('저장소가 없거나(null) 차단돼도 학습 흐름이 죽지 않는다', () => {
+  assert.deepEqual(AI.loadWeak(null), []);
+  assert.equal(AI.saveWeak(null, []), false);
+  assert.deepEqual(AI.loadConsent(null), { voice: false, at: null });
+  assert.equal(AI.saveConsent(null, true), false);
+  assert.equal(AI.withdrawConsent(null), false);
+});

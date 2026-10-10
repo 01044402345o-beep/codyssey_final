@@ -43,7 +43,7 @@ with sync_playwright() as p:
     def flip():
         page.locator('[data-act="flip"]').first.click(position={"x": 30, "y": 30}); page.wait_for_timeout(700)
 
-    page.goto(BASE + "/#u-study")
+    page.goto(BASE + "/?demo=1&frame=1#u-study")
     page.wait_for_timeout(800)
     flip()
     ls = lambda k: page.evaluate(f"localStorage.getItem('{k}')")
@@ -116,7 +116,7 @@ with sync_playwright() as p:
     page.locator('[data-act="modal-cancel"]').click()
 
     # 8) 문구: 보고서는 예시 데이터, 로그인 고지, 문장 모음 배지
-    page.goto(BASE + "/?fresh=1#u-report"); page.wait_for_timeout(1200)   # 새 로드 = 새 데모 여행 (보고서 단계)
+    page.goto(BASE + "/?demo=1&frame=1&fresh=1#u-report"); page.wait_for_timeout(1200)   # 새 로드 = 새 데모 여행 (보고서 단계)
     check("동의 철회 상태에서 시작 (생성은 동의와 무관)", ls("cd_consent") is None)
     rep = page.locator(".app").inner_text()
     check("보고서 '예시 데이터' 고지", "미리 준비한 예시 데이터" in rep)
