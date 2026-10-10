@@ -949,7 +949,9 @@ html:not([data-mode=legacy]) .toast { left: 50%; bottom: calc(var(--nav-h) + 20p
 .pframe .login h1 { margin-top: clamp(64px, 18dvh, 150px); }
 .pframe .login .stamp { width: clamp(140px, 50vw, 220px); height: clamp(140px, 50vw, 220px); }
 .pframe .gen { min-height: 70dvh; }
-.pframe .city-card .row2 { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+/* 날짜 입력 두 칸: 한 칸 최소 12rem(=192px). iOS Safari 의 날짜 입력은 고유 폭이 커서(≈180px) 반반으로 나누면 칸을 넘친다.
+   폰 폭에서는 자동으로 한 줄씩 쌓이고, 태블릿 이상에서 두 칸이 된다. rem 이라 글자 확대 때도 같이 커진다. */
+.pframe .city-card .row2 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
 .pframe .dots { max-width: 100%; }
 
 /* 관리자 (제품·데모 모드: 가짜 브라우저 창 없이 전체 폭) */
@@ -1030,3 +1032,9 @@ html:not([data-mode=legacy]) .input:focus-visible, html:not([data-mode=legacy]) 
 html:not([data-mode=legacy]) :where(.input, .cs-row input, .check) { border-color: var(--border-input); }
 .theme-card .seg { display: flex; width: 100%; }
 .theme-card .seg button { flex: 1; }
+
+/* 날짜 입력 (iOS Safari): 기본 모양은 고유 폭을 고집해 width/min-width 를 무시하고 칸·화면 오른쪽 밖으로 삐져나오며 글자가 가운데로 간다.
+   모양을 끄고(appearance) 블록 + 100% 로 못 박아야 칸 폭을 따른다. 달력 선택은 그대로 열린다. */
+input[type="date"] { -webkit-appearance: none; appearance: none; display: block; inline-size: 100%; min-inline-size: 0; max-inline-size: 100%; margin: 0; text-align: start; }
+input[type="date"]::-webkit-date-and-time-value { text-align: start; min-width: 0; margin: 0; }
+input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }

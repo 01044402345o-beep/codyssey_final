@@ -183,6 +183,21 @@ with sync_playwright() as p:
     check("다크 관리자 화면: 표면이 어두움", page.evaluate("getComputedStyle(document.querySelector('.admin-main')).backgroundColor") != "rgb(250, 248, 243)")
     ctx.close()
 
+    # --- 날짜 입력이 칸을 넘치지 않는다 (iOS 날짜 입력 고유 폭 이슈의 회귀 방지; 실기기 iOS 는 이 환경에서 검증 불가) ---
+    for w in (320, 360, 390, 430, 768):
+        ctx = b.new_context(viewport={"width": w, "height": 900}, has_touch=True, is_mobile=True)
+        page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(BASE + "/#u-input"); page.wait_for_timeout(600)
+        r = page.evaluate("""[...document.querySelectorAll('input[type=date].input')].map(i => {
+          const q = i.getBoundingClientRect(), host = i.closest('.city-card, .field').getBoundingClientRect();
+          return { out: q.right > host.right + 0.5 || q.left < host.left - 0.5, app: getComputedStyle(i).appearance, w: Math.round(q.width), host: Math.round(host.width) }; })""")
+        check(f"{w}px: 날짜 입력 {len(r)}개가 카드·필드 안에 들어감", r and not any(x["out"] for x in r), str(r[:2]))
+        check(f"{w}px: 날짜 입력 appearance:none(iOS 고유 폭 무시 방지)", all(x["app"] == "none" for x in r))
+        if w <= 430:
+            cols = page.evaluate("getComputedStyle(document.querySelector('.city-card .row2')).gridTemplateColumns.split(' ').length")
+            check(f"{w}px: 날짜 두 칸이 한 줄씩 쌓임(칸 최소 12rem)", cols == 1, str(cols))
+        ctx.close()
+
     # --- 외부 서버 배너 ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page()
