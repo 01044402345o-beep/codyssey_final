@@ -252,7 +252,8 @@ Long-term Memory의 실제 완료 기준:
 | 항목 | 값 | 방법 |
 |---|---|---|
 | 호출 제한 | 20회/60초 (IP 기준) | `RATE_LIMIT` / `RATE_WINDOW` 환경변수. 프록시 뒤 사용자 IP 는 `TRUSTED_PROXY_HOPS`(기본 0 = 모두 한 IP 로 묶임, `docs/DEPLOY_RUNBOOK.md` F14) |
-| 입력 길이 | `city` 80자, `places` 20개, `weak_expressions` 20개, `target` 200자 | Pydantic → 초과 시 422 |
+| 입력 길이 | `city` 80자, `places` 20개, `weak_expressions` 20개(각 64자), `target` 200자 | Pydantic → 초과 시 422 |
+| id 형식 | `category_id`·`weak_expressions[]` 는 `^[a-z][a-z0-9_]*$` (계약 id 형식). `category_id` 는 파일 경로가 되므로 `../` 등을 막는다 | 어긋나면 422. 형식은 맞지만 계약에 없는 취약 상황 id 는 프롬프트에서 빼고 `weak_unknown_situation` 경고만 남긴다 |
 | 장소 종류 | `places[].place_type` 은 그 카테고리 계약의 `place_types` 중 하나(대소문자·앞뒤 공백 무시, 생략 가능) | 밖이면 422 + `allowed` 목록. 프롬프트에 자유 문자열이 들어가지 않게 한다 |
 | 오디오 | 8MB, 30초(`MAX_AUDIO_SECONDS`), `audio/*` 만 | 초과 시 413, 형식 오류 415, 빈 파일 400. 길이는 디코딩 직후·외부 AI 호출 전에 검사(화면은 15초에서 녹음을 멈춤) |
 
