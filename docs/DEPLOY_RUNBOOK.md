@@ -306,6 +306,28 @@ curl -s https://<앱>.onrender.com/health | python3 -m json.tool
 
 ---
 
+### F14. 우리 서버의 429가 여러 사용자에게 한꺼번에 남 (프록시 뒤 IP)
+
+- **증상**: 한 사람이 몇 번 쓰지 않았는데 `요청이 너무 많습니다` (우리 서버 429). 여러 테스터가 동시에 겪음
+- **원인**: 앱은 Render 프록시 뒤에 있어 연결 상대(`request.client`)가 프록시입니다. `TRUSTED_PROXY_HOPS=0`(기본)이면 모든 사용자가 **한 IP 로 묶여** `RATE_LIMIT` 를 나눠 씁니다.
+  uvicorn 은 `127.0.0.1` 에서 온 `X-Forwarded-For` 만 믿으므로 Render 에서는 자동으로 풀리지 않습니다
+- **확인 (배포 후 1회, 2분)**
+  1. 내 공인 IP 확인: 브라우저로 `https://ifconfig.me`
+  2. 배포 주소 `/health` 를 한 번 열기 (아무 요청이나 됩니다. 프로세스마다 첫 요청 한 번만 기록)
+  3. Render → Logs 에서 `프록시 확인:` 한 줄 찾기. IP 는 마지막 자리를 가리고 `(공인)`/`(사설)` 을 붙여 둡니다. 예:
+     `프록시 확인: 연결 상대=10.214.3.x(사설), X-Forwarded-For=211.234.10.x(공인) , 172.71.0.x(공인), TRUSTED_PROXY_HOPS=0`
+  4. **`연결 상대` 가 내 IP(앞 세 자리 일치)면** uvicorn 이 이미 사용자 IP 를 쓰고 있는 것입니다. 할 일 없음(`0` 유지)
+  5. 아니면 `X-Forwarded-For` 에서 **내 IP 가 끝에서 몇 번째인지** 셉니다. 위 예에서는 끝에서 2번째 → `2`
+- **조치**: Render → Environment → `TRUSTED_PROXY_HOPS` 를 그 값으로 추가 → 자동 재시작. 재시작 뒤 `/health` 를 다시 열어 3번 로그의 `TRUSTED_PROXY_HOPS` 값이 바뀐 것을 확인
+- **주의**
+  - 값을 **크게** 잡으면 체인 앞쪽, 즉 사용자가 위조할 수 있는 값을 읽게 됩니다. 헤더만 바꿔 제한을 우회할 수 있습니다. 센 값 그대로 넣으세요
+  - 체인이 값보다 짧은 요청은 연결 상대 IP 로 셉니다(모두 묶이는 쪽 = 더 엄격)
+  - 확인 전 급하면 `RATE_LIMIT` 상향(아래 C절)이 임시 완화입니다
+- **롤백**: `TRUSTED_PROXY_HOPS` 삭제 = 예전 동작
+- **재발 방지**: 실사용자 테스트(10/19~) 전에 한 번 확인해 값을 넣어 둡니다
+
+---
+
 ## 5. 롤백 절차 (3계층)
 
 ### A. 배포 롤백 — Render 대시보드 (가장 빠름)
@@ -340,7 +362,7 @@ git push origin main
 
 구현자가 1명일 때 **가장 빠른 복구**입니다. Render → Environment → 값 변경 → 자동 재시작.
 
-> **기본값 주의 (코드 기준)**: `RATE_LIMIT=20`, `RATE_WINDOW=60`, `CONFIG_STRICT=0`, `ALLOW_ORIGINS=*`, `AI_MIN_ATTEMPTS=30`(하한, 낮출 수 없음).
+> **기본값 주의 (코드 기준)**: `RATE_LIMIT=20`, `RATE_WINDOW=60`, `TRUSTED_PROXY_HOPS=0`, `CONFIG_STRICT=0`, `ALLOW_ORIGINS=*`, `AI_MIN_ATTEMPTS=30`(하한, 낮출 수 없음).
 > 현재 `render.yaml` 에는 `PYTHON_VERSION`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `ASSEMBLYAI_API_KEY` 가 정의돼 있습니다. 모델은 실행 중 목록에서 고릅니다. `STT_SELFTEST=1` 은 검증할 때만 넣고 끝나면 지웁니다.
 > 아래 표의 "평상시" 값은 **Render Environment 에 직접 추가해야** 적용됩니다.
 > 교육장처럼 한 공용 IP 에서 여러 명이 테스트하면 `RATE_LIMIT=20/60s` 에 걸릴 수 있으니 테스트 전에 올려 두세요.
@@ -349,6 +371,7 @@ git push origin main
 |---|---|---|---|
 | `RATE_LIMIT` | `20` | `120` | 테스터 몰릴 때 429 방지 |
 | `RATE_WINDOW` | `60` | `60` | 유지 |
+| `TRUSTED_PROXY_HOPS` | F14 로 확인한 값 (기본 `0`) | `0` | 사용자별 호출 제한. 0 이면 모든 사용자가 한 IP 로 묶임 |
 | `CONFIG_STRICT` | 기본 `0` → 발표 전 `1`로 설정 | `0` | 설정 누락이어도 200 (시연 우선) |
 | `ALLOW_ORIGINS` | 기본 `*` (같은 서비스 서빙이면 불필요) | `*` | 별도 프론트를 쓸 때만 좁힘. CORS 문제 즉시 해소 (**임시**) |
 | `GEMINI_MODEL` | 비워 둠 (동적 선택) | 목록에 있는 모델명 | 특정 모델 우선 시도 (고정 아님) |
