@@ -108,31 +108,36 @@
   const postJson = (fetchImpl, url, body, signal) =>
     httpJson(fetchImpl, url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, signal);
   /* cities: [{ name, places:[{id,name,en}] }] → [{ city, kind, pools }] */
-  async function generateByCity({ fetchImpl, base, cities, weakIds, signal, timeoutMs = GEN_TIMEOUT_MS, categoryId = 'restaurant', placeType = 'restaurant' }) {
-    const allFallback = () => cities.map(c => ({ city: c.name, kind: 'fallback', pools: null }));
+  async function generateByCity({ fetchImpl, base, cities, weakIds, signal, timeoutMs = GEN_TIMEOUT_MS, categoryId, placeType }) {
+    const allFallback = () => cities.map(c => ({ city: c.name, categoryId: c.categoryId, kind: 'fallback', pools: null }));
     if (base === null || base === undefined) return allFallback();
     const t = withTimeout(signal, timeoutMs);        // /health 와 /generate 가 하나의 제한 시간을 공유한다
     try {
       // /health 로 서버를 깨우고, 이 카테고리의 현재 유효한 상황 id 만 취약 상황으로 보낸다.
       let health;
       try { health = await httpJson(fetchImpl, base + '/health', {}, t.signal); } catch (e) { return allFallback(); }
-      const valid = health && health.situations && Array.isArray(health.situations[categoryId]) ? health.situations[categoryId] : null;
-      const weak = valid ? weakIds.filter(w => valid.includes(w)) : weakIds;
-      const jobs = cities.map(c => postJson(fetchImpl, base + '/generate', {
-        category_id: categoryId, city: c.name,
-        places: c.places.map(p => ({ name: p.en || p.name, place_type: placeType })),
-        weak_expressions: weak,
-      }, t.signal));
+      // 카테고리는 도시마다 장소에서 끌어낸다(없으면 인자, 그다음 restaurant).
+      const jobs = cities.map(c => {
+        const cat = c.categoryId || categoryId || categoryOfKind(c.placeType) || categoryOfKind(placeType) || 'restaurant';
+        const valid = health && health.situations && Array.isArray(health.situations[cat]) ? health.situations[cat] : null;
+        const weak = valid ? weakIds.filter(w => valid.includes(w)) : weakIds;
+        return postJson(fetchImpl, base + '/generate', {
+          category_id: cat, city: c.name,
+          places: c.places.map(p => ({ name: p.en || p.name, place_type: p.kind || cat })),
+          weak_expressions: weak,
+        }, t.signal);
+      });
       return collect(cities, await Promise.allSettled(jobs));
     } finally { t.done(); }
   }
   function collect(cities, settled) {
     return settled.map((r, i) => {
       const c = cities[i];
-      if (r.status !== 'fulfilled') return { city: c.name, kind: 'fallback', pools: null };
+      const base = { city: c.name, categoryId: c.categoryId };
+      if (r.status !== 'fulfilled') return { ...base, kind: 'fallback', pools: null };
       const n = normalizeAiResponse(r.value);
-      if (n.kind === 'fallback') return { city: c.name, kind: 'fallback', pools: null };
-      return { city: c.name, kind: n.kind, pools: buildPools(n.sentences, c.places) };
+      if (n.kind === 'fallback') return { ...base, kind: 'fallback', pools: null };
+      return { ...base, kind: n.kind, pools: buildPools(n.sentences, c.places) };
     });
   }
 
@@ -184,9 +189,24 @@
     return ok;
   }
 
+  /* 장소 종류 → 카테고리 계약 id. 서버 계약(agent_contract/categories/*.json)의 place_types 와 맞춘다.
+     화면에 카테고리를 박아두지 않고 장소에서 끌어낸다. 계약에 없는 종류는 null(생성 대상 아님). */
+  const KIND_CATEGORY = {
+    restaurant: 'restaurant', cafe: 'restaurant',
+    airport: 'transport', train_station: 'transport', bus_station: 'transport',
+    subway_station: 'transport', taxi_stand: 'transport',
+    hotel: 'lodging', hostel: 'lodging', guesthouse: 'lodging', airbnb: 'lodging',
+  };
+  function categoryOfKind(kind) { return KIND_CATEGORY[String(kind == null ? '' : kind).trim().toLowerCase()] || null; }
+
   /* 요청에는 해당 카테고리의 취약 상황 id 만 보낸다 (서버가 현재 유효한 id 로 다시 거른다). */
   function weakIdsFor(list, categoryId) {
-    return cleanWeak(list).filter(w => w.category_id === categoryId).map(w => w.id);
+    const cats = Array.isArray(categoryId) ? categoryId : [categoryId];
+    const ids = [];
+    cats.forEach(cat => cleanWeak(list).forEach(w => {
+      if (w.category_id === cat && ids.indexOf(w.id) < 0) ids.push(w.id);
+    }));
+    return ids;
   }
   /* 복습 표시는 AI 가 만든 문장이 저장된 (카테고리, 상황)과 모두 일치하고 그 상황을 겨냥했다고 표시했을 때만. */
   function weakReviewOf(sentence, list) {
@@ -250,6 +270,7 @@
 
   const api = {
     WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
+    categoryOfKind,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
   };

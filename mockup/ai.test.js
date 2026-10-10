@@ -82,6 +82,30 @@ test('generateByCity: 서버가 유효하다고 알린 상황 id 만 취약 상�
   assert.deepEqual(bodies[0].weak_expressions, ['allergy_notice']);
 });
 
+test('generateByCity: 카테고리는 묶음마다 따로, 장소 종류가 place_type 으로 간다', async () => {
+  const bodies = [];
+  const fetchImpl = async (url, opt) => {
+    if (url.endsWith('/health')) return { ok: true, json: async () => ({ situations: { restaurant: ['allergy_notice'], lodging: ['check_in'] } }) };
+    bodies.push(JSON.parse(opt.body)); return { ok: true, json: async () => res() };
+  };
+  const cities = [
+    { name: 'X', categoryId: 'restaurant', places: [{ id: 'a', name: 'A', en: 'A', kind: 'cafe' }] },
+    { name: 'X', categoryId: 'lodging', places: [{ id: 'h', name: 'H', en: 'H', kind: 'hotel' }] },
+  ];
+  const out = await AI.generateByCity({ fetchImpl, base: '', cities, weakIds: ['allergy_notice', 'check_in'] });
+  assert.deepEqual(bodies.map(b => [b.category_id, b.places[0].place_type, b.weak_expressions]),
+    [['restaurant', 'cafe', ['allergy_notice']], ['lodging', 'hotel', ['check_in']]]);
+  assert.deepEqual(out.map(o => o.categoryId), ['restaurant', 'lodging']);
+});
+
+test('categoryOfKind·weakIdsFor: 계약의 place_types 로 카테고리를 찾고 여러 카테고리를 합친다', () => {
+  assert.equal(AI.categoryOfKind('Hotel '), 'lodging');
+  assert.equal(AI.categoryOfKind('airport'), 'transport');
+  assert.equal(AI.categoryOfKind('attraction'), null);
+  const list = [{ category_id: 'restaurant', id: 'allergy_notice', situation: 's' }, { category_id: 'lodging', id: 'check_in', situation: 's' }];
+  assert.deepEqual(AI.weakIdsFor(list, ['restaurant', 'lodging', 'restaurant']), ['allergy_notice', 'check_in']);
+});
+
 test('generateByCity: API 없음(file://)이면 전부 폴백, 호출 안 함', async () => {
   let called = 0;
   const out = await AI.generateByCity({ fetchImpl: async () => { called++; }, base: null, cities: [{ name: 'X', places: [] }], weakIds: [] });
