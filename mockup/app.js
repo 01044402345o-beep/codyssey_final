@@ -689,7 +689,7 @@ function notes(sc) {
 function planNote() {
   if (!S.plan || !S.screen.startsWith('u-')) return '';
   const p = S.plan;
-  return `<div class="note-card"><h3>현재 계산 결과 (FR-SENT-02)</h3><p style="font-family:var(--mono);font-size:12px;line-height:1.8">
+  return `<div class="note-card"><h3>현재 계산 결과 (FR-SENT-02)</h3><p style="font-family:var(--mono);font-size:0.75rem;line-height:1.8">
     여행 전 학습일 N = ${p.N}<br>새 문장 학습일 D = ${p.D}<br>목표 P = ${p.P === null ? '— (D = 0)' : `${p.D}×5−30 = ${p.P}`}<br>
     장소 ${p.per.length}곳 · 장소당 ${[...new Set(p.per)].sort((a, b) => b - a).join('/')}문장<br>전체 T = ${p.T} · 하루 A = ${p.A ?? '없음'}<br>
     여행 중 새 문장 ${p.tripNew} · 문장 모음 전용 ${p.none}</p></div>`;
@@ -823,7 +823,7 @@ function scrGen() {
   const t = S.trip;
   if (!t || !/_(requested|generating|failed)$/.test(t.status)) {
     return frame(`<div class="app-pad"><div class="empty" style="padding-top:120px"><div class="ico">${I.info}</div>
-      <b style="color:var(--text);font-size:16px">진행 중인 생성 작업이 없어요</b><p>보고서, 방문 순서, 문장을 만드는 동안 이 화면이 나타나요. (맛집 문장은 AI가 만들어요)<br>오른쪽 데모 버튼으로 생성·실패·멈춤 화면을 확인할 수 있어요.</p>
+      <b style="color:var(--text);font-size:1rem">진행 중인 생성 작업이 없어요</b><p>보고서, 방문 순서, 문장을 만드는 동안 이 화면이 나타나요. (맛집 문장은 AI가 만들어요)<br>오른쪽 데모 버튼으로 생성·실패·멈춤 화면을 확인할 수 있어요.</p>
       ${t ? `<button class="btn soft" data-act="tab" data-id="${t.status === 'studying' ? 'u-home' : t.status === 'report_done' ? 'u-report' : 'u-input'}">현재 단계로 돌아가기</button>` : `<button class="btn soft" data-act="tab" data-id="u-input">여행 입력으로</button>`}
       </div></div>`);
   }
@@ -912,13 +912,13 @@ function scrRoute() {
   const inner = `<div class="app-pad">
     <div class="card" style="background:var(--inv-bg);color:var(--inv-text);border:0">
       <div class="eyebrow" style="color:var(--sun)">Plan summary</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;font-size:12.5px;color:var(--inv-text-2)">
-        <div>전체 문장<b style="display:block;color:var(--inv-text);font-size:20px;font-family:var(--display)">${p.T}개</b>공통 30 + 장소 ${p.T - 30}</div>
-        <div>하루 학습량<b style="display:block;color:var(--inv-text);font-size:20px;font-family:var(--display)">${p.A ? p.A + '문장' : '없음'}</b>${p.A ? `새 문장 ${p.usedNew}일` : '여행 전 학습 없음'}</div>
-        <div>여행 전 학습<b style="display:block;color:var(--inv-text);font-size:16px">${p.N}일</b>복습 ${p.review} · 총복습 ${p.final}</div>
-        <div>여행 중 새 문장<b style="display:block;color:var(--inv-text);font-size:16px">${p.tripNew}개</b>문장 모음 전용 ${p.none}개</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;font-size:0.78125rem;color:var(--inv-text-2)">
+        <div>전체 문장<b style="display:block;color:var(--inv-text);font-size:1.25rem;font-family:var(--display)">${p.T}개</b>공통 30 + 장소 ${p.T - 30}</div>
+        <div>하루 학습량<b style="display:block;color:var(--inv-text);font-size:1.25rem;font-family:var(--display)">${p.A ? p.A + '문장' : '없음'}</b>${p.A ? `새 문장 ${p.usedNew}일` : '여행 전 학습 없음'}</div>
+        <div>여행 전 학습<b style="display:block;color:var(--inv-text);font-size:1rem">${p.N}일</b>복습 ${p.review} · 총복습 ${p.final}</div>
+        <div>여행 중 새 문장<b style="display:block;color:var(--inv-text);font-size:1rem">${p.tripNew}개</b>문장 모음 전용 ${p.none}개</div>
       </div>
-      <div style="margin-top:10px;font-size:12px;color:var(--inv-text-3)">장소당 ${perTxt}</div>
+      <div style="margin-top:10px;font-size:0.75rem;color:var(--inv-text-3)">장소당 ${perTxt}</div>
     </div>
     <div class="stack" style="margin:12px 0 16px">
       ${notice('지도 기반 최적 경로가 아니라, 장소의 지역을 기준으로 정한 <b>추천 방문 순서</b>예요.')}
@@ -957,19 +957,19 @@ function scrHome() {
   if (!r) {
     const first = S.sched[0];
     today = `<div class="today-card"><div class="top"><span class="badge k-free">학습 전</span></div><h3>학습은 ${Dt.full(first.date)}부터 시작해요</h3>
-      <p class="sub" style="font-size:13px">첫날 학습 · ${describe(first)}문장</p><button class="btn soft block" style="margin-top:12px" data-act="study-date" data-date="${first.date}">첫날 카드 미리 보기</button></div>`;
+      <p class="sub" style="font-size:0.8125rem">첫날 학습 · ${describe(first)}문장</p><button class="btn soft block" style="margin-top:12px" data-act="study-date" data-date="${first.date}">첫날 카드 미리 보기</button></div>`;
   } else {
     const st = rowStatus(r), n = r.ids.length;
     const title = r.kind === 'free' ? '오늘은 자유 일정이에요' : r.kind === 'new' ? `새 문장 ${n}개` : r.kind === 'trip' ? `오늘 장소 문장 ${n}개` : `${KIND[r.kind].label} · 문장 ${n}개`;
     today = `<div class="today-card"><div class="top"><span class="badge ${KIND[r.kind].cls}">${KIND[r.kind].label}</span>${st === 'done' ? '<span class="st done">완료</span>' : ''}</div>
-      <h3>${title}</h3><p class="sub" style="font-size:13px">${describe(r)}</p>
+      <h3>${title}</h3><p class="sub" style="font-size:0.8125rem">${describe(r)}</p>
       ${r.newIds.length ? `<div style="margin-top:8px"><span class="badge b-new">새 문장 ${r.newIds.length}개 포함</span></div>` : ''}
       ${r.kind === 'free' ? `<button class="btn soft block" style="margin-top:12px" data-act="tab" data-id="u-coll">문장 모음에서 복습하기</button>`
         : `<button class="btn ${st === 'done' ? 'soft' : 'accent'} block" style="margin-top:12px" data-act="study-date" data-date="${r.date}">${st === 'done' ? '완료했어요 · 다시 보기' : '오늘 학습 시작'}</button>`}</div>`;
   }
   const upcoming = S.sched.filter(x => x.date > S.today).slice(0, 3);
   const inner = `<div class="app-pad">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 12px"><div><div class="small">안녕하세요</div><b style="font-size:18px">${DEMO_USER.name}님</b></div><span class="badge t-norm">${STATUS_KO[t.status]}</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 12px"><div><div class="small">안녕하세요</div><b style="font-size:1.125rem">${DEMO_USER.name}님</b></div><span class="badge t-norm">${STATUS_KO[t.status]}</span></div>
     ${hero}<div style="height:12px"></div>${today}
     ${pr.miss ? `<div style="height:10px"></div>${notice(`지난 학습 ${pr.miss}일이 미완료예요. 일정표에서 여행 종료일까지 언제든 채울 수 있어요.`, 'warn')}` : ''}
     <div class="sec-title"><h4>진도</h4><button data-act="tab" data-id="u-sched">일정표 ›</button></div>
@@ -1031,7 +1031,7 @@ function studyView(r) {
   if (S.card.date !== r.date) resetCard(r.date);
   const st = rowStatus(r), ended = S.today > S.trip.tripEnd;
   const head = `<div class="study-head"><div><div class="small">${r.phase === 'trip' ? `${esc(r.day.city)} · ${r.day.types.map(ty => DAYTYPE[ty].label).join('·')}` : '여행 전 학습'}</div>
-    <b style="font-size:19px">${Dt.full(r.date)}</b></div><span class="badge ${KIND[r.kind].cls}">${KIND[r.kind].label}</span></div>`;
+    <b style="font-size:1.1875rem">${Dt.full(r.date)}</b></div><span class="badge ${KIND[r.kind].cls}">${KIND[r.kind].label}</span></div>`;
   let banner = '';
   if (ended) banner = notice('여행이 끝나 더 이상 완료 처리할 수 없어요.', 'plain');
   else if (r.completed) banner = notice('완료한 날이에요. 다시 학습해도 완료 상태는 유지돼요.', 'plain');
@@ -1039,7 +1039,7 @@ function studyView(r) {
   else if (st === 'miss') banner = notice('지난 날짜예요. 지금 학습하면 완료로 기록돼요.', 'warn');
 
   if (r.kind === 'free') {
-    return { inner: `<div class="app-pad">${head}<div class="empty" style="padding-top:70px"><div class="ico">☼</div><b style="color:var(--text);font-size:17px">오늘은 자유 일정이에요</b>
+    return { inner: `<div class="app-pad">${head}<div class="empty" style="padding-top:70px"><div class="ico">☼</div><b style="color:var(--text);font-size:1.0625rem">오늘은 자유 일정이에요</b>
       <p>배치된 장소가 없어 카드가 없어요.<br>문장 모음에서 복습해 보세요. (완료율 계산에서 제외돼요)</p><button class="btn soft" data-act="tab" data-id="u-coll">문장 모음 열기</button></div></div>`, bottom: '', tabbar: true };
   }
   if (S.justCompleted === r.date) {
@@ -1181,7 +1181,7 @@ function admMetrics() {
     <div class="grid2">
       <div class="panel funnel"><h3>단계별 도달 (여행 ${n1}건)</h3>${funnel.map(([l, k]) => `<div class="fr-row"><span>${l}</span><div class="bar"><i style="width:${cnt(k) / n1 * 100}%"></i></div><span class="n">${cnt(k)}</span></div>`).join('')}
         <p class="small" style="margin:8px 0 0">여행 입력(input_done)에 도달한 여행 기준. 데모 여행이 맨 위 행으로 포함돼요.</p></div>
-      <div class="panel"><h3>최근 최종 실패</h3>${failedRows.length ? failedRows.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-faint);font-size:12.5px">
+      <div class="panel"><h3>최근 최종 실패</h3>${failedRows.length ? failedRows.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-faint);font-size:0.78125rem">
         <span><b>${esc(r.route)}</b><br><span class="small">${r.user}</span></span><span class="st-chip fail">${r.status}</span></div>`).join('') : '<div class="empty">실패한 작업이 없어요</div>'}
         <p class="small" style="margin:10px 0 0">실패율은 사용자 요청 기준이에요. 서버 자동 재요청(최대 2번)은 따로 세지 않아요.</p></div>
     </div>`;
@@ -1213,7 +1213,7 @@ function admCommon() {
     ${notice('이름·목적지는 <b>[name]</b>, <b>[destination]</b> 빈칸으로 적어요. 듣기에서는 "your name", "your destination"으로 읽어요.')}
     <div style="height:14px"></div>
     ${S.commonsDraft.map((g, gi) => `<div class="cs-group panel"><h4>${g.label} <span class="small">${g.key}</span></h4>
-      <div class="cs-row cs-head" style="font-size:11px;color:var(--text-3)"><span>#</span><span>상황</span><span>영어 문장</span><span>한국어 뜻</span><span></span></div>
+      <div class="cs-row cs-head" style="font-size:0.6875rem;color:var(--text-3)"><span>#</span><span>상황</span><span>영어 문장</span><span>한국어 뜻</span><span></span></div>
       ${g.items.map((it, ii) => { const o = S.commons[gi].items[ii]; return `<div class="cs-row"><span class="i">${ii + 1}</span>
         <input data-cs="${gi}.${ii}.situation" aria-label="상황" value="${esc(it.situation)}" class="${it.situation !== o.situation ? 'dirty' : ''}">
         <input data-cs="${gi}.${ii}.en" aria-label="영어 문장" value="${esc(it.en)}" class="${it.en !== o.en ? 'dirty' : ''}">
@@ -1229,8 +1229,8 @@ function admUsers() {
   const users = [{ email: DEMO_USER.email, name: DEMO_USER.name + ' (데모)', trips: demoTrips, me: true }, ...MOCK_USERS];
   return `<h2>사용자 · 여행</h2><p class="desc">현재 여행 = <code>archived = false</code>인 내 여행 (FR-TRIP-05). 새 여행을 만들면 이전 여행은 삭제하지 않고 보관해요 (FR-TRIP-04).</p>
     <div class="panel" style="padding:4px 10px">
-      <div class="user-row" style="font-size:11.5px;color:var(--text-3)"><span>이름</span><span>이메일</span><span>여행</span></div>
-      ${users.map(u => `<div class="user-row" style="${u.me ? 'background:var(--me-bg)' : ''}"><b>${esc(u.name)}</b><span class="mono" style="font-family:var(--mono);font-size:12px">${esc(u.email)}</span>
+      <div class="user-row" style="font-size:0.71875rem;color:var(--text-3)"><span>이름</span><span>이메일</span><span>여행</span></div>
+      ${users.map(u => `<div class="user-row" style="${u.me ? 'background:var(--me-bg)' : ''}"><b>${esc(u.name)}</b><span class="mono" style="font-family:var(--mono);font-size:0.75rem">${esc(u.email)}</span>
         <div class="trips">${u.trips.length ? u.trips.map((tr, i) => `<span class="trip-chip ${tr.state === '보관' ? 'arch' : 'cur'}">${esc(tr.route)} · ${tr.state}</span>`).join('') : '<span class="small">여행 없음</span>'}</div></div>`).join('')}
     </div>`;
 }

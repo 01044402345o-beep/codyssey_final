@@ -1,5 +1,5 @@
 // 반응형 기준선 감사. 사용법: node mockup/audit/responsive_audit.js
-// 환경 변수: BASE_URL(기본 http://localhost:8000), PW_PATH(playwright 모듈 경로), CHROME_PATH(chromium 실행 파일)
+// 환경 변수: ZOOM(글자 확대 %, 예 200), BASE_URL(기본 http://localhost:8000), PW_PATH(playwright 모듈 경로), CHROME_PATH(chromium 실행 파일)
 // 현재(제품 셸 분리 전) 코드에서는 가로 스크롤 실패가 정상이며, docs/RESPONSIVE_STRATEGY.md 의 단계별 개선을 숫자로 확인하는 용도다.
 const { chromium } = require(process.env.PW_PATH || 'playwright');
 const BASE = process.env.BASE_URL || 'http://localhost:8000';
@@ -12,6 +12,7 @@ const SCREENS = ['u-login', 'u-input', 'u-report', 'u-route', 'u-home', 'u-sched
   for (const [w, h] of WIDTHS) {
     const page = await b.newPage({ viewport: { width: w, height: h } });
     await page.goto(BASE + (process.env.QS || '/'));
+    if (process.env.ZOOM) await page.addStyleTag({ content: `html{font-size:${process.env.ZOOM}%}` });   // 브라우저 글자 크기 확대(WCAG 1.4.4/1.4.10) 시뮬레이션
     await page.evaluate(() => preset('default'));
     for (const id of SCREENS) {
       await page.evaluate(i => {

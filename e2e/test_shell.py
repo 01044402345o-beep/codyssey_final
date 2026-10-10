@@ -235,6 +235,26 @@ with sync_playwright() as p:
     check("legacy 레이아웃은 2열을 쓰지 않음", page.locator(".split").count() == 0)
     ctx.close()
 
+    # --- 접근성: 글자 200% 확대(WCAG 1.4.4/1.4.10) · 모션 줄이기 ---
+    ctx = b.new_context(viewport={"width": 320, "height": 640})
+    page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(BASE + "/#u-home"); page.wait_for_timeout(600)
+    page.add_style_tag(content="html{font-size:200%}")
+    bad = []
+    for scr in ("u-input", "u-report", "u-route", "u-home", "u-sched", "u-study", "u-coll", "a-metrics", "a-jobs", "a-common", "a-users"):
+        page.evaluate(f"S.user = DEMO_USER; go('{scr}')"); page.wait_for_timeout(200)
+        if hscroll(page) > 0: bad.append(f"{scr}:{hscroll(page)}")
+    check("320px + 글자 200%: 11개 화면 가로 스크롤 없음", not bad, ", ".join(bad))
+    check("글자 200%: 하단 탭 라벨이 말줄임으로 잘리지 않고 줄바꿈", page.evaluate("[...document.querySelectorAll('.pnav button span')].every(s => getComputedStyle(s).textOverflow !== 'ellipsis')") if page.locator(".pnav").count() else True)
+    ctx.close()
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, reduced_motion="reduce")
+    page = ctx.new_page()
+    page.goto(BASE + "/#u-home"); page.wait_for_timeout(500)
+    page.evaluate("ACT['demo-gen']()"); page.wait_for_timeout(500)
+    d = page.evaluate("(() => { const e = document.querySelector('.orbit .plane'); return e ? parseFloat(getComputedStyle(e).animationDuration) : -1; })()")
+    check("모션 줄이기: 생성 화면 회전 애니메이션이 사실상 꺼짐", 0 <= d < 0.001, str(d))
+    ctx.close()
+
     # --- 외부 서버 배너 ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page()
