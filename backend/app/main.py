@@ -26,12 +26,12 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 from starlette.concurrency import run_in_threadpool
 
 from . import gemini as ai
@@ -175,11 +175,16 @@ class Place(BaseModel):
     place_type: str | None = Field(default=None, max_length=40)
 
 
+# 계약의 id 형식(schema.json 의 situation_id 와 같다). category_id 는 파일 경로가 되므로 '../' 같은 값을 막는다.
+ContractId = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$", max_length=64)]
+
+
 class GenerateRequest(BaseModel):
-    category_id: str = Field(min_length=1, max_length=40)
+    category_id: ContractId = Field(max_length=40)
     city: str = Field(default="New York", min_length=1, max_length=80)
     places: list[Place] = Field(default_factory=list, max_length=20)
-    weak_expressions: list[str] = Field(default_factory=list, max_length=20)
+    # 항목마다 형식·길이를 제한한다. 프롬프트에 들어가고 Gemini 호출은 최소 30회라 긴 문자열은 비용이 된다.
+    weak_expressions: list[ContractId] = Field(default_factory=list, max_length=20)
 
 
 # ---------------------------------------------------------------- 설정 로드
@@ -256,10 +261,11 @@ def build_prompt(cfg: dict[str, Any], req: GenerateRequest) -> str:
         cfg.get("system_prompt", ""),
     )
     mapping = {s.get("situation_id"): s for s in cfg.get("situations", []) if isinstance(s, dict)}
+    # 계약에 없는 id 는 프롬프트에 넣지 않는다(검증기가 weak_unknown_situation 경고로 따로 알린다).
     weak_spec = [
-        {"situation_id": w, "situation": (mapping.get(w) or {}).get("situation"),
-         "required_keywords": (mapping.get(w) or {}).get("required_keywords")}
-        for w in req.weak_expressions
+        {"situation_id": w, "situation": mapping[w].get("situation"),
+         "required_keywords": mapping[w].get("required_keywords")}
+        for w in req.weak_expressions if w in mapping
     ]
     payload = {
         "category_id": cfg["category_id"],
