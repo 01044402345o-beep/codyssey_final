@@ -15,6 +15,7 @@ GEMINI_API_KEY 가 없으면 목업으로 응답한다. 그래서 키 없이도 
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import os
@@ -58,6 +59,10 @@ MAX_AUDIO_SECONDS = 30
 # 호출 제한 (단일 인스턴스 기준)
 RATE_LIMIT = int(os.getenv("RATE_LIMIT", "20"))          # 창당 최대 요청 수
 RATE_WINDOW = int(os.getenv("RATE_WINDOW", "60"))        # 초
+# 앞단 프록시 수. Render 처럼 프록시 뒤에서는 연결 상대(request.client)가 프록시라
+# 모든 사용자가 한 IP 로 묶인다. N 이면 X-Forwarded-For 의 뒤에서 N 번째를 사용자 IP 로 본다.
+# 앞쪽 값은 사용자가 마음대로 넣을 수 있으므로 쓰지 않는다. 0(기본)은 연결 상대 그대로.
+TRUSTED_PROXY_HOPS = max(0, int(os.getenv("TRUSTED_PROXY_HOPS", "0")))
 
 # 1이면 설정 누락(schema.json·jsonschema·카테고리) 상태에서 /generate 를 거부한다.
 # 기본 0은 '일단 돌아가게' 두되, /health 가 degraded 로 알린다.
@@ -91,19 +96,76 @@ app.add_middleware(
 )
 
 _hits: dict[str, deque[float]] = defaultdict(deque)
+_hits_lock = threading.Lock()
 
+
+
+def _masked(ip: str) -> str:
+    """로그용. 마지막 자리를 가리고 사설·공인만 붙인다(IP 는 개인정보)."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return "?"
+    kind = "공인" if addr.is_global else "사설"
+    head = ".".join(ip.split(".")[:3]) + ".x" if addr.version == 4 else ":".join(ip.split(":")[:3]) + ":…"
+    return f"{head}({kind})"
+
+
+_proxy_logged = False
+
+
+def _log_proxy_chain_once(peer: str, xff: str) -> None:
+    """TRUSTED_PROXY_HOPS 를 정할 근거. 프로세스마다 X-Forwarded-For 가 붙은 첫 요청 한 번만 남긴다.
+
+    내 공인 IP 가 체인 끝에서 몇 번째인지가 TRUSTED_PROXY_HOPS 값이다 (docs/DEPLOY_RUNBOOK.md F14).
+    연결 상대는 uvicorn 이 이미 바꾼 값일 수 있다(연결이 127.0.0.1 에서 오면 X-Forwarded-For 를 반영).
+    """
+    global _proxy_logged
+    if _proxy_logged or not xff:
+        return
+    _proxy_logged = True
+    chain = [_masked(h.strip()) for h in xff.split(",") if h.strip()]
+    logging.getLogger("app.ratelimit").info(
+        "프록시 확인: 연결 상대=%s, X-Forwarded-For=%s, TRUSTED_PROXY_HOPS=%d",
+        _masked(peer), " , ".join(chain) or "(없음)", TRUSTED_PROXY_HOPS)
+
+
+def client_ip(request: Request) -> str:
+    """속도 제한용 사용자 IP. TRUSTED_PROXY_HOPS 설명 참고.
+
+    X-Forwarded-For 가 프록시 수보다 짧으면 연결 상대를 쓴다(여러 사용자가 묶여 더 엄격해지는 쪽).
+    """
+    peer = request.client.host if request.client else "unknown"
+    if TRUSTED_PROXY_HOPS == 0:
+        return peer
+    chain = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+    return chain[-TRUSTED_PROXY_HOPS] if len(chain) >= TRUSTED_PROXY_HOPS else peer
+
+
+@app.middleware("http")
+async def proxy_chain_probe(request: Request, call_next: Any) -> Any:
+    """/health 나 첫 화면만 열어도 프록시 구성이 로그에 남게 모든 요청에서 본다(기록은 한 번)."""
+    if not _proxy_logged:
+        _log_proxy_chain_once(request.client.host if request.client else "unknown",
+                              request.headers.get("x-forwarded-for", ""))
+    return await call_next(request)
 
 
 def rate_limit(request: Request) -> None:
     """IP 기준 슬라이딩 윈도. 프로세스 메모리라 인스턴스가 늘면 약해진다 — 임시 방어."""
-    ip = (request.client.host if request.client else "unknown")
-    now = time.time()
-    q = _hits[ip]
-    while q and now - q[0] > RATE_WINDOW:
-        q.popleft()
-    if len(q) >= RATE_LIMIT:
-        raise HTTPException(status_code=429, detail="요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.")
-    q.append(now)
+    ip = client_ip(request)
+    # /generate 는 동기 함수라 스레드풀에서 동시에 들어온다. 정리 중 순회와 추가가 겹치지 않게 잠근다.
+    with _hits_lock:
+        now = time.time()
+        if len(_hits) > 10_000:         # IP 별로 나뉘면 키가 쌓인다. 창이 지난 IP 는 버린다.
+            for k in [k for k, v in _hits.items() if not v or now - v[-1] > RATE_WINDOW]:
+                del _hits[k]
+        q = _hits[ip]
+        while q and now - q[0] > RATE_WINDOW:
+            q.popleft()
+        if len(q) >= RATE_LIMIT:
+            raise HTTPException(status_code=429, detail="요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.")
+        q.append(now)
 
 
 # ---------------------------------------------------------------- 요청 모델
