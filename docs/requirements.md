@@ -28,7 +28,7 @@
 | FR-12 | 기억 관리 | 복습 목록 보기·삭제, 동의 철회 시 함께 삭제 | Must | 완료 | 홈 "AI · 개인정보" 카드, `e2e/test_consent.py` |
 | FR-13 | 녹음 동의 | 첫 녹음 전 동의(보내는 것·받는 곳·처리·보관), 거부해도 나머지 기능 사용 | Must | 완료 | `askVoiceConsent`, 동의 v6 |
 | FR-14 | 여행 종료 요약 | 완료율·학습 문장 수·새 여행 | Should | 완료 | SCR-06 |
-| FR-15 | 교통·숙소 카테고리 생성 | 맛집 외 카테고리 문장 생성 | Should | **부분** | 계약 3종 모두 서버에 있음(`restaurant.json`·`transport.json`·`lodging.json`, 각 상황 10개). 화면 코드가 `restaurant` 로 고정돼 미연결 |
+| FR-15 | 교통·숙소 카테고리 생성 | 맛집 외 카테고리 문장 생성 | Should | **부분** | 계약 3종 모두 서버에 있음(`restaurant.json`·`transport.json`·`lodging.json`, 각 상황 10개). 화면 코드는 장소 종류로 카테고리를 정해 (도시, 카테고리)별로 요청함(`categoryOfKind`, `ai.test.js`). 남은 것: 예시 장소 데이터(`data.js`)에 교통·숙소 장소가 없어 실제로는 맛집만 요청됨 |
 | FR-16 | 로그인·사용자별 저장 | 구글 로그인, 서버 저장 | Could | **예정** | 현재 데모 사용자 + 브라우저 저장 |
 
 ## 2. 비기능 요구사항
@@ -43,7 +43,7 @@
 | NFR-06 | 남용·비용 방어 | IP당 20회/60초, 입력 길이(도시 80자·장소 20개·목표 200자), 오디오 8MB·`audio/*` | 완료 | `backend/app/main.py` |
 | NFR-07 | 보안 | API 키는 Render 환경변수에만, 코드·저장소에 없음 | 완료 | `render.yaml` `sync: false` |
 | NFR-08 | 화면 | 휴대폰 폭 대응, 화면 문구 한국어·학습 문장 영어 | 부분 | 목업 반응형 보강 필요 |
-| NFR-09 | 품질 | PR 마다 CI(백엔드 73·프론트 20 단위 테스트, 브라우저 E2E) | 완료 | `.github/workflows/ci.yml` |
+| NFR-09 | 품질 | PR 마다 CI(백엔드 73·프론트 22 단위 테스트, 브라우저 E2E 51개 확인) | 완료 | `.github/workflows/ci.yml` |
 | NFR-10 | 관측 | `/health` 에 배포 커밋, 키 상태, 모델 상태, 교차검증 준비 여부 | 완료 | `GET /health` |
 
 ## 3. AI 활용 명세
