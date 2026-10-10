@@ -140,6 +140,49 @@ with sync_playwright() as p:
     check("마우스 기기: 칩 높이 기존 크기 유지(<44)", h < 44, str(h))
     ctx.close()
 
+    # --- P3: 라이트 / 다크 / 시스템 ---
+    bg = "getComputedStyle(document.body).backgroundColor"
+    LIGHT_BG, DARK_BG = "rgb(251, 248, 241)", "rgb(18, 21, 28)"
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, color_scheme="dark")
+    page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(BASE + "/#u-home"); page.wait_for_timeout(600)
+    check("시스템 다크 → 다크 배경(저장값 없음)", page.evaluate(bg) == DARK_BG and page.evaluate("document.documentElement.dataset.theme") is None, page.evaluate(bg))
+    check("theme-color 메타가 다크 값", page.evaluate("document.getElementById('theme-color').content") == "#12151c")
+    check("카드가 다크 표면(흰색 아님)", page.evaluate("getComputedStyle(document.querySelector('.today-card, .card')).backgroundColor") != "rgb(255, 255, 255)")
+    page.locator('[data-act="theme"][data-v="light"]').scroll_into_view_if_needed(); page.locator('[data-act="theme"][data-v="light"]').click(); page.wait_for_timeout(200)
+    check("화면 모드 '라이트' 선택 → 시스템이 다크여도 라이트", page.evaluate(bg) == LIGHT_BG and page.evaluate("localStorage.getItem('cd_theme')") == "light", page.evaluate(bg))
+    check("선택한 버튼이 눌림 표시(aria-pressed)", page.locator('[data-act="theme"][data-v="light"]').get_attribute("aria-pressed") == "true")
+    check("theme-color 메타가 라이트 값", page.evaluate("document.getElementById('theme-color').content") == "#fbf8f1")
+    page.reload(wait_until="domcontentloaded")
+    check("새로고침: CSS 가 그려지기 전에 data-theme 적용(깜빡임 없음)", page.evaluate("document.documentElement.dataset.theme") == "light" and page.evaluate(bg) == LIGHT_BG)
+    page.wait_for_timeout(500)
+    page.locator('[data-act="theme"][data-v="system"]').scroll_into_view_if_needed(); page.locator('[data-act="theme"][data-v="system"]').click(); page.wait_for_timeout(200)
+    check("'시스템'으로 되돌리면 저장값 삭제 + 시스템(다크)을 따름", page.evaluate("localStorage.getItem('cd_theme')") is None and page.evaluate(bg) == DARK_BG)
+    page.emulate_media(color_scheme="light"); page.wait_for_timeout(200)
+    check("시스템 설정이 바뀌면 새로고침 없이 따라감", page.evaluate(bg) == LIGHT_BG and page.evaluate("document.getElementById('theme-color').content") == "#fbf8f1")
+    ctx.close()
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, color_scheme="light")
+    ctx.add_init_script("try { localStorage.setItem('cd_theme', 'dark'); } catch (e) {}")
+    page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(BASE + "/#u-home", wait_until="domcontentloaded")
+    check("저장된 다크 + 시스템 라이트 → 첫 화면부터 다크", page.evaluate("document.documentElement.dataset.theme") == "dark" and page.evaluate(bg) == DARK_BG)
+    ctx.close()
+    # localStorage 를 쓸 수 없는 환경(시크릿 모드 등): 화면은 정상, 선택은 이번 접속에서만
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, color_scheme="light")
+    ctx.add_init_script("Object.defineProperty(window, 'localStorage', { get() { throw new Error('blocked'); } });")
+    page = ctx.new_page(); errs2 = []; page.on("pageerror", lambda e: errs2.append(str(e)))
+    page.goto(BASE + "/#u-home"); page.wait_for_timeout(700)
+    ok_render = page.locator(".pnav").count() == 1
+    page.locator('[data-act="theme"][data-v="dark"]').scroll_into_view_if_needed(); page.locator('[data-act="theme"][data-v="dark"]').click(); page.wait_for_timeout(200)
+    check("저장소 차단: 화면 정상 + 다크 선택은 그 접속에서 적용", ok_render and page.evaluate(bg) == DARK_BG, "; ".join(errs2)[:120])
+    ctx.close()
+    # 다크 모드에서 데스크톱 레이아웃·관리자도 같은 토큰
+    ctx = b.new_context(viewport={"width": 1280, "height": 800}, color_scheme="dark")
+    page = ctx.new_page()
+    page.goto(BASE + "/#a-metrics"); page.wait_for_timeout(600)
+    check("다크 관리자 화면: 표면이 어두움", page.evaluate("getComputedStyle(document.querySelector('.admin-main')).backgroundColor") != "rgb(250, 248, 243)")
+    ctx.close()
+
     # --- 외부 서버 배너 ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page()

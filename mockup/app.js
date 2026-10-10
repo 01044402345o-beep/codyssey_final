@@ -194,7 +194,9 @@ const R = {
 let S;
 let genTimer = null, genToken = 0, placeSeq = 0, genAbort = null;
 const API = AI.apiBase(location);            // 서버 주소(저장하지 않음). base === null 이면 폴백 전용
-const weakList = () => AI.loadWeak(localStorage);
+/* window.localStorage 는 사이트 데이터 차단 시 접근만 해도 SecurityError 를 던진다. 그러면 null — AI.* 저장 함수는 null 을 "저장 불가"로 처리한다 */
+const STORE = (() => { try { return window.localStorage; } catch (e) { return null; } })();
+const weakList = () => AI.loadWeak(STORE);
 /* 생성 취소: 토큰을 올려 오래된 응답이 상태를 덮어쓰지 못하게 하고, 진행 중 요청도 중단한다 */
 function cancelGen() { genToken++; clearTimeout(genTimer); if (genAbort) { genAbort.abort(); genAbort = null; } }
 
@@ -594,6 +596,24 @@ const SCREENS = [
 const SCR = Object.fromEntries(SCREENS.map(s => [s.id, s]));
 
 /* ================= 렌더링: 셸 ================= */
+/* ================= 화면 테마 (P3) ================= */
+const THEME_KEY = 'cd_theme';   // 'light' | 'dark' — 없으면 시스템. 개인정보가 아닌 화면 설정이다.
+function getTheme() { try { const t = localStorage.getItem(THEME_KEY); return t === 'light' || t === 'dark' ? t : 'system'; } catch (e) { return document.documentElement.dataset.theme || 'system'; } }
+function themeIsDark() { const t = getTheme(); return t === 'dark' || (t === 'system' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches); }
+const THEME_COLOR = { light: '#fbf8f1', dark: '#12151c' };   // 브라우저 주소창 색(meta theme-color). CSS 토큰 --bg 와 같은 값이어야 한다
+function syncThemeColor() { const m = document.getElementById('theme-color'); if (m) m.setAttribute('content', themeIsDark() ? THEME_COLOR.dark : THEME_COLOR.light); }
+function setTheme(v) {
+  try { if (v === 'light' || v === 'dark') localStorage.setItem(THEME_KEY, v); else localStorage.removeItem(THEME_KEY); } catch (e) { /* 저장 불가(시크릿 모드 등): 이번 접속에서만 적용 */ }
+  if (v === 'light' || v === 'dark') document.documentElement.dataset.theme = v; else delete document.documentElement.dataset.theme;
+  syncThemeColor();
+}
+if (window.matchMedia) { const mq = matchMedia('(prefers-color-scheme: dark)'); (mq.addEventListener ? mq.addEventListener.bind(mq, 'change') : mq.addListener.bind(mq))(() => { syncThemeColor(); }); }
+function themeCard() {
+  const t = getTheme(), b = (v, l) => `<button class="${t === v ? 'on' : ''}" data-act="theme" data-v="${v}" aria-pressed="${t === v}">${l}</button>`;
+  return `<div class="sec-title"><h4>화면 모드</h4></div><div class="card theme-card"><div class="seg" role="group" aria-label="화면 모드">${b('system', '시스템')}${b('light', '라이트')}${b('dark', '다크')}</div>
+    <p class="small" style="margin-top:8px">시스템은 기기의 라이트·다크 설정을 따라요. 이 선택은 이 브라우저에만 저장돼요.</p></div>`;
+}
+
 const MODE = document.documentElement.dataset.mode || 'product';   // product | demo | legacy (index.html 인라인 스크립트)
 const LEGACY = MODE === 'legacy';
 function renderSide() {
@@ -727,7 +747,7 @@ function scrLogin() {
        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn soft" style="flex:1" data-act="logout">로그아웃</button><button class="btn primary" style="flex:2" data-act="after-login">계속하기</button></div>`
     : `<button class="gbtn" data-act="login">${I.google}Google로 계속하기</button>`;
   return frame(`<div class="login">
-    <div class="stamp">TRIP · ENGLISH<br>PASSPORT<br>— 2026 —</div>
+    <div class="stamp" aria-hidden="true">TRIP · ENGLISH<br>PASSPORT<br>— 2026 —</div>
     <div class="eyebrow" style="margin-top:130px">Travel English, planned</div>
     <h1 style="margin-top:10px">Speak where<br>you'll <em>actually</em><br>be.</h1>
     <p class="sub">여행지와 일정을 입력하면, 실제로 갈 관광지와 맛집에서 쓸 영어 문장을 만들어 출발 전부터 매일 학습하게 해 드려요.</p>
@@ -810,13 +830,13 @@ function scrGen() {
   let head, extra = '', bottom = '';
   if (failed) {
     head = `<div class="orbit failed stopped"><div class="plane"><i></i></div><div class="core">FAIL</div></div>
-      <div class="eyebrow" style="text-align:center;color:var(--bad)">Generation failed</div><div class="title-lg" style="text-align:center">${josa(STAGE_NAME[stage], '을', '를')} 만들지 못했어요</div>`;
+      <div class="eyebrow" style="text-align:center;color:var(--bad-text)">Generation failed</div><div class="title-lg" style="text-align:center">${josa(STAGE_NAME[stage], '을', '를')} 만들지 못했어요</div>`;
     extra = notice(esc(t.error), 'bad') + (t.failStreak >= 3 ? '<div style="height:8px"></div>' + notice(`같은 단계에서 ${t.failStreak}번 연속 실패했어요. <b>잠시 후 다시 시도해 주세요.</b>`, 'warn') : '') +
       '<div style="height:8px"></div>' + notice('이전 단계까지의 결과는 그대로 남아 있어요.', 'plain');
     bottom = `<button class="btn primary block" data-act="retry">다시 시도</button>`;
   } else if (stale) {
     head = `<div class="orbit stopped"><div class="plane"><i></i></div><div class="core">15:00+</div></div>
-      <div class="eyebrow" style="text-align:center;color:var(--bad)">Stalled</div><div class="title-lg" style="text-align:center">생성이 멈춘 것 같아요</div>`;
+      <div class="eyebrow" style="text-align:center;color:var(--bad-text)">Stalled</div><div class="title-lg" style="text-align:center">생성이 멈춘 것 같아요</div>`;
     extra = notice(`생성을 시작한 지 15분이 지났어요. 서버 작업이 중간에 멈췄을 수 있어요. 다시 시도할 수 있어요.`, 'bad');
     bottom = `<button class="btn primary block" data-act="retry">다시 시도</button>`;
   } else {
@@ -896,7 +916,7 @@ function scrRoute() {
     <div class="stack" style="margin:12px 0 16px">
       ${notice('지도 기반 최적 경로가 아니라, 장소의 지역을 기준으로 정한 <b>추천 방문 순서</b>예요.')}
       ${t.routeFallback ? notice('AI가 만든 방문 순서가 규칙을 2번 어겨 <b>코드 규칙으로 배치</b>했어요. (같은 지역끼리 묶어 날짜 순서대로 채움)', 'warn') : ''}
-      ${errs.length ? notice('검증 실패: ' + errs.join(', '), 'bad') : `<div class="small" style="display:flex;gap:6px;align-items:center;color:var(--ok)">${I.check} 검증 통과 · 도시 일치 · 하루 장소 수 · 누락·중복 없음</div>`}
+      ${errs.length ? notice('검증 실패: ' + errs.join(', '), 'bad') : `<div class="small" style="display:flex;gap:6px;align-items:center;color:var(--ok-text)">${I.check} 검증 통과 · 도시 일치 · 하루 장소 수 · 누락·중복 없음</div>`}
     </div>
     <div class="timeline">${S.days.map(d => `
       <div class="tl-day ${d.placeIds.length ? '' : 'free'}">
@@ -911,7 +931,7 @@ function scrRoute() {
 /* SCR-06 */
 function scrHome() {
   const t = S.trip, ph = phase();
-  if (ph === 'ended') return frame(`<div class="app-pad">${endBody()}${privacyCard()}</div>`, { tabbar: true });
+  if (ph === 'ended') return frame(`<div class="app-pad">${endBody()}${themeCard()}${privacyCard()}</div>`, { tabbar: true });
   const pr = progress();
   let hero;
   if (ph === 'trip') {
@@ -950,6 +970,7 @@ function scrHome() {
       <div class="mini-stats"><div><span>완료한 날</span><b>${pr.done}일</b></div><div><span>학습 날짜</span><b>${pr.den}일</b></div>
       <div class="${pr.miss ? 'bad' : ''}"><span>미완료</span><b>${pr.miss}일</b></div><div><span>자유 일정 (제외)</span><b>${pr.free}일</b></div></div></div>
     ${upcoming.length ? `<div class="sec-title"><h4>다가오는 일정</h4></div>${upcoming.map(srow).join('')}` : ''}
+    ${themeCard()}
     ${privacyCard()}
   </div>`;
   return frame(inner, { tabbar: true });
@@ -1282,7 +1303,7 @@ function speakHtml(s) {
 /* 말하기 연습 동의 — 녹음이 서버와 Google 로 나가고 복습 목록이 쌓이므로 첫 녹음 전에 받는다.
    저장소가 막힌 브라우저에서는 이번 접속 동안만 기억한다(consentMem). */
 let consentMem = false;
-const voiceConsent = () => { const c = AI.loadConsent(localStorage); return c.voice ? c : consentMem ? { voice: true, at: null } : c; };
+const voiceConsent = () => { const c = AI.loadConsent(STORE); return c.voice ? c : consentMem ? { voice: true, at: null } : c; };
 function askVoiceConsent() {
   const host = esc(API.host || location.host);
   confirmBox('말하기 연습 전에 확인해 주세요',
@@ -1296,7 +1317,7 @@ function askVoiceConsent() {
      동의하지 않아도 카드 학습과 듣기는 그대로 쓸 수 있어요. 동의는 홈 화면에서 언제든 철회할 수 있고, 철회하면 복습 목록도 지워져요.`,
     '동의하고 녹음하기', () => {
       S.modal = null;
-      if (!AI.saveConsent(localStorage, true)) consentMem = true;
+      if (!AI.saveConsent(STORE, true)) consentMem = true;
       render(); toggleSpeak();
     }, { cancel: '동의하지 않기' });
 }
@@ -1374,7 +1395,7 @@ async function uploadSpeech(tok, blob, s) {
   SPK.state = 'idle'; SPK.ctl = null;
   const decision = AI.weakDecision(s, res);
   const save = decision === 'auto';
-  if (save) AI.saveWeak(localStorage, AI.upsertWeak(weakList(), weakItem(s)));
+  if (save) AI.saveWeak(STORE, AI.upsertWeak(weakList(), weakItem(s)));
   SPK.result = { ...res, saved: save, savedBy: save ? 'auto' : null, offer: decision === 'ask', coverage: typeof res.heard === 'string' ? AI.heardCoverage(s.en, res.heard) : null };
   updateSpeakUi(); renderDemo();
 }
@@ -1382,6 +1403,7 @@ async function uploadSpeech(tok, blob, s) {
 const ACT = {
   nav: el => { navFromMenu(el.dataset.id); if (!LEGACY) $('#side').classList.remove('open'); },
   drawer: () => $('#side').classList.toggle('open'),
+  theme: el => { setTheme(el.dataset.v); render(); },
   tab: el => {
     const id = el.dataset.id;
     if (['u-home', 'u-sched', 'u-study', 'u-coll', 'u-route'].includes(id) && !S.plan) { navFromMenu(id); return; }
@@ -1394,14 +1416,14 @@ const ACT = {
   'demo-toggle': () => { S.demoClosed = !S.demoClosed; renderDemo(); },
   'set-today': el => { S.today = el.dataset.date; S.justCompleted = null; render(); toast(`오늘을 ${Dt.full(S.today)}로 바꿨어요.`); },
   preset: el => preset(el.dataset.kind),
-  'weak-demo': () => { AI.saveWeak(localStorage, DEMO_WEAK.reduce((l, w) => AI.upsertWeak(l, w), weakList())); renderDemo(); toast('데모 학습 기록을 불러왔어요. 실제 학습에서 생긴 기록이 아니에요.'); },
-  'weak-clear': () => { AI.saveWeak(localStorage, []); renderDemo(); toast('복습 목록을 비웠어요.'); },
+  'weak-demo': () => { AI.saveWeak(STORE, DEMO_WEAK.reduce((l, w) => AI.upsertWeak(l, w), weakList())); renderDemo(); toast('데모 학습 기록을 불러왔어요. 실제 학습에서 생긴 기록이 아니에요.'); },
+  'weak-clear': () => { AI.saveWeak(STORE, []); renderDemo(); toast('복습 목록을 비웠어요.'); },
   'speak-rec': () => toggleSpeak(),
   'consent-withdraw': () => confirmBox('동의를 철회할까요?',
     `말하기 연습을 다시 쓰려면 새로 동의해야 해요. 이 브라우저에 저장된 복습 목록 ${weakList().length}개도 함께 지워요.`,
     '철회하고 지우기', () => {
       S.modal = null; cancelSpeak(); consentMem = false;
-      const ok = AI.withdrawConsent(localStorage);
+      const ok = AI.withdrawConsent(STORE);
       render(); renderDemo();
       toast(ok ? '동의를 철회하고 복습 목록을 지웠어요.' : '브라우저 저장소에 접근하지 못했어요. 브라우저 설정에서 이 사이트 데이터를 지워 주세요.');
     }, { danger: true }),
@@ -1409,13 +1431,13 @@ const ACT = {
     `이 브라우저에 저장된 어려워한 상황 ${weakList().length}개를 지워요. 다음 문장 생성부터 반영돼요.`,
     '지우기', () => {
       S.modal = null;
-      const ok = AI.saveWeak(localStorage, []);
+      const ok = AI.saveWeak(STORE, []);
       render(); renderDemo(); toast(ok ? '복습 목록을 지웠어요.' : '브라우저 저장소에 접근하지 못했어요.');
     }, { danger: true }),
   'weak-save': () => {
     const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]];
     if (!s || SPK.sid !== s.id || !SPK.result || !SPK.result.offer) return;       // 다른 카드·취소된 결과에는 저장하지 않는다
-    AI.saveWeak(localStorage, AI.upsertWeak(weakList(), weakItem(s)));
+    AI.saveWeak(STORE, AI.upsertWeak(weakList(), weakItem(s)));
     SPK.result = { ...SPK.result, offer: false, saved: true, savedBy: 'user' }; updateSpeakUi(); renderDemo(); toast('복습 목록에 저장했어요.');
   },
 
