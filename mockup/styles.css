@@ -534,7 +534,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 }
 
 /* 900px 이하: 태블릿 세로 · 폰 — 앱 화면만 남긴다 */
-@media (max-width: 900px), (orientation: landscape) and (max-height: 560px) {
+@media (max-width: 900px) {
   html, body { height: 100%; overflow: hidden; }
 
   .shell { grid-template-columns: 1fr; height: 100vh; height: 100dvh; }
@@ -626,106 +626,3 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .api-note { font-size: 12px; color: var(--bad); }
 
 .gbtn:disabled, .btn:disabled { opacity: .5; cursor: not-allowed; }
-
-/* ============ 유동 크기 · 넘침 방지 ============
-   1) 그리드·flex 자식의 min-width 기본값은 auto 다. 내용이 칸을 밀어내면 옆 요소가 잘린다 → 0 으로 낮춘다.
-   2) px 고정값은 화면마다 다르게 깨진다. clamp(최소, 유동, 최대)로 바꿔
-      좁은 화면에서는 줄고, 큰 화면에서는 더 커지지 않게 한다.
-   3) 세로로 쌓이는 요소(탭바·앱바·하단바·카드)는 vh 기준, 가로 요소는 vw/% 기준으로 줄인다. */
-@media (max-width: 900px), (orientation: landscape) and (max-height: 560px) {
-
-  /* 1) 넘침 방지 — 자식이 줄어들기를 거부하지 못하게 */
-  .stage, .main, .app, .app-pad, .screen, .device, .city-card, .city-card .row2,
-  .summary-strip, .mini-stats, .stat3, .kpis, .grid2, .progress-row, .study-head,
-  .card-nav, .tts-row, .modal .acts, .sent, .sent .tags, .win-bar, .panel,
-  .funnel .fr-row, .user-row, .cs-row, .bottombar, .appbar, .tabbar { min-width: 0; }
-  .city-card .row2 > *, .summary-strip > *, .mini-stats > *, .stat3 > *, .kpis > *,
-  .grid2 > *, .modal .acts > *, .sent > *, .srow > *, .place > *, .tl-day .pl > *,
-  .funnel .fr-row > *, .admin-nav > * { min-width: 0; }
-  input, select, textarea, .btn, .input, .gbtn, .seg, .city-tabs, .chips,
-  table.tbl, .toast, .pill { min-width: 0; max-width: 100%; }
-
-  /* 2) 여백·글자를 % 로 유동화 */
-  .app-pad { padding: 2% 4% 5%; }
-  .card, .today-card { padding: 4%; }
-  .city-card { padding: 3.5%; }
-  .city-card .row2 { gap: 3%; }
-  .city-card .row2 .input { font-size: 12.5px; padding: 0 4%; }
-  .sent { grid-template-columns: 1fr 34px; gap: 3%; padding: 3.5%; }
-  .srow { grid-template-columns: 48px 1fr auto; gap: 3%; padding: 3%; }
-  .summary-strip, .stat3 { gap: 3%; }
-
-  /* 버튼: 높이 고정이 잘림의 원인이므로 내용에 맞춘다 */
-  .btn { height: auto; min-height: 44px; padding: 9px 3.5%; white-space: normal; line-height: 1.35; text-align: center; }
-  .btn.sm { height: auto; min-height: 32px; padding: 6px 3%; }
-  .btn.ghost { height: auto; min-height: 36px; }
-  .modal .acts { flex-wrap: wrap; }
-  .modal .acts .btn { flex: 1 1 44%; }
-
-  /* 3) 탭바·앱바·하단바 — 화면 높이(vh)에 비례해 줄인다. 가로 모드에서 공간을 먹던 주범 */
-  .tabbar {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    padding: max(5px, 1vh) 2% max(6px, env(safe-area-inset-bottom));
-  }
-  .tabbar button {
-    flex-direction: row; gap: clamp(4px, 1.6vw, 8px);
-    padding: clamp(2px, .8vh, 6px) 0;
-    font-size: clamp(10px, 1.5vh, 12px);
-    min-width: 0; overflow: hidden;
-  }
-  .tabbar button svg { width: clamp(16px, 2.6vh, 22px); height: clamp(16px, 2.6vh, 22px); flex: none; }
-
-  .appbar { padding: clamp(3px, .8vh, 6px) 4% clamp(5px, 1.2vh, 10px); }
-  .appbar h2 { font-size: clamp(15px, 2.1vh, 17px); }
-  .appbar .back { width: clamp(28px, 4vh, 34px); height: clamp(28px, 4vh, 34px); }
-  .bottombar { padding: clamp(7px, 1.3vh, 12px) 4% max(8px, env(safe-area-inset-bottom)); gap: clamp(5px, 1vh, 8px); }
-
-  /* 카드·글자도 화면 높이에 맞춰 줄어든다 (세로가 짧은 가로 모드 대응) */
-  .flip { height: clamp(180px, 46vh, 360px); }
-  .face { padding: 4%; }
-  .face .en { font-size: clamp(17px, 3.4vh, 30px); }
-  .face .ko { font-size: clamp(15px, 2.9vh, 25px); }
-  .hero { padding: 4%; }
-  .hero .big { font-size: clamp(26px, 4.6vh, 46px); }
-  .hero .big small { font-size: clamp(13px, 2vh, 18px); }
-  .title-lg { font-size: clamp(18px, 2.6vh, 26px); }
-  .ring { width: clamp(56px, 12vh, 96px); height: clamp(56px, 12vh, 96px); }
-  .progress-row { grid-template-columns: auto 1fr; gap: 4%; }
-  .round { width: clamp(34px, 6vh, 44px); height: clamp(34px, 6vh, 44px); }
-  .dots { max-width: 42%; }
-  .sec-title { margin: clamp(10px, 2vh, 22px) 0 clamp(6px, 1.2vh, 10px); }
-  .stat3 b, .kpi .val { font-size: clamp(18px, 3vh, 32px); }
-  .mini-stats b { font-size: clamp(13px, 2vh, 15px); }
-  .done-banner .seal { width: clamp(72px, 14vh, 110px); height: clamp(72px, 14vh, 110px); }
-  .orbit { width: clamp(80px, 18vh, 120px); height: clamp(80px, 18vh, 120px); }
-  .steps li { padding: clamp(4px, 1vh, 8px) 0; font-size: clamp(12px, 1.9vh, 13.5px); }
-
-  .tbl { font-size: 11.5px; }
-}
-
-/* ============ 가로 모드 (높이 560px 이하) ============
-   세로 공간이 절반도 안 남는다. 탭바를 눕히고 아이콘·여백을 더 줄인다. */
-@media (orientation: landscape) and (max-height: 560px) {
-  .tabbar { padding: max(3px, .8vh) 2% max(4px, env(safe-area-inset-bottom)); }
-  .tabbar button { gap: clamp(5px, 1.4vw, 9px); padding: clamp(1px, .6vh, 4px) 0; }
-  .tabbar button svg { width: clamp(14px, 3.6vw, 20px); height: clamp(14px, 3.6vw, 20px); }
-
-  .flip { height: clamp(150px, 50vh, 280px); }
-  .face .en { font-size: clamp(15px, 4.2vw, 26px); }
-  .face .ko { font-size: clamp(13px, 3.6vw, 22px); }
-  .login h1 { font-size: clamp(22px, 5.6vw, 34px); margin: 5% 0 10px; }
-  .login .stamp { width: 24vh; height: 24vh; right: -6vh; }
-  .hero .big { font-size: clamp(22px, 5.6vw, 38px); }
-  .ring { width: clamp(46px, 14vh, 76px); height: clamp(46px, 14vh, 76px); }
-  .app-pad { padding: 1.5% 3.5% 4%; }
-  .card, .today-card { padding: 3%; }
-}
-
-/* ============ 480px 이하 ============
-   날짜 입력(date)은 자기 고유 폭을 주장해 2단에서 겹친다. 세로로 편다. */
-@media (max-width: 480px) {
-  .city-card .row2 { grid-template-columns: 1fr; gap: 8px; }
-  .summary-strip { flex-direction: column; }
-  .mini-stats { grid-template-columns: 1fr; }
-  .stat3 { grid-template-columns: 1fr; }
-}
