@@ -518,7 +518,8 @@ async def speak_check(
 ) -> dict[str, Any]:
     rate_limit(request)
 
-    audio = await file.read()
+    # 상한 + 1 바이트까지만 읽는다. 큰 업로드를 통째로 메모리에 올리지 않는다.
+    audio = await file.read(MAX_AUDIO_BYTES + 1)
     if not audio:
         raise HTTPException(status_code=400, detail="빈 오디오입니다. 다시 녹음해 주세요.")
     if len(audio) > MAX_AUDIO_BYTES:
@@ -530,10 +531,15 @@ async def speak_check(
         raise HTTPException(status_code=415, detail=f"지원하지 않는 형식입니다: {mime}")
 
     # 1) 말소리 검출 — 키가 없어도 동작한다. 말이 없으면 여기서 끝(외부 API 0회).
+    # 디코딩은 CPU 작업이라 스레드풀에서 한다. 이벤트 루프에서 하면 그동안 다른 요청(/health 포함)이 멈춘다.
     try:
-        samples = vad.decode(audio)
+        samples = await run_in_threadpool(vad.decode, audio)
     except vad.AudioDecodeError:
         raise HTTPException(status_code=400, detail="녹음 파일을 읽을 수 없습니다. 다시 녹음해 주세요.")
+    # 8MB 는 압축 녹음이면 30분이 넘는다. 길이로 다시 막는다(화면은 15초에서 멈춘다).
+    # 전사 비용은 오디오 길이에 비례하므로 외부 AI 를 부르기 전에 거절한다.
+    if len(samples) > MAX_AUDIO_SECONDS * vad.SAMPLE_RATE:
+        raise HTTPException(status_code=413, detail=f"녹음이 너무 깁니다 (최대 {MAX_AUDIO_SECONDS}초).")
     speech = await run_in_threadpool(vad.detect, samples)
     if not speech.has_speech:
         return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요.", vad=speech.summary())
