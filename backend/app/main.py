@@ -373,6 +373,15 @@ def health() -> dict[str, Any]:
 
 @app.post("/generate")
 def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
+    """처리 시간(elapsed_ms)과 생각 예산 설정을 붙인다 — 속도 개선 전후를 같은 응답으로 비교하려고."""
+    t0 = time.monotonic()
+    out = _generate(req, request)
+    out["elapsed_ms"] = round((time.monotonic() - t0) * 1000)
+    out["thinking_budget"] = (os.getenv("GEMINI_THINKING_BUDGET") or "").strip() or None
+    return out
+
+
+def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     rate_limit(request)
     if CONFIG_STRICT and config_problems():
         raise HTTPException(

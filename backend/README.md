@@ -69,6 +69,7 @@ python scripts/check_negatives.py
 | `GROQ_STT_MODEL` / `OPENAI_STT_MODEL` | 비워 둠 | 고정이 아니라 우선 선호(목록에 있을 때만) |
 | `STT_SELFTEST` | 비워 둠 | `1` 이면 시작 시 공급자별 실제 호출 점검 → `/health` `stt_selftest`. **검증 뒤 지운다**(콜드스타트마다 비용) |
 | `GEMINI_MODEL` | 비워 둠 | **고정이 아니라 우선 선호.** 실행 중 받은 목록에 있을 때만 맨 앞에 둔다 |
+| `GEMINI_THINKING_BUDGET` | 비워 둠(모델 기본) | flash 계열 호출의 생각(thinking) 토큰 상한. `0` 이면 생각을 끈다 — 짧은 JSON 생성이 빨라질 수 있다. pro 계열에는 적용하지 않는다(끌 수 없음). `/generate` 응답의 `elapsed_ms`·`thinking_budget` 으로 전후를 비교한다. 켠 뒤 `attempts` 가 1보다 크고 `failures` 에 400 이 보이면 모델이 거부하는 것이니 지운다 |
 | `AI_MIN_ATTEMPTS` | 기본 `30` | AI API 호출당 최소 시도 횟수. **늘릴 수만 있고 30 미만은 무시** |
 | `AI_BACKOFF_BASE` / `AI_BACKOFF_MAX` | `0.5` / `4` (초) | 실패 후 대기: 0.5→1→2→4→4… |
 | `AI_CALL_TIMEOUT` | `60` (초) | API 요청 1회의 제한 시간 (전체 제한 시간은 없음) |

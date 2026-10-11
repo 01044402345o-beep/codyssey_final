@@ -375,6 +375,7 @@ git push origin main
 | `CONFIG_STRICT` | 기본 `0` → 발표 전 `1`로 설정 | `0` | 설정 누락이어도 200 (시연 우선) |
 | `ALLOW_ORIGINS` | 기본 `*` (같은 서비스 서빙이면 불필요) | `*` | 별도 프론트를 쓸 때만 좁힘. CORS 문제 즉시 해소 (**임시**) |
 | `GEMINI_MODEL` | 비워 둠 (동적 선택) | 목록에 있는 모델명 | 특정 모델 우선 시도 (고정 아님) |
+| `GEMINI_THINKING_BUDGET` | 비워 둠 → 측정 후 `0` 검토 | (삭제) | 생성 속도. 켠 뒤 `/generate` 의 `attempts`>1·`failures` 에 400 이면 삭제 |
 | `AI_MIN_ATTEMPTS` | `30` | `40` 등 | 일시 오류 흡수 (응답 느려짐). 30 미만은 무시됨 |
 | `GEMINI_API_KEY` | 등록됨 | (제거) | **최후 수단** — 목업 전환. 4장 F04 주의사항 참조 |
 
