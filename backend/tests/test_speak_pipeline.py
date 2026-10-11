@@ -198,6 +198,27 @@ class SilenceGateTest(Base):
         self.assertEqual(code, 400)
 
 
+class AudioLimitTest(Base):
+    """8MB 는 압축 녹음이면 30분이 넘는다. 길이(MAX_AUDIO_SECONDS)로도 막고, 외부 API 는 부르지 않는다."""
+
+    def test_longer_than_limit_is_413_before_any_api(self) -> None:
+        fake, gem = self.install({"groq": lambda n: Resp(200, stt_ok(TARGET))})
+        code, d = self.speak(wav_of(np.zeros((main.MAX_AUDIO_SECONDS + 1) * 16000)))
+        self.assertEqual(code, 413)
+        self.assertIn(f"{main.MAX_AUDIO_SECONDS}초", d["detail"])
+        self.assertEqual(fake.posts, [])
+        self.assertEqual(gem.texts, [])
+
+    def test_exactly_at_limit_is_judged(self) -> None:
+        code, d = self.speak(wav_of(np.zeros(main.MAX_AUDIO_SECONDS * 16000)))
+        self.assertEqual(code, 200)
+        self.assertFalse(d["usable"])                   # 무음이라 VAD 가 거절 — 길이로는 막지 않음
+
+    def test_over_byte_limit_is_413(self) -> None:
+        code, _ = self.speak(b"\0" * (main.MAX_AUDIO_BYTES + 1))
+        self.assertEqual(code, 413)
+
+
 class SttTest(Base):
     def test_request_has_no_target_and_only_speech_audio(self) -> None:
         fake, _ = self.install({"groq": lambda n: Resp(200, stt_ok(TARGET))})
@@ -388,35 +409,71 @@ class CrossValidationTest(Base):
         self.assertIn("두 번째 말소리 검출기", d["reason"])
         self.assertEqual((fake.posts, gem.texts), ([], []))
 
-    def test_checker_failure_means_no_score_after_floor(self) -> None:
+    def assert_limited(self, d: dict[str, Any], gem: GeminiFake) -> None:
+        """교차검증 불가 → 제한 모드(사용자 결정 2026-10-10): 들린 문장만, 점수·피드백 없음."""
+        self.assertTrue(d["usable"])
+        self.assertTrue(d["limited"])
+        self.assertIs(d["cross_validated"], False)
+        self.assertIsNone(d["score"])
+        self.assertEqual(d["heard"], TARGET)
+        self.assertEqual((d["fix_one"], d["tip"], d["issues"]), ("", "", []))
+        self.assertIn("점수와 자동 복습 저장을 제공하지 않습니다", d["reason"])
+        self.assertEqual(d["failed_at"], "cross_validation")
+        self.assertNotIn("diff", d)
+        self.assertEqual(gem.texts, [])                          # 검증 안 된 전사로 피드백 AI 를 부르지 않는다
+
+    def test_checker_failure_after_floor_is_limited_mode(self) -> None:
         fake, gem = self.install(self.ok())
         fake.aai_fail = True
         _, d = self.speak(GOOD)
-        self.assertFalse(d["usable"])
-        self.assertEqual(d["failed_at"], "cross_validation")
-        self.assertEqual(fake.calls["assemblyai"], 30)          # 교차검증자도 최소 30회
+        self.assert_limited(d, gem)
+        self.assertEqual(fake.calls["assemblyai"], 30)          # 교차검증자도 최소 30회 시도한 뒤에야
         self.assertEqual(d["cross_validation"]["checker"]["attempts"], 30)
-        self.assertEqual(gem.texts, [])
 
-    def test_missing_cross_keys_means_no_score(self) -> None:
+    def test_missing_cross_key_is_limited_mode_without_calling_checker(self) -> None:
         for k in self.CROSS:
             with self.subTest(k):
-                fake, _ = self.install(self.ok())
+                fake, gem = self.install(self.ok())
                 os.environ.pop(k)
                 _, d = self.speak(GOOD)
-                self.assertFalse(d["usable"])
-                self.assertEqual(d["failed_at"], "cross_validation")
-                self.assertEqual(fake.posts, [])               # 아무 AI 도 부르지 않는다
+                self.assert_limited(d, gem)
+                self.assertEqual({p["pid"] for p in fake.posts}, {"groq"})   # 1차 전사만
+                self.assertIn(stt.CHECKER, d["cross_validation"]["missing_keys"])
                 os.environ[k] = "k"
 
     def test_openai_is_not_a_checker(self) -> None:
-        """같은 Whisper 계열(OpenAI)은 교차검증자로 쓰지 않는다 — AssemblyAI 가 없으면 채점 안 함."""
-        fake, _ = self.install({"groq": lambda n: Resp(200, stt_ok(TARGET)),
-                                "openai": lambda n: Resp(200, stt_ok(TARGET))}, keys=("GROQ_API_KEY", "OPENAI_API_KEY"))
+        """같은 Whisper 계열(OpenAI)은 교차검증자로 쓰지 않는다 — AssemblyAI 가 없으면 점수 없음(제한 모드)."""
+        fake, gem = self.install({"groq": lambda n: Resp(200, stt_ok(TARGET)),
+                                  "openai": lambda n: Resp(200, stt_ok(TARGET))}, keys=("GROQ_API_KEY", "OPENAI_API_KEY"))
         os.environ.pop("ASSEMBLYAI_API_KEY")
         _, d = self.speak(GOOD)
-        self.assertFalse(d["usable"])
+        self.assert_limited(d, gem)
         self.assertIn("assemblyai", d["cross_validation"]["missing_keys"])
+
+    def test_limited_mode_still_drops_hallucinated_primary(self) -> None:
+        """제한 모드에서도 1차 전사의 환각 세그먼트는 버린다. 남는 게 없으면 '말소리 없음'."""
+        fake, gem = self.install({"groq": lambda n: Resp(200, stt_ok("you", nsp=0.9, lp=-1.5))})
+        fake.aai_fail = True
+        _, d = self.speak(GOOD)
+        self.assertFalse(d["usable"])
+        self.assertNotIn("limited", d)
+        self.assertIsNone(d["score"])
+        self.assertEqual(gem.texts, [])
+
+    def test_primary_failure_is_not_limited_mode(self) -> None:
+        """들린 문장이 없으면 제한 모드도 없다 — 1차 전사 실패는 지금처럼 평가 불가."""
+        fake, _ = self.install({"groq": lambda n: Resp(500, "down")})
+        fake.aai_fail = True
+        _, d = self.speak(GOOD)
+        self.assertFalse(d["usable"])
+        self.assertEqual(d["failed_at"], "stt")
+
+    def test_cross_validated_flag_on_full_success(self) -> None:
+        fake, gem = self.install(self.ok())
+        _, d = self.speak(GOOD)
+        self.assertIs(d["cross_validated"], True)
+        self.assertNotIn("limited", d)
+        self.assertIsInstance(d["score"], int)
 
     def test_local_detector_reported(self) -> None:
         fake, _ = self.install(self.ok())

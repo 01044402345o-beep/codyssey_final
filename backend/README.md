@@ -65,10 +65,11 @@ python scripts/check_negatives.py
 | `GEMINI_API_KEY` | Google AI Studio에서 발급 | 문장 생성·말하기 피드백. 없으면 생성은 목업, 피드백은 문장 틀 |
 | `GROQ_API_KEY` | console.groq.com | 말하기 전사 1순위(Whisper). STT 키가 하나도 없으면 말하기는 목업 |
 | `OPENAI_API_KEY` | platform.openai.com | 전사 보충(whisper 계열만, gpt-4o-transcribe 제외) |
-| `ASSEMBLYAI_API_KEY` | assemblyai.com | **교차검증 전사(필수)**. `speech_models` 미전송 → 계정 기본 모델. `ASSEMBLY_AI_API_KEY` 도 인식 |
+| `ASSEMBLYAI_API_KEY` | assemblyai.com | **교차검증 전사(채점에 필수, 없으면 제한 모드)**. `speech_models` 미전송 → 계정 기본 모델. `ASSEMBLY_AI_API_KEY` 도 인식 |
 | `GROQ_STT_MODEL` / `OPENAI_STT_MODEL` | 비워 둠 | 고정이 아니라 우선 선호(목록에 있을 때만) |
 | `STT_SELFTEST` | 비워 둠 | `1` 이면 시작 시 공급자별 실제 호출 점검 → `/health` `stt_selftest`. **검증 뒤 지운다**(콜드스타트마다 비용) |
 | `GEMINI_MODEL` | 비워 둠 | **고정이 아니라 우선 선호.** 실행 중 받은 목록에 있을 때만 맨 앞에 둔다 |
+| `GEMINI_THINKING_BUDGET` | 비워 둠(모델 기본) | flash 계열 호출의 생각(thinking) 토큰 상한. `0` 이면 생각을 끈다 — 짧은 JSON 생성이 빨라질 수 있다. pro 계열에는 적용하지 않는다(끌 수 없음). `/generate` 응답의 `elapsed_ms`·`thinking_budget` 으로 전후를 비교한다. 켠 뒤 `attempts` 가 1보다 크고 `failures` 에 400 이 보이면 모델이 거부하는 것이니 지운다 |
 | `AI_MIN_ATTEMPTS` | 기본 `30` | AI API 호출당 최소 시도 횟수. **늘릴 수만 있고 30 미만은 무시** |
 | `AI_BACKOFF_BASE` / `AI_BACKOFF_MAX` | `0.5` / `4` (초) | 실패 후 대기: 0.5→1→2→4→4… |
 | `AI_CALL_TIMEOUT` | `60` (초) | API 요청 1회의 제한 시간 (전체 제한 시간은 없음) |
@@ -146,6 +147,11 @@ seongbin45/transcribe_app 의 방식을 따랐다(정독·커밋 교차검증 �
   둘 다 말소리를 찾아야 외부 AI 를 부른다. pyannoteAI 클라우드는 계정 크레딧 없음(HTTP 402)으로 모든 요청이 실패해
   로컬 모델로 바꿨다(2026-10-08) — 네트워크·크레딧이 필요 없다. 단독으로는 브라우저 녹음 신호음 일부를 말소리로 보지만 Silero 와의 AND 로 걸러진다.
 - 두 전사 호출은 동시에(각각 최소 30회). 교차검증 키(`ASSEMBLYAI_API_KEY`)가 없거나 실패하면 **채점하지 않는다**.
+- **제한 모드**(사용자 결정 2026-10-10): 교차검증은 못 했지만 1차 전사문이 있으면 `usable: true`, `limited: true`,
+  `cross_validated: false`, `score: null`, `heard`(환각 세그먼트를 거른 1차 전사)만 준다. 피드백 AI(Gemini)는 부르지 않는다.
+  화면은 "음성 확인이 제한되어 점수와 자동 복습 저장을 제공하지 않습니다"를 보여 주고, 복습 목록 저장은 사용자가 고를 때만 한다
+  (`weakDecision` 이 `cross_validated: false` 면 점수가 와도 `ask`). 1차 전사가 비거나 실패하면 지금처럼 평가 불가다.
+  정상 채점 응답에는 `cross_validated: true` 가 붙는다.
 - 점수 `100 × 2·M_both / (T + H_max)` — 각 전사 단독 점수보다 크지 않다. 응답 `cross_validation`, `heard_checker`, `diff.per_stt`, `diff.agreement`.
 - 근거·한계: `docs/research/references.md`.
 
@@ -251,9 +257,11 @@ Long-term Memory의 실제 완료 기준:
 
 | 항목 | 값 | 방법 |
 |---|---|---|
-| 호출 제한 | 20회/60초 (IP 기준) | `RATE_LIMIT` / `RATE_WINDOW` 환경변수 |
-| 입력 길이 | `city` 80자, `places` 20개, `weak_expressions` 20개, `target` 200자 | Pydantic → 초과 시 422 |
-| 오디오 | 8MB, `audio/*` 만 | 초과 시 413, 형식 오류 415, 빈 파일 400 |
+| 호출 제한 | 20회/60초 (IP 기준) | `RATE_LIMIT` / `RATE_WINDOW` 환경변수. 프록시 뒤 사용자 IP 는 `TRUSTED_PROXY_HOPS`(기본 0 = 모두 한 IP 로 묶임, `docs/DEPLOY_RUNBOOK.md` F14) |
+| 입력 길이 | `city` 80자, `places` 20개, `weak_expressions` 20개(각 64자), `target` 200자 | Pydantic → 초과 시 422 |
+| id 형식 | `category_id`·`weak_expressions[]` 는 `^[a-z][a-z0-9_]*$` (계약 id 형식). `category_id` 는 파일 경로가 되므로 `../` 등을 막는다 | 어긋나면 422. 형식은 맞지만 계약에 없는 취약 상황 id 는 프롬프트에서 빼고 `weak_unknown_situation` 경고만 남긴다 |
+| 장소 종류 | `places[].place_type` 은 그 카테고리 계약의 `place_types` 중 하나(대소문자·앞뒤 공백 무시, 생략 가능) | 밖이면 422 + `allowed` 목록. 프롬프트에 자유 문자열이 들어가지 않게 한다 |
+| 오디오 | 8MB, 30초(`MAX_AUDIO_SECONDS`), `audio/*` 만 | 초과 시 413, 형식 오류 415, 빈 파일 400. 길이는 디코딩 직후·외부 AI 호출 전에 검사(화면은 15초에서 녹음을 멈춤) |
 
 > ⚠️ **Google Cloud 예산 알림은 지출을 자동으로 차단하는 상한이 아닙니다.** 알림만으로는
 > 비용이 계속 나갑니다. "알림 + 상한이면 코드보다 확실하다"는 설명은 틀렸습니다.

@@ -14,7 +14,7 @@
 
   "situations": [
     { "situation_id": "reserve_table",   "situation": "자리 예약·문의" },
-    { "situation_id": "ask_wait",        "situation": "대기 시간·웨이팅 확인" },
+    { "situation_id": "ask_wait",        "situation": "대기 시간·웨이팅 및 호출 방식 확인" },
     { "situation_id": "order_menu",      "situation": "대표 메뉴 주문" },
     { "situation_id": "ask_recommend",   "situation": "추천 메뉴 요청" },
     { "situation_id": "allergy_notice",  "situation": "알레르기·재료 고지",
@@ -25,42 +25,42 @@
     { "situation_id": "takeout",         "situation": "포장 요청" },
     { "situation_id": "pay_check",       "situation": "계산·영수증 요청",
       "required_keywords": ["check", "bill", "receipt"] },
-    { "situation_id": "tip_split",       "situation": "팁·더치페이" }
+    { "situation_id": "tip_split",       "situation": "더치페이·분할 결제 문의" }
   ],
 
   "system_prompt": "You generate travel English practice sentences for the 'restaurant / cafe' category.\n\nINPUT: city, a list of places (place_type in [restaurant, cafe]), the situation list, and the learner's weak situations.\n\nRULES:\n- Output ONLY JSON matching the attached schema. No prose, no markdown fences.\n- Generate between {min_sentences_per_situation} and {max_sentences_per_situation} sentences for each situation_id.\n- English: polite register, at most {max_words_per_sentence} words, immediately usable on the spot.\n- Korean: natural translation, not word-for-word.\n- If a weak situation is given, it MUST have at least one sentence, and that sentence must contain the situation's required_keywords (e.g. allergy_notice -> allergy/allergic).\n- Do NOT encourage drinking, or raise politics or religion.\n- Never repeat the same English sentence across situations.\n- When a specific place is given, reference its signature dish or feature where natural.",
 
   "good_examples": [
     {
-      "place": "Katz's Delicatessen",
+      "place": "A local restaurant",
       "place_type": "restaurant",
-      "situation_id": "order_menu",
-      "situation": "대표 메뉴 주문",
-      "en": "I'd like a pastrami sandwich, please.",
-      "ko": "파스트라미 샌드위치 하나 주세요.",
+      "situation_id": "reserve_table",
+      "situation": "자리 예약·문의",
+      "en": "Could we have a table for two, please?",
+      "ko": "두 명 자리 부탁드려도 될까요?",
       "level": "basic",
-      "tags": ["주문"]
+      "tags": ["입장", "인원"]
     },
     {
-      "place": "Katz's Delicatessen",
+      "place": "A local restaurant",
       "place_type": "restaurant",
       "situation_id": "allergy_notice",
       "situation": "알레르기·재료 고지",
-      "en": "I have a peanut allergy. Does this contain peanuts?",
-      "ko": "땅콩 알레르기가 있어요. 이거에 땅콩이 들어가나요?",
+      "en": "I have a shellfish allergy. Could you check with the kitchen?",
+      "ko": "갑각류 알레르기가 있습니다. 주방에 확인해 주실 수 있나요?",
       "level": "basic",
-      "tags": ["알레르기", "안전"],
+      "tags": ["알레르기", "확인"],
       "targets_weak": ["allergy_notice"]
     },
     {
       "place": "A local cafe",
       "place_type": "cafe",
-      "situation_id": "request_side",
-      "situation": "추가 요청 (물·리필·소스)",
-      "en": "Could I get a refill, please?",
-      "ko": "리필 한 번 더 주시겠어요?",
+      "situation_id": "takeout",
+      "situation": "포장 요청",
+      "en": "Could I get this iced latte to go, please?",
+      "ko": "이 아이스 라테 포장해 주실 수 있나요?",
       "level": "basic",
-      "tags": ["추가요청"]
+      "tags": ["카페", "포장"]
     }
   ],
 
@@ -73,8 +73,8 @@
         "place_type": "restaurant",
         "situation_id": "ask_recommend",
         "situation": "추천 메뉴 요청",
-        "en": "Do you want to grab a beer and talk about politics?",
-        "ko": "맥주 마시면서 정치 얘기 할래요?"
+        "en": "Let's get drunk and talk about politics.",
+        "ko": "취하도록 마시고 정치 이야기도 하자."
       }
     },
     {
@@ -97,7 +97,7 @@
         "place_type": "restaurant",
         "situation_id": "request_side",
         "situation": "추가 요청 (물·리필·소스)",
-        "en": "Excuse me, I was wondering if it might be possible for me to possibly get a glass of water at some point when you have a moment.",
+        "en": "Could you please bring us another glass of water when you have a moment, because we have been waiting for quite a while?",
         "ko": "실례합니다, 혹시 잠시 괜찮으실 때 물 한 잔 받을 수 있을까요?"
       }
     },
@@ -109,8 +109,8 @@
         "place_type": "restaurant",
         "situation_id": "request_side",
         "situation": "추가 요청 (물·리필·소스)",
-        "en": "Could I get a refill, please?",
-        "ko": "리필 한 번 더 주시겠어요?"
+        "en": "Could we have a table for two, please?",
+        "ko": "두 명 자리 부탁드려도 될까요?"
       }
     },
     {
@@ -121,8 +121,8 @@
         "place_type": "restaurant",
         "situation_id": "pay_check",
         "situation": "계산·영수증 요청",
-        "en": "Gimme the check.",
-        "ko": "계산서 줘."
+        "en": "Gimme the bill now.",
+        "ko": "지금 계산서 줘."
       }
     }
   ],

@@ -173,6 +173,17 @@ test('shouldSaveWeak: null/NaN/범위 밖/목업/샘플·폴백 문장/파싱 �
   assert.equal(AI.shouldSaveWeak(ai, null), false);
 });
 
+test('weakDecision: 교차검증 못 한 결과(제한 모드)는 자동 저장하지 않고 사용자 선택만', () => {
+  const ai = { ai: true, categoryId: 'restaurant', situationId: 'allergy_notice', en: 'I have a peanut allergy.' };
+  const limited = { usable: true, limited: true, cross_validated: false, score: null, heard: 'I have a nut' };
+  assert.equal(AI.weakDecision(ai, limited), 'ask');
+  assert.equal(AI.weakDecision(ai, { ...limited, score: 10 }), 'ask');       // 서버가 실수로 점수를 보내도 자동 저장 안 함
+  assert.equal(AI.shouldSaveWeak(ai, { ...limited, score: 10 }), false);
+  assert.equal(AI.weakDecision(ai, { ...limited, heard: '' }), 'none');      // 들린 문장이 없으면 저장 제안도 없음
+  assert.equal(AI.weakDecision({ ...ai, ai: false }, limited), 'none');      // 샘플·폴백 문장은 그대로 제외
+  assert.equal(AI.weakDecision(ai, { usable: true, cross_validated: true, score: 40, heard: 'x' }), 'auto');
+});
+
 test('weakDecision: 점수가 없으면 자동 저장하지 않고 사용자에게 묻는다(ask)', () => {
   const ai = { ai: true, categoryId: 'restaurant', situationId: 'allergy_notice', en: 'I have a peanut allergy.' };
   const d = o => AI.weakDecision(ai, { usable: true, score: null, ...o });

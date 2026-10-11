@@ -116,6 +116,7 @@ python3 backend/scripts/measure_score_rate.py \
 2 usable:true / 실제 응답                       10 /  10  (100%)
 3 유효 score / usable:true                     9 /  10  (90%)
 4 점수 누락(null)+heard 있음 / usable:true        1 /  10  (10%)
+  (참고) 제한 모드(교차검증 못 함, 점수 없음) / usable:true  0 /  10  (0%)
   (참고) 값은 있으나 무효한 점수 / usable:true         0 /  10  (0%)
   (참고) score_discarded / 실제 응답               0 /  10  (0%)
   (참고) heard 비어 있음 / 실제 응답                 0 /  10  (0%)
@@ -128,7 +129,7 @@ python3 backend/scripts/measure_score_rate.py \
 | 1 | 전체 요청 | 네트워크·서버가 살아 있는가 |
 | 2 | 실제 응답(HTTP 200 ∧ 목업 아님) | 모델이 `usable:true`를 주는가 |
 | 3 | `usable:true` | **점수가 유효하게 오는가** (bool 제외·유한·0~100·폐기 아님) |
-| 4 | `usable:true` | **점수가 누락(null/없음)** 이고 `heard`는 있는가 → **`ask` 후보**. 점수 값이 있으나 무효(범위 밖·bool·문자열)인 응답은 여기 넣지 않고 "(참고) 값은 있으나 무효한 점수"로 센다. 프론트는 AI 문장 여부·유효한 상황 ID 등 다른 조건도 확인하므로 **이 비율을 `ask` 발생률로 읽지 않는다** |
+| 4 | `usable:true` | **점수가 누락(null/없음)** 이고 `heard`는 있는가 → **`ask` 후보**. 점수 값이 있으나 무효(범위 밖·bool·문자열)인 응답은 여기 넣지 않고 "(참고) 값은 있으나 무효한 점수"로 센다. 프론트는 AI 문장 여부·유효한 상황 ID 등 다른 조건도 확인하므로 **이 비율을 `ask` 발생률로 읽지 않는다**. 제한 모드(`cross_validated:false`, AssemblyAI 키 없음·장애)는 여기 넣지 않고 "(참고) 제한 모드"로 따로 센다 — 0이 아니면 정상 경로 측정이 아니므로 교차검증 상태부터 확인한다 |
 | 참고 | 실제 응답 | 점수를 줬다가 버린 경우 / 들린 내용이 빈 경우 |
 
 ---

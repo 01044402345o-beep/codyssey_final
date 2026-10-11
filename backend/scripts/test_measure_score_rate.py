@@ -32,6 +32,15 @@ class T(unittest.TestCase):
             c = classify(st, res, err)
             self.assertFalse(c["http_ok"] or c["real"] or c["usable"])
 
+    def test_limited_mode_counted_separately(self):
+        lim = classify(200, {"usable": True, "limited": True, "cross_validated": False, "score": None, "heard": "x"})
+        self.assertTrue(lim["usable"] and lim["limited"])
+        self.assertFalse(lim["no_score_with_heard"] or lim["valid_score"])   # 지표 4(ask 후보)에 섞지 않는다
+        full = classify(200, {"usable": True, "cross_validated": True, "score": 55, "heard": "x"})
+        self.assertFalse(full["limited"])
+        rows = [lim, full]
+        self.assertEqual(summarize(rows)["  (참고) 제한 모드(교차검증 못 함, 점수 없음) / usable:true"], (1, 2))
+
     def test_missing_vs_invalid_score(self):
         for bad in (150, True, "40", float("nan")):
             c = classify(200, {"usable": True, "score": bad, "heard": "x"})

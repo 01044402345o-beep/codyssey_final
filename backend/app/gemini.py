@@ -353,10 +353,28 @@ def run_on(
     return Result(value=value, attempts=attempts, model=model_of(attempts), failures=failures)
 
 
+def thinking_budget(model: str) -> int | None:
+    """GEMINI_THINKING_BUDGET(정수)이 있으면 flash 계열 호출에 생각(thinking) 토큰 상한을 건다.
+
+    짧은 JSON 문장 생성에는 추론 시간이 거의 필요 없어 0 이면 응답이 빨라질 수 있다(배포에서 전후 측정).
+    pro 계열은 생각을 끌 수 없어(예산 0 = 요청 오류) 적용하지 않는다. 비어 있으면 모델 기본값.
+    """
+    raw = (os.getenv("GEMINI_THINKING_BUDGET") or "").strip()
+    if not raw or "flash" not in model.lower():
+        return None
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return None
+
+
 def generate_text(client: Any, model: str, contents: Any, **config: Any) -> str:
     """generate_content 1회 = API 요청 1회. 재시도는 run()/retry() 가 맡는다."""
     from google.genai import types
 
+    budget = thinking_budget(model)
+    if budget is not None:
+        config["thinking_config"] = types.ThinkingConfig(thinking_budget=budget)
     resp = client.models.generate_content(
         model=model,
         contents=contents,

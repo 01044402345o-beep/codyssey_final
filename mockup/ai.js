@@ -236,6 +236,8 @@
     if (!res || typeof res !== 'object' || res.usable !== true || res.mock === true || res.score_discarded === true || 'raw' in res) return 'none';
     // 무음·인식 실패(heard 없음)는 점수가 낮게 와도 실력 부족이 아니다.
     if (typeof res.heard !== 'string' || !res.heard.trim()) return 'none';
+    // 교차검증을 못 한 결과(제한 모드)는 점수가 오더라도 자동 저장하지 않는다. 사용자가 고를 때만 저장.
+    if (res.cross_validated === false) return 'ask';
     const s = res.score;
     // 점수가 없으면 단어 일치율만으로 자동 저장하지 않는다. 사용자에게 저장할지 묻는다 (일치율은 참고 신호).
     if (s === null || s === undefined) return 'ask';

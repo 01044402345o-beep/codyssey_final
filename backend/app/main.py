@@ -15,6 +15,7 @@ GEMINI_API_KEY 가 없으면 목업으로 응답한다. 그래서 키 없이도 
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import os
@@ -25,12 +26,12 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 from starlette.concurrency import run_in_threadpool
 
 from . import gemini as ai
@@ -58,6 +59,10 @@ MAX_AUDIO_SECONDS = 30
 # 호출 제한 (단일 인스턴스 기준)
 RATE_LIMIT = int(os.getenv("RATE_LIMIT", "20"))          # 창당 최대 요청 수
 RATE_WINDOW = int(os.getenv("RATE_WINDOW", "60"))        # 초
+# 앞단 프록시 수. Render 처럼 프록시 뒤에서는 연결 상대(request.client)가 프록시라
+# 모든 사용자가 한 IP 로 묶인다. N 이면 X-Forwarded-For 의 뒤에서 N 번째를 사용자 IP 로 본다.
+# 앞쪽 값은 사용자가 마음대로 넣을 수 있으므로 쓰지 않는다. 0(기본)은 연결 상대 그대로.
+TRUSTED_PROXY_HOPS = max(0, int(os.getenv("TRUSTED_PROXY_HOPS", "0")))
 
 # 1이면 설정 누락(schema.json·jsonschema·카테고리) 상태에서 /generate 를 거부한다.
 # 기본 0은 '일단 돌아가게' 두되, /health 가 degraded 로 알린다.
@@ -91,19 +96,76 @@ app.add_middleware(
 )
 
 _hits: dict[str, deque[float]] = defaultdict(deque)
+_hits_lock = threading.Lock()
 
+
+
+def _masked(ip: str) -> str:
+    """로그용. 마지막 자리를 가리고 사설·공인만 붙인다(IP 는 개인정보)."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return "?"
+    kind = "공인" if addr.is_global else "사설"
+    head = ".".join(ip.split(".")[:3]) + ".x" if addr.version == 4 else ":".join(ip.split(":")[:3]) + ":…"
+    return f"{head}({kind})"
+
+
+_proxy_logged = False
+
+
+def _log_proxy_chain_once(peer: str, xff: str) -> None:
+    """TRUSTED_PROXY_HOPS 를 정할 근거. 프로세스마다 X-Forwarded-For 가 붙은 첫 요청 한 번만 남긴다.
+
+    내 공인 IP 가 체인 끝에서 몇 번째인지가 TRUSTED_PROXY_HOPS 값이다 (docs/DEPLOY_RUNBOOK.md F14).
+    연결 상대는 uvicorn 이 이미 바꾼 값일 수 있다(연결이 127.0.0.1 에서 오면 X-Forwarded-For 를 반영).
+    """
+    global _proxy_logged
+    if _proxy_logged or not xff:
+        return
+    _proxy_logged = True
+    chain = [_masked(h.strip()) for h in xff.split(",") if h.strip()]
+    logging.getLogger("app.ratelimit").info(
+        "프록시 확인: 연결 상대=%s, X-Forwarded-For=%s, TRUSTED_PROXY_HOPS=%d",
+        _masked(peer), " , ".join(chain) or "(없음)", TRUSTED_PROXY_HOPS)
+
+
+def client_ip(request: Request) -> str:
+    """속도 제한용 사용자 IP. TRUSTED_PROXY_HOPS 설명 참고.
+
+    X-Forwarded-For 가 프록시 수보다 짧으면 연결 상대를 쓴다(여러 사용자가 묶여 더 엄격해지는 쪽).
+    """
+    peer = request.client.host if request.client else "unknown"
+    if TRUSTED_PROXY_HOPS == 0:
+        return peer
+    chain = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+    return chain[-TRUSTED_PROXY_HOPS] if len(chain) >= TRUSTED_PROXY_HOPS else peer
+
+
+@app.middleware("http")
+async def proxy_chain_probe(request: Request, call_next: Any) -> Any:
+    """/health 나 첫 화면만 열어도 프록시 구성이 로그에 남게 모든 요청에서 본다(기록은 한 번)."""
+    if not _proxy_logged:
+        _log_proxy_chain_once(request.client.host if request.client else "unknown",
+                              request.headers.get("x-forwarded-for", ""))
+    return await call_next(request)
 
 
 def rate_limit(request: Request) -> None:
     """IP 기준 슬라이딩 윈도. 프로세스 메모리라 인스턴스가 늘면 약해진다 — 임시 방어."""
-    ip = (request.client.host if request.client else "unknown")
-    now = time.time()
-    q = _hits[ip]
-    while q and now - q[0] > RATE_WINDOW:
-        q.popleft()
-    if len(q) >= RATE_LIMIT:
-        raise HTTPException(status_code=429, detail="요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.")
-    q.append(now)
+    ip = client_ip(request)
+    # /generate 는 동기 함수라 스레드풀에서 동시에 들어온다. 정리 중 순회와 추가가 겹치지 않게 잠근다.
+    with _hits_lock:
+        now = time.time()
+        if len(_hits) > 10_000:         # IP 별로 나뉘면 키가 쌓인다. 창이 지난 IP 는 버린다.
+            for k in [k for k, v in _hits.items() if not v or now - v[-1] > RATE_WINDOW]:
+                del _hits[k]
+        q = _hits[ip]
+        while q and now - q[0] > RATE_WINDOW:
+            q.popleft()
+        if len(q) >= RATE_LIMIT:
+            raise HTTPException(status_code=429, detail="요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.")
+        q.append(now)
 
 
 # ---------------------------------------------------------------- 요청 모델
@@ -113,11 +175,16 @@ class Place(BaseModel):
     place_type: str | None = Field(default=None, max_length=40)
 
 
+# 계약의 id 형식(schema.json 의 situation_id 와 같다). category_id 는 파일 경로가 되므로 '../' 같은 값을 막는다.
+ContractId = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$", max_length=64)]
+
+
 class GenerateRequest(BaseModel):
-    category_id: str = Field(min_length=1, max_length=40)
+    category_id: ContractId = Field(max_length=40)
     city: str = Field(default="New York", min_length=1, max_length=80)
     places: list[Place] = Field(default_factory=list, max_length=20)
-    weak_expressions: list[str] = Field(default_factory=list, max_length=20)
+    # 항목마다 형식·길이를 제한한다. 프롬프트에 들어가고 Gemini 호출은 최소 30회라 긴 문자열은 비용이 된다.
+    weak_expressions: list[ContractId] = Field(default_factory=list, max_length=20)
 
 
 # ---------------------------------------------------------------- 설정 로드
@@ -169,6 +236,23 @@ def config_problems() -> list[str]:
     return problems
 
 
+def check_place_types(cfg: dict[str, Any], req: GenerateRequest) -> None:
+    """장소 종류는 계약의 place_types 중 하나여야 한다(생략은 허용).
+
+    맛집 카테고리에 hotel 을 보내는 식의 잘못된 짝을 조용히 생성하지 않는다.
+    place_type 은 프롬프트에 그대로 들어가므로 허용 목록 밖의 문자열을 받지 않는다.
+    """
+    allowed = {str(t).strip().lower() for t in cfg.get("place_types") or []}
+    bad = sorted({p.place_type for p in req.places
+                  if p.place_type is not None and p.place_type.strip().lower() not in allowed})
+    if bad:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": f"{cfg['category_id']} 카테고리에서 쓸 수 없는 장소 종류입니다.",
+                    "place_types": bad, "allowed": sorted(allowed)},
+        )
+
+
 def build_prompt(cfg: dict[str, Any], req: GenerateRequest) -> str:
     """system_prompt 의 {키} 를 rules 의 같은 키 값으로 치환한다."""
     rules = cfg.get("rules", {})
@@ -177,10 +261,11 @@ def build_prompt(cfg: dict[str, Any], req: GenerateRequest) -> str:
         cfg.get("system_prompt", ""),
     )
     mapping = {s.get("situation_id"): s for s in cfg.get("situations", []) if isinstance(s, dict)}
+    # 계약에 없는 id 는 프롬프트에 넣지 않는다(검증기가 weak_unknown_situation 경고로 따로 알린다).
     weak_spec = [
-        {"situation_id": w, "situation": (mapping.get(w) or {}).get("situation"),
-         "required_keywords": (mapping.get(w) or {}).get("required_keywords")}
-        for w in req.weak_expressions
+        {"situation_id": w, "situation": mapping[w].get("situation"),
+         "required_keywords": mapping[w].get("required_keywords")}
+        for w in req.weak_expressions if w in mapping
     ]
     payload = {
         "category_id": cfg["category_id"],
@@ -203,11 +288,16 @@ def mock_pack(cfg: dict[str, Any], req: GenerateRequest) -> dict[str, Any]:
     주의: 여기서 취약 표현 태그를 임의로 붙이지 않는다. 태그를 조작하면
     '반영됐다'는 증거를 위조하는 것이 된다. 반영 여부는 검증기가
     weak_expressions.json 의 상황·키워드로 판단한다.
+
+    예시의 place 는 빼고 보낸다. 예시는 사용자가 고른 장소와 무관한데, 화면(buildPools)은 place 가
+    고른 장소 이름과 다르면 문장을 버린다. place 가 없으면 도시 공통 문장으로 쓴다.
+    (예시 place 를 'Katz's Delicatessen' → 'A local restaurant' 로 바꾼 ae4f9a9 뒤 샘플이 0개가 됐다.)
     """
     default_type = (cfg.get("place_types") or [None])[0]
     sentences = []
     for ex in cfg.get("good_examples", []):
         s = dict(ex)
+        s.pop("place", None)
         s.setdefault("place_type", default_type)
         sentences.append(s)
     return {"category_id": cfg["category_id"], "city": req.city, "sentences": sentences}
@@ -300,10 +390,13 @@ class _Timer:
 
 @app.post("/generate")
 def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
+    """처리 시간과 생각 예산 설정을 붙인다 — 속도 개선 전후를 같은 응답으로 비교하려고.
+    elapsed_ms: 전체(ms). timing_ms.attempt_ms: 시도별 {model 호출 ms, 검증 ms, 통과 여부} — 재시도가 지연의 주범인지 본다."""
     t = _Timer()
     res = _generate(req, request)
-    # attempt_ms: 시도별 {model 호출 ms, 검증 ms, 통과 여부}. 재시도가 지연의 주범인지 보려는 것이다.
     res["timing_ms"] = {**t.result(), "attempt_ms": res.pop("attempt_ms", [])}
+    res["elapsed_ms"] = res["timing_ms"]["total"]
+    res["thinking_budget"] = (os.getenv("GEMINI_THINKING_BUDGET") or "").strip() or None
     return res
 
 
@@ -315,6 +408,7 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
             detail={"message": "설정이 갖춰지지 않아 생성을 거부했습니다.", "problems": config_problems()},
         )
     cfg = load_category(req.category_id)
+    check_place_types(cfg, req)
     schema = load_schema()
 
     if not os.getenv("GEMINI_API_KEY"):
@@ -459,6 +553,21 @@ def _run_parallel(tasks: dict[str, Any]) -> dict[str, Any]:
         return out
 
 
+LIMITED_REASON = "음성 확인이 제한되어 점수와 자동 복습 저장을 제공하지 않습니다. 다시 녹음해 보세요."
+
+
+def limited(heard: str, **extra: Any) -> dict[str, Any]:
+    """교차검증을 못 했지만 1차 전사문은 있는 경우(사용자 결정, 2026-10-10).
+
+    서비스는 계속 쓰게 하되, 검증하지 못한 결과를 검증된 평가처럼 주지 않는다.
+    들린 문장만 보여 주고 점수·피드백은 만들지 않는다. score 가 null 이라 화면은 자동 저장하지 않고
+    사용자에게 저장할지 묻는다(mockup/ai.js weakDecision → 'ask').
+    """
+    return {"usable": True, "limited": True, "cross_validated": False, "reason": LIMITED_REASON,
+            "score": None, "heard": heard, "issues": [], "fix_one": "", "tip": "",
+            "failed_at": "cross_validation", **extra}
+
+
 def no_speech(reason: str, **extra: Any) -> dict[str, Any]:
     """말이 없거나 받아쓰기에 실패한 경우. 점수·피드백을 만들지 않는다."""
     return {"usable": False, "reason": reason, "score": None, "heard": "", "issues": [],
@@ -481,7 +590,8 @@ async def speak_check(
 async def _speak_check(request: Request, target: str, file: UploadFile, situation: str, t: _Timer) -> dict[str, Any]:
     rate_limit(request)
 
-    audio = await file.read()
+    # 상한 + 1 바이트까지만 읽는다. 큰 업로드를 통째로 메모리에 올리지 않는다.
+    audio = await file.read(MAX_AUDIO_BYTES + 1)
     t.mark("read")
     if not audio:
         raise HTTPException(status_code=400, detail="빈 오디오입니다. 다시 녹음해 주세요.")
@@ -494,11 +604,16 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
         raise HTTPException(status_code=415, detail=f"지원하지 않는 형식입니다: {mime}")
 
     # 1) 말소리 검출 — 키가 없어도 동작한다. 말이 없으면 여기서 끝(외부 API 0회).
+    # 디코딩은 CPU 작업이라 스레드풀에서 한다. 이벤트 루프에서 하면 그동안 다른 요청(/health 포함)이 멈춘다.
     try:
-        samples = vad.decode(audio)
+        samples = await run_in_threadpool(vad.decode, audio)
     except vad.AudioDecodeError:
         raise HTTPException(status_code=400, detail="녹음 파일을 읽을 수 없습니다. 다시 녹음해 주세요.")
     t.mark("decode")
+    # 8MB 는 압축 녹음이면 30분이 넘는다. 길이로 다시 막는다(화면은 15초에서 멈춘다).
+    # 전사 비용은 오디오 길이에 비례하므로 외부 AI 를 부르기 전에 거절한다.
+    if len(samples) > MAX_AUDIO_SECONDS * vad.SAMPLE_RATE:
+        raise HTTPException(status_code=413, detail=f"녹음이 너무 깁니다 (최대 {MAX_AUDIO_SECONDS}초).")
     speech = await run_in_threadpool(vad.detect, samples)
     t.mark("silero")
     if not speech.has_speech:
@@ -519,22 +634,14 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
             "mock": True, "vad": speech.summary(),
         }
 
-    # 교차검증 필수화: 다른 모델 계열의 전사(AssemblyAI)가 없으면 채점하지 않는다.
-    if not stt.api_key(stt.CHECKER):
-        return no_speech(
-            "교차검증에 필요한 AI 키가 없어 채점하지 않았습니다.",
-            failed_at="cross_validation", cross_validation={"required": [stt.CHECKER],
-                                                             "missing_keys": [stt.CHECKER], "detector": detector},
-            vad=speech.summary(),
-        )
-
     # 2) 말소리 구간만, 목표 문장 없이 두 전사 AI 에 동시에 보낸다(지연 시간 = 느린 쪽).
     #    1차 전사(Whisper 계열 체인) · 교차검증 전사(AssemblyAI). 각각 최소 30회.
+    #    교차검증 키가 없으면 1차 전사만 하고 제한 모드로 답한다(점수 없음).
     wav = vad.speech_only_wav(samples, speech)
-    jobs = await run_in_threadpool(_run_parallel, {
-        "primary": lambda: stt.transcribe(wav),
-        "checker": lambda: stt.transcribe_with(stt.CHECKER, wav),
-    })
+    tasks: dict[str, Any] = {"primary": lambda: stt.transcribe(wav)}
+    if stt.api_key(stt.CHECKER):
+        tasks["checker"] = lambda: stt.transcribe_with(stt.CHECKER, wav)
+    jobs = await run_in_threadpool(_run_parallel, tasks)
     t.mark("stt")   # 두 전사는 병렬이라 느린 쪽 시간이다
     base = {"vad": speech.summary()}
     if isinstance(jobs["primary"], Exception):
@@ -545,16 +652,20 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
                          failures=getattr(exc, "failures", []), **base)
     tr = jobs["primary"]
     base.update(attempts=tr.attempts, model=tr.model, failures=tr.failures, stt=tr.meta())
-    broken = {k: jobs[k] for k in ("checker",) if isinstance(jobs[k], Exception)}
-    if broken:
-        return no_speech(
-            "교차검증 AI 가 응답하지 않아 채점하지 않았습니다. 잠시 후 다시 시도해 주세요.",
-            failed_at="cross_validation",
-            cross_validation={k: {"error": getattr(e, "last_error", str(e)), "attempts": getattr(e, "attempts", 0)}
-                              for k, e in broken.items()},
-            **base,
-        )
-    ck = jobs["checker"]
+    ck = jobs.get("checker")
+    if ck is None or isinstance(ck, Exception):
+        # 교차검증 불가 → 제한 모드. 1차 전사도 환각 세그먼트를 걸러 비면 '말소리 없음'과 같게 다룬다.
+        heard, dropped = compare.filter_segments(tr.text, tr.segments)
+        base["dropped_segments"] = dropped
+        cv: dict[str, Any] = {"detector": detector}
+        if ck is None:
+            cv.update(required=[stt.CHECKER], missing_keys=[stt.CHECKER])
+        else:
+            cv["checker"] = {"error": getattr(ck, "last_error", str(ck)), "attempts": getattr(ck, "attempts", 0)}
+        if compare.is_placeholder(heard):
+            return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요.", failed_at="cross_validation",
+                             heard_raw=tr.text, cross_validation=cv, **base)
+        return limited(heard, cross_validation=cv, **base)
     base["cross_validation"] = {"checker": ck.meta(), "detector": detector}
 
     # 3) 판정 — 모두 코드가 한다. 두 전사(Whisper 계열·AssemblyAI) 모두 환각 세그먼트 제거 뒤 비어 있지 않아야 한다.
@@ -597,6 +708,7 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
 
     return {
         "usable": True,
+        "cross_validated": True,
         "score": diff["score"],
         "score_kind": "word_match_consensus",   # 발음 점수가 아니라, 두 전사 모두에서 들린 단어 일치율
         "heard": heard,
