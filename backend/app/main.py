@@ -288,11 +288,16 @@ def mock_pack(cfg: dict[str, Any], req: GenerateRequest) -> dict[str, Any]:
     주의: 여기서 취약 표현 태그를 임의로 붙이지 않는다. 태그를 조작하면
     '반영됐다'는 증거를 위조하는 것이 된다. 반영 여부는 검증기가
     weak_expressions.json 의 상황·키워드로 판단한다.
+
+    예시의 place 는 빼고 보낸다. 예시는 사용자가 고른 장소와 무관한데, 화면(buildPools)은 place 가
+    고른 장소 이름과 다르면 문장을 버린다. place 가 없으면 도시 공통 문장으로 쓴다.
+    (예시 place 를 'Katz's Delicatessen' → 'A local restaurant' 로 바꾼 ae4f9a9 뒤 샘플이 0개가 됐다.)
     """
     default_type = (cfg.get("place_types") or [None])[0]
     sentences = []
     for ex in cfg.get("good_examples", []):
         s = dict(ex)
+        s.pop("place", None)
         s.setdefault("place_type", default_type)
         sentences.append(s)
     return {"category_id": cfg["category_id"], "city": req.city, "sentences": sentences}

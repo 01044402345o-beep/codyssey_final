@@ -57,6 +57,16 @@ class T(unittest.TestCase):
         self.assertEqual([w["situation_id"] for w in payload["weak_expressions"]], ["allergy_notice"])
         self.assertTrue(payload["weak_expressions"][0]["situation"])
 
+    def test_sample_pack_has_no_example_place(self):
+        """키 없는 샘플은 예시의 장소 이름을 붙이지 않는다 — 화면이 고른 장소와 다른 place 문장을 버리기 때문."""
+        for cid in main.list_categories():
+            with self.subTest(cid=cid):
+                d = self.http.post("/generate", json={"category_id": cid, "places": [{"name": "Somewhere"}]}).json()
+                self.assertEqual(d["usable"], "sample")
+                self.assertTrue(d["pack"]["sentences"])
+                self.assertTrue(all("place" not in s for s in d["pack"]["sentences"]))
+                self.assertTrue(all(s.get("place_type") for s in d["pack"]["sentences"]))
+
 
 if __name__ == "__main__":
     unittest.main()
