@@ -1625,31 +1625,74 @@ render();
 /* index.html#u-home 처럼 주소 뒤에 화면 ID를 붙이면 그 화면으로 바로 열림 */
 if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));
 
-/* ===== 카드 좌우로 밀어 넘기기 (cardSwipe) =====
-   세로 스크롤은 그대로 두고, 카드 위에서 가로로 확정된 제스처만 앞/뒤 카드로 넘긴다.
-   이동은 카드의 inline transform 하나로 처리한다 — 새 CSS 토큰을 만들지 않는다.
-   상태 로직을 복제하지 않고 기존 .card-nav 의 prev/next 버튼을 눌러 준다. */
+/* ===== 카드 좌우로 밀어 넘기기 + 넘어가는 동안의 움직임 (cardSwipe) =====
+   가로로 확정된 제스처만 앞/뒤 카드로 넘긴다 — 세로 스크롤은 브라우저가 그대로 처리한다.
+   넘길 때는 (1) 지금 카드가 손가락이 가던 쪽으로 밀려 나가고 (2) 내용이 바뀌고
+   (3) 새 카드가 반대쪽에서 들어온다. 그래야 넘어갔다는 것이 눈에 보인다.
+   나가고 들어오는 값은 CSS(.flip.leaving / cardInNext·cardInPrev)에 있고 여기서는 시점만 잡는다.
+   새 CSS 토큰을 만들지 않는다 — 이동은 카드의 inline transform 하나로 처리한다. */
 (function () {
-  var MIN_X = 10;   /* 이만큼 가로로 움직여야 스와이프로 인정 */
-  var MAX_Y = 45;   /* 이보다 세로로 움직이면 스크롤에 양보 */
-  var GO = 40;      /* 손을 뗄 때 넘어가는 최소 이동량 */
-  var cur = null;
+  var MIN_X = 10;    /* 이만큼 가로로 움직여야 스와이프로 인정 */
+  var MAX_Y = 45;    /* 이보다 세로로 움직이면 스크롤에 양보 */
+  var GO = 44;       /* 손을 뗄 때 넘어가는 최소 이동량 */
+  var FREE = 56;     /* 여기까지는 손가락을 1:1 로 따라간다 */
+  var CAP = 96;      /* 따라오는 최대 거리 */
+  var OUT = 130;     /* 밀려 나가는 시간 — styles.css 의 .flip.leaving 과 맞춘다 */
+  var IN = 240;      /* 새 카드가 들어오는 시간 — cardInNext·cardInPrev 와 맞춘다 */
+  var slow = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var cur = null, leaving = false, lastIdx = null, swallowUntil = 0, own = false;
 
-  function clear() {
-    if (cur && cur.card) { cur.card.classList.remove('dragging'); cur.card.style.removeProperty('transform'); }
-    cur = null;
+  function card() { return document.querySelector('.flip'); }
+  function navBtn(dir) {
+    var n = document.querySelector('.card-nav');
+    return n ? n.querySelector(dir > 0 ? '[data-act="card-next"]' : '[data-act="card-prev"]') : null;
   }
-  function swallowClick() {   /* 넘긴 직후 카드가 뒤집히지 않게 클릭 한 번을 먹는다 */
-    function h(ev) { ev.stopPropagation(); ev.preventDefault(); document.removeEventListener('click', h, true); }
-    document.addEventListener('click', h, true);
-    setTimeout(function () { document.removeEventListener('click', h, true); }, 450);
+  function curIdx() {
+    var list = document.querySelectorAll('.dots i');
+    for (var i = 0; i < list.length; i++) if (list[i].classList.contains('cur')) return i;
+    return null;
   }
+  function amp(dx) {                 /* 1:1 로 따라가다 끝에서 무거워진다 */
+    var a = Math.abs(dx);
+    if (a > FREE) a = FREE + (a - FREE) * 0.35;
+    return Math.min(a, CAP);
+  }
+  function back(el) {                /* 넘기지 못했다 — 제자리로 부드럽게 되돌린다 */
+    if (!el) return;
+    el.style.transform = 'translateX(0px)';
+    el.style.opacity = '';
+    setTimeout(function () { el.style.removeProperty('transform'); }, 220);
+  }
+  function advance(dir) {            /* 나가고 → 바뀌고 → 들어온다 */
+    if (leaving) return;
+    var b = navBtn(dir);
+    if (!b || b.disabled) return;
+    var c = card();
+    if (slow || !c) { b.click(); return; }        /* 모션 줄이기: 곧바로 바꾼다 */
+    leaving = true;
+    swallowUntil = Date.now() + 700;              /* 손 떼며 브라우저가 합성하는 클릭을 막는다 */
+    c.classList.remove('dragging');
+    c.classList.add('leaving');
+    c.style.transform = 'translateX(' + (-dir * 72) + 'px)';
+    c.style.opacity = '0.25';
+    setTimeout(function () {
+      own = true; b.click(); own = false;         /* 이 클릭만 앱이 처리한다 */
+      leaving = false;
+    }, OUT);
+  }
+  /* 손 떼며 브라우저가 만드는 클릭이 카드를 뒤집지 않게 한 번 먹는다 */
+  document.addEventListener('click', function (e) {
+    if (own || Date.now() >= swallowUntil) return;
+    e.stopPropagation(); e.preventDefault();
+  }, true);
+
   function begin(target, x, y) {
+    if (leaving) return;
     if (!target || !target.closest) return;
     if (target.closest('.tts-btn, button, a, input, select, textarea')) return;
-    var card = target.closest('.flip');
-    if (!card) return;
-    cur = { x: x, y: y, dx: 0, dy: 0, card: card, on: false };
+    var el = target.closest('.flip');
+    if (!el) return;
+    cur = { x: x, y: y, dx: 0, dy: 0, card: el, on: false };
   }
   function drag(x, y, ev) {
     if (!cur) return;
@@ -1660,25 +1703,22 @@ if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));
         cur.on = true; cur.card.classList.add('dragging');
       } else return;
     }
-    if (Math.abs(cur.dy) >= MAX_Y) { clear(); return; }
+    if (Math.abs(cur.dy) >= MAX_Y) {
+      var g = cur; cur = null; g.card.classList.remove('dragging'); back(g.card); return;
+    }
     if (ev && ev.cancelable) ev.preventDefault();
-    cur.card.style.transform = 'translateX(' + (Math.max(-80, Math.min(80, cur.dx)) * 0.5) + 'px)';
+    var a = amp(cur.dx), dx = cur.dx < 0 ? -a : a;
+    cur.card.style.transform = 'translateX(' + dx + 'px)';
+    cur.card.style.opacity = String(1 - a / 420);
   }
   function finish() {
     if (!cur) return;
     var c = cur; cur = null;
     c.card.classList.remove('dragging');
-    c.card.style.removeProperty('transform');
-    if (!c.on || Math.abs(c.dx) < GO) return;
-    var nav = document.querySelector('.card-nav');
-    if (!nav) return;
-    var b = nav.querySelector(c.dx < 0 ? '[data-act="card-next"]' : '[data-act="card-prev"]');
-    if (!b || b.disabled) return;
-    b.click();          /* 넘김을 먼저 실행 — 삼키기를 먼저 걸면 이 클릭까지 막힌다 */
-    swallowClick();     /* 그 뒤 브라우저가 합성하는 클릭(카드 뒤집힘)만 막는다 */
+    if (c.on && Math.abs(c.dx) >= GO) { advance(c.dx < 0 ? 1 : -1); return; }
+    back(c.card);
   }
 
-  /* 터치 — 가로로 확정된 뒤에만 스크롤을 막는다(그 전에는 세로 스크롤 그대로) */
   document.addEventListener('touchstart', function (e) {
     if (e.touches.length !== 1) return;
     begin(e.target, e.touches[0].clientX, e.touches[0].clientY);
@@ -1688,9 +1728,12 @@ if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));
     drag(e.touches[0].clientX, e.touches[0].clientY, e);
   }, { passive: false });
   document.addEventListener('touchend', finish, { passive: true });
-  document.addEventListener('touchcancel', clear, { passive: true });
+  document.addEventListener('touchcancel', function () {
+    if (!cur) return;
+    var c = cur; cur = null; c.card.classList.remove('dragging'); back(c.card);
+  }, { passive: true });
 
-  /* 마우스(데스크톱) */
+  /* 마우스(데스크톱) — 끌어서 넘기기 */
   document.addEventListener('pointerdown', function (e) {
     if (e.pointerType !== 'mouse' || e.button !== 0) return;
     begin(e.target, e.clientX, e.clientY);
@@ -1703,8 +1746,25 @@ if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));
     if (e.pointerType !== 'mouse') return;
     finish();
   }, { passive: true });
-})();
 
+  /* 내용이 실제로 바뀐 뒤에 새 카드를 들여보낸다.
+     스와이프와 버튼 탭이 모두 이 한 곳을 지나가므로 넘어가는 움직임이 한 곳에서만 정의된다. */
+  function settle() {
+    var v = curIdx();
+    if (lastIdx === null) { lastIdx = v; return; }
+    if (v === null || v === lastIdx) return;
+    var dir = v > lastIdx ? 1 : -1;
+    lastIdx = v;
+    var c = card();
+    if (!c || slow) return;
+    c.style.removeProperty('transform'); c.style.opacity = '';
+    c.classList.add(dir > 0 ? 'in-next' : 'in-prev');
+    setTimeout(function () { c.classList.remove('in-next', 'in-prev'); }, IN);
+  }
+  new MutationObserver(function () { window.requestAnimationFrame(settle); })
+    .observe(document.body, { childList: true, subtree: true });
+  window.requestAnimationFrame(settle);
+})();
 /* ===== 처음 한 번만, 카드가 좌우로 흔들려 스와이프를 알려 준다 (cardHint) =====
    다음 카드 버튼이 화면 밖일 때만 띄운다 — 그때가 스와이프가 유일한 길인 상황이다.
    앱이 다시 그릴 때마다 .flip 이 새로 만들어지므로, DOM 이 잠잠해진 뒤(450ms) 붙이고
