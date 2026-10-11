@@ -1656,17 +1656,59 @@ if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));
     if (a > FREE) a = FREE + (a - FREE) * CURVE;
     return Math.min(a, CAP);
   }
+  /* 끝 카드 전용 — 고무줄을 덜 조여 빈 자리를 넓게 연다(안내 문구가 들어갈 폭). */
+  function edgeAmp(dx) {
+    var a = Math.abs(dx);
+    if (a > FREE) a = FREE + (a - FREE) * 0.6;
+    return Math.min(a, 168);
+  }
   function back(el) {                /* 넘기지 못했다 — 부드럽게 제자리로 */
     if (!el) return;
     el.style.transform = 'translateX(0px)';
     el.style.opacity = '';
     setTimeout(function () { el.style.removeProperty('transform'); }, 220);
   }
+  /* ===== 끝 카드에서 밀면 드러나는 자리에 안내와 가장자리 그늘 =====
+     .flip-wrap 은 가만히 있고 .flip 만 미끄러지므로 카드가 있던 자리가 비고 그 자리에 이 층이 보인다.
+     그늘은 카드 쪽이 진하고 바깥으로 옅어진다(카드가 드리우는 그림자처럼). */
+  var edgeSide = null;
+  function edgeEl() { return document.querySelector('.flip-edge'); }
+  function edgeHide() {
+    edgeSide = null;
+    var e = edgeEl();
+    if (!e) return;
+    e.classList.remove('shown', 'side-left', 'side-right');
+    e.style.clipPath = '';
+    var sp = e.querySelectorAll('span');
+    for (var q = 0; q < sp.length; q++) { sp[q].style.width = ''; sp[q].style.transform = ''; }
+  }
+  function edgeShow(dx, amount) {
+    var e = edgeEl();
+    if (!e) return;
+    var side = dx < 0 ? 'side-right' : 'side-left';   /* 카드가 왼쪽으로 갔으면 빈 자리는 오른쪽 */
+    if (edgeSide && edgeSide !== side) return;         /* 방향이 뒤집히는 도중에는 그리지 않는다 */
+    edgeSide = side;
+    if (!e.classList.contains('shown')) {
+      e.classList.add('shown');
+      e.setAttribute('data-first', side === 'side-left' ? '1' : '0');
+    }
+    e.classList.toggle('side-left', side === 'side-left');
+    e.classList.toggle('side-right', side === 'side-right');
+    var box = e.getBoundingClientRect().width || 1;
+    var w = Math.max(0, Math.min(100, amount / box * 100));   /* 드러난 폭(px)을 층 폭에 대한 % 로 */
+    e.style.clipPath = side === 'side-left' ? 'inset(0 ' + (100 - w) + '% 0 0)' : 'inset(0 0 0 ' + (100 - w) + '%)';
+    /* 드러난 자리 폭과 같은 폭을 주고 그 쪽으로 붙인다 — 문구가 그 자리 한가운데에 온다. */
+    e.style.justifyContent = side === 'side-left' ? 'flex-start' : 'flex-end';
+    var sp = e.querySelectorAll('span');
+    for (var q = 0; q < sp.length; q++) sp[q].style.width = amount.toFixed(0) + 'px';
+    e.style.opacity = String(Math.min(1, amount / 60));
+  }
   function advance(dir) {
     var b = navBtn(dir);
     /* 넘어갈 곳이 없는 끝 카드(첫 카드에서 오른쪽, 마지막 카드에서 왼쪽)는 제자리로 되돌린다.
        여기서 그냥 돌아가면 드래그로 옮겨 놓은 위치와 투명도가 그대로 남아,
        카드가 어긋난 채 멈춘다 — 넘어가지도 않고 돌아오지도 않는 상태가 된다. */
+    edgeHide();
     if (!b || b.disabled) { back(card()); return; }
     if (slow) { b.click(); return; }
     swallowUntil = Date.now() + 420;   /* 손 떼며 브라우저가 합성하는 클릭을 막는다 */
@@ -1702,13 +1744,20 @@ if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));
     }
     if (ev && ev.cancelable) ev.preventDefault();
     var a = amp(cur.dx), dx = cur.dx < 0 ? -a : a;
-    cur.card.style.transform = 'translateX(' + dx + 'px)';
-    cur.card.style.opacity = String(1 - a / 420);
+    var nb = navBtn(cur.dx < 0 ? 1 : -1);
+    var stop = !!(nb && nb.disabled);                  /* 넘어갈 카드가 없다 = 끝 */
+    if (stop) a = edgeAmp(cur.dx);                     /* 끝에서는 더 넓게 드러나야 문구가 읽힌다 */
+    var dx2 = cur.dx < 0 ? -a : a;
+    cur.card.style.transform = 'translateX(' + dx2 + 'px)';
+    cur.card.style.opacity = String(1 - Math.min(a, 96) / 420);
+    if (stop) edgeShow(cur.dx, a);
+    else edgeHide();
   }
   function finish() {
     if (!cur) return;
     var c = cur; cur = null;
     c.card.classList.remove('dragging');
+    edgeHide();
     if (c.on && Math.abs(c.dx) >= GO) { advance(c.dx < 0 ? 1 : -1); return; }
     back(c.card);
   }
@@ -1724,7 +1773,7 @@ if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));
   document.addEventListener('touchend', finish, { passive: true });
   document.addEventListener('touchcancel', function () {
     if (!cur) return;
-    var c = cur; cur = null; c.card.classList.remove('dragging'); back(c.card);
+    var c = cur; cur = null; c.card.classList.remove('dragging'); edgeHide(); back(c.card);
   }, { passive: true });
 
   /* 마우스(데스크톱) — 끌어서 넘기기 */
