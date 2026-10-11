@@ -1098,13 +1098,23 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
   .pframe .login .stamp { width: clamp(96px, 26dvh, 150px); height: clamp(96px, 26dvh, 150px); }
 }
 
-/* ===== 카드 좌우로 밀어 넘기기 =====
+/* ===== 카드 좌우로 밀어 넘기기 + 넘어가는 움직임 =====
    touch-action: pan-y — 세로 스크롤은 브라우저가 계속 처리하고 가로 제스처만 JS 가 받는다.
    이동 거리는 JS 가 카드의 inline transform 으로 넣고, 손을 떼면 제거되어 0 으로 돌아간다. */
-.flip { touch-action: pan-y; transition: transform .18s cubic-bezier(.2,.8,.2,1); }
+.flip { touch-action: pan-y; transition: transform .18s cubic-bezier(.2,.8,.2,1), opacity .18s ease; }
 .flip.dragging { transition: none; }
-@media (prefers-reduced-motion: reduce) { .flip { transition: none; } }
+.flip.leaving { transition: transform .13s ease-out, opacity .13s ease-out; }   /* 넘어갈 때 밀려 나가는 시간 */
 
+/* 새 카드가 들어오는 움직임 — 어느 쪽에서 왔는지가 보이므로 내용이 바뀐 것을 알아챈다 */
+@keyframes cardInNext { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes cardInPrev { from { transform: translateX(-30px); opacity: 0; } to { transform: none; opacity: 1; } }
+.flip.in-next { animation: cardInNext .24s cubic-bezier(.2,.8,.2,1); }
+.flip.in-prev { animation: cardInPrev .24s cubic-bezier(.2,.8,.2,1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .flip { transition: none; }
+  .flip.in-next, .flip.in-prev { animation: none; }
+}
 /* ===== 처음 한 번, 카드가 좌우로 흔들려 스와이프를 알려 준다 =====
    새 색·새 레이어를 만들지 않는다: 카드 자신을 흔들고 카드 안 안내 문구를 잠깐 바꾼다.
    .flip 의 transform 을 쓰므로 사용자가 만지는 순간 JS 가 클래스를 뗀다(드래그와 충돌 방지). */
