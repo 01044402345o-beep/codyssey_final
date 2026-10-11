@@ -1035,7 +1035,7 @@ function studyView(r) {
   let banner = '';
   if (ended) banner = notice('여행이 끝나 더 이상 완료 처리할 수 없어요.', 'plain');
   else if (r.completed) banner = notice('완료한 날이에요. 다시 학습해도 완료 상태는 유지돼요.', 'plain');
-  else if (st === 'future') banner = notice('앞으로의 날짜예요. 카드는 미리 볼 수 있지만 완료는 그날부터 가능해요.', 'plain');
+  /* 미래 날짜 안내는 아래 완료 버튼 옆으로 옮겼다 — 같은 말을 두 곳에서 하지 않는다 */
   else if (st === 'miss') banner = notice('지난 날짜예요. 지금 학습하면 완료로 기록돼요.', 'warn');
 
   if (r.kind === 'free') {
@@ -1084,7 +1084,8 @@ function completeBtn(r) {
   const all = S.card.flipped.size >= r.ids.length;
   if (r.completed) return `<button class="btn soft block" disabled>완료한 날이에요</button>`;
   if (S.today > S.trip.tripEnd) return `<button class="btn soft block" disabled>여행 종료 후에는 완료할 수 없어요</button>`;
-  if (r.date > S.today) return `<button class="btn soft block" disabled>${Dt.md(r.date)}부터 완료할 수 있어요</button>`;
+  if (r.date > S.today) return `<button class="btn soft block" disabled>${Dt.md(r.date)}부터 완료할 수 있어요</button>
+    <div class="small" style="text-align:center">카드는 지금 봐도 돼요. 미리 학습해 두면 그날 바로 완료돼요</div>`;
   return `<button class="btn accent block" data-act="complete" ${all && canComplete(r) ? '' : 'disabled'}>학습 완료 (${S.card.flipped.size}/${r.ids.length})</button>
     ${all ? '' : '<div class="small" style="text-align:center">모든 카드를 한 번 이상 뒤집으면 완료할 수 있어요</div>'}`;
 }
