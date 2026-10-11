@@ -1621,6 +1621,9 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) rend
 
 initState();
 renderSide();
+/* 서버 미리 깨우기: Render 무료 플랜은 15분 놀면 잠들고, 깨어나는 데 수십 초 걸린다. 사용자가 여행을 입력하는 동안 /health 한 번으로
+   깨워 두면 첫 생성·말하기가 그 시간을 기다리지 않는다. 개인정보는 보내지 않는다. 사용자가 ?api= 로 지정한 외부 서버에는 부르지 않는다. */
+if (API.base !== null && !API.external) { try { fetch(API.base + '/health', { cache: 'no-store' }).catch(() => {}); } catch (e) { /* 폴백 전용 */ } }
 $('#demo-fab').hidden = MODE === 'product';
 render();
 /* index.html#u-home 처럼 주소 뒤에 화면 ID를 붙이면 그 화면으로 바로 열림 */

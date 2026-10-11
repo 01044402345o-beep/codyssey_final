@@ -255,6 +255,20 @@ with sync_playwright() as p:
     check("모션 줄이기: 생성 화면 회전 애니메이션이 사실상 꺼짐", 0 <= d < 0.001, str(d))
     ctx.close()
 
+    # --- 서버 미리 깨우기(콜드스타트 완화) ---
+    ctx = b.new_context(viewport={"width": 390, "height": 844})
+    page = ctx.new_page(); health = []
+    page.on("request", lambda r: health.append(r.url) if r.url.endswith("/health") else None)
+    page.goto(BASE + "/"); page.wait_for_timeout(800)
+    check("첫 방문: 사용자가 아무것도 안 해도 /health 로 서버를 깨움(1회)", len(health) == 1, str(health))
+    ctx.close()
+    ctx = b.new_context(viewport={"width": 390, "height": 844})
+    page = ctx.new_page(); health = []
+    page.on("request", lambda r: health.append(r.url) if r.url.endswith("/health") else None)
+    page.goto(BASE + "/?api=https://example.com"); page.wait_for_timeout(800)
+    check("?api= 외부 서버에는 미리 부르지 않음", not any("example.com" in u for u in health), str(health))
+    ctx.close()
+
     # --- 외부 서버 배너 ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page()

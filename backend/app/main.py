@@ -371,14 +371,33 @@ def health() -> dict[str, Any]:
     }
 
 
+class _Timer:
+    """요청 한 건의 단계별 소요 시간(ms). 응답의 timing_ms 로 내보낸다 — 어디서 시간이 쓰이는지 숫자로 보려는 것이다.
+    mark(name) 은 직전 mark(또는 시작) 이후 경과 시간을 name 에 기록한다."""
+
+    def __init__(self) -> None:
+        self.t0 = self.last = time.perf_counter()
+        self.stages: dict[str, int] = {}
+
+    def mark(self, name: str) -> None:
+        now = time.perf_counter()
+        self.stages[name] = round((now - self.last) * 1000)
+        self.last = now
+
+    def result(self) -> dict[str, int]:
+        return {**self.stages, "total": round((time.perf_counter() - self.t0) * 1000)}
+
+
 @app.post("/generate")
 def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
-    """처리 시간(elapsed_ms)과 생각 예산 설정을 붙인다 — 속도 개선 전후를 같은 응답으로 비교하려고."""
-    t0 = time.monotonic()
-    out = _generate(req, request)
-    out["elapsed_ms"] = round((time.monotonic() - t0) * 1000)
-    out["thinking_budget"] = (os.getenv("GEMINI_THINKING_BUDGET") or "").strip() or None
-    return out
+    """처리 시간과 생각 예산 설정을 붙인다 — 속도 개선 전후를 같은 응답으로 비교하려고.
+    elapsed_ms: 전체(ms). timing_ms.attempt_ms: 시도별 {model 호출 ms, 검증 ms, 통과 여부} — 재시도가 지연의 주범인지 본다."""
+    t = _Timer()
+    res = _generate(req, request)
+    res["timing_ms"] = {**t.result(), "attempt_ms": res.pop("attempt_ms", [])}
+    res["elapsed_ms"] = res["timing_ms"]["total"]
+    res["thinking_budget"] = (os.getenv("GEMINI_THINKING_BUDGET") or "").strip() or None
+    return res
 
 
 def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
@@ -408,27 +427,36 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
         }
 
     prompt = build_prompt(cfg, req)
-    state: dict[str, Any] = {"last_error": "", "last_pack": None, "last_issues": []}
+    state: dict[str, Any] = {"last_error": "", "last_pack": None, "last_issues": [], "attempt_ms": []}
 
     def once(client: Any, model: str, attempt: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         src = prompt if attempt == 1 else (
             prompt + f"\n\nPrevious attempt was rejected: {state['last_error']}\nFix it and return JSON only."
         )
+        t_call = time.perf_counter()
+        rec: dict[str, Any] = {"model": model, "call_ms": None, "validate_ms": None, "ok": False}
+        state["attempt_ms"].append(rec)
         try:
             raw = ai.generate_text(client, model, src, temperature=0.7, max_output_tokens=8192)
+            rec["call_ms"] = round((time.perf_counter() - t_call) * 1000)
             pack = parse_json_object(raw)
         except Exception as exc:
+            if rec["call_ms"] is None:
+                rec["call_ms"] = round((time.perf_counter() - t_call) * 1000)   # 실패(타임아웃 등)까지 걸린 시간
             state["last_error"] = f"{type(exc).__name__}: {exc}"
             raise
 
         # 검증기 호출도 시도 안에 둔다. 검증기 버그가 500 을 내면 재시도가 무의미해진다.
+        t_val = time.perf_counter()
         try:
             issues = validate_pack(pack, cfg, req.weak_expressions, schema)
+            rec["validate_ms"] = round((time.perf_counter() - t_val) * 1000)
         except Exception as exc:
             state["last_error"] = f"validator error: {type(exc).__name__}: {exc}"
             raise
 
         state["last_pack"], state["last_issues"] = pack, issues
+        rec["ok"] = not has_blocking(issues)
         if has_blocking(issues):
             state["last_error"] = json.dumps(
                 [i for i in issues if i["severity"] == "block"], ensure_ascii=False
@@ -462,6 +490,7 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
             "degraded": True,
             "usable": "rejected",
             "error": state["last_error"] or exc.last_error,
+            "attempt_ms": state["attempt_ms"],
         }
 
     pack, issues = res.value
@@ -469,6 +498,7 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
         "pack": pack, "issues": issues, "attempts": res.attempts, "model": res.model,
         "failures": res.failures,   # 성공 전에 실패한 시도들 (원인 진단용)
         "mock": False, "usable": "ok",
+        "attempt_ms": state["attempt_ms"],
     }
 
 
@@ -551,10 +581,18 @@ async def speak_check(
     file: UploadFile = File(...),
     situation: str = Form("", max_length=120),
 ) -> dict[str, Any]:
+    t = _Timer()
+    res = await _speak_check(request, target, file, situation, t)
+    res["timing_ms"] = t.result()   # read·decode·silero·pyannote·stt(병렬 중 느린 쪽)·feedback·total. 거부 응답에도 들어간다
+    return res
+
+
+async def _speak_check(request: Request, target: str, file: UploadFile, situation: str, t: _Timer) -> dict[str, Any]:
     rate_limit(request)
 
     # 상한 + 1 바이트까지만 읽는다. 큰 업로드를 통째로 메모리에 올리지 않는다.
     audio = await file.read(MAX_AUDIO_BYTES + 1)
+    t.mark("read")
     if not audio:
         raise HTTPException(status_code=400, detail="빈 오디오입니다. 다시 녹음해 주세요.")
     if len(audio) > MAX_AUDIO_BYTES:
@@ -571,15 +609,18 @@ async def speak_check(
         samples = await run_in_threadpool(vad.decode, audio)
     except vad.AudioDecodeError:
         raise HTTPException(status_code=400, detail="녹음 파일을 읽을 수 없습니다. 다시 녹음해 주세요.")
+    t.mark("decode")
     # 8MB 는 압축 녹음이면 30분이 넘는다. 길이로 다시 막는다(화면은 15초에서 멈춘다).
     # 전사 비용은 오디오 길이에 비례하므로 외부 AI 를 부르기 전에 거절한다.
     if len(samples) > MAX_AUDIO_SECONDS * vad.SAMPLE_RATE:
         raise HTTPException(status_code=413, detail=f"녹음이 너무 깁니다 (최대 {MAX_AUDIO_SECONDS}초).")
     speech = await run_in_threadpool(vad.detect, samples)
+    t.mark("silero")
     if not speech.has_speech:
         return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요.", vad=speech.summary())
     # 두 번째 말소리 검출기(로컬 pyannote, Silero 와 다른 신경망). 둘 다 말소리를 찾아야 외부 AI 를 부른다.
     speech2 = await run_in_threadpool(vad.detect_pyannote, samples)
+    t.mark("pyannote")
     detector = speech2.summary("pyannote segmentation-3.0 (local onnx)")
     if not speech2.has_speech:
         return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요. (두 번째 말소리 검출기가 말소리를 찾지 못함)",
@@ -601,6 +642,7 @@ async def speak_check(
     if stt.api_key(stt.CHECKER):
         tasks["checker"] = lambda: stt.transcribe_with(stt.CHECKER, wav)
     jobs = await run_in_threadpool(_run_parallel, tasks)
+    t.mark("stt")   # 두 전사는 병렬이라 느린 쪽 시간이다
     base = {"vad": speech.summary()}
     if isinstance(jobs["primary"], Exception):
         exc = jobs["primary"]
@@ -636,6 +678,7 @@ async def speak_check(
     meta = base
     # 두 전사 모두에서 들린 목표 단어만 점수가 된다.
     diff = compare.compare_consensus(target, heard, heard_ck)
+    t.mark("compare")
     issues = [{"word": w, "note": "빠짐"} for w in diff["missing"]] + \
              [{"word": a, "note": f"'{b}'(으)로 들림"} for a, b in diff["replaced"]] + \
              [{"word": w, "note": "목표 문장에 없음"} for w in diff["extra"]]
@@ -661,6 +704,7 @@ async def speak_check(
             # 점수는 코드가 이미 정했으므로 결과는 쓸 수 있다. 문구만 사실 기반 문장 틀로 대신한다.
             fix_one, tip = compare.template_feedback(diff)
             feedback = {"source": "template", "attempts": exc.attempts, "error": exc.last_error}
+    t.mark("feedback")
 
     return {
         "usable": True,
