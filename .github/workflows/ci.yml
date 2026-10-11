@@ -31,6 +31,10 @@ jobs:
         working-directory: backend
         run: python -m unittest scripts/test_measure_score_rate.py
 
+      - name: 지연 측정 스크립트 테스트
+        working-directory: backend
+        run: python -m unittest scripts/test_measure_latency.py
+
       - name: 카테고리 파일 검증기 테스트
         working-directory: backend
         run: python -m unittest scripts/test_validate_category.py
