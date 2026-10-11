@@ -1126,3 +1126,21 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
 }
 .flip.hint-swipe:not(.in-next):not(.in-prev) { animation: cardSwipeHint 1.1s ease-in-out 2; }   /* 합계 2.2초 — WCAG 2.2.2 의 5초 아래 */
 @media (prefers-reduced-motion: reduce) { .flip.hint-swipe { animation: none; } }
+
+/* ===== 끝 카드에서 밀었을 때 드러나는 자리 =====
+   .flip-wrap 은 움직이지 않고 .flip 만 옮겨 가므로 카드가 있던 자리가 비고 그 자리에 이 층이 보인다.
+   그늘은 카드 쪽이 진하고 바깥으로 옅어진다 — 카드가 드리우는 그림자처럼 보이게 하려는 것.
+   색은 기존 토큰만 쓴다(다크 모드에서 자동으로 뒤집힌다). */
+.flip-wrap { position: relative; }
+/* 끝 카드에서 카드가 화면 밖으로 나가며 빈 자리를 만들 때 페이지가 가로로 밀리지 않게 막는다.
+   overflow-x: clip 은 스크롤 컨테이너를 만들지 않으므로 sticky 앱바·하단 바·세로 스크롤에 영향이 없다. */
+.pframe { overflow-x: clip; }
+.flip-edge { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; pointer-events: none;
+  opacity: 0; visibility: hidden; display: flex; align-items: center; justify-content: center; border-radius: 16px; }
+.flip-edge.shown { visibility: visible; }
+.flip-edge.side-left { background: linear-gradient(to left, var(--surface-2), transparent); }
+.flip-edge.side-right { background: linear-gradient(to right, var(--surface-2), transparent); }
+.flip-edge span { display: none; width: 100%; padding: 0 8px; text-align: center;
+  font-size: 0.8125rem; font-weight: 700; line-height: 1.35; word-break: keep-all; color: var(--text); }
+.flip-edge[data-first="1"] .fe-first { display: block; }
+.flip-edge[data-first="0"] .fe-last { display: block; }
