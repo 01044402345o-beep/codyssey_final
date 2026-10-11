@@ -73,8 +73,8 @@
         "place_type": "restaurant",
         "situation_id": "ask_recommend",
         "situation": "추천 메뉴 요청",
-        "en": "Let's get drunk after dinner.",
-        "ko": "저녁 먹고 취하도록 마시자."
+        "en": "Let's get drunk and talk about politics.",
+        "ko": "취하도록 마시고 정치 이야기도 하자."
       }
     },
     {
@@ -97,7 +97,7 @@
         "place_type": "restaurant",
         "situation_id": "request_side",
         "situation": "추가 요청 (물·리필·소스)",
-        "en": "Could you please bring us another glass of water when you have a moment, if possible?",
+        "en": "Could you please bring us another glass of water when you have a moment, because we have been waiting for quite a while?",
         "ko": "실례합니다, 혹시 잠시 괜찮으실 때 물 한 잔 받을 수 있을까요?"
       }
     },
@@ -121,8 +121,8 @@
         "place_type": "restaurant",
         "situation_id": "pay_check",
         "situation": "계산·영수증 요청",
-        "en": "Bring me the bill now.",
-        "ko": "지금 계산서 가져와."
+        "en": "Gimme the bill now.",
+        "ko": "지금 계산서 줘."
       }
     }
   ],
@@ -140,7 +140,7 @@
     "not_polite": {
       "severity": "warn",
       "match": "substring",
-      "terms": ["gimme", "give me the", "bring me the", "hurry up", "right now"]
+      "terms": ["gimme", "give me the", "hurry up", "right now"]
     }
   }
 }
