@@ -290,8 +290,10 @@
     const name = named ? named[1] : '앱 안';
     let scheme = null;
     if (url && /^https?:\/\//i.test(url)) {
+      const u = new URL(url);
       if (named && named[1] === '카카오톡') scheme = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url);
-      else if (android) { const u = new URL(url); scheme = 'intent://' + u.host + u.pathname + u.search + '#Intent;scheme=' + u.protocol.replace(':', '') + ';package=com.android.chrome;end'; }
+      else if (named && named[1] === '라인') { u.searchParams.set('openExternalBrowser', '1'); scheme = u.href; }   // 해시 앞(검색어)에 붙여야 LINE 이 읽는다
+      else if (android) scheme = 'intent://' + u.host + u.pathname + u.search + u.hash + '#Intent;scheme=' + u.protocol.replace(':', '') + ';package=com.android.chrome;S.browser_fallback_url=' + encodeURIComponent(url) + ';end';
     }
     return { name, os, scheme };
   }

@@ -299,7 +299,7 @@ test('inAppBrowser: 인앱 브라우저 UA 추정 (실기기 동작은 미검증
   assert.equal(k1.scheme, 'kakaotalk://web/openExternal?url=' + encodeURIComponent(U));
   assert.equal(AI.inAppBrowser(kakaoAnd, U).name, '카카오톡');
   const insta = AI.inAppBrowser('Mozilla/5.0 (Linux; Android 13; wv) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36 Instagram 300.0', U);
-  assert.equal(insta.name, '인스타그램'); assert.match(insta.scheme, /^intent:\/\/x\.onrender\.com\/\?a=1#Intent;scheme=https;package=com\.android\.chrome;end$/);
+  assert.equal(insta.name, '인스타그램'); assert.match(insta.scheme, /^intent:\/\/x\.onrender\.com\/\?a=1#Intent;scheme=https;package=com\.android\.chrome;S\.browser_fallback_url=.+;end$/);
   assert.equal(AI.inAppBrowser('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 300', U).scheme, null);
   const gen = AI.inAppBrowser('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148', U);
   assert.equal(gen.name, '앱 안');
@@ -309,4 +309,13 @@ test('inAppBrowser: 인앱 브라우저 UA 추정 (실기기 동작은 미검증
   assert.equal(AI.inAppBrowser('Mozilla/5.0 (Linux; Android 13; SM-S911N) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36', U), null);
   assert.equal(AI.inAppBrowser('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120 Safari/537.36', U), null);
   assert.equal(AI.inAppBrowser('', U), null);
+});
+
+test('inAppBrowser: LINE 은 openExternalBrowser 를 해시 앞에 붙이고, Android intent 는 해시·폴백을 유지한다', () => {
+  const line = AI.inAppBrowser('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari Line/13.0.0', 'https://x.onrender.com/?a=1#u-home');
+  assert.equal(line.name, '라인'); assert.equal(line.scheme, 'https://x.onrender.com/?a=1&openExternalBrowser=1#u-home');
+  const ua = 'Mozilla/5.0 (Linux; Android 13; wv) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36 NAVER(inapp; search; 1; 12.0)';
+  const nv = AI.inAppBrowser(ua, 'https://x.onrender.com/p?a=1#u-home');
+  assert.ok(nv.scheme.startsWith('intent://x.onrender.com/p?a=1#u-home#Intent;'));
+  assert.ok(nv.scheme.includes('S.browser_fallback_url=' + encodeURIComponent('https://x.onrender.com/p?a=1#u-home')));
 });

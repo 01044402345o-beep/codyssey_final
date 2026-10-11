@@ -1626,6 +1626,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) rend
 function initInAppBanner() {
   const el = $('#inapp-banner'); if (!el) return;
   const info = AI.inAppBrowser(navigator.userAgent, location.href);
+  try { if (sessionStorage.getItem('cd_inapp_closed') === '1') return; } catch (e) { /* 저장소 막힘: 매번 안내 */ }   // 닫으면 이번 방문 동안 다시 안 띄움
   const noRec = API.base !== null && !canRecord(), noTts = !ttsSupported();
   if (!info && !noRec && !noTts) return;                      // 일반 브라우저이고 기능도 다 되면 아무것도 띄우지 않는다
   const lack = noRec && noTts ? '듣기와 녹음이' : noRec ? '녹음이' : noTts ? '듣기가' : '';
@@ -1633,11 +1634,12 @@ function initInAppBanner() {
   const msg = lack ? `<b>${who}이 브라우저에서는 ${lack} 안 돼요.</b> ${betterBrowser()}에서 열어 주세요.`
                    : `<b>${who}</b>듣기·말하기가 안 되면 ${betterBrowser()}에서 열어 주세요.`;   // 기능은 있어 보이지만 앱 안 웹뷰는 실행 중 막힐 수 있다
   const open = info && info.scheme ? `<button type="button" data-inapp="open">브라우저에서 열기</button>` : '';
-  el.innerHTML = `<span>${msg}</span>${open}<button type="button" data-inapp="copy">링크 복사</button>`;
+  el.innerHTML = `<span>${msg}</span>${open}<button type="button" data-inapp="copy">링크 복사</button><button type="button" data-inapp="close">닫기</button>`;
   el.hidden = false;
   el.addEventListener('click', async e => {
     const b = e.target.closest('[data-inapp]'); if (!b) return;
     if (b.dataset.inapp === 'open') { location.href = info.scheme; return; }
+    if (b.dataset.inapp === 'close') { el.hidden = true; try { sessionStorage.setItem('cd_inapp_closed', '1'); } catch (err) { /* 무시 */ } return; }
     try { await navigator.clipboard.writeText(location.href); toast(`링크를 복사했어요. ${betterBrowser()}에 붙여넣어 열어 주세요.`); }
     catch (err) { toast(`주소창의 링크를 길게 눌러 복사한 뒤 ${betterBrowser()}에서 열어 주세요.`); }
   });
