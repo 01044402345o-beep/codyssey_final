@@ -270,8 +270,34 @@
     finally { t.done(); }
   }
 
+
+  /* ---------- 인앱 브라우저 감지 ----------
+     카톡·네이버·인스타 등 앱 안 웹뷰는 마이크(getUserMedia)·MediaRecorder·음성 합성이 막히거나 불안정할 수 있다.
+     UA 문자열 기반의 추정이며 기기별 동작은 실기기 검증 전이다. 안내 문구 결정에만 쓰고 기능 판단은 기능 감지로 따로 한다.
+     반환: null(일반 브라우저로 보임) | { name, os, scheme } — scheme 은 외부 브라우저로 여는 링크를 만들 수 있는 경우만. */
+  function inAppBrowser(ua, url) {
+    ua = String(ua || '');
+    const ios = /iPhone|iPad|iPod/i.test(ua);
+    const android = /Android/i.test(ua);
+    const os = ios ? 'ios' : android ? 'android' : 'other';
+    const named = [
+      [/KAKAOTALK/i, '카카오톡'], [/NAVER\(inapp|NAVER\/|; naver/i, '네이버'], [/Instagram/i, '인스타그램'],
+      [/FBAN|FBAV|FB_IAB/i, '페이스북'], [/\bLine\//i, '라인'], [/DaumApps/i, '다음'], [/Band\//i, '밴드'], [/everytimeApp/i, '에브리타임'],
+    ].find(([re]) => re.test(ua));
+    /* 이름이 없어도 웹뷰 흔적이면 일반 안내: Android 는 "; wv)", iOS 는 Safari 토큰이 없는 WebKit */
+    const generic = !named && ((android && /; wv\)/.test(ua)) || (ios && /AppleWebKit/i.test(ua) && !/Safari\//i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua)));
+    if (!named && !generic) return null;
+    const name = named ? named[1] : '앱 안';
+    let scheme = null;
+    if (url && /^https?:\/\//i.test(url)) {
+      if (named && named[1] === '카카오톡') scheme = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url);
+      else if (android) { const u = new URL(url); scheme = 'intent://' + u.host + u.pathname + u.search + '#Intent;scheme=' + u.protocol.replace(':', '') + ';package=com.android.chrome;end'; }
+    }
+    return { name, os, scheme };
+  }
+
   const api = {
-    WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
+    inAppBrowser, WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
     categoryOfKind,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,

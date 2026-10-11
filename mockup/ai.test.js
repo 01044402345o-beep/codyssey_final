@@ -290,3 +290,23 @@ test('저장소가 없거나(null) 차단돼도 학습 흐름이 죽지 않는�
   assert.equal(AI.saveConsent(null, true), false);
   assert.equal(AI.withdrawConsent(null), false);
 });
+
+test('inAppBrowser: 인앱 브라우저 UA 추정 (실기기 동작은 미검증)', () => {
+  const U = 'https://x.onrender.com/?a=1';
+  const kakaoIos = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 KAKAOTALK 10.4.0';
+  const kakaoAnd = 'Mozilla/5.0 (Linux; Android 13; SM-S911N Build/TP1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0 Mobile Safari/537.36 KAKAOTALK/10.4.0';
+  const k1 = AI.inAppBrowser(kakaoIos, U); assert.equal(k1.name, '카카오톡'); assert.equal(k1.os, 'ios');
+  assert.equal(k1.scheme, 'kakaotalk://web/openExternal?url=' + encodeURIComponent(U));
+  assert.equal(AI.inAppBrowser(kakaoAnd, U).name, '카카오톡');
+  const insta = AI.inAppBrowser('Mozilla/5.0 (Linux; Android 13; wv) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36 Instagram 300.0', U);
+  assert.equal(insta.name, '인스타그램'); assert.match(insta.scheme, /^intent:\/\/x\.onrender\.com\/\?a=1#Intent;scheme=https;package=com\.android\.chrome;end$/);
+  assert.equal(AI.inAppBrowser('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 300', U).scheme, null);
+  const gen = AI.inAppBrowser('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148', U);
+  assert.equal(gen.name, '앱 안');
+  /* 일반 브라우저는 null */
+  assert.equal(AI.inAppBrowser('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1', U), null);
+  assert.equal(AI.inAppBrowser('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120 Mobile/15E148 Safari/604.1', U), null);
+  assert.equal(AI.inAppBrowser('Mozilla/5.0 (Linux; Android 13; SM-S911N) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36', U), null);
+  assert.equal(AI.inAppBrowser('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120 Safari/537.36', U), null);
+  assert.equal(AI.inAppBrowser('', U), null);
+});

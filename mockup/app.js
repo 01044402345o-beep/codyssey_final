@@ -1618,9 +1618,27 @@ setInterval(() => {
 /* 앱이 다시 보일 때 화면 갱신 (NFR-03) */
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 
+/* 인앱 브라우저 안내: 카톡 등 앱 안에서 열면 듣기·말하기가 막힐 수 있다 → 상단에 외부 브라우저 안내 (UA 추정, 기능 감지와 별개) */
+function initInAppBanner() {
+  const el = $('#inapp-banner'); if (!el) return;
+  const info = AI.inAppBrowser(navigator.userAgent, location.href);
+  if (!info) return;
+  const open = info.scheme ? `<button type="button" data-inapp="open">브라우저에서 열기</button>` : '';
+  const hint = info.os === 'ios' ? 'Safari' : info.os === 'android' ? 'Chrome' : 'Chrome 또는 Safari';
+  el.innerHTML = `<span><b>${esc(info.name)} 안에서 열려 있어요.</b> 듣기·말하기는 ${hint}에서 열어야 동작해요.</span>${open}<button type="button" data-inapp="copy">링크 복사</button>`;
+  el.hidden = false;
+  el.addEventListener('click', async e => {
+    const b = e.target.closest('[data-inapp]'); if (!b) return;
+    if (b.dataset.inapp === 'open') { location.href = info.scheme; return; }
+    try { await navigator.clipboard.writeText(location.href); toast(`링크를 복사했어요. ${hint}에 붙여넣어 열어 주세요.`); }
+    catch (err) { toast(`주소창의 링크를 길게 눌러 복사한 뒤 ${hint}에서 열어 주세요.`); }
+  });
+}
+
 initState();
 renderSide();
 $('#demo-fab').hidden = MODE === 'product';
+initInAppBanner();
 render();
 /* index.html#u-home 처럼 주소 뒤에 화면 ID를 붙이면 그 화면으로 바로 열림 */
 if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));
