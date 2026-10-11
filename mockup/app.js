@@ -1664,7 +1664,10 @@ if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));
   }
   function advance(dir) {
     var b = navBtn(dir);
-    if (!b || b.disabled) return;
+    /* 넘어갈 곳이 없는 끝 카드(첫 카드에서 오른쪽, 마지막 카드에서 왼쪽)는 제자리로 되돌린다.
+       여기서 그냥 돌아가면 드래그로 옮겨 놓은 위치와 투명도가 그대로 남아,
+       카드가 어긋난 채 멈춘다 — 넘어가지도 않고 돌아오지도 않는 상태가 된다. */
+    if (!b || b.disabled) { back(card()); return; }
     if (slow) { b.click(); return; }
     swallowUntil = Date.now() + 420;   /* 손 떼며 브라우저가 합성하는 클릭을 막는다 */
     b.click();                         /* 기다리지 않고 곧바로 — 지연이 곧 끊김이다 */
