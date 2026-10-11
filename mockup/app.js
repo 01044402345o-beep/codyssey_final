@@ -1294,7 +1294,10 @@ function preset(kind) {
    작업 토큰(SPK.tok)으로 취소·늦은 응답을 구분한다. 카드 이동·화면 전환·재진입 시 cancelSpeak(). */
 const SPK = { state: 'idle', tok: 0, rec: null, stream: null, ctl: null, timer: null, sid: null, result: null };
 const stopTracks = st => { try { st && st.getTracks().forEach(t => t.stop()); } catch (e) { /* 이미 종료 */ } };
-const speakAvailable = () => API.base !== null && typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+const canRecord = () => typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;   // 기능 감지(UA 아님)
+const speakAvailable = () => API.base !== null && canRecord();
+/* 외부 브라우저 안내 문구: 어떤 브라우저가 맞는지는 OS 로 정하고, "무엇이 안 되는지"는 기능 감지로 정한다 */
+const betterBrowser = () => { const o = (AI.inAppBrowser(navigator.userAgent, location.href) || {}).os || (/iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'ios' : /Android/i.test(navigator.userAgent) ? 'android' : 'other'); return o === 'ios' ? 'Safari' : o === 'android' ? 'Chrome' : 'Chrome 또는 Safari'; };
 function aiBadges(s) {
   let h = '';
   if (s.ai) h += '<span class="badge b-ai">AI 생성</span>';
@@ -1304,6 +1307,7 @@ function aiBadges(s) {
   return h;
 }
 function speakHtml(s) {
+  if (API.base !== null && !canRecord()) return `<div class="tts-off">이 브라우저에서는 녹음이 안 돼요. ${betterBrowser()}에서 열면 말하기 연습을 쓸 수 있어요. 카드 학습은 계속할 수 있어요.</div>`;
   if (!speakAvailable()) return '';
   const mine = SPK.sid === s.id;
   const st = mine ? SPK.state : 'idle';
@@ -1384,14 +1388,14 @@ async function toggleSpeak() {
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch (e) {
-    if (tok === SPK.tok) { SPK.state = 'idle'; SPK.result = { error: '마이크를 사용할 수 없어요. 권한을 확인해 주세요. 카드 학습은 계속할 수 있어요.' }; updateSpeakUi(); }
+    if (tok === SPK.tok) { SPK.state = 'idle'; SPK.result = { error: `마이크를 사용할 수 없어요. 권한을 확인하거나 ${betterBrowser()}에서 열어 주세요. 카드 학습은 계속할 수 있어요.` }; updateSpeakUi(); }
     return;
   }
   if (tok !== SPK.tok) { stopTracks(stream); return; }                      // 취소 뒤에 늦게 허용된 권한: 바로 해제
   const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'].find(m => MediaRecorder.isTypeSupported?.(m));
   let rec;
   try { rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); }
-  catch (e) { stopTracks(stream); SPK.state = 'idle'; SPK.result = { error: '이 브라우저에서는 녹음을 시작할 수 없어요.' }; updateSpeakUi(); return; }
+  catch (e) { stopTracks(stream); SPK.state = 'idle'; SPK.result = { error: `이 브라우저에서는 녹음을 시작할 수 없어요. ${betterBrowser()}에서 열어 주세요.` }; updateSpeakUi(); return; }
   const chunks = [];
   SPK.stream = stream; SPK.rec = rec;
   rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
@@ -1622,16 +1626,20 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) rend
 function initInAppBanner() {
   const el = $('#inapp-banner'); if (!el) return;
   const info = AI.inAppBrowser(navigator.userAgent, location.href);
-  if (!info) return;
-  const open = info.scheme ? `<button type="button" data-inapp="open">브라우저에서 열기</button>` : '';
-  const hint = info.os === 'ios' ? 'Safari' : info.os === 'android' ? 'Chrome' : 'Chrome 또는 Safari';
-  el.innerHTML = `<span><b>${esc(info.name)} 안에서 열려 있어요.</b> 듣기·말하기는 ${hint}에서 열어야 동작해요.</span>${open}<button type="button" data-inapp="copy">링크 복사</button>`;
+  const noRec = API.base !== null && !canRecord(), noTts = !ttsSupported();
+  if (!info && !noRec && !noTts) return;                      // 일반 브라우저이고 기능도 다 되면 아무것도 띄우지 않는다
+  const lack = noRec && noTts ? '듣기와 녹음이' : noRec ? '녹음이' : noTts ? '듣기가' : '';
+  const who = info ? `${esc(info.name)} 안에서 열려 있어요. ` : '';
+  const msg = lack ? `<b>${who}이 브라우저에서는 ${lack} 안 돼요.</b> ${betterBrowser()}에서 열어 주세요.`
+                   : `<b>${who}</b>듣기·말하기가 안 되면 ${betterBrowser()}에서 열어 주세요.`;   // 기능은 있어 보이지만 앱 안 웹뷰는 실행 중 막힐 수 있다
+  const open = info && info.scheme ? `<button type="button" data-inapp="open">브라우저에서 열기</button>` : '';
+  el.innerHTML = `<span>${msg}</span>${open}<button type="button" data-inapp="copy">링크 복사</button>`;
   el.hidden = false;
   el.addEventListener('click', async e => {
     const b = e.target.closest('[data-inapp]'); if (!b) return;
     if (b.dataset.inapp === 'open') { location.href = info.scheme; return; }
-    try { await navigator.clipboard.writeText(location.href); toast(`링크를 복사했어요. ${hint}에 붙여넣어 열어 주세요.`); }
-    catch (err) { toast(`주소창의 링크를 길게 눌러 복사한 뒤 ${hint}에서 열어 주세요.`); }
+    try { await navigator.clipboard.writeText(location.href); toast(`링크를 복사했어요. ${betterBrowser()}에 붙여넣어 열어 주세요.`); }
+    catch (err) { toast(`주소창의 링크를 길게 눌러 복사한 뒤 ${betterBrowser()}에서 열어 주세요.`); }
   });
 }
 
