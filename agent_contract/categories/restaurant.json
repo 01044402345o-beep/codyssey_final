@@ -32,35 +32,35 @@
 
   "good_examples": [
     {
-      "place": "Katz's Delicatessen",
+      "place": "A local restaurant",
       "place_type": "restaurant",
-      "situation_id": "order_menu",
-      "situation": "대표 메뉴 주문",
-      "en": "I'd like a pastrami sandwich, please.",
-      "ko": "파스트라미 샌드위치 하나 주세요.",
+      "situation_id": "reserve_table",
+      "situation": "자리 예약·문의",
+      "en": "Could we have a table for two, please?",
+      "ko": "두 명 자리 부탁드려도 될까요?",
       "level": "basic",
-      "tags": ["주문"]
+      "tags": ["입장", "인원"]
     },
     {
-      "place": "Katz's Delicatessen",
+      "place": "A local restaurant",
       "place_type": "restaurant",
       "situation_id": "allergy_notice",
       "situation": "알레르기·재료 고지",
-      "en": "I have a peanut allergy. Does this contain peanuts?",
-      "ko": "땅콩 알레르기가 있어요. 이거에 땅콩이 들어가나요?",
+      "en": "I have a shellfish allergy. Could you check with the kitchen?",
+      "ko": "갑각류 알레르기가 있습니다. 주방에 확인해 주실 수 있나요?",
       "level": "basic",
-      "tags": ["알레르기", "안전"],
+      "tags": ["알레르기", "확인"],
       "targets_weak": ["allergy_notice"]
     },
     {
       "place": "A local cafe",
       "place_type": "cafe",
-      "situation_id": "request_side",
-      "situation": "추가 요청 (물·리필·소스)",
-      "en": "Could I get a refill, please?",
-      "ko": "리필 한 번 더 주시겠어요?",
+      "situation_id": "takeout",
+      "situation": "포장 요청",
+      "en": "Could I get this iced latte to go, please?",
+      "ko": "이 아이스 라테 포장해 주실 수 있나요?",
       "level": "basic",
-      "tags": ["추가요청"]
+      "tags": ["카페", "포장"]
     }
   ],
 
@@ -73,8 +73,8 @@
         "place_type": "restaurant",
         "situation_id": "ask_recommend",
         "situation": "추천 메뉴 요청",
-        "en": "Do you want to grab a beer and talk about politics?",
-        "ko": "맥주 마시면서 정치 얘기 할래요?"
+        "en": "Let's get drunk after dinner.",
+        "ko": "저녁 먹고 취하도록 마시자."
       }
     },
     {
@@ -97,7 +97,7 @@
         "place_type": "restaurant",
         "situation_id": "request_side",
         "situation": "추가 요청 (물·리필·소스)",
-        "en": "Excuse me, I was wondering if it might be possible for me to possibly get a glass of water at some point when you have a moment.",
+        "en": "Could you please bring us another glass of water when you have a moment, if possible?",
         "ko": "실례합니다, 혹시 잠시 괜찮으실 때 물 한 잔 받을 수 있을까요?"
       }
     },
@@ -109,8 +109,8 @@
         "place_type": "restaurant",
         "situation_id": "request_side",
         "situation": "추가 요청 (물·리필·소스)",
-        "en": "Could I get a refill, please?",
-        "ko": "리필 한 번 더 주시겠어요?"
+        "en": "Could we have a table for two, please?",
+        "ko": "두 명 자리 부탁드려도 될까요?"
       }
     },
     {
@@ -121,8 +121,8 @@
         "place_type": "restaurant",
         "situation_id": "pay_check",
         "situation": "계산·영수증 요청",
-        "en": "Gimme the check.",
-        "ko": "계산서 줘."
+        "en": "Bring me the bill now.",
+        "ko": "지금 계산서 가져와."
       }
     }
   ],
@@ -140,7 +140,7 @@
     "not_polite": {
       "severity": "warn",
       "match": "substring",
-      "terms": ["gimme", "give me the", "hurry up", "right now"]
+      "terms": ["gimme", "give me the", "bring me the", "hurry up", "right now"]
     }
   }
 }
