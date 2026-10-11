@@ -40,7 +40,7 @@ jobs:
         run: python scripts/check_negatives.py
 
       - name: 프론트 테스트
-        run: node --test mockup/ai.test.js
+        run: node --test mockup/ai.test.js mockup/tokens.test.js   # 토큰 가드: 색 리터럴·다크 블록 동일·글자 대비(AA)
 
       - name: 서버 기동 확인 (/health 에 restaurant, 화면 서빙)
         working-directory: backend
@@ -66,7 +66,7 @@ jobs:
         run: |
           pip install -r backend/requirements.txt playwright==1.63.0
           python -m playwright install --with-deps chromium
-      - name: 동의 · 무음 E2E
+      - name: 동의 · 무음 · 반응형 셸 E2E
         working-directory: backend
         run: |
           uvicorn app.main:app --port 8768 &
@@ -74,6 +74,7 @@ jobs:
           mkdir -p ../e2e-shots
           python ../e2e/test_consent.py http://localhost:8768 ../e2e-shots
           python ../e2e/test_silence.py http://localhost:8768 ../e2e-shots
+          python ../e2e/test_shell.py http://localhost:8768 ../e2e-shots   # 반응형 셸·터치·테마
       - uses: actions/upload-artifact@v4
         if: always()
         with:
