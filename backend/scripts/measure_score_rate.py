@@ -15,6 +15,7 @@
   2. usable:true          / 실제 응답(HTTP 성공, mock 아님)
   3. 유효 score           / usable:true 응답
   4. 점수 누락(null/없음) + heard 있음 / usable:true 응답   (프론트의 다른 조건도 충족하면 'ask' 후보. ask 발생률이 아님)
+     제한 모드(cross_validated:false, 교차검증 못 함)는 4에 넣지 않고 따로 센다 — 정상 경로의 점수 누락과 외부 전사 장애를 섞지 않는다.
 유효 score = bool 제외 · 유한한 숫자 · 0~100 · score_discarded 아님.
 호출마다 원본 JSON 을 --out(기본 measure_<label>.jsonl)에 남긴다.
 """
@@ -49,6 +50,7 @@ def classify(status: int | None, res: dict | None, error: str | None = None) -> 
     heard = isinstance(res.get("heard"), str) and bool(res["heard"].strip())
     score_missing = res.get("score") is None
     discarded = res.get("score_discarded") is True
+    limited = usable and res.get("cross_validated") is False
     return {
         "http_ok": http_ok,
         "mock": http_ok and res.get("mock") is True,
@@ -56,7 +58,8 @@ def classify(status: int | None, res: dict | None, error: str | None = None) -> 
         "usable": usable,
         "valid_score": valid_score,
         # 점수가 "없는"(null/누락) 경우만. 값이 있으나 무효(150, true, "40" 등)는 invalid_score 로 따로 센다.
-        "no_score_with_heard": usable and score_missing and not discarded and heard,
+        "no_score_with_heard": usable and score_missing and not discarded and heard and not limited,
+        "limited": limited,
         "invalid_score": usable and not score_missing and not valid_score,
         "score_discarded": real and discarded,
         "heard_empty": real and not heard,
@@ -100,6 +103,7 @@ def summarize(rows: list[dict[str, bool]]) -> dict[str, tuple[int, int]]:
         "2 usable:true / 실제 응답": (usable, real),
         "3 유효 score / usable:true": (sum(r["valid_score"] for r in rows), usable),
         "4 점수 누락(null)+heard 있음 / usable:true": (sum(r["no_score_with_heard"] for r in rows), usable),
+        "  (참고) 제한 모드(교차검증 못 함, 점수 없음) / usable:true": (sum(r["limited"] for r in rows), usable),
         "  (참고) 값은 있으나 무효한 점수 / usable:true": (sum(r["invalid_score"] for r in rows), usable),
         "  (참고) score_discarded / 실제 응답": (sum(r["score_discarded"] for r in rows), real),
         "  (참고) heard 비어 있음 / 실제 응답": (sum(r["heard_empty"] for r in rows), real),

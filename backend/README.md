@@ -65,7 +65,7 @@ python scripts/check_negatives.py
 | `GEMINI_API_KEY` | Google AI Studio에서 발급 | 문장 생성·말하기 피드백. 없으면 생성은 목업, 피드백은 문장 틀 |
 | `GROQ_API_KEY` | console.groq.com | 말하기 전사 1순위(Whisper). STT 키가 하나도 없으면 말하기는 목업 |
 | `OPENAI_API_KEY` | platform.openai.com | 전사 보충(whisper 계열만, gpt-4o-transcribe 제외) |
-| `ASSEMBLYAI_API_KEY` | assemblyai.com | **교차검증 전사(필수)**. `speech_models` 미전송 → 계정 기본 모델. `ASSEMBLY_AI_API_KEY` 도 인식 |
+| `ASSEMBLYAI_API_KEY` | assemblyai.com | **교차검증 전사(채점에 필수, 없으면 제한 모드)**. `speech_models` 미전송 → 계정 기본 모델. `ASSEMBLY_AI_API_KEY` 도 인식 |
 | `GROQ_STT_MODEL` / `OPENAI_STT_MODEL` | 비워 둠 | 고정이 아니라 우선 선호(목록에 있을 때만) |
 | `STT_SELFTEST` | 비워 둠 | `1` 이면 시작 시 공급자별 실제 호출 점검 → `/health` `stt_selftest`. **검증 뒤 지운다**(콜드스타트마다 비용) |
 | `GEMINI_MODEL` | 비워 둠 | **고정이 아니라 우선 선호.** 실행 중 받은 목록에 있을 때만 맨 앞에 둔다 |
@@ -146,6 +146,11 @@ seongbin45/transcribe_app 의 방식을 따랐다(정독·커밋 교차검증 �
   둘 다 말소리를 찾아야 외부 AI 를 부른다. pyannoteAI 클라우드는 계정 크레딧 없음(HTTP 402)으로 모든 요청이 실패해
   로컬 모델로 바꿨다(2026-10-08) — 네트워크·크레딧이 필요 없다. 단독으로는 브라우저 녹음 신호음 일부를 말소리로 보지만 Silero 와의 AND 로 걸러진다.
 - 두 전사 호출은 동시에(각각 최소 30회). 교차검증 키(`ASSEMBLYAI_API_KEY`)가 없거나 실패하면 **채점하지 않는다**.
+- **제한 모드**(사용자 결정 2026-10-10): 교차검증은 못 했지만 1차 전사문이 있으면 `usable: true`, `limited: true`,
+  `cross_validated: false`, `score: null`, `heard`(환각 세그먼트를 거른 1차 전사)만 준다. 피드백 AI(Gemini)는 부르지 않는다.
+  화면은 "음성 확인이 제한되어 점수와 자동 복습 저장을 제공하지 않습니다"를 보여 주고, 복습 목록 저장은 사용자가 고를 때만 한다
+  (`weakDecision` 이 `cross_validated: false` 면 점수가 와도 `ask`). 1차 전사가 비거나 실패하면 지금처럼 평가 불가다.
+  정상 채점 응답에는 `cross_validated: true` 가 붙는다.
 - 점수 `100 × 2·M_both / (T + H_max)` — 각 전사 단독 점수보다 크지 않다. 응답 `cross_validation`, `heard_checker`, `diff.per_stt`, `diff.agreement`.
 - 근거·한계: `docs/research/references.md`.
 

@@ -509,6 +509,21 @@ def _run_parallel(tasks: dict[str, Any]) -> dict[str, Any]:
         return out
 
 
+LIMITED_REASON = "음성 확인이 제한되어 점수와 자동 복습 저장을 제공하지 않습니다. 다시 녹음해 보세요."
+
+
+def limited(heard: str, **extra: Any) -> dict[str, Any]:
+    """교차검증을 못 했지만 1차 전사문은 있는 경우(사용자 결정, 2026-10-10).
+
+    서비스는 계속 쓰게 하되, 검증하지 못한 결과를 검증된 평가처럼 주지 않는다.
+    들린 문장만 보여 주고 점수·피드백은 만들지 않는다. score 가 null 이라 화면은 자동 저장하지 않고
+    사용자에게 저장할지 묻는다(mockup/ai.js weakDecision → 'ask').
+    """
+    return {"usable": True, "limited": True, "cross_validated": False, "reason": LIMITED_REASON,
+            "score": None, "heard": heard, "issues": [], "fix_one": "", "tip": "",
+            "failed_at": "cross_validation", **extra}
+
+
 def no_speech(reason: str, **extra: Any) -> dict[str, Any]:
     """말이 없거나 받아쓰기에 실패한 경우. 점수·피드백을 만들지 않는다."""
     return {"usable": False, "reason": reason, "score": None, "heard": "", "issues": [],
@@ -564,22 +579,14 @@ async def speak_check(
             "mock": True, "vad": speech.summary(),
         }
 
-    # 교차검증 필수화: 다른 모델 계열의 전사(AssemblyAI)가 없으면 채점하지 않는다.
-    if not stt.api_key(stt.CHECKER):
-        return no_speech(
-            "교차검증에 필요한 AI 키가 없어 채점하지 않았습니다.",
-            failed_at="cross_validation", cross_validation={"required": [stt.CHECKER],
-                                                             "missing_keys": [stt.CHECKER], "detector": detector},
-            vad=speech.summary(),
-        )
-
     # 2) 말소리 구간만, 목표 문장 없이 두 전사 AI 에 동시에 보낸다(지연 시간 = 느린 쪽).
     #    1차 전사(Whisper 계열 체인) · 교차검증 전사(AssemblyAI). 각각 최소 30회.
+    #    교차검증 키가 없으면 1차 전사만 하고 제한 모드로 답한다(점수 없음).
     wav = vad.speech_only_wav(samples, speech)
-    jobs = await run_in_threadpool(_run_parallel, {
-        "primary": lambda: stt.transcribe(wav),
-        "checker": lambda: stt.transcribe_with(stt.CHECKER, wav),
-    })
+    tasks: dict[str, Any] = {"primary": lambda: stt.transcribe(wav)}
+    if stt.api_key(stt.CHECKER):
+        tasks["checker"] = lambda: stt.transcribe_with(stt.CHECKER, wav)
+    jobs = await run_in_threadpool(_run_parallel, tasks)
     base = {"vad": speech.summary()}
     if isinstance(jobs["primary"], Exception):
         exc = jobs["primary"]
@@ -589,16 +596,20 @@ async def speak_check(
                          failures=getattr(exc, "failures", []), **base)
     tr = jobs["primary"]
     base.update(attempts=tr.attempts, model=tr.model, failures=tr.failures, stt=tr.meta())
-    broken = {k: jobs[k] for k in ("checker",) if isinstance(jobs[k], Exception)}
-    if broken:
-        return no_speech(
-            "교차검증 AI 가 응답하지 않아 채점하지 않았습니다. 잠시 후 다시 시도해 주세요.",
-            failed_at="cross_validation",
-            cross_validation={k: {"error": getattr(e, "last_error", str(e)), "attempts": getattr(e, "attempts", 0)}
-                              for k, e in broken.items()},
-            **base,
-        )
-    ck = jobs["checker"]
+    ck = jobs.get("checker")
+    if ck is None or isinstance(ck, Exception):
+        # 교차검증 불가 → 제한 모드. 1차 전사도 환각 세그먼트를 걸러 비면 '말소리 없음'과 같게 다룬다.
+        heard, dropped = compare.filter_segments(tr.text, tr.segments)
+        base["dropped_segments"] = dropped
+        cv: dict[str, Any] = {"detector": detector}
+        if ck is None:
+            cv.update(required=[stt.CHECKER], missing_keys=[stt.CHECKER])
+        else:
+            cv["checker"] = {"error": getattr(ck, "last_error", str(ck)), "attempts": getattr(ck, "attempts", 0)}
+        if compare.is_placeholder(heard):
+            return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요.", failed_at="cross_validation",
+                             heard_raw=tr.text, cross_validation=cv, **base)
+        return limited(heard, cross_validation=cv, **base)
     base["cross_validation"] = {"checker": ck.meta(), "detector": detector}
 
     # 3) 판정 — 모두 코드가 한다. 두 전사(Whisper 계열·AssemblyAI) 모두 환각 세그먼트 제거 뒤 비어 있지 않아야 한다.
@@ -639,6 +650,7 @@ async def speak_check(
 
     return {
         "usable": True,
+        "cross_validated": True,
         "score": diff["score"],
         "score_kind": "word_match_consensus",   # 발음 점수가 아니라, 두 전사 모두에서 들린 단어 일치율
         "heard": heard,
