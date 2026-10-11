@@ -1624,3 +1624,154 @@ $('#demo-fab').hidden = MODE === 'product';
 render();
 /* index.html#u-home 처럼 주소 뒤에 화면 ID를 붙이면 그 화면으로 바로 열림 */
 if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));
+
+/* ===== 카드 좌우로 밀어 넘기기 (cardSwipe) =====
+   세로 스크롤은 그대로 두고, 카드 위에서 가로로 확정된 제스처만 앞/뒤 카드로 넘긴다.
+   이동은 카드의 inline transform 하나로 처리한다 — 새 CSS 토큰을 만들지 않는다.
+   상태 로직을 복제하지 않고 기존 .card-nav 의 prev/next 버튼을 눌러 준다. */
+(function () {
+  var MIN_X = 10;   /* 이만큼 가로로 움직여야 스와이프로 인정 */
+  var MAX_Y = 45;   /* 이보다 세로로 움직이면 스크롤에 양보 */
+  var GO = 40;      /* 손을 뗄 때 넘어가는 최소 이동량 */
+  var cur = null;
+
+  function clear() {
+    if (cur && cur.card) { cur.card.classList.remove('dragging'); cur.card.style.removeProperty('transform'); }
+    cur = null;
+  }
+  function swallowClick() {   /* 넘긴 직후 카드가 뒤집히지 않게 클릭 한 번을 먹는다 */
+    function h(ev) { ev.stopPropagation(); ev.preventDefault(); document.removeEventListener('click', h, true); }
+    document.addEventListener('click', h, true);
+    setTimeout(function () { document.removeEventListener('click', h, true); }, 450);
+  }
+  function begin(target, x, y) {
+    if (!target || !target.closest) return;
+    if (target.closest('.tts-btn, button, a, input, select, textarea')) return;
+    var card = target.closest('.flip');
+    if (!card) return;
+    cur = { x: x, y: y, dx: 0, dy: 0, card: card, on: false };
+  }
+  function drag(x, y, ev) {
+    if (!cur) return;
+    cur.dx = x - cur.x; cur.dy = y - cur.y;
+    if (!cur.on) {
+      if (Math.abs(cur.dy) >= MAX_Y) { cur = null; return; }
+      if (Math.abs(cur.dx) > MIN_X && Math.abs(cur.dx) > Math.abs(cur.dy)) {
+        cur.on = true; cur.card.classList.add('dragging');
+      } else return;
+    }
+    if (Math.abs(cur.dy) >= MAX_Y) { clear(); return; }
+    if (ev && ev.cancelable) ev.preventDefault();
+    cur.card.style.transform = 'translateX(' + (Math.max(-80, Math.min(80, cur.dx)) * 0.5) + 'px)';
+  }
+  function finish() {
+    if (!cur) return;
+    var c = cur; cur = null;
+    c.card.classList.remove('dragging');
+    c.card.style.removeProperty('transform');
+    if (!c.on || Math.abs(c.dx) < GO) return;
+    var nav = document.querySelector('.card-nav');
+    if (!nav) return;
+    var b = nav.querySelector(c.dx < 0 ? '[data-act="card-next"]' : '[data-act="card-prev"]');
+    if (!b || b.disabled) return;
+    b.click();          /* 넘김을 먼저 실행 — 삼키기를 먼저 걸면 이 클릭까지 막힌다 */
+    swallowClick();     /* 그 뒤 브라우저가 합성하는 클릭(카드 뒤집힘)만 막는다 */
+  }
+
+  /* 터치 — 가로로 확정된 뒤에만 스크롤을 막는다(그 전에는 세로 스크롤 그대로) */
+  document.addEventListener('touchstart', function (e) {
+    if (e.touches.length !== 1) return;
+    begin(e.target, e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+  document.addEventListener('touchmove', function (e) {
+    if (e.touches.length !== 1) return;
+    drag(e.touches[0].clientX, e.touches[0].clientY, e);
+  }, { passive: false });
+  document.addEventListener('touchend', finish, { passive: true });
+  document.addEventListener('touchcancel', clear, { passive: true });
+
+  /* 마우스(데스크톱) */
+  document.addEventListener('pointerdown', function (e) {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    begin(e.target, e.clientX, e.clientY);
+  }, { passive: true });
+  document.addEventListener('pointermove', function (e) {
+    if (e.pointerType !== 'mouse' || !cur) return;
+    drag(e.clientX, e.clientY, null);
+  }, { passive: true });
+  document.addEventListener('pointerup', function (e) {
+    if (e.pointerType !== 'mouse') return;
+    finish();
+  }, { passive: true });
+})();
+
+/* ===== 처음 한 번만, 카드가 좌우로 흔들려 스와이프를 알려 준다 (cardHint) =====
+   다음 카드 버튼이 화면 밖일 때만 띄운다 — 그때가 스와이프가 유일한 길인 상황이다.
+   앱이 다시 그릴 때마다 .flip 이 새로 만들어지므로, DOM 이 잠잠해진 뒤(450ms) 붙이고
+   다시 그려져 떨어져 나가면 다시 붙인다. 저장은 안내를 끝까지 보여 준 뒤에만 한다. */
+(function () {
+  var KEY = 'cd_hint_swipe';
+  var TXT = '좌우로 밀어 넘겨 보세요 ↔';
+  var SETTLE = 450;      /* 이만큼 다시 그리지 않으면 붙인다 */
+  var MS = 3200;         /* 처음 붙인 뒤 이만큼 지나면 끝낸다 */
+  var ack = false, firstAt = null, settleT = null, endT = null, orig = null, front = null;
+  try { if (localStorage.getItem(KEY)) ack = true; } catch (e) {}
+
+  function reachable() {              /* 다음 카드 버튼이 온전히 보이는가 */
+    var b = document.querySelector('.card-nav [data-act="card-next"]');
+    if (!b || b.disabled) return true;
+    var r = b.getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= window.innerHeight;
+  }
+  function onTop(card) {              /* 동의 모달 같은 것이 덮여 있으면 띄우지 않는다 */
+    var r = card.getBoundingClientRect();
+    var x = r.left + r.width / 2, y = r.top + Math.min(60, r.height / 2);
+    if (y < 0 || y > window.innerHeight) return false;
+    var top = document.elementFromPoint(x, y);
+    return !!top && card.contains(top);
+  }
+  function detach() {
+    var list = document.querySelectorAll('.flip.hint-swipe');
+    for (var i = 0; i < list.length; i++) list[i].classList.remove('hint-swipe');
+    if (front && orig !== null) {
+      var h = front.querySelector('.face .hint');
+      if (h) h.textContent = orig;
+    }
+    orig = null; front = null;
+  }
+  function stop() {                   /* 끝: 저장하고 다시는 띄우지 않는다 */
+    if (!ack) { ack = true; try { localStorage.setItem(KEY, '1'); } catch (e) {} }
+    if (endT) { clearTimeout(endT); endT = null; }
+    if (settleT) { clearTimeout(settleT); settleT = null; }
+    firstAt = null; detach();
+  }
+  function cancel() {                 /* 사용자가 만졌다 — 안내를 거둔다(저장은 유지) */
+    if (settleT) { clearTimeout(settleT); settleT = null; }
+    detach();
+  }
+  function attach() {
+    settleT = null;
+    if (ack) return;
+    var card = document.querySelector('.flip');
+    if (!card || card.classList.contains('flipped') || !onTop(card) || reachable()) return;
+    if (card.classList.contains('hint-swipe')) return;
+    front = card;
+    var h = card.querySelector('.face .hint');
+    if (h) { orig = h.textContent; h.textContent = TXT; }
+    card.classList.add('hint-swipe');
+    if (firstAt === null) {
+      firstAt = Date.now();
+      endT = setTimeout(stop, MS);
+    }
+  }
+  function schedule() {               /* 다시 그려질 때마다 미룬다 → 잠잠해지면 붙인다 */
+    if (ack) return;
+    if (settleT) clearTimeout(settleT);
+    settleT = setTimeout(attach, SETTLE);
+  }
+
+  document.addEventListener('touchstart', cancel, { capture: true, passive: true });
+  document.addEventListener('pointerdown', cancel, { capture: true, passive: true });
+  new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+  schedule();
+})();

@@ -1097,3 +1097,22 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
   .pframe .login h1 { margin-top: clamp(24px, 10dvh, 72px); }
   .pframe .login .stamp { width: clamp(96px, 26dvh, 150px); height: clamp(96px, 26dvh, 150px); }
 }
+
+/* ===== 카드 좌우로 밀어 넘기기 =====
+   touch-action: pan-y — 세로 스크롤은 브라우저가 계속 처리하고 가로 제스처만 JS 가 받는다.
+   이동 거리는 JS 가 카드의 inline transform 으로 넣고, 손을 떼면 제거되어 0 으로 돌아간다. */
+.flip { touch-action: pan-y; transition: transform .18s cubic-bezier(.2,.8,.2,1); }
+.flip.dragging { transition: none; }
+@media (prefers-reduced-motion: reduce) { .flip { transition: none; } }
+
+/* ===== 처음 한 번, 카드가 좌우로 흔들려 스와이프를 알려 준다 =====
+   새 색·새 레이어를 만들지 않는다: 카드 자신을 흔들고 카드 안 안내 문구를 잠깐 바꾼다.
+   .flip 의 transform 을 쓰므로 사용자가 만지는 순간 JS 가 클래스를 뗀다(드래그와 충돌 방지). */
+@keyframes cardSwipeHint {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-10px); }
+  50% { transform: translateX(0); }
+  75% { transform: translateX(10px); }
+}
+.flip.hint-swipe { animation: cardSwipeHint 1.1s ease-in-out 2; }   /* 합계 2.2초 — WCAG 2.2.2 의 5초 아래 */
+@media (prefers-reduced-motion: reduce) { .flip.hint-swipe { animation: none; } }
