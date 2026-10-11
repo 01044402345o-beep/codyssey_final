@@ -353,42 +353,15 @@ def run_on(
     return Result(value=value, attempts=attempts, model=model_of(attempts), failures=failures)
 
 
-_thinking_rejected = False   # 모델이 thinking_budget 설정을 거부하면 그 뒤로는 보내지 않는다(30회 재시도가 전부 같은 오류로 낭비되는 걸 막는다)
-
-
-def thinking_budget() -> int | None:
-    """환경변수 GEMINI_THINKING_BUDGET: 비우면 None(기존 동작 그대로). 0 이면 '생각' 단계를 끈다.
-    짧은 문장 생성에는 추론 시간이 거의 필요 없는데 지연을 만든다. 모델마다 지원 여부가 달라 기본값은 건드리지 않는다."""
-    raw = os.getenv("GEMINI_THINKING_BUDGET", "").strip()
-    try:
-        return int(raw) if raw else None
-    except ValueError:
-        return None
-
-
 def generate_text(client: Any, model: str, contents: Any, **config: Any) -> str:
     """generate_content 1회 = API 요청 1회. 재시도는 run()/retry() 가 맡는다."""
-    global _thinking_rejected
     from google.genai import types
 
-    budget = thinking_budget()
-    use_thinking = budget is not None and not _thinking_rejected and "thinking_config" not in config
-
-    def call(extra: dict[str, Any]) -> Any:
-        return client.models.generate_content(
-            model=model,
-            contents=contents,
-            config=types.GenerateContentConfig(response_mime_type="application/json", **config, **extra),
-        )
-
-    try:
-        resp = call({"thinking_config": types.ThinkingConfig(thinking_budget=budget)} if use_thinking else {})
-    except Exception as exc:  # noqa: BLE001
-        if not (use_thinking and "thinking" in str(exc).lower()):
-            raise
-        _thinking_rejected = True            # 이 모델은 thinking 설정을 받지 않는다 → 설정 없이 같은 시도를 다시 한다
-        log.warning("thinking_budget 을 모델이 거부해 끄고 계속합니다: %s", exc)
-        resp = call({})
+    resp = client.models.generate_content(
+        model=model,
+        contents=contents,
+        config=types.GenerateContentConfig(response_mime_type="application/json", **config),
+    )
     text = resp.text or ""
     if not text.strip():
         raise ValueError("빈 응답")
