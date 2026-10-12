@@ -255,11 +255,57 @@ with sync_playwright() as p:
     check("모션 줄이기: 생성 화면 회전 애니메이션이 사실상 꺼짐", 0 <= d < 0.001, str(d))
     ctx.close()
 
+    # --- 서버 미리 깨우기(콜드스타트 완화) ---
+    ctx = b.new_context(viewport={"width": 390, "height": 844})
+    page = ctx.new_page(); health = []
+    page.on("request", lambda r: health.append(r.url) if r.url.endswith("/health") else None)
+    page.goto(BASE + "/"); page.wait_for_timeout(800)
+    check("첫 방문: 사용자가 아무것도 안 해도 /health 로 서버를 깨움(1회)", len(health) == 1, str(health))
+    ctx.close()
+    ctx = b.new_context(viewport={"width": 390, "height": 844})
+    page = ctx.new_page(); health = []
+    page.on("request", lambda r: health.append(r.url) if r.url.endswith("/health") else None)
+    page.goto(BASE + "/?api=https://example.com"); page.wait_for_timeout(800)
+    check("?api= 외부 서버에는 미리 부르지 않음", not any("example.com" in u for u in health), str(health))
+    ctx.close()
+
     # --- 외부 서버 배너 ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page()
     page.goto(BASE + "/?api=https://example.com#u-login"); page.wait_for_timeout(600)
     check("?api= 외부 서버: 상단 배너에 호스트 표시", page.locator("#api-banner").is_visible() and "example.com" in page.locator("#api-banner").inner_text())
+    ctx.close()
+
+    # --- 앱 안 브라우저(카톡 등) 안내 (사용자 테스트 P1·P2) ---
+    KAKAO_AND = ("Mozilla/5.0 (Linux; Android 13; SM-S918N Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) "
+                 "Version/4.0 Chrome/119.0.6045.163 Mobile Safari/537.36 KAKAOTALK/10.4.5 (INAPP)")
+    INSTA_IOS = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 "
+                 "Instagram 307.0.0.34.111 (iPhone15,2; iOS 17_1; ko_KR; ko; scale=3.00; 1179x2556; 529085245)")
+    ctx = b.new_context(viewport={"width": 360, "height": 780}, user_agent=KAKAO_AND, has_touch=True, is_mobile=True)
+    page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(BASE + "/"); page.wait_for_timeout(600)
+    ban = page.locator("#inapp-banner")
+    check("카톡(안드로이드): 상단에 브라우저 안내", ban.is_visible() and "카카오톡" in ban.inner_text())
+    check("카톡: 360px 에서 안내가 가로로 넘치지 않음", hscroll(page) <= 0, str(hscroll(page)))
+    check("카톡: '브라우저에서 열기' 버튼 있음", page.locator('[data-inapp="open"]').count() == 1)
+    page.locator('[data-inapp="close"]').click(); page.wait_for_timeout(200)
+    check("닫기 → 안내 숨김", not ban.is_visible())
+    page.reload(); page.wait_for_timeout(600)
+    check("닫은 뒤 새로고침해도 이번 방문 동안은 다시 안 뜸", not page.locator("#inapp-banner").is_visible())
+    ctx.close()
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, user_agent=INSTA_IOS, has_touch=True, is_mobile=True)
+    page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(BASE + "/"); page.wait_for_timeout(600)
+    check("인스타그램(iOS): 안내는 뜨지만 직접 여는 버튼은 없고 링크 복사만", page.locator("#inapp-banner").is_visible() and page.locator('[data-inapp="open"]').count() == 0 and page.locator('[data-inapp="copy"]').count() == 1)
+    ctx.close()
+    ctx = b.new_context(viewport={"width": 390, "height": 844})
+    page = ctx.new_page(); page.goto(BASE + "/"); page.wait_for_timeout(500)
+    check("일반 브라우저(기능 정상)에는 안내 없음", not page.locator("#inapp-banner").is_visible())
+    ctx.close()
+    ctx = b.new_context(viewport={"width": 390, "height": 844})
+    page = ctx.new_page(); page.add_init_script("delete window.MediaRecorder;")
+    page.goto(BASE + "/"); page.wait_for_timeout(500)
+    check("일반 브라우저라도 녹음 API 가 없으면 기능 감지로 안내", page.locator("#inapp-banner").is_visible() and "녹음이 안 돼요" in page.locator("#inapp-banner").inner_text())
     ctx.close()
 
     check("페이지 JS 오류 없음", not errors, "; ".join(errors))

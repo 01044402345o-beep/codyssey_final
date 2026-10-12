@@ -143,7 +143,7 @@
     "not_polite": {
       "severity": "warn",
       "match": "substring",
-      "terms": ["gimme", "give me the", "hurry up", "right now", "get me there", "move it"]
+      "terms": ["gimme", "hurry up", "right now", "move it"]
     }
   }
 }

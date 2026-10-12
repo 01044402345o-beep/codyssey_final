@@ -1035,7 +1035,7 @@ function studyView(r) {
   let banner = '';
   if (ended) banner = notice('여행이 끝나 더 이상 완료 처리할 수 없어요.', 'plain');
   else if (r.completed) banner = notice('완료한 날이에요. 다시 학습해도 완료 상태는 유지돼요.', 'plain');
-  else if (st === 'future') banner = notice('앞으로의 날짜예요. 카드는 미리 볼 수 있지만 완료는 그날부터 가능해요.', 'plain');
+  /* 미래 날짜 안내는 아래 완료 버튼 옆으로 옮겼다 — 같은 말을 두 곳에서 하지 않는다 */
   else if (st === 'miss') banner = notice('지난 날짜예요. 지금 학습하면 완료로 기록돼요.', 'warn');
 
   if (r.kind === 'free') {
@@ -1084,7 +1084,8 @@ function completeBtn(r) {
   const all = S.card.flipped.size >= r.ids.length;
   if (r.completed) return `<button class="btn soft block" disabled>완료한 날이에요</button>`;
   if (S.today > S.trip.tripEnd) return `<button class="btn soft block" disabled>여행 종료 후에는 완료할 수 없어요</button>`;
-  if (r.date > S.today) return `<button class="btn soft block" disabled>${Dt.md(r.date)}부터 완료할 수 있어요</button>`;
+  if (r.date > S.today) return `<button class="btn soft block" disabled>${Dt.md(r.date)}부터 완료할 수 있어요</button>
+    <div class="small" style="text-align:center">카드는 지금 봐도 돼요. 미리 학습해 두면 그날 바로 완료돼요</div>`;
   return `<button class="btn accent block" data-act="complete" ${all && canComplete(r) ? '' : 'disabled'}>학습 완료 (${S.card.flipped.size}/${r.ids.length})</button>
     ${all ? '' : '<div class="small" style="text-align:center">모든 카드를 한 번 이상 뒤집으면 완료할 수 있어요</div>'}`;
 }
@@ -1294,7 +1295,10 @@ function preset(kind) {
    작업 토큰(SPK.tok)으로 취소·늦은 응답을 구분한다. 카드 이동·화면 전환·재진입 시 cancelSpeak(). */
 const SPK = { state: 'idle', tok: 0, rec: null, stream: null, ctl: null, timer: null, sid: null, result: null };
 const stopTracks = st => { try { st && st.getTracks().forEach(t => t.stop()); } catch (e) { /* 이미 종료 */ } };
-const speakAvailable = () => API.base !== null && typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+const canRecord = () => typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;   // 기능 감지(UA 아님)
+const speakAvailable = () => API.base !== null && canRecord();
+/* 외부 브라우저 안내 문구: 어떤 브라우저가 맞는지는 OS 로 정하고, "무엇이 안 되는지"는 기능 감지로 정한다 */
+const betterBrowser = () => { const o = (AI.inAppBrowser(navigator.userAgent, location.href) || {}).os || (/iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'ios' : /Android/i.test(navigator.userAgent) ? 'android' : 'other'); return o === 'ios' ? 'Safari' : o === 'android' ? 'Chrome' : 'Chrome 또는 Safari'; };
 function aiBadges(s) {
   let h = '';
   if (s.ai) h += '<span class="badge b-ai">AI 생성</span>';
@@ -1304,6 +1308,7 @@ function aiBadges(s) {
   return h;
 }
 function speakHtml(s) {
+  if (API.base !== null && !canRecord()) return `<div class="tts-off">이 브라우저에서는 녹음이 안 돼요. ${betterBrowser()}에서 열면 말하기 연습을 쓸 수 있어요. 카드 학습은 계속할 수 있어요.</div>`;
   if (!speakAvailable()) return '';
   const mine = SPK.sid === s.id;
   const st = mine ? SPK.state : 'idle';
@@ -1384,14 +1389,14 @@ async function toggleSpeak() {
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch (e) {
-    if (tok === SPK.tok) { SPK.state = 'idle'; SPK.result = { error: '마이크를 사용할 수 없어요. 권한을 확인해 주세요. 카드 학습은 계속할 수 있어요.' }; updateSpeakUi(); }
+    if (tok === SPK.tok) { SPK.state = 'idle'; SPK.result = { error: `마이크를 사용할 수 없어요. 권한을 확인하거나 ${betterBrowser()}에서 열어 주세요. 카드 학습은 계속할 수 있어요.` }; updateSpeakUi(); }
     return;
   }
   if (tok !== SPK.tok) { stopTracks(stream); return; }                      // 취소 뒤에 늦게 허용된 권한: 바로 해제
   const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'].find(m => MediaRecorder.isTypeSupported?.(m));
   let rec;
   try { rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); }
-  catch (e) { stopTracks(stream); SPK.state = 'idle'; SPK.result = { error: '이 브라우저에서는 녹음을 시작할 수 없어요.' }; updateSpeakUi(); return; }
+  catch (e) { stopTracks(stream); SPK.state = 'idle'; SPK.result = { error: `이 브라우저에서는 녹음을 시작할 수 없어요. ${betterBrowser()}에서 열어 주세요.` }; updateSpeakUi(); return; }
   const chunks = [];
   SPK.stream = stream; SPK.rec = rec;
   rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
@@ -1618,9 +1623,312 @@ setInterval(() => {
 /* 앱이 다시 보일 때 화면 갱신 (NFR-03) */
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 
+function initInAppBanner() {
+  const el = $('#inapp-banner'); if (!el) return;
+  const info = AI.inAppBrowser(navigator.userAgent, location.href);
+  try { if (sessionStorage.getItem('cd_inapp_closed') === '1') return; } catch (e) { /* 저장소 막힘: 매번 안내 */ }   // 닫으면 이번 방문 동안 다시 안 띄움
+  const noRec = API.base !== null && !canRecord(), noTts = !ttsSupported();
+  if (!info && !noRec && !noTts) return;                      // 일반 브라우저이고 기능도 다 되면 아무것도 띄우지 않는다
+  const lack = noRec && noTts ? '듣기와 녹음이' : noRec ? '녹음이' : noTts ? '듣기가' : '';
+  const who = info ? `${esc(info.name)} 안에서 열려 있어요. ` : '';
+  const msg = lack ? `<b>${who}이 브라우저에서는 ${lack} 안 돼요.</b> ${betterBrowser()}에서 열어 주세요.`
+                   : `<b>${who}</b>듣기·말하기가 안 되면 ${betterBrowser()}에서 열어 주세요.`;   // 기능은 있어 보이지만 앱 안 웹뷰는 실행 중 막힐 수 있다
+  const open = info && info.scheme ? `<button type="button" data-inapp="open">브라우저에서 열기</button>` : '';
+  el.innerHTML = `<span>${msg}</span>${open}<button type="button" data-inapp="copy">링크 복사</button><button type="button" data-inapp="close">닫기</button>`;
+  el.hidden = false;
+  el.addEventListener('click', async e => {
+    const b = e.target.closest('[data-inapp]'); if (!b) return;
+    if (b.dataset.inapp === 'open') { location.href = info.scheme; return; }
+    if (b.dataset.inapp === 'close') { el.hidden = true; try { sessionStorage.setItem('cd_inapp_closed', '1'); } catch (err) { /* 무시 */ } return; }
+    try { await navigator.clipboard.writeText(location.href); toast(`링크를 복사했어요. ${betterBrowser()}에 붙여넣어 열어 주세요.`); }
+    catch (err) { toast(`주소창의 링크를 길게 눌러 복사한 뒤 ${betterBrowser()}에서 열어 주세요.`); }
+  });
+}
+
 initState();
 renderSide();
+/* 서버 미리 깨우기: Render 무료 플랜은 15분 놀면 잠들고, 깨어나는 데 수십 초 걸린다. 사용자가 여행을 입력하는 동안 /health 한 번으로
+   깨워 두면 첫 생성·말하기가 그 시간을 기다리지 않는다. 개인정보는 보내지 않는다. 사용자가 ?api= 로 지정한 외부 서버에는 부르지 않는다. */
+if (API.base !== null && !API.external) { try { fetch(API.base + '/health', { cache: 'no-store' }).catch(() => {}); } catch (e) { /* 폴백 전용 */ } }
 $('#demo-fab').hidden = MODE === 'product';
+initInAppBanner();
 render();
 /* index.html#u-home 처럼 주소 뒤에 화면 ID를 붙이면 그 화면으로 바로 열림 */
 if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));
+
+/* ===== 카드 좌우로 밀어 넘기기 (cardSwipe) =====
+   가로로 확정된 제스처만 앞/뒤 카드로 넘긴다 — 세로 스크롤은 브라우저가 그대로 처리한다.
+   손을 떼면 곧바로 카드를 바꾸고, 바뀐 사실은 새 카드가 옆에서 들어오는 움직임으로 보여 준다.
+   나가고 들어오는 2단 구성은 손을 뗀 뒤 기다리는 시간(체감 지연)을 만들어 '뚝뚝 끊기는' 느낌을 줬다.
+   새 CSS 토큰을 만들지 않는다 — 이동은 카드의 inline transform 하나로 처리한다. */
+(function () {
+  var LOCK_X = 12;   /* 이만큼 가로로 움직이면 스와이프로 확정 */
+  var ABORT_Y = 60;  /* 확정 전에 이보다 세로로 움직이면 스크롤에 양보 */
+  var GO = 40;       /* 손을 뗄 때 넘어가는 최소 이동량 */
+  var FREE = 40;     /* 여기까지는 손가락을 1:1 로 따라간다 */
+  var CAP = 96;      /* 따라오는 최대 거리 */
+  var CURVE = 0.35;  /* 끝에서 무거워지는 정도 */
+  var IN = 240;      /* 새 카드가 들어오는 시간 — styles.css 의 cardInNext·cardInPrev 와 맞춘다 */
+  var swallowUntil = 0, own = false, cur = null, lastIdx = null;
+  var slow = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  function card() { return document.querySelector('.flip'); }
+  function navBtn(dir) {
+    var n = document.querySelector('.card-nav');
+    return n ? n.querySelector(dir > 0 ? '[data-act="card-next"]' : '[data-act="card-prev"]') : null;
+  }
+  function curIdx() {
+    var list = document.querySelectorAll('.dots i');
+    for (var i = 0; i < list.length; i++) if (list[i].classList.contains('cur')) return i;
+    return null;
+  }
+  function amp(dx) {
+    var a = Math.abs(dx);
+    if (a > FREE) a = FREE + (a - FREE) * CURVE;
+    return Math.min(a, CAP);
+  }
+  /* 끝 카드 전용 — 고무줄을 덜 조여 빈 자리를 넓게 연다(안내 문구가 들어갈 폭). */
+  function edgeAmp(dx) {
+    var a = Math.abs(dx);
+    if (a > FREE) a = FREE + (a - FREE) * 0.6;
+    return Math.min(a, 168);
+  }
+  function back(el) {                /* 넘기지 못했다 — 부드럽게 제자리로 */
+    if (!el) return;
+    el.style.transform = 'translateX(0px)';
+    el.style.opacity = '';
+    setTimeout(function () { el.style.removeProperty('transform'); }, 220);
+  }
+  /* ===== 끝 카드에서 밀면 드러나는 자리에 안내와 가장자리 그늘 =====
+     .flip-wrap 은 가만히 있고 .flip 만 미끄러지므로 카드가 있던 자리가 비고 그 자리에 이 층이 보인다.
+     그늘은 카드 쪽이 진하고 바깥으로 옅어진다(카드가 드리우는 그림자처럼). */
+  /* ===== 끝 카드에서 밀면 드러나는 자리에 안내와 가장자리 그늘 =====
+     .flip-wrap 은 가만히 있고 .flip 만 미끄러지므로 카드가 있던 자리가 비고 그 자리에 이 층이 보인다.
+     문구는 JS 가 직접 넣는다("첫 카드예요" / "마지막 카드예요") — 클래스·속성 전환에 기대지 않아
+     표시 전환이 어긋날 여지가 없다.
+     마크업에 .flip-wrap·.flip-edge 가 없으면 여기서 만들어 준다 — HTML 을 손대지 않아도 동작한다. */
+  var TXT_FIRST = '첫 카드예요', TXT_LAST = '마지막 카드예요';
+  var edgeSide = null;
+  function ensureEdge() {
+    var c = document.querySelector('.flip');
+    if (!c || !c.parentNode) return null;
+    var e = document.querySelector('.flip-edge');
+    var w = c.parentElement;
+    if (e && w && w.classList.contains('flip-wrap') && w.contains(e)) return e;   /* 이미 있음 */
+    if (e && e.parentNode) e.parentNode.removeChild(e);                            /* 엉뚱한 자리에 있으면 버린다 */
+    if (!w || !w.classList || !w.classList.contains('flip-wrap')) {
+      w = document.createElement('div'); w.className = 'flip-wrap';
+      c.parentNode.insertBefore(w, c); w.appendChild(c);
+    }
+    e = document.createElement('div');
+    e.className = 'flip-edge'; e.setAttribute('aria-hidden', 'true');
+    e.appendChild(document.createElement('span'));
+    w.appendChild(e);
+    return e;
+  }
+  function edgeHide() {
+    edgeSide = null;
+    var e = document.querySelector('.flip-edge');
+    if (!e) return;
+    e.classList.remove('shown', 'side-left', 'side-right');
+    e.style.clipPath = '';
+    var sp = e.querySelectorAll('span');
+    for (var q = 0; q < sp.length; q++) { sp[q].style.width = ''; }
+  }
+  function edgeShow(dx, amount) {
+    var e = ensureEdge();
+    if (!e) return;
+    var side = dx < 0 ? 'side-right' : 'side-left';   /* 카드가 왼쪽으로 갔으면 빈 자리는 오른쪽 */
+    if (edgeSide && edgeSide !== side) return;         /* 방향이 뒤집히는 도중에는 그리지 않는다 */
+    edgeSide = side;
+    e.classList.add('shown');
+    e.classList.toggle('side-left', side === 'side-left');
+    e.classList.toggle('side-right', side === 'side-right');
+    var box = e.getBoundingClientRect().width || 1;
+    var w = Math.max(0, Math.min(100, amount / box * 100));   /* 드러난 폭(px)을 층 폭에 대한 % 로 */
+    e.style.clipPath = side === 'side-left' ? 'inset(0 ' + (100 - w) + '% 0 0)' : 'inset(0 0 0 ' + (100 - w) + '%)';
+    /* 드러난 자리 폭과 같은 폭을 주고 그 쪽으로 붙인다 — 문구가 그 자리 한가운데에 온다. */
+    e.style.justifyContent = side === 'side-left' ? 'flex-start' : 'flex-end';
+    var sp = e.querySelectorAll('span');
+    for (var q = 0; q < sp.length; q++) {
+      sp[q].textContent = (side === 'side-left') ? TXT_FIRST : TXT_LAST;   /* 문구 전환은 여기서 끝난다 */
+      sp[q].style.width = amount.toFixed(0) + 'px';
+    }
+    e.style.opacity = String(Math.min(1, amount / 60));
+  }
+  function advance(dir) {
+    var b = navBtn(dir);
+    /* 넘어갈 곳이 없는 끝 카드(첫 카드에서 오른쪽, 마지막 카드에서 왼쪽)는 제자리로 되돌린다.
+       여기서 그냥 돌아가면 드래그로 옮겨 놓은 위치와 투명도가 그대로 남아,
+       카드가 어긋난 채 멈춘다 — 넘어가지도 않고 돌아오지도 않는 상태가 된다. */
+    edgeHide();
+    if (!b || b.disabled) { back(card()); return; }
+    if (slow) { b.click(); return; }
+    swallowUntil = Date.now() + 420;   /* 손 떼며 브라우저가 합성하는 클릭을 막는다 */
+    b.click();                         /* 기다리지 않고 곧바로 — 지연이 곧 끊김이다 */
+  }
+  /* 손 떼며 브라우저가 만드는 클릭이 카드를 뒤집지 않게 한 번 먹는다.
+     카드 밖(하단 버튼·말하기 버튼)은 그대로 누를 수 있어야 하므로 카드 위 클릭만 먹는다. */
+  document.addEventListener('click', function (e) {
+    if (own || Date.now() >= swallowUntil) return;
+    var t = e.target;
+    if (!t || !t.closest || !t.closest('.flip')) return;
+    e.stopPropagation(); e.preventDefault();
+  }, true);
+
+  function begin(target, x, y) {
+    if (!target || !target.closest) return;
+    if (target.closest('.tts-btn, button, a, input, select, textarea')) return;
+    var el = target.closest('.flip');
+    if (!el) return;
+    cur = { x: x, y: y, dx: 0, dy: 0, card: el, on: false };
+  }
+  function drag(x, y, ev) {
+    if (!cur) return;
+    cur.dx = x - cur.x; cur.dy = y - cur.y;
+    var ax = Math.abs(cur.dx), ay = Math.abs(cur.dy);
+    if (!cur.on) {
+      if (ay > ABORT_Y && ay > ax) { cur = null; return; }        /* 세로 스크롤에 양보 */
+      if (ax >= LOCK_X && ax >= ay) { cur.on = true; cur.card.classList.add('dragging'); }
+      else return;
+    }
+    if (ay > ABORT_Y && ay > ax) {
+      var g = cur; cur = null; g.card.classList.remove('dragging'); back(g.card); return;
+    }
+    if (ev && ev.cancelable) ev.preventDefault();
+    var a = amp(cur.dx), dx = cur.dx < 0 ? -a : a;
+    var nb = navBtn(cur.dx < 0 ? 1 : -1);
+    var stop = !!(nb && nb.disabled);                  /* 넘어갈 카드가 없다 = 끝 */
+    if (stop) a = edgeAmp(cur.dx);                     /* 끝에서는 더 넓게 드러나야 문구가 읽힌다 */
+    var dx2 = cur.dx < 0 ? -a : a;
+    cur.card.style.transform = 'translateX(' + dx2 + 'px)';
+    cur.card.style.opacity = String(1 - Math.min(a, 96) / 420);
+    if (stop) edgeShow(cur.dx, a);
+    else edgeHide();
+  }
+  function finish() {
+    if (!cur) return;
+    var c = cur; cur = null;
+    c.card.classList.remove('dragging');
+    edgeHide();
+    if (c.on && Math.abs(c.dx) >= GO) { advance(c.dx < 0 ? 1 : -1); return; }
+    back(c.card);
+  }
+
+  document.addEventListener('touchstart', function (e) {
+    if (e.touches.length !== 1) return;
+    begin(e.target, e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+  document.addEventListener('touchmove', function (e) {
+    if (e.touches.length !== 1) return;
+    drag(e.touches[0].clientX, e.touches[0].clientY, e);
+  }, { passive: false });
+  document.addEventListener('touchend', finish, { passive: true });
+  document.addEventListener('touchcancel', function () {
+    if (!cur) return;
+    var c = cur; cur = null; c.card.classList.remove('dragging'); edgeHide(); back(c.card);
+  }, { passive: true });
+
+  /* 마우스(데스크톱) — 끌어서 넘기기 */
+  document.addEventListener('pointerdown', function (e) {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    begin(e.target, e.clientX, e.clientY);
+  }, { passive: true });
+  document.addEventListener('pointermove', function (e) {
+    if (e.pointerType !== 'mouse' || !cur) return;
+    drag(e.clientX, e.clientY, null);
+  }, { passive: true });
+  document.addEventListener('pointerup', function (e) {
+    if (e.pointerType !== 'mouse') return;
+    finish();
+  }, { passive: true });
+
+  /* 내용이 바뀐 뒤 새 카드를 들여보낸다.
+     스와이프와 버튼 탭이 모두 이 한 곳을 지나가므로 넘어가는 움직임이 한 곳에서만 정의된다. */
+  function settle() {
+    var v = curIdx();
+    if (lastIdx === null) { lastIdx = v; return; }
+    if (v === null || v === lastIdx) return;
+    var dir = v > lastIdx ? 1 : -1;
+    lastIdx = v;
+    var c = card();
+    if (!c || slow) return;
+    c.style.removeProperty('transform'); c.style.opacity = '';
+    c.classList.add(dir > 0 ? 'in-next' : 'in-prev');
+    setTimeout(function () { c.classList.remove('in-next', 'in-prev'); }, IN);
+  }
+  new MutationObserver(function () { window.requestAnimationFrame(settle); })
+    .observe(document.body, { childList: true, subtree: true });
+  window.requestAnimationFrame(settle);
+})();
+/* ===== 처음 한 번만, 카드가 좌우로 흔들려 스와이프를 알려 준다 (cardHint) =====
+   다음 카드 버튼이 화면 밖일 때만 띄운다 — 그때가 스와이프가 유일한 길인 상황이다.
+   사용자가 만지거나 카드가 바뀌면 곧바로 끝내고 다시는 띄우지 않는다.
+   (끝내지 않으면 카드가 넘어갈 때마다 다시 흔들려 넘김 움직임과 뒤엉킨다.) */
+(function () {
+  var KEY = 'cd_hint_swipe';
+  var TXT = '좌우로 밀어 넘겨 보세요 ↔';
+  var SETTLE = 450;      /* 이만큼 다시 그리지 않으면 붙인다 */
+  var MS = 3200;         /* 처음 붙인 뒤 이만큼 지나면 끝낸다 */
+  var ack = false, baseIdx = null, settleT = null, endT = null, orig = null, front = null;
+  try { if (localStorage.getItem(KEY)) ack = true; } catch (e) {}
+
+  function curIdx() {
+    var list = document.querySelectorAll('.dots i');
+    for (var i = 0; i < list.length; i++) if (list[i].classList.contains('cur')) return i;
+    return null;
+  }
+  function reachable() {              /* 다음 카드 버튼이 온전히 보이는가 */
+    var b = document.querySelector('.card-nav [data-act="card-next"]');
+    if (!b || b.disabled) return true;
+    var r = b.getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= window.innerHeight;
+  }
+  function onTop(card) {              /* 동의 모달 같은 것이 덮여 있으면 띄우지 않는다 */
+    var r = card.getBoundingClientRect();
+    var x = r.left + r.width / 2, y = r.top + Math.min(60, r.height / 2);
+    if (y < 0 || y > window.innerHeight) return false;
+    var top = document.elementFromPoint(x, y);
+    return !!top && card.contains(top);
+  }
+  function detach() {
+    var list = document.querySelectorAll('.flip.hint-swipe');
+    for (var i = 0; i < list.length; i++) list[i].classList.remove('hint-swipe');
+    if (front && orig !== null) {
+      var h = front.querySelector('.face .hint');
+      if (h) h.textContent = orig;
+    }
+    orig = null; front = null;
+  }
+  function done() {                   /* 끝: 저장하고 다시는 띄우지 않는다 */
+    if (settleT) { clearTimeout(settleT); settleT = null; }
+    if (endT) { clearTimeout(endT); endT = null; }
+    detach();
+    if (!ack) { ack = true; try { localStorage.setItem(KEY, '1'); } catch (e) {} }
+  }
+  function attach() {
+    settleT = null;
+    if (ack) return;
+    var v = curIdx();
+    if (baseIdx !== null && v !== baseIdx) { done(); return; }   /* 카드가 넘어갔다 — 안내 끝 */
+    if (baseIdx === null) baseIdx = v;
+    var card = document.querySelector('.flip');
+    if (!card || card.classList.contains('flipped') || !onTop(card) || reachable()) return;
+    if (card.classList.contains('hint-swipe')) return;
+    front = card;
+    var h = card.querySelector('.face .hint');
+    if (h) { orig = h.textContent; h.textContent = TXT; }
+    card.classList.add('hint-swipe');
+    if (!endT) endT = setTimeout(done, MS);
+  }
+  function schedule() {               /* 다시 그려질 때마다 미룬다 → 잠잠해지면 붙인다 */
+    if (ack) return;
+    if (settleT) clearTimeout(settleT);
+    settleT = setTimeout(attach, SETTLE);
+  }
+
+  document.addEventListener('touchstart', function () { if (front) done(); }, { capture: true, passive: true });
+  document.addEventListener('pointerdown', function () { if (front) done(); }, { capture: true, passive: true });
+  new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+  schedule();
+})();
