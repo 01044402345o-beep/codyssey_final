@@ -886,6 +886,10 @@ html[data-mode=legacy] .api-banner { display: none; }
 @media (min-width: 901px) { html[data-mode=legacy] .demo-fab { display: none; } }   /* 좁은 화면에서만 사이드 서랍 버튼 */
 .api-banner { background: var(--bad-soft); color: var(--on-bad-soft); font-size: 0.78125rem; padding: 8px var(--gutter); text-align: center; }
 .api-banner[hidden], .demo-fab[hidden] { display: none; }
+.inapp-banner { background: var(--sun-soft); color: var(--on-sun-soft-2); font-size: 0.875rem; line-height: 1.5; padding: 10px var(--gutter); display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: center; text-align: center; }
+.inapp-banner[hidden] { display: none; }
+.inapp-banner button { min-height: 36px; padding: 6px 14px; border-radius: 8px; border: 1px solid currentColor; background: transparent; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+html[data-mode=legacy] .inapp-banner { display: none; }
 
 /* 데모 서랍: 데모 모드에서 사이드 패널을 화면 밖 서랍으로 쓴다 */
 html[data-mode=demo] .side { position: fixed; inset: 0 auto 0 0; width: min(320px, 88vw); z-index: 200; transform: translateX(-102%); transition: transform .2s; }
