@@ -381,6 +381,37 @@ with sync_playwright() as p:
     check("음성 목록이 늦게 도착: 처음엔 단정 안 함 → 영어 음성이 없다고 드러나면 '듣기 불가'로 갱신", "안 돼요" not in first and "'듣기'(음성 재생)가 안 돼요" in later, first + " => " + later)
     ctx.close()
 
+    # --- 실제 터치 제스처 주입(CDP): 한 번 밀면 카드 한 장 (c76335a 같은 스와이프 회귀를 잡는다) ---
+    # has_touch=True 만으로는 제스처가 발생하지 않는다. Input.dispatchTouchEvent 로 touchStart→move→End 를 직접 보낸다.
+    def swipe(page, cdp, dx, steps=6):
+        box = page.locator(".flip").first.bounding_box()
+        x0, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x0, "y": y}]})
+        for k in range(1, steps + 1):
+            cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": x0 + dx * k / steps, "y": y}]})
+            page.wait_for_timeout(16)
+        cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+        page.wait_for_timeout(450)
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True)
+    page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
+    cdp = ctx.new_cdp_session(page)
+    page.goto(BASE + "/#u-coll"); page.wait_for_timeout(600)
+    page.locator('[data-act="drill"][data-v="airport"]').click(); page.wait_for_timeout(300)
+    cur = lambda: page.evaluate("S.card.i")
+    check("터치 스와이프: 시작은 1번째 카드", cur() == 0, str(cur()))
+    swipe(page, cdp, -140)
+    check("터치 스와이프: 왼쪽으로 한 번 밀면 한 장만 넘어감(0→1)", cur() == 1, str(cur()))
+    swipe(page, cdp, -140)
+    check("터치 스와이프: 한 번 더 밀면 1→2", cur() == 2, str(cur()))
+    swipe(page, cdp, 140)
+    check("터치 스와이프: 오른쪽으로 밀면 한 장 뒤로(2→1)", cur() == 1, str(cur()))
+    for _ in range(6): swipe(page, cdp, -140)
+    check("터치 스와이프: 끝 카드에서 더 밀어도 마지막에서 멈춤", cur() == 4, str(cur()))
+    tr = page.evaluate("(() => { const e = document.querySelector('.flip'); return getComputedStyle(e).transform + '|' + getComputedStyle(e).opacity; })()")
+    check("터치 스와이프: 끝에서 놓으면 카드가 제자리로 돌아옴(옆으로 밀린 채 남지 않음)", tr in ("none|1", "matrix(1, 0, 0, 1, 0, 0)|1"), tr)
+    check("터치 스와이프: JS 오류 없음", not errors, "; ".join(errors))
+    ctx.close()
+
     check("페이지 JS 오류 없음", not errors, "; ".join(errors))
     b.close()
 fail = [n for n, ok in results if not ok]
