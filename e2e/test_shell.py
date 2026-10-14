@@ -287,9 +287,7 @@ with sync_playwright() as p:
     ban = page.locator("#inapp-banner")
     check("카톡(안드로이드): 상단에 브라우저 안내", ban.is_visible() and "카카오톡" in ban.inner_text())
     bt = ban.inner_text()
-    check("카톡(안드로이드): 듣기만 안 된다고 하고 카톡 메뉴 '다른 브라우저로 열기'를 안내",
-          "'듣기'(음성 재생)가 안 돼요" in bt and "다른 브라우저로 열기" in bt and "녹음" not in bt, bt)
-    check("카톡(안드로이드): 여기서도 되는 것(말하기·카드 학습)을 함께 알림", "말하기와 카드 학습은 여기서도 돼요" in bt, bt)
+    check("카톡(안드로이드), 기능은 다 되는 환경: 약한 안내 + 카톡 메뉴 안내(안 된다고 단정하지 않음)", "다른 브라우저로 열기" in bt and "안 돼요" not in bt, bt)
     check("카톡(안드로이드): Safari 언급 없음", "Safari" not in bt, bt)
     check("카톡: 360px 에서 안내가 가로로 넘치지 않음", hscroll(page) <= 0, str(hscroll(page)))
     check("카톡: '브라우저에서 열기' 버튼 있음", page.locator('[data-inapp="open"]').count() == 1)
@@ -311,6 +309,26 @@ with sync_playwright() as p:
     page = ctx.new_page(); page.add_init_script("delete window.MediaRecorder;")
     page.goto(BASE + "/"); page.wait_for_timeout(500)
     check("일반 브라우저라도 녹음 API 가 없으면 기능 감지로 안내", page.locator("#inapp-banner").is_visible() and "녹음이 안 돼요" in page.locator("#inapp-banner").inner_text())
+    ctx.close()
+
+    # 실제 감지: 카톡에서 speechSynthesis 가 없으면 '듣기만' 안 된다고 안내하고, 되는 것(말하기·카드)도 알린다
+    ctx = b.new_context(viewport={"width": 360, "height": 780}, user_agent=KAKAO_AND, has_touch=True, is_mobile=True)
+    page = ctx.new_page(); page.add_init_script("delete window.speechSynthesis;")
+    page.goto(BASE + "/"); page.wait_for_timeout(600)
+    bt = page.locator("#inapp-banner").inner_text() if page.locator("#inapp-banner").is_visible() else ""
+    check("카톡에서 듣기만 안 됨(speechSynthesis 없음): '듣기'가 안 돼요 + 카톡 메뉴 + 말하기·카드는 된다고 알림",
+          "'듣기'(음성 재생)가 안 돼요" in bt and "다른 브라우저로 열기" in bt and "말하기와 카드 학습은 여기서도 돼요" in bt and "녹음" not in bt, bt)
+    ctx.close()
+    # 음성 목록이 늦게 도착하는데 영어 음성이 없는 경우: 처음엔 약한 안내, voiceschanged 뒤에 '듣기 불가'로 바뀐다
+    ctx = b.new_context(viewport={"width": 360, "height": 780}, user_agent=KAKAO_AND, has_touch=True, is_mobile=True)
+    page = ctx.new_page()
+    page.add_init_script("window.__v = []; const ss = window.speechSynthesis; if (ss) { ss.getVoices = () => window.__v; }")
+    page.goto(BASE + "/"); page.wait_for_timeout(500)
+    first = page.locator("#inapp-banner").inner_text()
+    page.evaluate("window.__v = [{lang:'ko-KR', name:'Korean', default:true}]; speechSynthesis.onvoiceschanged && speechSynthesis.onvoiceschanged(new Event('voiceschanged'));")
+    page.wait_for_timeout(300)
+    later = page.locator("#inapp-banner").inner_text()
+    check("음성 목록이 늦게 도착: 처음엔 단정 안 함 → 영어 음성이 없다고 드러나면 '듣기 불가'로 갱신", "안 돼요" not in first and "'듣기'(음성 재생)가 안 돼요" in later, first + " => " + later)
     ctx.close()
 
     check("페이지 JS 오류 없음", not errors, "; ".join(errors))
