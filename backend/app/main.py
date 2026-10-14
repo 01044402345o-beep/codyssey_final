@@ -39,7 +39,12 @@ from . import speech_compare as compare
 from . import speech_vad as vad
 from . import stt_providers as stt
 from . import stt_selftest as selftest
-from .agents.facts import collect_facts, facts_clause, kakao_configured
+from .agents.facts import (
+    FACT_SOURCES_READY,
+    collect_facts,
+    facts_clause,
+    kakao_configured,
+)
 
 from .validators import (
     SCHEMA_CHECKER_AVAILABLE,
@@ -364,6 +369,8 @@ def health() -> dict[str, Any]:
             "kakao": kakao_configured(),
             "osm": "no-key",
             "google_places": False,
+            # False 면 키가 있어도 외부 호출이 0회다. facts.py 의 FACT_SOURCES_READY.
+            "sources_ready": FACT_SOURCES_READY,
         },
         # 배포된 코드가 어느 커밋인지 응답 한 번으로 알 수 있게 한다. Render 가 빌드·런타임에 주는 기본 환경변수이고,
         # 로컬 실행처럼 값이 없으면 null 이다. (SHA 는 비밀이 아니다.)
