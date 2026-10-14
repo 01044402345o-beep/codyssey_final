@@ -71,6 +71,7 @@ python e2e/test_shell.py <배포 또는 로컬 주소> <스크린샷 폴더>
 
 같은 이유로, 브랜치 하나에 여러 성격의 변경을 섞지 않는다. `c76335a` 는 커밋 메시지가 "스와이프 블록 중복 제거"였지만 실제 변경은 CSS 대체(−941/+471)를 포함했다.
 
+PR 은 `gh pr create --fill --base main` 으로 연다. 대상 저장소는 `01044402345o-beep/codyssey_final` 이고 base 는 `main` 이다. 이 클론에서는 `gh repo set-default` 가 그 저장소다. 헤드는 포크 `seongbin45:<브랜치>` 이며, 그 명령은 `team` 원격에 푸시하지 않는다.
 ## 6. 사실이 서로 다를 때
 
 1. 현재 코드와 테스트
