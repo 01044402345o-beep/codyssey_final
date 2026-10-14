@@ -58,6 +58,20 @@
 - 커밋 메시지에는 무엇을 왜 넣었는지 적는다.
 - 사용자에게 커밋 해시, 브랜치 이름, 푸시한 원격을 말한다.
 
+### 5.1 팀 `main` 에는 직접 푸시하지 않는다
+
+팀 저장소 `main` 반영은 **PR 을 거쳐** 한다. PR 을 열기 전에 로컬에서 두 검사를 통과시킨다.
+
+```
+node --test mockup/ai.test.js mockup/tokens.test.js
+python e2e/test_shell.py <배포 또는 로컬 주소> <스크린샷 폴더>
+```
+
+이유는 기록이다. 2026-10-12 `c76335a` 가 팀 `main` 에 직접 들어갔고, 그 커밋에서 `mockup/styles.css` 941줄(반응형·다크 모드 토큰)이 사라져 `mockup/tokens.test.js` **6개가 실패한 채로 배포**됐다(`/api/health` 의 `deploy.commit` 이 그 커밋). PR 이었다면 CI 가 막았을 경로다. 복구는 `7065dc9`, 이후 같은 유형의 재발을 막는 터치 스와이프 E2E 가 `e18cb77`(PR #55)에 들어갔다.
+
+같은 이유로, 브랜치 하나에 여러 성격의 변경을 섞지 않는다. `c76335a` 는 커밋 메시지가 "스와이프 블록 중복 제거"였지만 실제 변경은 CSS 대체(−941/+471)를 포함했다.
+
+PR 은 `gh pr create --fill --base main` 으로 연다. 대상 저장소는 `01044402345o-beep/codyssey_final` 이고 base 는 `main` 이다. 이 클론에서는 `gh repo set-default` 가 그 저장소다. 헤드는 포크 `seongbin45:<브랜치>` 이며, 그 명령은 `team` 원격에 푸시하지 않는다.
 ## 6. 사실이 서로 다를 때
 
 1. 현재 코드와 테스트
