@@ -286,6 +286,11 @@ with sync_playwright() as p:
     page.goto(BASE + "/"); page.wait_for_timeout(600)
     ban = page.locator("#inapp-banner")
     check("카톡(안드로이드): 상단에 브라우저 안내", ban.is_visible() and "카카오톡" in ban.inner_text())
+    bt = ban.inner_text()
+    check("카톡(안드로이드): 듣기만 안 된다고 하고 카톡 메뉴 '다른 브라우저로 열기'를 안내",
+          "'듣기'(음성 재생)가 안 돼요" in bt and "다른 브라우저로 열기" in bt and "녹음" not in bt, bt)
+    check("카톡(안드로이드): 여기서도 되는 것(말하기·카드 학습)을 함께 알림", "말하기와 카드 학습은 여기서도 돼요" in bt, bt)
+    check("카톡(안드로이드): Safari 언급 없음", "Safari" not in bt, bt)
     check("카톡: 360px 에서 안내가 가로로 넘치지 않음", hscroll(page) <= 0, str(hscroll(page)))
     check("카톡: '브라우저에서 열기' 버튼 있음", page.locator('[data-inapp="open"]').count() == 1)
     page.locator('[data-inapp="close"]').click(); page.wait_for_timeout(200)
