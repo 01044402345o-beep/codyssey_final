@@ -39,6 +39,7 @@ from . import speech_compare as compare
 from . import speech_vad as vad
 from . import stt_providers as stt
 from . import stt_selftest as selftest
+from .agents.facts import collect_facts, facts_clause, kakao_configured
 
 from .validators import (
     SCHEMA_CHECKER_AVAILABLE,
@@ -253,7 +254,7 @@ def check_place_types(cfg: dict[str, Any], req: GenerateRequest) -> None:
         )
 
 
-def build_prompt(cfg: dict[str, Any], req: GenerateRequest) -> str:
+def build_prompt(cfg: dict[str, Any], req: GenerateRequest, facts: dict[str, Any] | None = None) -> str:
     """system_prompt 의 {키} 를 rules 의 같은 키 값으로 치환한다."""
     rules = cfg.get("rules", {})
     body = PLACEHOLDER.sub(
@@ -279,6 +280,7 @@ def build_prompt(cfg: dict[str, Any], req: GenerateRequest) -> str:
         f"{body}\n\nINPUT:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
         f"\n\nOUTPUT JSON SCHEMA:\n{json.dumps(load_schema(), ensure_ascii=False)}"
         f"\n\nReturn JSON only."
+        + (facts_clause(facts) if facts is not None else "")
     )
 
 
@@ -357,6 +359,12 @@ def health() -> dict[str, Any]:
         "stt_models": stt.cached_models(),
         "stt_selftest": selftest.status(),
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
+        # 사실 조회는 문장 모델과 다른 키다. 구글 장소 검색은 붙이지 않았다.
+        "fact_agents": {
+            "kakao": kakao_configured(),
+            "osm": "no-key",
+            "google_places": False,
+        },
         # 배포된 코드가 어느 커밋인지 응답 한 번으로 알 수 있게 한다. Render 가 빌드·런타임에 주는 기본 환경변수이고,
         # 로컬 실행처럼 값이 없으면 null 이다. (SHA 는 비밀이 아니다.)
         "deploy": {
@@ -410,6 +418,16 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     cfg = load_category(req.category_id)
     check_place_types(cfg, req)
     schema = load_schema()
+    facts = collect_facts(
+        category_id=req.category_id,
+        city=req.city,
+        places=[p.model_dump() for p in req.places],
+        situation_ids=[
+            s.get("situation_id")
+            for s in cfg.get("situations", [])
+            if isinstance(s, dict) and isinstance(s.get("situation_id"), str)
+        ],
+    )
 
     if not os.getenv("GEMINI_API_KEY"):
         pack = mock_pack(cfg, req)
@@ -424,9 +442,10 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
             "attempts": 0,
             "mock": True,
             "usable": usability(issues, True, False),
+            "facts": facts,
         }
 
-    prompt = build_prompt(cfg, req)
+    prompt = build_prompt(cfg, req, facts)
     state: dict[str, Any] = {"last_error": "", "last_pack": None, "last_issues": [], "attempt_ms": []}
 
     def once(client: Any, model: str, attempt: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -491,6 +510,7 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
             "usable": "rejected",
             "error": state["last_error"] or exc.last_error,
             "attempt_ms": state["attempt_ms"],
+            "facts": facts,
         }
 
     pack, issues = res.value
@@ -499,6 +519,7 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
         "failures": res.failures,   # 성공 전에 실패한 시도들 (원인 진단용)
         "mock": False, "usable": "ok",
         "attempt_ms": state["attempt_ms"],
+        "facts": facts,
     }
 
 
