@@ -4,29 +4,25 @@
 
 | 항목 | 값 |
 |---|---|
-| 기록 시각 | 2026-10-14 오후 (PR #55 반영 후) |
+| 기록 시각 | 2026-10-14 |
 | 최근 세션 | `C:\Users\seong\.grok\sessions\C%3A%5CUsers%5Cseong%5CDesktop%5CProJect%5Ccodyssey_final\01a138a0-a233-7ca1-843c-3de2a5de06b6` |
 | 세션 파일 | `chat_history.jsonl`, `events.jsonl`, `updates.jsonl`, `summary.json`, `prompt_context.json`, `resources_state.json`, `system_prompt.txt`, `tool_definitions.json`, `terminal/` |
-| 사실 확인 시점 HEAD | 팀 `main` `e18cb77` (10-14 13:51, PR #55) · 포크 `main` `a7d0021` |
-| 팀 `main` 대비 포크 `main` | 45 앞, 1 뒤. **파일 차이는 `README.md`·`docs/AGENT_WORKFLOW.md`·`docs/REPO_STATE.md` 셋뿐**(194줄). 나머지 43커밋은 브랜치 병합 이력이라 팀에 올라가도 무해하다 |
-| 작업 브랜치 | `docs/agent-workflow` (포크). 팀 반영은 PR 로 한다 — 직접 푸시하지 않는다(§5.1) |
+| 작업 브랜치 | `docs/results-pr55` |
+| 이 커밋 | `8b5a92d`와 팀 `main` `169954b`의 머지. 충돌은 `docs/AGENT_WORKFLOW.md`, `docs/REPO_STATE.md`, `docs/user-test/results.md` |
 | `origin` | `https://github.com/seongbin45/codyssey_final` |
 | `team` | `https://github.com/01044402345o-beep/codyssey_final.git` |
-| 배포 | `https://codyssey-final.onrender.com` (팀 `main` 머지 시 Render 무료 플랜). 확인 시점 `deploy.commit = e18cb7775`, `branch = main` |
+| 팀 `main` | `169954b` — 2026-10-14 16:46:56 +0900, seongbin45, `docs: 결과 표의 PR 칸을 머지 결과로 정정, 에이전트 작업 절차·저장소 상태 문서 추가`. 부모는 `e18cb77` |
+| 배포 | `https://codyssey-final.onrender.com`. 이 충돌 해결에서는 `/health`를 다시 열지 않았고 테스트도 다시 돌리지 않았다 |
 
-세션 시작 때 로컬 `main`(`4a21b87`)은 `origin/main` 보다 44커밋 뒤에 있었다. 평가·배포 기준은 팀 저장소 `main`이다.
+이 읽기의 git 사실:
 
-추적되지 않은 루트 `.gitignore`는 Next.js 템플릿이다. 이 제품은 바닐라 JS와 FastAPI라 그 파일은 커밋하지 않는다.
-
-## PR #55 (`e18cb77`, 10-14 13:51) 로 바뀐 것
-
-| 항목 | 이전 | 지금 (코드에서 확인) |
-|---|---|---|
-| 상황별 연습 | 없음 | **구현.** `mockup/app.js` `S.drill` — 문장 모음의 묶음마다 "카드로 연습". `drill:${by}:${v}` 를 날짜 대신 쓰므로 날짜 일정과 분리된다. 끝낼 때 `S.card` 를 `savedCard` 로 되돌린다 |
-| 터치 스와이프 검사 | 없음 | **추가.** `e2e/test_shell.py` 가 CDP `Input.dispatchTouchEvent` 로 `0→1`, `1→2`, `2→1`, 끝 카드에서 멈춤, 놓으면 제자리, JS 오류 0 을 단언한다. `has_touch=True` 만 켜 두면 못 잡던 회귀다 |
-| 카톡 안내 | "일부 기능이 안 됨" | 듣기(TTS)만 안 되는 것으로 좁히고, 카톡 자체 메뉴 `⋮ → 다른 브라우저로 열기` 안내 + 여기서도 되는 것(말하기·카드) 표시 |
-| 프론트 테스트 | 31 | **33 pass / 0 fail** (`node --test mockup/ai.test.js mockup/tokens.test.js`) |
-| `results.md` | §1 빈 표 | §1 P1~P5 명단, §5 피드백 6행(1a·1b·1c·2·3·4), §6 원문, §6.1 실기기 채점 2건. **§2·§3·§4 는 아직 빈칸** |
+- `git ls-remote --heads` 로 본 팀 브랜치: `main` `169954b34be23af79a10f92687787ad4aa0dc111`, `New-add-backend` `a4b850ac16483695080b38f93b0e942e4818d4ac`, `feat/memory-and-speak` `47f5c698852f3f24277d0ede20a7f01c6b5ae5b3`, `docs/sync-and-results-pr` `661005a25f767d4d8115fe0d6e838848077873a6`.
+- `git rev-list --left-right --count origin/main...team/main` 은 45와 2이다. 팀에만 있는 두 커밋은 `e18cb77`과 `169954b`이다. `e18cb77`은 머지 전 `HEAD` `8b5a92d`의 조상이 아니다.
+- 로컬 `main`(`4a21b87`)은 `origin/main`보다 58커밋 뒤이고, 앞은 0이다. `origin/main`은 `a7d0021`이다.
+- `docs/agent-workflow` 는 `3756ecc`이다. 그 커밋과 부모 `a1fa890`은 `8b5a92d`의 조상이 아니고, `169954b`의 부모는 `e18cb77`이라 이 머지에도 들어오지 않는다. 과제 원문 대조(`docs/ASSIGNMENT.md`)는 그 브랜치에 있다.
+- `gh repo set-default --view` 는 `01044402345o-beep/codyssey_final` 이다. `remote.team.gh-resolved` 는 `base` 이다.
+- 추적되지 않은 루트 `.gitignore`는 커밋하지 않는다. `core.autocrlf` 는 true이고, 커밋 blob은 LF로 둔다.
+- `169954b`가 이 문서에 적은 `deploy.commit = e18cb7775` 와 프론트 테스트 33 pass 는 그 커밋의 기록이다. 이 충돌 해결에서 다시 확인하지 않았다.
 
 ## 구조
 
@@ -55,87 +51,82 @@
 
 제품은 여행지와 일정을 넣으면 갈 장소에서 쓸 영어 문장을 만들고, 말해 보고, 어려웠던 상황을 브라우저에 기억하는 학습 서비스다. 화면과 API는 같은 주소에서 서빙한다. AI가 하는 일은 문장 생성(`/generate`), 말하기 채점(`/speak-check`), 어려웠던 상황의 다음 생성 반영이다. 장소 목록은 예시 데이터다.
 
+`169954b`가 팀 `main`에 더한 패치 파일 세 개(`add-agent-workflow-repo-state.patch`, `fix-landscape-fluid.patch`, `results-pr-columns.patch`)는 충돌이 아니라 그 커밋의 추가분이라 이 머지에 남긴다.
+
+## 동결
+
+2026-10-14에 사용자가 정한 것이다. 전문 기록은 `docs/agent-workflow` `3756ecc`에 있다.
+
+- 디자인 가이드 적용은 `a1fa890`에서 멈춘다. 그 커밋은 이 머지의 어느 부모에도 없다.
+- `team` 원격에는 직접 푸시하지 않는다. 팀 `main` 반영은 PR 이다. `gh pr create --fill --base main` 의 대상은 `01044402345o-beep/codyssey_final` 이다.
+- `mockup/`은 2차 테스트가 끝나는 2026-10-22까지 동결이다.
+- 그때까지 저장소에서 할 일은 과제 요건 확인과, 2차 테스트에서 나온 버그 수정이다.
+
 ## `.`에서 열려 있는 일
 
-기준 문서: `docs/requirements.md` (2026-10-09, 커밋 `f78b23b` 시점 표기). 아래는 그 문서가 완료로 두지 않은 항목이다.
+기준 문서: `docs/requirements.md` (2026-10-09, 커밋 `f78b23b` 시점 표기). 아래는 그 문서가 완료로 두지 않은 항목이다. FR-15 행은 이 작업 트리의 `mockup/ai.js` `categoryOfKind`와 `mockup/app.js` `genReport`를 이전 읽기에서 확인했고, `169954b`는 `mockup/app.js`를 바꾸지 않는다.
 
 | ID | 상태 | 코드에서 확인한 내용 |
 |---|---|---|
 | FR-03 장소 보고서 | 예시 | `mockup/data.js` `PLACE_POOLS`. 뉴욕·보스턴은 관광지·맛집만 있음 |
 | FR-04 방문 순서 | 예시 | 코드 배치 |
-| FR-15 교통·숙소 생성 | 부분 | 계약 3종은 `agent_contract/categories/`에 있다. `mockup/ai.js` `categoryOfKind`는 식당·카페→restaurant, 공항·역·택시→transport, 호텔·호스텔·게스트하우스·에어비앤비→lodging. `genReport`(`mockup/app.js`)는 장소를 `attraction`과 `restaurant`로만 만든다. `attraction`은 계약 밖이라 생성 요청은 식당만 나간다 |
+| FR-15 교통·숙소 생성 | 부분 | 계약 3종은 `agent_contract/categories/`에 있다. `categoryOfKind`는 식당·카페→restaurant, 공항·역·택시→transport, 호텔·호스텔·게스트하우스·에어비앤비→lodging. `genReport`는 장소를 `attraction`과 `restaurant`로만 만든다. `attraction`은 계약 밖이라 생성 요청은 식당만 나간다 |
 | FR-16 로그인·서버 저장 | 예정 | 데모 사용자와 브라우저 저장 |
 | NFR-08 화면 | 부분 | 반응형·다크·넓은 화면 배치는 구현 기록이 `docs/RESPONSIVE_STRATEGY.md`에 있다. 남은 것: 실기기(iOS Safari·iPad), 다크 모드 팀 디자인 검수, 브라우저 뒤로가기와 날짜 선택 |
-| **사용자 테스트 측정값** | **미기록** | `docs/user-test/results.md` §2 과업 성공률(T1·T2·T3·T5·T6·T7), §3 말해 보기 측정(오거부율 포함), §4 설문 12문항이 **빈칸**이다. §1 참가자 5명과 §5 피드백 6행은 채워져 있다. T6(한 단어 빼고 말하기)은 아직 실행되지 않았다 |
+| 사용자 테스트 측정값 | 미기록 | `docs/user-test/results.md` 2·3·4절이 빈칸이다. 1절 참가자 5명과 5절 피드백 6행은 채워져 있다. T6(한 단어 빼고 말하기)은 아직 실행 기록이 없다 |
 | 장소 보강 파이프라인 | 제안 | `docs/ENRICHMENT_PIPELINE.md`는 미구현 |
 
-`README.md`의 알려진 한계 문장은 이제 `categoryOfKind`·`genReport`와 같다(이번 커밋에서 함께 고쳤다).
+이 작업 트리 `README.md` 161행은 `categoryOfKind`와 생성 요청이 식당만 나간다는 문장이다.
 
-## `./other`에서 가져올 수 있는 것
+`backend/app/gemini.py` 는 `MIN_ATTEMPTS = 30` 이고, 주석은 전체 제한 시간(deadline)을 두지 않는다고 적는다. 시간 제한이 시도 횟수를 깎으면 '최소'가 깨진다는 문장이다. `backend/app/stt_providers.py` 는 `REQUEST_TIMEOUT = 60`, `POLL_MAX_SECONDS = 120` 이다. 이 충돌 해결은 그 값을 바꾸지 않는다.
 
-| 자료 | 쓰는 조건 |
+## PR #55 로 이미 들어가 있는 것
+
+`e18cb77`(2026-10-14 13:51:39 +0900, 최성빈, PR #55)의 부모는 `747c673`(2026-10-12 09:01:18 +0900, PR #54)이다. `169954b`는 `mockup/`을 바꾸지 않으므로 아래는 팀 `main`의 코드와 같다.
+
+| 항목 | 코드 |
 |---|---|
-| `design/디자인 가이드.dc.html` | 2026-10-08 가이드 v1. 색·글자·부품. 출처로 `mockup/styles.css`를 들고, 목업과 다른 값을 표에 적는다 |
-| `design/반응형 전략 v2.dc.html`, `반응형 전략.dc.html` | 초안. `docs/RESPONSIVE_STRATEGY.md`가 바닐라 CSS 기준으로 다시 적었고, React·Vite·Tailwind 전제는 따르지 않는다 |
-| `output/` | 발표 구성. 제품 동작을 바꾸려면 `docs/requirements.md`와 코드를 먼저 본다 |
-| `resorce/` | 과제 원문, 상세기획서, 2026-10-04 진단(스코프 과대, 기술 요소 미달). 진단이 제안한 말하기·기억은 현재 제품에 들어가 있다 |
-| `codyssey_final/` | 오래된 사본. 루트에 없는 기능을 여기서 현재인 것처럼 가져오지 않는다 |
-| `transcribe_app/` | 범위 밖 |
-
-## 다음 구현 후보
-
-1. **FR-15.** 예시 장소에 교통·숙소를 넣어 `categoryOfKind`가 그 계약을 실제로 호출하게 한다. 뉴욕·보스턴 장소 목록이 있거나, `data.js`와 같은 결의 예시 장소를 만들어도 된다는 확인이 필요하다.
-2. **생성 실패가 화면에 안 보이는 문제.** `mockup/ai.js` `GEN_TIMEOUT_MS = 90 * 1000` 하나를 `/health` 와 모든 도시가 **공유**하고(`withTimeout` 1개), 실패한 도시는 `kind:'fallback'` 으로 로컬 템플릿 문장이 된다. 화면에는 실패 표시가 없고 전체가 실패한 경우에만 `u-gen` 에 문구가 뜬다(`mockup/app.js` `runAi`·`failStage`). 최소 조치는 **실패한 도시를 화면에 표시**하는 것. 사용자 테스트 중 재발하면 그 회차 측정값이 무효가 된다.
-3. **말하기 결과를 점수부터 표시.** `/speak-check` 응답을 통째로 받은 뒤에야 결과가 뜬다(`mockup/app.js` `uploadSpeech` → `updateSpeakUi`). 실측 20초 중 17초가 피드백 문장 생성이라, 점수는 나와 있는데 화면에는 아무것도 없는 구간이 생긴다. 전사·점수를 먼저 그리고 피드백은 도착 시 덧붙인다.
-4. **디자인 가이드와 목업의 차이 정리.** `디자인 가이드.dc.html`이 2026-10-08 이후에도 기준인지, 다크 모드 팀 검수 메모가 있는지가 필요하다.
-
-백엔드 재시도·제한 시간은 **의도가 코드 주석에 박혀 있다.** `backend/app/gemini.py` 는 `MIN_ATTEMPTS = 30` 이고 "전체 제한 시간(deadline)을 두지 않는다. 시간 제한이 시도 횟수를 깎으면 '최소'가 깨진다"고 적혀 있다. `stt_providers.py` 는 `REQUEST_TIMEOUT = 60`, `POLL_MAX_SECONDS = 120` 이다. 팀 결정 없이 줄이지 않는다.
+| 상황별 연습 | `mockup/app.js` `endDrill` 이 `S.card = S.drill.savedCard` 로 되돌리고, 시작 때 `savedCard: S.card` 를 넣는다 |
+| 터치 스와이프 검사 | `e2e/test_shell.py` 가 `Input.dispatchTouchEvent` 를 쓴다 |
+| 결과 표 | `results.md` 1a·1b 는 `#54` (`747c673`), 1c·2와 6절 대응은 `#55` (`e18cb77`) |
 
 ## 사용자에게 요청할 파일
 
-트리에 이미 있어서 다시 받지 않는 것: `other/Project261000/design/`의 DC 세 파일, `docs/RESPONSIVE_STRATEGY.md`, `docs/requirements.md`.
+아직 저장소에 없는 것:
 
-다음에 구현하려면 필요한 것:
+1. 팀 6인에 대한 운영진 예외 승인. 원문 문장 "팀 인원: 3~5인 (5명 권장)"은 `3756ecc`의 `docs/ASSIGNMENT.md`에 있다. 이 머지에는 그 파일이 없다. README 2절은 이름 6명이다.
+2. 2차 테스트의 과업 성공률·설문. `results.md` 2·3·4절은 비어 있다. 이 머지에서 채우지 않는다.
+3. §6.1 스크린샷과 발표 사용 동의. 파일명은 비어 있고, 동의 전 외부 공개는 금지라고 적혀 있다.
 
-1. 2026-10-08보다 새로운 디자인 가이드가 있으면 그 파일. 없으면 현재 DC를 기준으로 쓴다.
-2. 다크 모드 팀 검수 메모나 화면 캡처. NFR-08이 이 검수를 미완으로 둔다.
-3. 실기기에서 깨진 화면이 있으면 그 캡처(기기, 브라우저, 화면 이름).
-4. FR-15를 먼저 할지, 디자인 가이드와 목업의 차이를 먼저 할지.
-5. `results.md` §6.1 채점 기록 스크린샷을 넣을 `docs/user-test/img/` 가 아직 없다. 파일을 넣을지, 폴더만 만들지.
-6. §6.1 의 실기기 채점 2건을 발표 자료에 쓸 동의(현재 "동의 요청 중").
+## 이번 작업
 
-## 이전 작업 — 절차·상태 문서 작성 (2026-10-14 오전)
+목적: 팀 `main` `169954b`를 `docs/results-pr55`(`8b5a92d`)에 합치면서 세 문서의 충돌을 푼다. `mockup/`은 수정하지 않는다. `team`에는 푸시하지 않는다.
 
-목적: 위 절차를 문서화하고, 이 시점의 구조와 열린 일을 한 문서에 고정한다. 제품 동작은 바꾸지 않는다.
+| 단계 | 목적 | 파일 | 완료 조건 | 읽을 것 |
+|---|---|---|---|---|
+| 1 | 충돌 표시를 없애고 양쪽의 문장을 한 벌로 맞춘다 | 위 세 문서 | 아래 체크리스트. 다른 에이전트가 통과라고 적는다. 그 다음 머지 커밋으로 `origin`의 `docs/results-pr55`에 푸시한다 | 작업 트리, `git diff --diff-filter=U`, `8b5a92d`, `169954b` |
 
-| 단계 | 목적 | 파일 | 완료 조건 |
-|---|---|---|---|
-| 1 | 절차를 적는다 | `docs/AGENT_WORKFLOW.md` | 아이디어 출처, 세션마다 상태 갱신, 구현 전 단계 계획, 단계별 다른 에이전트 검증, 없는 자료 요청, 작업 끝 커밋·`origin` 푸시, 세션 경로 공개가 모두 있다 |
-| 2 | 이 시점의 사실을 적는다 | `docs/REPO_STATE.md` | 브랜치, 원격, 구조, FR-15의 실제 연결, `./other`의 역할이 코드·git과 같다 |
-| 3 | 읽는 사람이 절차를 찾게 하고, 한계 문장을 코드와 맞춘다 | `README.md` | 문서 표에 두 문서가 있고, 한계 문장이 `categoryOfKind`와 `genReport`와 같다 |
-| 4 | 1–3을 다른 에이전트가 대조한다 | 위 세 파일 | 불일치를 고친 뒤 같은 기준으로 다시 본다 |
-| 5 | 이 세 파일만 커밋하고 `origin`의 `docs/agent-workflow`에 푸시한다 | git | 분기 기준은 그 시점의 `fix/dup-swipe` 끝. `.gitignore`와 `fix/dup-swipe` 자체는 푸시하지 않는다 |
+체크리스트:
 
-검증 기록:
-
-- 절차 문서 대조: 통과. 아이디어 출처, 세션마다 상태 갱신, 구현 전 단계 계획, 다른 에이전트의 단계별 대조, 없는 자료 요청, `origin` 푸시와 `team` 제한, 세션 경로 공개, 오래된 사본의 우선순위, 사실 순서를 문서에서 확인했다.
-- 상태 문서 첫 대조 (`bd4bf06` 시점): 불일치. 상태 표만 `docs/agent-workflow`가 이미 있는 것처럼 적혀 있었다.
-- 상태 문서 재대조: 불일치. `fix/dup-swipe`가 `2e77ff1`로 움직여 `origin/fix/dup-swipe`와 같아졌다.
-- 상태 문서 세 번째 대조: 불일치 한 곳. "`2e77ff1`의 바로 아래는 `809c38d`"는 틀렸다. `2e77ff1`은 병합이고 첫 부모는 `bd4bf06`, 둘째 부모는 `809c38d`이다.
-- 상태 문서 네 번째 대조: 통과.
-
-## 이번 작업 — 팀 저장소 반영 (2026-10-14 오후)
-
-목적: 이 세 파일(`docs/AGENT_WORKFLOW.md`, `docs/REPO_STATE.md`, `README.md`)을 팀 저장소 `main` 에 올리고, 그 사이 움직인 사실을 반영한다. 제품 동작은 바꾸지 않는다.
-
-| 단계 | 목적 | 파일 | 완료 조건 |
-|---|---|---|---|
-| 1 | 팀 `main` 최신(`e18cb77`)을 사실로 다시 읽는다 | `docs/REPO_STATE.md` | `deploy.commit`, 프론트 테스트 수, `S.drill`, E2E 터치 단언, `results.md` 채워진 절/빈 절이 git·코드와 같다 |
-| 2 | `results.md` §5 의 PR 칸을 머지 결과로 고친다 | `docs/user-test/results.md` | 1a·1b = `#54`(`747c673`), 1c·2 = `#55`(`e18cb77`). "PR 예정" 표기가 남지 않는다 |
-| 3 | 팀 `main` 직접 푸시 금지 규칙을 절차에 넣는다 | `docs/AGENT_WORKFLOW.md` §5.1 | `c76335a` 사고를 근거로 적고, PR 전 두 검사 명령이 있다 |
-| 4 | 세 파일을 PR 로 올린다 | git | 팀 `main` 에 직접 푸시하지 않는다 |
+- 세 파일에 `<<<<<<<` 가 없다.
+- `results.md` 1c·2행과 6절 대응은 `#55` (`e18cb77`)이다. 그 칸에 `fix/dup-swipe`와 `PR 예정`이 없다. 1a·1b는 `#54` (`747c673`)이다. 5절 표 아래 주석은 예전 `PR 예정` 표기를 고쳤다고 적고, #54 시각 `2026-10-12 09:01:18 +0900`과 #55 시각 `2026-10-14 13:51:39 +0900`을 가리킨다. 2·3·4절 빈칸은 그대로다.
+- `AGENT_WORKFLOW.md` §5.1 이 있다. 팀 `main` 직접 푸시 금지, PR 전 두 검사, `c76335a` 기록, `gh pr create --fill --base main` 의 대상이 `01044402345o-beep/codyssey_final` 이라는 문장이 있다.
+- 이 문서의 팀 `main`은 `169954b`이고, `/health`와 테스트를 이 자리에서 다시 실행하지 않았다고 적는다. 동결 네 줄이 있다.
+- `git diff --name-only --diff-filter=U` 가 비어 있다. `.gitignore`는 스테이지에 없다.
+- 세 문서의 작업 트리 바이트에 CR 이 0이다.
 
 검증:
 
-- `node --test mockup/ai.test.js mockup/tokens.test.js` → **33 pass / 0 fail** (문서만 바꿨으므로 `e18cb77` 과 같은 수여야 한다).
-- `python e2e/test_shell.py <주소> <폴더>` → CI 에서 확인한다.
+- 단계 1 첫 대조: 다른 에이전트 `01a1396d-d62e-7d23-b364-a7347a1e6532` 가 불일치 한 곳이라고 적었다. 6절에서 `| 대응 |` 행과 `| 재테스트 |` 행이 `||` 로 한 줄에 붙어 있었다. 나머지 항목은 맞았다.
+- 그 두 행을 나누고 같은 단계 재대조: 다른 에이전트 `01a13971-696f-7b21-81cf-24d4edeeb73c` 가 통과라고 적었다. 1c·2행·6절 대응은 `#55` (`e18cb77`)이고, 1a·1b는 `#54` (`747c673`)이다. 2·3·4절 빈칸은 그대로다.
+
+## 이전 기록
+
+`8b5a92d`에 있던 검증이다. 그때 조사한 `HEAD`는 `a7d0021`이었고, 팀 `main`은 `e18cb77`이었다. 지금 팀 `main`은 `169954b`이다.
+
+- 다른 에이전트 `01a1395f-c6c2-7a72-8db4-e4b196ce40dd` 가 `results.md`의 `#55` 정정을 통과라고 적었다. 재대조 `01a13961-9419-75a3-b7b4-6bcf4d2792fb` 도 통과라고 적었다.
+- 그 이전 `2e77ff1` 대조의 결론: `2e77ff1`은 병합이고 첫 부모는 `bd4bf06`, 둘째 부모는 `809c38d`이다.
+
+`169954b`에 있던 검증 기록은 그 커밋이 프론트 테스트 33 pass 와 E2E 는 CI 에서 본다고 적는다. 이 충돌 해결은 그 테스트를 다시 돌리지 않았다.
+
+과제 원문 대조의 검증 기록은 `docs/agent-workflow` `3756ecc`에 있다.
