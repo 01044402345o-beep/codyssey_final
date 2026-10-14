@@ -54,6 +54,7 @@ const KIND = {
   final: { label: '총복습', cls: 'k-final' },
   trip: { label: '여행 중', cls: 'k-trip' },
   free: { label: '자유 일정', cls: 'k-free' },
+  drill: { label: '상황별 연습', cls: 'k-review' },
 };
 const ENGLISH_COUNTRIES = ['미국', '영국', '캐나다', '호주', '뉴질랜드', '아일랜드', '싱가포르', '필리핀', '몰타'];
 const STAGE_OBJ = { report: '보고서를', route: '방문 순서를', sentences: '문장과 일정표를' };
@@ -219,7 +220,7 @@ function initState() {
     draft: defaultDraft(BASE_TODAY), showErrors: false,
     trip: null, places: [], reportMeta: {}, days: [], sents: [], smap: {}, sched: [], plan: null, aiPools: {}, aiBy: {},
     archived: [], gen: null, cityTab: null, showCand: {},
-    studyDate: null, card: { date: null, i: 0, flipped: new Set() }, justCompleted: null,
+    studyDate: null, drill: null, card: { date: null, i: 0, flipped: new Set() }, justCompleted: null,
     coll: { tab: 'common', filter: 'all' }, schedFilter: 'all', ttsRate: 0.95,
     commons: JSON.parse(JSON.stringify(COMMON_SITUATIONS)), commonsDraft: null,
     jobFilter: 'all', mockTrips: JSON.parse(JSON.stringify(MOCK_TRIPS)), modal: null, lastScreen: null,
@@ -494,6 +495,7 @@ function phase() {
 }
 function rowStatus(r) {
   if (r.kind === 'free') return 'free';
+  if (r.kind === 'drill') return 'drill';
   if (r.completed) return 'done';
   if (r.date === S.today) return 'today';
   if (r.date < S.today) return 'miss';
@@ -521,6 +523,7 @@ function describe(r) {
   return parts.join(' · ');
 }
 function pickRow() {
+  if (S.drill && S.screen === 'u-study') return S.drill;   // 문장 모음에서 고른 상황 묶음 — 날짜 일정과 따로 논다
   const rows = S.sched; if (!rows.length) return null;
   return rows.find(r => r.date === S.studyDate) || rows.find(r => r.date === S.today) ||
     (S.today < rows[0].date ? rows[0] : rows[rows.length - 1]);
@@ -1030,10 +1033,13 @@ function scrSplit(tab) {
 function studyView(r) {
   if (S.card.date !== r.date) resetCard(r.date);
   const st = rowStatus(r), ended = S.today > S.trip.tripEnd;
-  const head = `<div class="study-head"><div><div class="small">${r.phase === 'trip' ? `${esc(r.day.city)} · ${r.day.types.map(ty => DAYTYPE[ty].label).join('·')}` : '여행 전 학습'}</div>
+  const head = r.kind === 'drill'
+    ? `<div class="study-head"><div><div class="small">문장 모음에서 고른 묶음 · 완료율에는 들어가지 않아요</div><b style="font-size:1.1875rem">${esc(r.label)}</b></div><span class="badge ${KIND.drill.cls}">${KIND.drill.label}</span></div>`
+    : `<div class="study-head"><div><div class="small">${r.phase === 'trip' ? `${esc(r.day.city)} · ${r.day.types.map(ty => DAYTYPE[ty].label).join('·')}` : '여행 전 학습'}</div>
     <b style="font-size:1.1875rem">${Dt.full(r.date)}</b></div><span class="badge ${KIND[r.kind].cls}">${KIND[r.kind].label}</span></div>`;
   let banner = '';
-  if (ended) banner = notice('여행이 끝나 더 이상 완료 처리할 수 없어요.', 'plain');
+  if (r.kind === 'drill') banner = '';
+  else if (ended) banner = notice('여행이 끝나 더 이상 완료 처리할 수 없어요.', 'plain');
   else if (r.completed) banner = notice('완료한 날이에요. 다시 학습해도 완료 상태는 유지돼요.', 'plain');
   /* 미래 날짜 안내는 아래 완료 버튼 옆으로 옮겼다 — 같은 말을 두 곳에서 하지 않는다 */
   else if (st === 'miss') banner = notice('지난 날짜예요. 지금 학습하면 완료로 기록돼요.', 'warn');
@@ -1050,7 +1056,7 @@ function studyView(r) {
       <button class="btn soft block" data-act="restudy">다시 보기</button></div>`, bottom: '', tabbar: true };
   }
   const i = Math.min(S.card.i, r.ids.length - 1), s = S.smap[r.ids[i]];
-  const isNew = r.kind === 'new' || r.newIds.includes(s.id);
+  const isNew = r.kind === 'new' || (r.newIds || []).includes(s.id);
   const pl = s.placeId ? S.places.find(p => p.id === s.placeId) : null;
   const tag = s.source === 'common' ? `<span class="badge t-norm">공통 · ${s.sitLabel}</span>` : `<span class="badge ${pl.kind === 'attraction' ? 't-dep' : 't-arr'}">${esc(pl.name)}</span>`;
   const ts = ttsState();
@@ -1074,6 +1080,10 @@ function studyView(r) {
   return { inner, bottom: completeBtn(r), tabbar: false };
 }
 function scrStudy() {
+  if (S.drill) {   // 상황별 연습: 넓은 화면에서도 일정 목록 없이 카드만 (뒤로 → 문장 모음)
+    const v = studyView(S.drill);
+    return frame(v.inner, { appbar: appbar('상황별 연습', { back: 'u-coll' }), bottom: v.bottom, tabbar: false, tab: 'u-study' });
+  }
   if (isWide()) return scrSplit('u-study');
   const r = pickRow();
   if (!r) return frame(`<div class="empty">일정이 없어요</div>`, { tabbar: true });
@@ -1082,6 +1092,7 @@ function scrStudy() {
 }
 function completeBtn(r) {
   const all = S.card.flipped.size >= r.ids.length;
+  if (r.kind === 'drill') return `<button class="btn ${all ? 'accent' : 'soft'} block" data-act="tab" data-id="u-coll">${all ? '다 봤어요 · 다른 상황 고르기' : `문장 모음으로 (${S.card.flipped.size}/${r.ids.length})`}</button>`;
   if (r.completed) return `<button class="btn soft block" disabled>완료한 날이에요</button>`;
   if (S.today > S.trip.tripEnd) return `<button class="btn soft block" disabled>여행 종료 후에는 완료할 수 없어요</button>`;
   if (r.date > S.today) return `<button class="btn soft block" disabled>${Dt.md(r.date)}부터 완료할 수 있어요</button>
@@ -1103,18 +1114,20 @@ function scrColl() {
   const learnBadge = s => s.learnPhase === 'none' ? '<span class="badge b-only">문장 모음 전용</span>' : s.learnPhase === 'trip' ? '<span class="badge b-new">여행 중 새 문장</span>' : '';
   const item = s => `<div class="sent"><div><div class="tags">${learnBadge(s)}${aiBadges(s)}<span class="small">${esc(s.situation)}</span></div><div class="en">${phHtml(s.en)}</div><div class="ko">${phHtml(s.ko)}</div></div>
     <button class="play" data-act="speak" data-id="${s.id}">${I.speaker}</button></div>`;
+  /* 묶음 머리에 '카드로 연습' — 사용자 피드백: 날짜별 말고 상황별로 모아서 연습하고 싶다 */
+  const drillBtn = (by, v, n) => `<button class="drill-btn" data-act="drill" data-by="${by}" data-v="${esc(v)}">${I.cards}카드로 연습 ${n}</button>`;
   let chipsHtml, listHtml;
   if (tab === 'common') {
     const chips = [['all', '전체'], ...SIT_ORDER.map(k => [k, S.commons.find(g => g.key === k).label])];
     const list = S.sents.filter(s => s.source === 'common' && (f === 'all' || s.sit === f));
     chipsHtml = `<div class="chips">${chips.map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-act="coll-filter" data-v="${k}">${l}</button>`).join('')}</div>`;
-    listHtml = `${SIT_ORDER.filter(k => f === 'all' || k === f).map(k => { const g = list.filter(s => s.sit === k); return g.length ? `<div class="phase-label">${g[0].sitLabel}</div>${g.map(item).join('')}` : ''; }).join('')}`;
+    listHtml = `${SIT_ORDER.filter(k => f === 'all' || k === f).map(k => { const g = list.filter(s => s.sit === k); return g.length ? `<div class="phase-label">${g[0].sitLabel}${drillBtn('sit', k, g.length)}</div>${g.map(item).join('')}` : ''; }).join('')}`;
   } else {
     const cities = S.trip.cities.map(c => c.name);
     const cf = cities.includes(f) ? f : 'all';
     const places = S.places.filter(p => p.selected && (cf === 'all' || p.city === cf)).sort((a, b) => a.visitDate.localeCompare(b.visitDate) || a.visitOrder - b.visitOrder);
     chipsHtml = `<div class="chips">${[['all', '전체'], ...cities.map(c => [c, c])].map(([k, l]) => `<button class="${cf === k ? 'on' : ''}" data-act="coll-filter" data-v="${esc(k)}">${esc(l)}</button>`).join('')}</div>`;
-    listHtml = `${places.map(p => `<div class="phase-label">${esc(p.name)} · ${Dt.md(p.visitDate)} 방문</div>${S.sents.filter(s => s.placeId === p.id).map(item).join('')}`).join('')}`;
+    listHtml = `${places.map(p => { const g = S.sents.filter(s => s.placeId === p.id); return `<div class="phase-label">${esc(p.name)} · ${Dt.md(p.visitDate)} 방문${g.length ? drillBtn('place', p.id, g.length) : ''}</div>${g.map(item).join('')}`; }).join('')}`;
   }
   const ts = ttsState();
   const segHtml = `<div class="seg" style="margin-bottom:12px"><button class="${tab === 'common' ? 'on' : ''}" data-act="coll-tab" data-v="common">공통 상황 30</button><button class="${tab === 'place' ? 'on' : ''}" data-act="coll-tab" data-v="place">장소별 ${S.sents.length - 30}</button></div>`;
@@ -1243,7 +1256,7 @@ function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
-function go(id) { cancelSpeak(); S.card.back = null; S.screen = id; S.modal = null; render(); }
+function go(id) { cancelSpeak(); S.card.back = null; if (id !== 'u-study') S.drill = null; S.screen = id; S.modal = null; render(); }
 
 function navFromMenu(id) {
   S.modal = null;
@@ -1255,7 +1268,7 @@ function navFromMenu(id) {
   if (['u-route', 'u-home', 'u-sched', 'u-study', 'u-coll', 'u-end'].includes(id)) did = ensure('plan');
   if (id === 'u-end' && phase() !== 'ended') { S.today = Dt.add(S.trip.tripEnd, 1); toast(`데모: 오늘을 여행 종료 다음 날(${Dt.md(S.today)})로 바꿨어요.`); }
   else if (did) toast('데모: 이 화면에 필요한 데이터를 자동으로 준비했어요.');
-  if (id === 'u-study') S.studyDate = null;
+  if (id === 'u-study') { S.studyDate = null; S.drill = null; }
   S.justCompleted = null;
   go(id);
 }
@@ -1436,7 +1449,7 @@ const ACT = {
   tab: el => {
     const id = el.dataset.id;
     if (['u-home', 'u-sched', 'u-study', 'u-coll', 'u-route'].includes(id) && !S.plan) { navFromMenu(id); return; }
-    if (id === 'u-study') S.studyDate = null;
+    if (id === 'u-study') { S.studyDate = null; S.drill = null; }
     S.justCompleted = null; go(id);
   },
   noop: () => {},
@@ -1528,7 +1541,7 @@ const ACT = {
   },
 
   'study-date': el => {
-    S.studyDate = el.dataset.date; S.justCompleted = null;
+    S.studyDate = el.dataset.date; S.justCompleted = null; S.drill = null;
     if (isWide() && (S.screen === 'u-sched' || S.screen === 'u-study')) { go(S.screen); window.scrollTo(0, 0); }   // 2열: 화면은 그대로, 오른쪽 상세만 바뀐다
     else go('u-study');
   },
@@ -1560,6 +1573,14 @@ const ACT = {
   },
   'coll-tab': el => { S.coll = { tab: el.dataset.v, filter: 'all' }; render(); },
   'coll-filter': el => { S.coll.filter = el.dataset.v; render(); },
+  drill: el => {
+    const by = el.dataset.by, v = el.dataset.v;
+    const ids = S.sents.filter(s => by === 'sit' ? s.source === 'common' && s.sit === v : s.placeId === v).map(s => s.id);
+    if (!ids.length) return;
+    const label = by === 'sit' ? S.commons.find(g => g.key === v).label : S.places.find(p => p.id === v).name;
+    S.drill = { kind: 'drill', date: `drill:${by}:${v}`, label, ids, newIds: [], completed: false };
+    S.justCompleted = null; resetCard(S.drill.date); go('u-study'); window.scrollTo(0, 0);
+  },
   'new-trip': () => confirmBox('새 여행을 만들까요?', '이 여행은 보관되고 더 이상 보이지 않아요. (삭제되지는 않아요)', '보관하고 새로 만들기', () => {
     archiveTrip(); S.trip = null; S.places = []; S.sched = []; S.plan = null; S.sents = []; S.days = [];
     S.draft = defaultDraft(S.today); S.showErrors = false; S.modal = null; go('u-input'); toast('이전 여행을 보관했어요.');
