@@ -558,7 +558,7 @@ function speak(text, btn) {
 }
 if (ttsSupported()) {
   loadVoices();
-  speechSynthesis.onvoiceschanged = () => { loadVoices(); if (['u-study', 'u-sched', 'u-coll'].includes(S?.screen)) render(); };
+  speechSynthesis.onvoiceschanged = () => { loadVoices(); renderInAppBanner(); if (['u-study', 'u-sched', 'u-coll'].includes(S?.screen)) render(); };
 }
 
 /* ================= 화면 정의 ================= */
@@ -1644,18 +1644,19 @@ setInterval(() => {
 /* 앱이 다시 보일 때 화면 갱신 (NFR-03) */
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 
-function initInAppBanner() {
+/* 배너는 판정이 바뀌면 다시 그린다 — 음성 목록(speechSynthesis.getVoices)은 늦게 채워져서 첫 판정은 'ok' 로 나올 수 있다 */
+const INAPP_INFO = AI.inAppBrowser(navigator.userAgent, location.href);
+function renderInAppBanner() {
   const el = $('#inapp-banner'); if (!el) return;
-  const info = AI.inAppBrowser(navigator.userAgent, location.href);
-  try { if (sessionStorage.getItem('cd_inapp_closed') === '1') return; } catch (e) { /* 저장소 막힘: 매번 안내 */ }   // 닫으면 이번 방문 동안 다시 안 띄움
-  /* 사용자 테스트(안드로이드 4명): 카톡 앱 안에서는 녹음은 되고 음성 재생만 안 됐다. speechSynthesis 는 있어 보여도 실제로는
-     목소리가 없어 재생이 막히므로, 카톡 안드로이드는 듣기 불가로 본다. */
-  const kakaoAnd = !!info && info.name === '카카오톡' && info.os === 'android';
-  const noRec = API.base !== null && !canRecord(), noTts = ttsState() !== 'ok' || kakaoAnd;
-  if (!info && !noRec && !noTts) return;                      // 일반 브라우저이고 기능도 다 되면 아무것도 띄우지 않는다
+  const info = INAPP_INFO;
+  try { if (sessionStorage.getItem('cd_inapp_closed') === '1') { el.hidden = true; return; } } catch (e) { /* 저장소 막힘: 매번 안내 */ }   // 닫으면 이번 방문 동안 다시 안 띄움
+  /* 무엇이 안 되는지는 기능 감지로만 정한다(UA 추정 아님). UA 는 안내 문구(카톡 메뉴 이름)에만 쓴다. */
+  const noRec = API.base !== null && !canRecord(), noTts = ttsState() !== 'ok';
+  if (!info && !noRec && !noTts) { el.hidden = true; return; }   // 일반 브라우저이고 기능도 다 되면 아무것도 띄우지 않는다
   const lack = noRec && noTts ? '듣기와 녹음이' : noRec ? '녹음이' : noTts ? "'듣기'(음성 재생)가" : '';
   const where = info ? `${esc(info.name)}에서는` : '이 브라우저에서는';
-  /* 카톡에는 자체 메뉴 '다른 브라우저로 열기'가 있다 — 우리가 만든 버튼보다 확실하므로 이것을 먼저 안내한다 */
+  /* 카톡에는 자체 메뉴 '다른 브라우저로 열기'가 있다(Android 스크린샷으로 확인) — 우리가 만든 버튼보다 확실하므로 이것을 먼저 안내한다 */
+  const kakaoAnd = !!info && info.name === '카카오톡' && info.os === 'android';
   const how = kakaoAnd ? "오른쪽 아래 ⋮ → '다른 브라우저로 열기'를 눌러 주세요." : `${betterBrowser()}에서 열어 주세요.`;
   /* 안 되는 것만 말하면 앱을 닫아 버린다(P2) — 여기서도 되는 것을 함께 알린다 */
   const works = noRec && noTts ? '카드 학습은' : noRec ? '듣기와 카드 학습은' : noTts ? (API.base !== null ? '말하기와 카드 학습은' : '카드 학습은') : '';
@@ -1664,13 +1665,17 @@ function initInAppBanner() {
   const open = info && info.scheme ? `<button type="button" data-inapp="open">브라우저에서 열기</button>` : '';
   el.innerHTML = `<span>${msg}</span>${open}<button type="button" data-inapp="copy">링크 복사</button><button type="button" data-inapp="close">닫기</button>`;
   el.hidden = false;
-  el.addEventListener('click', async e => {
+}
+function initInAppBanner() {
+  const el = $('#inapp-banner'); if (!el) return;
+  el.addEventListener('click', async e => {   // 한 번만 연결(재판정으로 내용만 바뀐다)
     const b = e.target.closest('[data-inapp]'); if (!b) return;
-    if (b.dataset.inapp === 'open') { location.href = info.scheme; return; }
+    if (b.dataset.inapp === 'open') { if (INAPP_INFO && INAPP_INFO.scheme) location.href = INAPP_INFO.scheme; return; }
     if (b.dataset.inapp === 'close') { el.hidden = true; try { sessionStorage.setItem('cd_inapp_closed', '1'); } catch (err) { /* 무시 */ } return; }
     try { await navigator.clipboard.writeText(location.href); toast(`링크를 복사했어요. ${betterBrowser()}에 붙여넣어 열어 주세요.`); }
     catch (err) { toast(`주소창의 링크를 길게 눌러 복사한 뒤 ${betterBrowser()}에서 열어 주세요.`); }
   });
+  renderInAppBanner();
 }
 
 initState();
