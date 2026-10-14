@@ -54,6 +54,7 @@ const KIND = {
   final: { label: '총복습', cls: 'k-final' },
   trip: { label: '여행 중', cls: 'k-trip' },
   free: { label: '자유 일정', cls: 'k-free' },
+  drill: { label: '상황별 연습', cls: 'k-review' },
 };
 const ENGLISH_COUNTRIES = ['미국', '영국', '캐나다', '호주', '뉴질랜드', '아일랜드', '싱가포르', '필리핀', '몰타'];
 const STAGE_OBJ = { report: '보고서를', route: '방문 순서를', sentences: '문장과 일정표를' };
@@ -219,7 +220,7 @@ function initState() {
     draft: defaultDraft(BASE_TODAY), showErrors: false,
     trip: null, places: [], reportMeta: {}, days: [], sents: [], smap: {}, sched: [], plan: null, aiPools: {}, aiBy: {},
     archived: [], gen: null, cityTab: null, showCand: {},
-    studyDate: null, card: { date: null, i: 0, flipped: new Set() }, justCompleted: null,
+    studyDate: null, drill: null, card: { date: null, i: 0, flipped: new Set() }, justCompleted: null,
     coll: { tab: 'common', filter: 'all' }, schedFilter: 'all', ttsRate: 0.95,
     commons: JSON.parse(JSON.stringify(COMMON_SITUATIONS)), commonsDraft: null,
     jobFilter: 'all', mockTrips: JSON.parse(JSON.stringify(MOCK_TRIPS)), modal: null, lastScreen: null,
@@ -494,6 +495,7 @@ function phase() {
 }
 function rowStatus(r) {
   if (r.kind === 'free') return 'free';
+  if (r.kind === 'drill') return 'drill';
   if (r.completed) return 'done';
   if (r.date === S.today) return 'today';
   if (r.date < S.today) return 'miss';
@@ -521,6 +523,7 @@ function describe(r) {
   return parts.join(' · ');
 }
 function pickRow() {
+  if (S.drill && S.screen === 'u-study') return S.drill;   // 문장 모음에서 고른 상황 묶음 — 날짜 일정과 따로 논다
   const rows = S.sched; if (!rows.length) return null;
   return rows.find(r => r.date === S.studyDate) || rows.find(r => r.date === S.today) ||
     (S.today < rows[0].date ? rows[0] : rows[rows.length - 1]);
@@ -540,9 +543,12 @@ function ttsState() {
   if (TTS.voices.length && !enVoice()) return 'novoice';
   return 'ok';
 }
+/* 듣기가 안 될 때 안내: 되는 것도 함께 알린다(녹음이 가능할 때만 '말하기' 언급). 카톡(Android)이면 카톡 자체 메뉴도 안내 — 배너를 닫은 뒤에도 막히지 않게 */
+const ttsOffMsg = () => `이 브라우저는 듣기를 지원하지 않아요. ${API.base !== null && canRecord() ? '말하기와 ' : ''}카드 학습은 계속할 수 있어요.`
+  + ((typeof INAPP_INFO !== 'undefined' && INAPP_INFO && INAPP_INFO.name === '카카오톡' && INAPP_INFO.os === 'android') ? " ⋮ 메뉴에서 '다른 브라우저로 열기'를 누르면 듣기도 돼요." : '');
 const ttsText = s => s.replace(/\[name\]/g, 'your name').replace(/\[destination\]/g, 'your destination');
 function speak(text, btn) {
-  if (ttsState() !== 'ok') { toast('이 브라우저는 듣기를 지원하지 않아요. 카드 학습은 계속할 수 있어요.'); return; }
+  if (ttsState() !== 'ok') { toast(ttsOffMsg()); return; }
   speechSynthesis.cancel();
   document.querySelectorAll('.playing').forEach(e => e.classList.remove('playing'));
   const u = new SpeechSynthesisUtterance(ttsText(text));
@@ -555,7 +561,7 @@ function speak(text, btn) {
 }
 if (ttsSupported()) {
   loadVoices();
-  speechSynthesis.onvoiceschanged = () => { loadVoices(); if (['u-study', 'u-sched', 'u-coll'].includes(S?.screen)) render(); };
+  speechSynthesis.onvoiceschanged = () => { loadVoices(); renderInAppBanner(); if (['u-study', 'u-sched', 'u-coll'].includes(S?.screen)) render(); };
 }
 
 /* ================= 화면 정의 ================= */
@@ -1030,10 +1036,13 @@ function scrSplit(tab) {
 function studyView(r) {
   if (S.card.date !== r.date) resetCard(r.date);
   const st = rowStatus(r), ended = S.today > S.trip.tripEnd;
-  const head = `<div class="study-head"><div><div class="small">${r.phase === 'trip' ? `${esc(r.day.city)} · ${r.day.types.map(ty => DAYTYPE[ty].label).join('·')}` : '여행 전 학습'}</div>
+  const head = r.kind === 'drill'
+    ? `<div class="study-head"><div><div class="small">문장 모음에서 고른 묶음 · 완료율에는 들어가지 않아요</div><b style="font-size:1.1875rem">${esc(r.label)}</b></div><span class="badge ${KIND.drill.cls}">${KIND.drill.label}</span></div>`
+    : `<div class="study-head"><div><div class="small">${r.phase === 'trip' ? `${esc(r.day.city)} · ${r.day.types.map(ty => DAYTYPE[ty].label).join('·')}` : '여행 전 학습'}</div>
     <b style="font-size:1.1875rem">${Dt.full(r.date)}</b></div><span class="badge ${KIND[r.kind].cls}">${KIND[r.kind].label}</span></div>`;
   let banner = '';
-  if (ended) banner = notice('여행이 끝나 더 이상 완료 처리할 수 없어요.', 'plain');
+  if (r.kind === 'drill') banner = '';
+  else if (ended) banner = notice('여행이 끝나 더 이상 완료 처리할 수 없어요.', 'plain');
   else if (r.completed) banner = notice('완료한 날이에요. 다시 학습해도 완료 상태는 유지돼요.', 'plain');
   /* 미래 날짜 안내는 아래 완료 버튼 옆으로 옮겼다 — 같은 말을 두 곳에서 하지 않는다 */
   else if (st === 'miss') banner = notice('지난 날짜예요. 지금 학습하면 완료로 기록돼요.', 'warn');
@@ -1050,13 +1059,13 @@ function studyView(r) {
       <button class="btn soft block" data-act="restudy">다시 보기</button></div>`, bottom: '', tabbar: true };
   }
   const i = Math.min(S.card.i, r.ids.length - 1), s = S.smap[r.ids[i]];
-  const isNew = r.kind === 'new' || r.newIds.includes(s.id);
+  const isNew = r.kind === 'new' || (r.newIds || []).includes(s.id);
   const pl = s.placeId ? S.places.find(p => p.id === s.placeId) : null;
   const tag = s.source === 'common' ? `<span class="badge t-norm">공통 · ${s.sitLabel}</span>` : `<span class="badge ${pl.kind === 'attraction' ? 't-dep' : 't-arr'}">${esc(pl.name)}</span>`;
   const ts = ttsState();
   const tts = ts === 'ok'
     ? `<div class="tts-row"><button class="tts-btn" data-act="speak-card">${I.speaker}듣기</button><button class="tts-rate" data-act="rate">${S.ttsRate < 0.9 ? '느리게' : '보통 속도'}</button></div>`
-    : `<div class="tts-off">이 브라우저는 듣기를 지원하지 않아요. 카드 학습은 계속할 수 있어요.</div>`;
+    : `<div class="tts-off">${ttsOffMsg()}</div>`;
   const inner = `<div class="app-pad">${head}${banner ? banner + '<div style="height:10px"></div>' : ''}
     <div class="flip ${S.card.back === S.card.i ? 'flipped' : ''}" data-act="flip">
       <div class="flip-inner">
@@ -1074,6 +1083,10 @@ function studyView(r) {
   return { inner, bottom: completeBtn(r), tabbar: false };
 }
 function scrStudy() {
+  if (S.drill) {   // 상황별 연습: 넓은 화면에서도 일정 목록 없이 카드만 (뒤로 → 문장 모음)
+    const v = studyView(S.drill);
+    return frame(v.inner, { appbar: appbar('상황별 연습', { back: 'u-coll' }), bottom: v.bottom, tabbar: false, tab: 'u-study' });
+  }
   if (isWide()) return scrSplit('u-study');
   const r = pickRow();
   if (!r) return frame(`<div class="empty">일정이 없어요</div>`, { tabbar: true });
@@ -1082,6 +1095,7 @@ function scrStudy() {
 }
 function completeBtn(r) {
   const all = S.card.flipped.size >= r.ids.length;
+  if (r.kind === 'drill') return `<button class="btn ${all ? 'accent' : 'soft'} block" data-act="tab" data-id="u-coll">${all ? '다 봤어요 · 다른 상황 고르기' : `문장 모음으로 (${S.card.flipped.size}/${r.ids.length})`}</button>`;
   if (r.completed) return `<button class="btn soft block" disabled>완료한 날이에요</button>`;
   if (S.today > S.trip.tripEnd) return `<button class="btn soft block" disabled>여행 종료 후에는 완료할 수 없어요</button>`;
   if (r.date > S.today) return `<button class="btn soft block" disabled>${Dt.md(r.date)}부터 완료할 수 있어요</button>
@@ -1103,22 +1117,24 @@ function scrColl() {
   const learnBadge = s => s.learnPhase === 'none' ? '<span class="badge b-only">문장 모음 전용</span>' : s.learnPhase === 'trip' ? '<span class="badge b-new">여행 중 새 문장</span>' : '';
   const item = s => `<div class="sent"><div><div class="tags">${learnBadge(s)}${aiBadges(s)}<span class="small">${esc(s.situation)}</span></div><div class="en">${phHtml(s.en)}</div><div class="ko">${phHtml(s.ko)}</div></div>
     <button class="play" data-act="speak" data-id="${s.id}">${I.speaker}</button></div>`;
+  /* 묶음 머리에 '카드로 연습' — 사용자 피드백: 날짜별 말고 상황별로 모아서 연습하고 싶다 */
+  const drillBtn = (by, v, n) => `<button class="drill-btn" data-act="drill" data-by="${by}" data-v="${esc(v)}">${I.cards}카드로 연습 ${n}</button>`;
   let chipsHtml, listHtml;
   if (tab === 'common') {
     const chips = [['all', '전체'], ...SIT_ORDER.map(k => [k, S.commons.find(g => g.key === k).label])];
     const list = S.sents.filter(s => s.source === 'common' && (f === 'all' || s.sit === f));
     chipsHtml = `<div class="chips">${chips.map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-act="coll-filter" data-v="${k}">${l}</button>`).join('')}</div>`;
-    listHtml = `${SIT_ORDER.filter(k => f === 'all' || k === f).map(k => { const g = list.filter(s => s.sit === k); return g.length ? `<div class="phase-label">${g[0].sitLabel}</div>${g.map(item).join('')}` : ''; }).join('')}`;
+    listHtml = `${SIT_ORDER.filter(k => f === 'all' || k === f).map(k => { const g = list.filter(s => s.sit === k); return g.length ? `<div class="phase-label">${g[0].sitLabel}${drillBtn('sit', k, g.length)}</div>${g.map(item).join('')}` : ''; }).join('')}`;
   } else {
     const cities = S.trip.cities.map(c => c.name);
     const cf = cities.includes(f) ? f : 'all';
     const places = S.places.filter(p => p.selected && (cf === 'all' || p.city === cf)).sort((a, b) => a.visitDate.localeCompare(b.visitDate) || a.visitOrder - b.visitOrder);
     chipsHtml = `<div class="chips">${[['all', '전체'], ...cities.map(c => [c, c])].map(([k, l]) => `<button class="${cf === k ? 'on' : ''}" data-act="coll-filter" data-v="${esc(k)}">${esc(l)}</button>`).join('')}</div>`;
-    listHtml = `${places.map(p => `<div class="phase-label">${esc(p.name)} · ${Dt.md(p.visitDate)} 방문</div>${S.sents.filter(s => s.placeId === p.id).map(item).join('')}`).join('')}`;
+    listHtml = `${places.map(p => { const g = S.sents.filter(s => s.placeId === p.id); return `<div class="phase-label">${esc(p.name)} · ${Dt.md(p.visitDate)} 방문${g.length ? drillBtn('place', p.id, g.length) : ''}</div>${g.map(item).join('')}`; }).join('')}`;
   }
   const ts = ttsState();
   const segHtml = `<div class="seg" style="margin-bottom:12px"><button class="${tab === 'common' ? 'on' : ''}" data-act="coll-tab" data-v="common">공통 상황 30</button><button class="${tab === 'place' ? 'on' : ''}" data-act="coll-tab" data-v="place">장소별 ${S.sents.length - 30}</button></div>`;
-  const ttsNote = ts !== 'ok' ? notice('이 브라우저는 듣기를 지원하지 않아요.', 'warn') + '<div style="height:10px"></div>' : '';
+  const ttsNote = ts !== 'ok' ? notice(ttsOffMsg(), 'warn') + '<div style="height:10px"></div>' : '';
   if (isWide()) {   // P4: 왼쪽 = 탭·상황/도시 필터, 오른쪽 = 문장
     return frame(`<div class="split coll"><div class="split-list">${segHtml}${chipsHtml}</div><div class="split-detail">${ttsNote}${listHtml}</div></div>`, { appbar: appbar('문장 모음'), tabbar: true, wide: true });
   }
@@ -1243,7 +1259,9 @@ function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
-function go(id) { cancelSpeak(); S.card.back = null; S.screen = id; S.modal = null; render(); }
+/* 상황별 연습은 카드 상태(S.card)를 잠시 빌려 쓴다 — 끝낼 때 날짜별 학습의 카드 위치·뒤집은 카드를 그대로 돌려놓는다 */
+function endDrill() { if (S.drill) { S.card = S.drill.savedCard; S.drill = null; } }
+function go(id) { cancelSpeak(); S.card.back = null; if (id !== 'u-study') endDrill(); S.screen = id; S.modal = null; render(); }
 
 function navFromMenu(id) {
   S.modal = null;
@@ -1255,7 +1273,7 @@ function navFromMenu(id) {
   if (['u-route', 'u-home', 'u-sched', 'u-study', 'u-coll', 'u-end'].includes(id)) did = ensure('plan');
   if (id === 'u-end' && phase() !== 'ended') { S.today = Dt.add(S.trip.tripEnd, 1); toast(`데모: 오늘을 여행 종료 다음 날(${Dt.md(S.today)})로 바꿨어요.`); }
   else if (did) toast('데모: 이 화면에 필요한 데이터를 자동으로 준비했어요.');
-  if (id === 'u-study') S.studyDate = null;
+  if (id === 'u-study') { S.studyDate = null; endDrill(); }
   S.justCompleted = null;
   go(id);
 }
@@ -1436,7 +1454,7 @@ const ACT = {
   tab: el => {
     const id = el.dataset.id;
     if (['u-home', 'u-sched', 'u-study', 'u-coll', 'u-route'].includes(id) && !S.plan) { navFromMenu(id); return; }
-    if (id === 'u-study') S.studyDate = null;
+    if (id === 'u-study') { S.studyDate = null; endDrill(); }
     S.justCompleted = null; go(id);
   },
   noop: () => {},
@@ -1528,7 +1546,7 @@ const ACT = {
   },
 
   'study-date': el => {
-    S.studyDate = el.dataset.date; S.justCompleted = null;
+    S.studyDate = el.dataset.date; S.justCompleted = null; endDrill();
     if (isWide() && (S.screen === 'u-sched' || S.screen === 'u-study')) { go(S.screen); window.scrollTo(0, 0); }   // 2열: 화면은 그대로, 오른쪽 상세만 바뀐다
     else go('u-study');
   },
@@ -1560,6 +1578,15 @@ const ACT = {
   },
   'coll-tab': el => { S.coll = { tab: el.dataset.v, filter: 'all' }; render(); },
   'coll-filter': el => { S.coll.filter = el.dataset.v; render(); },
+  drill: el => {
+    const by = el.dataset.by, v = el.dataset.v;
+    const ids = S.sents.filter(s => by === 'sit' ? s.source === 'common' && s.sit === v : s.placeId === v).map(s => s.id);
+    if (!ids.length) return;
+    const label = by === 'sit' ? S.commons.find(g => g.key === v).label : S.places.find(p => p.id === v).name;
+    endDrill();
+    S.drill = { kind: 'drill', date: `drill:${by}:${v}`, label, ids, newIds: [], completed: false, savedCard: S.card };
+    S.justCompleted = null; resetCard(S.drill.date); go('u-study'); window.scrollTo(0, 0);
+  },
   'new-trip': () => confirmBox('새 여행을 만들까요?', '이 여행은 보관되고 더 이상 보이지 않아요. (삭제되지는 않아요)', '보관하고 새로 만들기', () => {
     archiveTrip(); S.trip = null; S.places = []; S.sched = []; S.plan = null; S.sents = []; S.days = [];
     S.draft = defaultDraft(S.today); S.showErrors = false; S.modal = null; go('u-input'); toast('이전 여행을 보관했어요.');
@@ -1623,26 +1650,38 @@ setInterval(() => {
 /* 앱이 다시 보일 때 화면 갱신 (NFR-03) */
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 
-function initInAppBanner() {
+/* 배너는 판정이 바뀌면 다시 그린다 — 음성 목록(speechSynthesis.getVoices)은 늦게 채워져서 첫 판정은 'ok' 로 나올 수 있다 */
+const INAPP_INFO = AI.inAppBrowser(navigator.userAgent, location.href);
+function renderInAppBanner() {
   const el = $('#inapp-banner'); if (!el) return;
-  const info = AI.inAppBrowser(navigator.userAgent, location.href);
-  try { if (sessionStorage.getItem('cd_inapp_closed') === '1') return; } catch (e) { /* 저장소 막힘: 매번 안내 */ }   // 닫으면 이번 방문 동안 다시 안 띄움
-  const noRec = API.base !== null && !canRecord(), noTts = !ttsSupported();
-  if (!info && !noRec && !noTts) return;                      // 일반 브라우저이고 기능도 다 되면 아무것도 띄우지 않는다
-  const lack = noRec && noTts ? '듣기와 녹음이' : noRec ? '녹음이' : noTts ? '듣기가' : '';
-  const who = info ? `${esc(info.name)} 안에서 열려 있어요. ` : '';
-  const msg = lack ? `<b>${who}이 브라우저에서는 ${lack} 안 돼요.</b> ${betterBrowser()}에서 열어 주세요.`
-                   : `<b>${who}</b>듣기·말하기가 안 되면 ${betterBrowser()}에서 열어 주세요.`;   // 기능은 있어 보이지만 앱 안 웹뷰는 실행 중 막힐 수 있다
+  const info = INAPP_INFO;
+  try { if (sessionStorage.getItem('cd_inapp_closed') === '1') { el.hidden = true; return; } } catch (e) { /* 저장소 막힘: 매번 안내 */ }   // 닫으면 이번 방문 동안 다시 안 띄움
+  /* 무엇이 안 되는지는 기능 감지로만 정한다(UA 추정 아님). UA 는 안내 문구(카톡 메뉴 이름)에만 쓴다. */
+  const noRec = API.base !== null && !canRecord(), noTts = ttsState() !== 'ok';
+  if (!info && !noRec && !noTts) { el.hidden = true; return; }   // 일반 브라우저이고 기능도 다 되면 아무것도 띄우지 않는다
+  const lack = noRec && noTts ? '듣기와 녹음이' : noRec ? '녹음이' : noTts ? "'듣기'(음성 재생)가" : '';
+  const where = info ? `${esc(info.name)}에서는` : '이 브라우저에서는';
+  /* 카톡에는 자체 메뉴 '다른 브라우저로 열기'가 있다(Android 스크린샷으로 확인) — 우리가 만든 버튼보다 확실하므로 이것을 먼저 안내한다 */
+  const kakaoAnd = !!info && info.name === '카카오톡' && info.os === 'android';
+  const how = kakaoAnd ? "오른쪽 아래 ⋮ → '다른 브라우저로 열기'를 눌러 주세요." : `${betterBrowser()}에서 열어 주세요.`;
+  /* 안 되는 것만 말하면 앱을 닫아 버린다(P2) — 여기서도 되는 것을 함께 알린다 */
+  const works = noRec && noTts ? '카드 학습은' : noRec ? '듣기와 카드 학습은' : noTts ? (API.base !== null ? '말하기와 카드 학습은' : '카드 학습은') : '';
+  const msg = lack ? `<b>${where} ${lack} 안 돼요.</b> ${how}${works ? ` ${works} 여기서도 돼요.` : ''}`
+                   : `<b>${esc(info.name)} 안에서 열려 있어요.</b> 듣기·말하기가 안 되면 ${how}`;   // 기능은 있어 보이지만 앱 안 웹뷰는 실행 중 막힐 수 있다
   const open = info && info.scheme ? `<button type="button" data-inapp="open">브라우저에서 열기</button>` : '';
   el.innerHTML = `<span>${msg}</span>${open}<button type="button" data-inapp="copy">링크 복사</button><button type="button" data-inapp="close">닫기</button>`;
   el.hidden = false;
-  el.addEventListener('click', async e => {
+}
+function initInAppBanner() {
+  const el = $('#inapp-banner'); if (!el) return;
+  el.addEventListener('click', async e => {   // 한 번만 연결(재판정으로 내용만 바뀐다)
     const b = e.target.closest('[data-inapp]'); if (!b) return;
-    if (b.dataset.inapp === 'open') { location.href = info.scheme; return; }
+    if (b.dataset.inapp === 'open') { if (INAPP_INFO && INAPP_INFO.scheme) location.href = INAPP_INFO.scheme; return; }
     if (b.dataset.inapp === 'close') { el.hidden = true; try { sessionStorage.setItem('cd_inapp_closed', '1'); } catch (err) { /* 무시 */ } return; }
     try { await navigator.clipboard.writeText(location.href); toast(`링크를 복사했어요. ${betterBrowser()}에 붙여넣어 열어 주세요.`); }
     catch (err) { toast(`주소창의 링크를 길게 눌러 복사한 뒤 ${betterBrowser()}에서 열어 주세요.`); }
   });
+  renderInAppBanner();
 }
 
 initState();
