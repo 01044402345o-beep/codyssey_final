@@ -543,9 +543,12 @@ function ttsState() {
   if (TTS.voices.length && !enVoice()) return 'novoice';
   return 'ok';
 }
+/* 듣기가 안 될 때 안내: 되는 것도 함께 알린다(녹음이 가능할 때만 '말하기' 언급). 카톡(Android)이면 카톡 자체 메뉴도 안내 — 배너를 닫은 뒤에도 막히지 않게 */
+const ttsOffMsg = () => `이 브라우저는 듣기를 지원하지 않아요. ${API.base !== null && canRecord() ? '말하기와 ' : ''}카드 학습은 계속할 수 있어요.`
+  + ((typeof INAPP_INFO !== 'undefined' && INAPP_INFO && INAPP_INFO.name === '카카오톡' && INAPP_INFO.os === 'android') ? " ⋮ 메뉴에서 '다른 브라우저로 열기'를 누르면 듣기도 돼요." : '');
 const ttsText = s => s.replace(/\[name\]/g, 'your name').replace(/\[destination\]/g, 'your destination');
 function speak(text, btn) {
-  if (ttsState() !== 'ok') { toast('이 브라우저는 듣기를 지원하지 않아요. 카드 학습은 계속할 수 있어요.'); return; }
+  if (ttsState() !== 'ok') { toast(ttsOffMsg()); return; }
   speechSynthesis.cancel();
   document.querySelectorAll('.playing').forEach(e => e.classList.remove('playing'));
   const u = new SpeechSynthesisUtterance(ttsText(text));
@@ -1062,7 +1065,7 @@ function studyView(r) {
   const ts = ttsState();
   const tts = ts === 'ok'
     ? `<div class="tts-row"><button class="tts-btn" data-act="speak-card">${I.speaker}듣기</button><button class="tts-rate" data-act="rate">${S.ttsRate < 0.9 ? '느리게' : '보통 속도'}</button></div>`
-    : `<div class="tts-off">이 브라우저는 듣기를 지원하지 않아요. 카드 학습은 계속할 수 있어요.</div>`;
+    : `<div class="tts-off">${ttsOffMsg()}</div>`;
   const inner = `<div class="app-pad">${head}${banner ? banner + '<div style="height:10px"></div>' : ''}
     <div class="flip ${S.card.back === S.card.i ? 'flipped' : ''}" data-act="flip">
       <div class="flip-inner">
@@ -1131,7 +1134,7 @@ function scrColl() {
   }
   const ts = ttsState();
   const segHtml = `<div class="seg" style="margin-bottom:12px"><button class="${tab === 'common' ? 'on' : ''}" data-act="coll-tab" data-v="common">공통 상황 30</button><button class="${tab === 'place' ? 'on' : ''}" data-act="coll-tab" data-v="place">장소별 ${S.sents.length - 30}</button></div>`;
-  const ttsNote = ts !== 'ok' ? notice('이 브라우저는 듣기를 지원하지 않아요.', 'warn') + '<div style="height:10px"></div>' : '';
+  const ttsNote = ts !== 'ok' ? notice(ttsOffMsg(), 'warn') + '<div style="height:10px"></div>' : '';
   if (isWide()) {   // P4: 왼쪽 = 탭·상황/도시 필터, 오른쪽 = 문장
     return frame(`<div class="split coll"><div class="split-list">${segHtml}${chipsHtml}</div><div class="split-detail">${ttsNote}${listHtml}</div></div>`, { appbar: appbar('문장 모음'), tabbar: true, wide: true });
   }

@@ -412,6 +412,22 @@ with sync_playwright() as p:
     check("터치 스와이프: JS 오류 없음", not errors, "; ".join(errors))
     ctx.close()
 
+    # 카톡(Android)에서 듣기 불가: 배너를 닫은 뒤에도 카드의 듣기 안내·토스트에 카톡 메뉴 안내가 있다
+    ctx = b.new_context(viewport={"width": 360, "height": 780}, user_agent=KAKAO_AND, has_touch=True, is_mobile=True)
+    page = ctx.new_page(); page.add_init_script("delete window.speechSynthesis;")
+    page.goto(BASE + "/#u-coll"); page.wait_for_timeout(600)
+    page.locator('[data-inapp="close"]').click(); page.wait_for_timeout(200)
+    st_txt = page.locator("#stage").inner_text()
+    check("카톡: 배너를 닫아도 문장 모음의 듣기 안내에 카톡 메뉴 안내가 남음", "다른 브라우저로 열기" in st_txt and "말하기와 카드 학습은" in st_txt, st_txt[:120])
+    page.locator('.play').first.click(); page.wait_for_timeout(300)
+    check("카톡: 듣기 버튼을 누르면 토스트에 카톡 메뉴 안내", "다른 브라우저로 열기" in page.locator("#toast").inner_text(), page.locator("#toast").inner_text())
+    ctx.close()
+    ctx = b.new_context(viewport={"width": 360, "height": 780})
+    page = ctx.new_page(); page.add_init_script("delete window.speechSynthesis;")
+    page.goto(BASE + "/#u-coll"); page.wait_for_timeout(600)
+    check("카톡이 아닌 브라우저: 듣기 안내에 카톡 메뉴 문구 없음", "듣기를 지원하지 않아요" in page.locator("#stage").inner_text() and "다른 브라우저로 열기" not in page.locator("#stage").inner_text())
+    ctx.close()
+
     check("페이지 JS 오류 없음", not errors, "; ".join(errors))
     b.close()
 fail = [n for n, ok in results if not ok]
