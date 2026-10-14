@@ -1,6 +1,7 @@
 """사실 에이전트. 네트워크 없이 상태만 본다.  실행: cd backend && python -m unittest tests.test_fact_agents"""
 from __future__ import annotations
 
+import inspect
 import os
 import unittest
 from pathlib import Path
@@ -16,160 +17,202 @@ def _http_raising(url, headers, timeout):  # noqa: ANN001
     raise AssertionError(f"http called: {url}")
 
 
-class Facts(unittest.TestCase):
-    def test_missing_kakao_key_does_not_call_out(self):
-        with mock.patch.dict(os.environ, {"KAKAO_REST_API_KEY": ""}, clear=False):
-            out = facts.collect_facts(
-                category_id="restaurant", city="서울",
-                places=[{"name": "산모퉁이", "place_type": "restaurant"}],
-                situation_ids=["allergy_notice", "takeout", "order_menu"],
-                http=_http_raising,
-            )
-        self.assertEqual(out["places"]["status"], "unavailable")
-        self.assertEqual(out["places"]["reason"], "KAKAO_REST_API_KEY 없음")
-        self.assertEqual(out["places"]["items"], [])
-        self.assertEqual(out["situations"]["status"], "unavailable")
-        self.assertEqual(out["situations"]["reason"], "좌표 없음")
+def _kakao_doc(name, x="126.97", y="37.57", url="http://place.map.kakao.com/1"):
+    return {"place_name": name, "road_address_name": "서울 종로구", "x": x, "y": y, "place_url": url}
 
-    def test_other_categories_do_not_call_kakao(self):
+
+class AllergyIsNotDiet(unittest.TestCase):
+    """allergy_notice 를 diet:* 로 채우지 않는다. diet:vegetarian=yes 는 채식 메뉴가 있다는
+    뜻이고 알레르기 안전과 다른 주장인데, verified 로 올라가면 프롬프트가 사실로 취급한다."""
+
+    def test_allergy_notice_is_not_an_osm_situation(self):
+        self.assertNotIn("allergy_notice", facts.OSM_SITUATIONS)
+
+    def test_diet_tags_produce_no_allergy_fact(self):
+        def http(url, headers, timeout):  # noqa: ANN001
+            if "dapi.kakao.com" in url:
+                return 200, {"documents": [_kakao_doc("산모퉁이")]}
+            return 200, {"elements": [{
+                "type": "node", "id": 9,
+                "tags": {"amenity": "restaurant", "diet:vegetarian": "yes",
+                         "takeaway": "only", "internet_access": "wlan"},
+            }]}
+
+        with mock.patch.dict(os.environ, {"KAKAO_REST_API_KEY": "k"}, clear=False):
+            located = facts._kakao_places("서울", [{"name": "산모퉁이", "place_type": "restaurant"}], http, 5.0)
+            out = facts._osm_facts(["allergy_notice", "takeout", "ask_wifi", "order_menu"], located, http, 8.0)
+        ids = {i["situation_id"] for i in out["items"]}
+        self.assertNotIn("allergy_notice", ids)
+        self.assertEqual(ids, {"takeout", "ask_wifi"})
+        self.assertNotIn("diet", str(out))
+
+
+class RequestedPlaceMustMatch(unittest.TestCase):
+    """요청한 장소와 이름이 맞는 응답만 사실로 올린다."""
+
+    def test_unmatched_documents_are_dropped(self):
+        def http(url, headers, timeout):  # noqa: ANN001
+            return 200, {"documents": [
+                _kakao_doc("다른가게"), _kakao_doc("또다른가게"), _kakao_doc("산모퉁이"),
+            ]}
+
+        with mock.patch.dict(os.environ, {"KAKAO_REST_API_KEY": "k"}, clear=False):
+            out = facts._kakao_places("서울", [{"name": "산모퉁이", "place_type": "restaurant"}], http, 5.0)
+        self.assertEqual(out["status"], "verified")
+        self.assertEqual([i["name"] for i in out["items"]], ["산모퉁이"])
+        self.assertIn("2건", out["reason"])
+
+    def test_no_match_is_unavailable_not_a_wrong_place(self):
+        def http(url, headers, timeout):  # noqa: ANN001
+            return 200, {"documents": [_kakao_doc("다른가게"), _kakao_doc("또다른가게")]}
+
+        with mock.patch.dict(os.environ, {"KAKAO_REST_API_KEY": "k"}, clear=False):
+            out = facts._kakao_places("서울", [{"name": "Joe's Pizza", "place_type": "restaurant"}], http, 5.0)
+        self.assertEqual(out["status"], "unavailable")
+        self.assertEqual(out["items"], [])
+
+    def test_no_requested_name_means_no_verdict(self):
+        with mock.patch.dict(os.environ, {"KAKAO_REST_API_KEY": "k"}, clear=False):
+            out = facts._kakao_places("서울", [], _http_raising, 5.0)
+        self.assertEqual(out["status"], "unavailable")
+        self.assertIn("대조", out["reason"])
+
+    def test_same_place_normalizes_case_and_punctuation(self):
+        self.assertTrue(facts._same_place("Joe's Pizza", "JOES  PIZZA"))
+        self.assertTrue(facts._same_place("Joe's Pizza", "Joe's Pizza Greenwich Village"))
+        self.assertFalse(facts._same_place("Joe's Pizza", "Ess-a-Bagel"))
+        self.assertFalse(facts._same_place("Joe's Pizza", "Pizza"))
+        self.assertFalse(facts._same_place("Joe's Pizza", "Not Joe's Pizza"))
+        self.assertFalse(facts._same_place("Joe's Pizza", "Joe's Famous Pizza"))
+        self.assertFalse(facts._same_place("Pizza", "Joe's Pizza"))
+        self.assertFalse(facts._same_place("Bagel", "Ess-a-Bagel"))
+        self.assertFalse(facts._same_place("", "아무가게"))
+        self.assertFalse(facts._same_place("A", "아무가게"))   # 한 글자 조각은 오탐이 된다
+
+
+class KoreaOnlyScope(unittest.TestCase):
+    def test_foreign_city_makes_no_call(self):
+        with mock.patch.dict(os.environ, {"KAKAO_REST_API_KEY": "kakao-secret"}, clear=False):
+            out = facts._kakao_places("뉴욕", [{"name": "Joe's Pizza", "place_type": "restaurant"}],
+                                      _http_raising, 5.0)
+        self.assertEqual(out["status"], "unavailable")
+        self.assertIn("한국", out["reason"])
+
+    def test_korean_city_is_in_scope(self):
+        self.assertTrue(facts._kakao_in_scope("서울"))
+        for city in ("뉴욕", "보스턴", "오사카", "런던", "파리", "도쿄", "시드니", "타이베이"):
+            self.assertFalse(facts._kakao_in_scope(city), city)
+
+
+class SourcesAreOff(unittest.TestCase):
+    """키를 넣지 않기로 한 결정을 코드로도 막는다."""
+
+    def test_flag_is_false(self):
+        self.assertFalse(facts.FACT_SOURCES_READY)
+
+    def test_key_present_still_makes_no_external_call(self):
         with mock.patch.dict(os.environ, {"KAKAO_REST_API_KEY": "kakao-secret"}, clear=False):
             out = facts.collect_facts(
-                category_id="transport", city="서울",
-                places=[{"name": "서울역", "place_type": "train_station"}],
-                situation_ids=["buy_ticket"],
-                http=_http_raising,
+                category_id="restaurant", city="뉴욕",
+                places=[{"name": "Joe's Pizza", "place_type": "restaurant"}],
+                situation_ids=["takeout", "ask_wifi"], http=_http_raising,
             )
         self.assertEqual(out["places"]["status"], "unavailable")
-        self.assertEqual(out["places"]["reason"], "식당·카페만 조회한다")
-        self.assertEqual(out["situations"]["reason"], "이 카테고리에 조회할 상황 사실이 없다")
+        self.assertEqual(out["situations"]["status"], "unavailable")
         self.assertNotIn("kakao-secret", str(out))
 
-    def test_kakao_hit_is_verified_and_osm_reads_tags(self):
+    def test_collect_facts_does_not_wire_the_provider(self):
+        src = inspect.getsource(facts.collect_facts)
+        for bad in ("_kakao_places", "_osm_facts", "_default_http"):
+            self.assertNotIn(bad, src)
+
+
+class ProviderBehavior(unittest.TestCase):
+    def test_happy_path_and_tag_filtering(self):
         seen: list[tuple[str, dict]] = []
 
         def http(url, headers, timeout):  # noqa: ANN001
             seen.append((url, headers))
             if "dapi.kakao.com" in url:
                 self.assertEqual(headers["Authorization"], "KakaoAK kakao-secret")
-                return 200, {"documents": [{
-                    "place_name": "산모퉁이",
-                    "road_address_name": "서울 종로구",
-                    "x": "126.97",
-                    "y": "37.57",
-                    "place_url": "http://place.map.kakao.com/1",
-                }, {
-                    "place_name": "출처없음",
-                    "x": "126.1",
-                    "y": "37.1",
-                    "place_url": "",
-                }]}
+                return 200, {"documents": [_kakao_doc("산모퉁이"), _kakao_doc("출처없음", url="")]}
             self.assertIn("overpass-api.de", url)
             self.assertNotIn("Authorization", headers)
             return 200, {"elements": [{
-                "type": "node",
-                "id": 9,
-                "tags": {
-                    "amenity": "restaurant",
-                    "diet:vegetarian": "yes",
-                    "takeaway": "only",
-                    "wifi:password": "do-not-keep",
-                    "internet_access": "wlan",
-                },
+                "type": "node", "id": 9,
+                "tags": {"amenity": "restaurant", "takeaway": "only",
+                         "wifi:password": "do-not-keep", "internet_access": "wlan"},
             }]}
 
         with mock.patch.dict(os.environ, {"KAKAO_REST_API_KEY": "kakao-secret"}, clear=False):
-            out = facts.collect_facts(
-                category_id="restaurant", city="서울",
-                places=[{"name": "산모퉁이", "place_type": "restaurant"}],
-                situation_ids=["allergy_notice", "takeout", "ask_wifi", "order_menu"],
-                http=http,
-            )
-        self.assertEqual(out["places"]["status"], "verified")
-        self.assertEqual(len(out["places"]["items"]), 1)
-        place = out["places"]["items"][0]
-        self.assertEqual(place["lat"], 37.57)
-        self.assertEqual(place["lon"], 126.97)
-        self.assertEqual(place["source_url"], "http://place.map.kakao.com/1")
-        ids = {item["situation_id"] for item in out["situations"]["items"]}
-        self.assertEqual(ids, {"allergy_notice", "takeout", "ask_wifi"})
-        self.assertNotIn("do-not-keep", str(out))
-        wifi = next(item for item in out["situations"]["items"] if item["situation_id"] == "ask_wifi")
-        self.assertEqual(wifi["value"]["internet_access"], "wlan")
-        self.assertTrue(all(item["source_url"].startswith("https://www.openstreetmap.org/")
-                            for item in out["situations"]["items"]))
+            located = facts._kakao_places("서울", [{"name": "산모퉁이", "place_type": "restaurant"}], http, 5.0)
+            out = facts._osm_facts(["takeout", "ask_wifi"], located, http, 8.0)
+        self.assertEqual(located["status"], "verified")
+        self.assertEqual(len(located["items"]), 1)
+        self.assertEqual(located["items"][0]["lat"], 37.57)
+        self.assertEqual(located["items"][0]["lon"], 126.97)
+        self.assertEqual(located["items"][0]["source_url"], "http://place.map.kakao.com/1")
+        self.assertEqual({i["situation_id"] for i in out["items"]}, {"takeout", "ask_wifi"})
+        self.assertNotIn("do-not-keep", str({"p": located, "s": out}))
         self.assertEqual(len(seen), 2)
-        self.assertTrue(all("maps.googleapis.com" not in url and "places.googleapis.com" not in url
-                            for url, _ in seen))
+        self.assertTrue(all("maps.googleapis.com" not in u and "places.googleapis.com" not in u for u, _ in seen))
 
     def test_zero_results_are_not_a_silent_success(self):
         def http(url, headers, timeout):  # noqa: ANN001
             return 200, {"documents": []}
 
         with mock.patch.dict(os.environ, {"KAKAO_REST_API_KEY": "k"}, clear=False):
-            out = facts.collect_facts(
-                category_id="restaurant", city="서울", places=[],
-                situation_ids=["takeout"], http=http,
-            )
-        self.assertEqual(out["places"]["status"], "unavailable")
-        self.assertEqual(out["places"]["reason"], "검색 결과 0건")
-        self.assertEqual(out["situations"]["reason"], "좌표 없음")
+            located = facts._kakao_places("서울", [{"name": "산모퉁이"}], http, 5.0)
+        self.assertEqual(located["status"], "unavailable")
+        self.assertEqual(located["reason"], "검색 결과 0건")
 
-    def test_kakao_http_error_is_failed_and_hides_the_key(self):
+    def test_missing_key_is_unavailable(self):
+        with mock.patch.dict(os.environ, {"KAKAO_REST_API_KEY": ""}, clear=False):
+            located = facts._kakao_places("서울", [{"name": "산모퉁이"}], _http_raising, 5.0)
+        self.assertEqual(located["status"], "unavailable")
+        self.assertEqual(located["reason"], "KAKAO_REST_API_KEY 없음")
+
+    def test_http_error_is_failed_and_hides_the_key(self):
         def http(url, headers, timeout):  # noqa: ANN001
             raise RuntimeError("boom kakao-secret leaked")
 
         with mock.patch.dict(os.environ, {"KAKAO_REST_API_KEY": "kakao-secret"}, clear=False):
-            out = facts.collect_facts(
-                category_id="restaurant", city="서울", places=[],
-                situation_ids=["takeout"], http=http,
-            )
-        self.assertEqual(out["places"]["status"], "failed")
-        self.assertNotIn("kakao-secret", out["places"]["reason"])
+            located = facts._kakao_places("서울", [{"name": "산모퉁이"}], http, 5.0)
+        self.assertEqual(located["status"], "failed")
+        self.assertNotIn("kakao-secret", located["reason"])
+
+    def test_osm_without_coordinates_is_unavailable(self):
+        out = facts._osm_facts(["takeout"], {"status": "unavailable", "items": []}, _http_raising, 8.0)
+        self.assertEqual(out["status"], "unavailable")
+        self.assertEqual(out["reason"], "좌표 없음")
 
     def test_osm_http_error_is_failed(self):
-        def http(url, headers, timeout):  # noqa: ANN001
-            if "dapi.kakao.com" in url:
-                return 200, {"documents": [{
-                    "place_name": "산모퉁이", "x": "126.9", "y": "37.5",
-                    "place_url": "http://place.map.kakao.com/1",
-                }]}
-            return 429, {}
-
-        with mock.patch.dict(os.environ, {"KAKAO_REST_API_KEY": "k"}, clear=False):
-            out = facts.collect_facts(
-                category_id="restaurant", city="서울", places=[],
-                situation_ids=["takeout"], http=http,
-            )
-        self.assertEqual(out["places"]["status"], "verified")
-        self.assertEqual(out["situations"]["status"], "failed")
-        self.assertEqual(out["situations"]["reason"], "osm http 429")
+        out = facts._osm_facts(["takeout"], {"status": "verified", "items": [{"lat": 37.5, "lon": 126.9}]},
+                               lambda u, h, t: (429, {}), 8.0)
+        self.assertEqual(out["status"], "failed")
+        self.assertEqual(out["reason"], "osm http 429")
 
     def test_google_key_is_not_a_kakao_fallback(self):
         source = Path(facts.__file__).read_text(encoding="utf-8")
         self.assertNotIn("maps.googleapis.com", source)
         self.assertNotIn("places.googleapis.com", source)
         self.assertNotIn("GOOGLE_MAPS_API_KEY", source)
-        with mock.patch.dict(os.environ, {
-            "GOOGLE_MAPS_API_KEY": "google-secret",
-            "KAKAO_REST_API_KEY": "",
-        }, clear=False):
-            out = facts.collect_facts(
-                category_id="restaurant", city="서울", places=[],
-                situation_ids=["takeout"], http=_http_raising,
-            )
-        self.assertEqual(out["places"]["reason"], "KAKAO_REST_API_KEY 없음")
+        with mock.patch.dict(os.environ, {"GOOGLE_MAPS_API_KEY": "google-secret",
+                                          "KAKAO_REST_API_KEY": ""}, clear=False):
+            out = facts.collect_facts(category_id="restaurant", city="서울", places=[],
+                                      situation_ids=["takeout"], http=_http_raising)
         self.assertNotIn("google-secret", str(out))
 
     def test_prompt_marks_unverified_items_as_not_facts(self):
         cfg = main.load_category("restaurant")
         req = main.GenerateRequest(category_id="restaurant", city="서울")
         text = main.build_prompt(cfg, req, {
-            "places": {"status": "unavailable", "reason": "검색 결과 0건", "items": []},
-            "situations": {"status": "unavailable", "reason": "좌표 없음", "items": []},
+            "places": {"status": "unavailable", "reason": "사실 공급원 없음", "items": []},
+            "situations": {"status": "unavailable", "reason": "좌표 공급원 없음", "items": []},
         })
         self.assertIn("VERIFIED_FACTS:", text)
         self.assertIn("Only items with status verified are facts.", text)
-        self.assertIn("검색 결과 0건", text)
+        self.assertIn("사실 공급원 없음", text)
 
 
 class GenerateKeepsSentencePath(unittest.TestCase):
@@ -193,11 +236,12 @@ class GenerateKeepsSentencePath(unittest.TestCase):
         self.assertTrue(body["mock"])
         self.assertEqual(body["attempts"], 0)
         self.assertEqual(body["facts"]["places"]["status"], "unavailable")
-        self.assertEqual(body["facts"]["places"]["reason"], "KAKAO_REST_API_KEY 없음")
+        self.assertIn("한국", body["facts"]["places"]["reason"])
         called.assert_called()
 
-    def test_health_lists_fact_agents_without_google_places(self):
+    def test_health_reports_sources_off(self):
         health = self.http.get("/health").json()
         self.assertEqual(health["fact_agents"]["google_places"], False)
         self.assertEqual(health["fact_agents"]["osm"], "no-key")
         self.assertIs(health["fact_agents"]["kakao"], False)
+        self.assertIs(health["fact_agents"]["sources_ready"], False)
