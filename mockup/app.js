@@ -1256,7 +1256,9 @@ function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
-function go(id) { cancelSpeak(); S.card.back = null; if (id !== 'u-study') S.drill = null; S.screen = id; S.modal = null; render(); }
+/* 상황별 연습은 카드 상태(S.card)를 잠시 빌려 쓴다 — 끝낼 때 날짜별 학습의 카드 위치·뒤집은 카드를 그대로 돌려놓는다 */
+function endDrill() { if (S.drill) { S.card = S.drill.savedCard; S.drill = null; } }
+function go(id) { cancelSpeak(); S.card.back = null; if (id !== 'u-study') endDrill(); S.screen = id; S.modal = null; render(); }
 
 function navFromMenu(id) {
   S.modal = null;
@@ -1268,7 +1270,7 @@ function navFromMenu(id) {
   if (['u-route', 'u-home', 'u-sched', 'u-study', 'u-coll', 'u-end'].includes(id)) did = ensure('plan');
   if (id === 'u-end' && phase() !== 'ended') { S.today = Dt.add(S.trip.tripEnd, 1); toast(`데모: 오늘을 여행 종료 다음 날(${Dt.md(S.today)})로 바꿨어요.`); }
   else if (did) toast('데모: 이 화면에 필요한 데이터를 자동으로 준비했어요.');
-  if (id === 'u-study') { S.studyDate = null; S.drill = null; }
+  if (id === 'u-study') { S.studyDate = null; endDrill(); }
   S.justCompleted = null;
   go(id);
 }
@@ -1449,7 +1451,7 @@ const ACT = {
   tab: el => {
     const id = el.dataset.id;
     if (['u-home', 'u-sched', 'u-study', 'u-coll', 'u-route'].includes(id) && !S.plan) { navFromMenu(id); return; }
-    if (id === 'u-study') { S.studyDate = null; S.drill = null; }
+    if (id === 'u-study') { S.studyDate = null; endDrill(); }
     S.justCompleted = null; go(id);
   },
   noop: () => {},
@@ -1541,7 +1543,7 @@ const ACT = {
   },
 
   'study-date': el => {
-    S.studyDate = el.dataset.date; S.justCompleted = null; S.drill = null;
+    S.studyDate = el.dataset.date; S.justCompleted = null; endDrill();
     if (isWide() && (S.screen === 'u-sched' || S.screen === 'u-study')) { go(S.screen); window.scrollTo(0, 0); }   // 2열: 화면은 그대로, 오른쪽 상세만 바뀐다
     else go('u-study');
   },
@@ -1578,7 +1580,8 @@ const ACT = {
     const ids = S.sents.filter(s => by === 'sit' ? s.source === 'common' && s.sit === v : s.placeId === v).map(s => s.id);
     if (!ids.length) return;
     const label = by === 'sit' ? S.commons.find(g => g.key === v).label : S.places.find(p => p.id === v).name;
-    S.drill = { kind: 'drill', date: `drill:${by}:${v}`, label, ids, newIds: [], completed: false };
+    endDrill();
+    S.drill = { kind: 'drill', date: `drill:${by}:${v}`, label, ids, newIds: [], completed: false, savedCard: S.card };
     S.justCompleted = null; resetCard(S.drill.date); go('u-study'); window.scrollTo(0, 0);
   },
   'new-trip': () => confirmBox('새 여행을 만들까요?', '이 여행은 보관되고 더 이상 보이지 않아요. (삭제되지는 않아요)', '보관하고 새로 만들기', () => {

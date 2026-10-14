@@ -279,7 +279,10 @@ with sync_playwright() as p:
     # --- 상황별 연습 (사용자 피드백: 날짜별 말고 상황별로 묶어서 연습) ---
     ctx = b.new_context(viewport={"width": 360, "height": 780}, has_touch=True, is_mobile=True)
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/#u-coll"); page.wait_for_timeout(600)
+    page.goto(BASE + "/#u-study"); page.wait_for_timeout(600)
+    page.locator(".flip").click(); page.wait_for_timeout(200)
+    day = page.evaluate("({ date: S.card.date, i: S.card.i, n: S.card.flipped.size })")
+    page.evaluate("navFromMenu('u-coll')"); page.wait_for_timeout(300)
     check("문장 모음: 공통 상황 6묶음마다 '카드로 연습' 버튼", page.locator('[data-act="drill"]').count() == 6, str(page.locator('[data-act="drill"]').count()))
     check("문장 모음 360px: 버튼이 붙어도 가로 넘침 없음", hscroll(page) <= 0, str(hscroll(page)))
     page.locator('[data-act="drill"][data-v="airport"]').click(); page.wait_for_timeout(300)
@@ -288,10 +291,21 @@ with sync_playwright() as p:
     check("상황별 연습: 머리에 상황 이름, 점 5개", "공항·기내" in page.locator(".study-head").inner_text() and page.locator(".dots i").count() == 5)
     check("상황별 연습: 완료 버튼 없음(완료율과 무관)", page.locator('[data-act="complete"]').count() == 0)
     check("상황별 연습 360px: 가로 넘침 없음", hscroll(page) <= 0, str(hscroll(page)))
+    # 실제 터치 제스처 주입 — has_touch 만 켜 두면 스와이프 중복(한 번에 두 장) 회귀를 못 잡는다
+    fb = page.locator(".flip").bounding_box(); cx, cy = fb["x"] + fb["width"] / 2, fb["y"] + fb["height"] / 2
+    cdp = ctx.new_cdp_session(page)
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": cx, "y": cy}]})
+    for dx in (15, 45, 80, 115):
+        cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": cx - dx, "y": cy}]})
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+    page.wait_for_timeout(700)
+    check("상황별 연습: 왼쪽 스와이프 1회 = 카드 1장(1/5 → 2/5)", page.evaluate("S.card.i") == 1 and "2 / 5" in page.locator('[data-live="flipcount"]').inner_text(), page.locator('[data-live="flipcount"]').inner_text())
     page.locator(".flip").click(); page.wait_for_timeout(200)
     check("상황별 연습: 카드 뒤집으면 뒷면에 말해보기 영역", page.locator('[data-live="speak"]').count() == 1)
     page.locator('.appbar .back').click(); page.wait_for_timeout(300)
     check("뒤로 → 문장 모음, 연습 묶음 해제", page.evaluate("S.screen") == "u-coll" and page.evaluate("S.drill") is None)
+    back = page.evaluate("({ date: S.card.date, i: S.card.i, n: S.card.flipped.size })")
+    check("연습을 끝내면 날짜별 학습의 카드 위치·뒤집은 카드가 그대로", back == day, f"{day} -> {back}")
     page.locator('[data-act="drill"][data-v="emergency"]').click(); page.wait_for_timeout(300)
     page.evaluate("ACT.tab({ dataset: { id: 'u-study' } })"); page.wait_for_timeout(300)
     check("하단 '학습' 탭으로 가면 날짜 일정 카드로 돌아옴", page.evaluate("S.drill") is None and page.locator(".study-head .badge").inner_text() != "상황별 연습")
@@ -314,7 +328,10 @@ with sync_playwright() as p:
                  "Version/4.0 Chrome/119.0.6045.163 Mobile Safari/537.36 KAKAOTALK/10.4.5 (INAPP)")
     INSTA_IOS = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 "
                  "Instagram 307.0.0.34.111 (iPhone15,2; iOS 17_1; ko_KR; ko; scale=3.00; 1179x2556; 529085245)")
+    # '기능이 다 되는 환경'은 영어 음성이 있어야 성립한다 — 실행 기기(헤드리스 Chromium)에 영어 음성이 없을 수 있어 하나 넣어 둔다
+    EN_VOICE = "(() => { const ss = window.speechSynthesis; if (ss) ss.getVoices = () => [{ name: 'Google US English', lang: 'en-US' }]; })()"
     ctx = b.new_context(viewport={"width": 360, "height": 780}, user_agent=KAKAO_AND, has_touch=True, is_mobile=True)
+    ctx.add_init_script(EN_VOICE)
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(BASE + "/"); page.wait_for_timeout(600)
     ban = page.locator("#inapp-banner")
@@ -335,7 +352,7 @@ with sync_playwright() as p:
     check("인스타그램(iOS): 안내는 뜨지만 직접 여는 버튼은 없고 링크 복사만", page.locator("#inapp-banner").is_visible() and page.locator('[data-inapp="open"]').count() == 0 and page.locator('[data-inapp="copy"]').count() == 1)
     ctx.close()
     ctx = b.new_context(viewport={"width": 390, "height": 844})
-    page = ctx.new_page(); page.goto(BASE + "/"); page.wait_for_timeout(500)
+    page = ctx.new_page(); page.add_init_script(EN_VOICE); page.goto(BASE + "/"); page.wait_for_timeout(500)
     check("일반 브라우저(기능 정상)에는 안내 없음", not page.locator("#inapp-banner").is_visible())
     ctx.close()
     ctx = b.new_context(viewport={"width": 390, "height": 844})
