@@ -130,3 +130,31 @@
 `169954b`에 있던 검증 기록은 그 커밋이 프론트 테스트 33 pass 와 E2E 는 CI 에서 본다고 적는다. 이 충돌 해결은 그 테스트를 다시 돌리지 않았다.
 
 과제 원문 대조의 검증 기록은 `docs/agent-workflow` `3756ecc`에 있다.
+
+## 이번 작업 — 사실 에이전트 (2026-10-14)
+
+세션: `C:\Users\seong\.grok\sessions\C%3A%5CUsers%5Cseong%5CDesktop%5CProJect%5Ccodyssey_final\01a138a0-a233-7ca1-843c-3de2a5de06b6`
+
+기준 브랜치: 팀 `main` `63b1809`. 이 작업 브랜치는 `feat/fact-agents`. `team`에는 푸시하지 않는다. `mockup/`은 2026-10-22까지 수정하지 않는다.
+
+### reference 종합 결론
+
+`reference`에는 서로 다른 문서가 세 갈래다. 구현에 쓰는 결론은 이것이다.
+
+- 제품은 여행 영어 문장 생성이다. A1-2의 일정표·PyQt·경로 URL·날씨 문장은 가져오지 않는다.
+- 좌표·주소·식이·포장·조식·와이파이는 API가 확정하고, Gemini는 문장만 만든다. LLM 호출은 지금처럼 문장 1곳이다.
+- 장소 사실은 카카오 키워드 검색 1회, 식당·카페(`restaurant`)만. 카카오 키를 구글에 보내지 않는다. 구글 Places·그라운딩·날씨·경로·Ticketmaster·Foursquare·Unsplash·사진은 이번 구현에 없다.
+- 상황 사실은 키 없는 OSM 1회. 대상은 `allergy_notice`·`takeout`·`ask_breakfast`·`ask_wifi`뿐이고, 카카오가 좌표를 줬을 때만 조회한다. 태그가 없거나 조회가 실패하면 미확인이지 정상 빈 결과가 아니다.
+- 키가 없으면 그 조회만 꺼지고 `/generate`의 문장 경로는 그대로다.
+- `required_keywords.patch`는 적용하지 않는다. 취약 상황 키워드가 없으면 `validators.py`가 생성을 막는다.
+- 화면은 동결이라 실패 표시는 응답 JSON의 `facts`로만 드러낸다. `mockup/`은 이 작업에서 읽기만 한다.
+
+| 단계 | 목적 | 파일 | 완료 조건 | 읽을 것 |
+|---|---|---|---|---|
+| 1 | 위 결론을 이 문서에 고정한다 | `docs/REPO_STATE.md` 이 절 | 다른 에이전트가 통과라고 적기 전에는 코드를 쓰지 않는다 | `reference/` 세 문서, `backend/app/main.py`의 `/generate`, `docs/requirements.md` FR-03·FR-15 |
+| 2 | 사실 조회를 `/generate`에 붙인다 | `backend/app/agents/facts.py`, `backend/app/main.py`, `backend/tests/test_fact_agents.py` | 키 없으면 `facts`가 unavailable이고 외부 호출이 없다. 카카오 성공은 verified 장소만. 실패·0건은 failed 또는 unavailable. OSM은 좌표가 있을 때만. 구글 URL이 없다. 기존 `/generate` 샘플 경로는 200이다. `mockup/` diff가 없다 | 단계 1 결론, `validators.py`는 수정하지 않음 |
+
+검증:
+
+- 단계 1: 다른 에이전트 `01a139d0-0f99-7823-bf7c-c9e49a1d9ada` 가 통과라고 적었다.
+- 단계 2: 다른 에이전트 `01a139d5-ea10-7411-8ff7-51085c5c3d72` 가 통과라고 적었다. 백엔드 테스트는 120개 OK다. `node --test mockup/ai.test.js`는 통과했다. `mockup/tokens.test.js` 5개 실패는 이 브랜치의 기준 `63b1809` 화면이고, 이 작업은 `mockup/`을 고치지 않았다. e2e는 이 브랜치를 배포하지 않아 돌리지 않았다.
