@@ -158,7 +158,7 @@ python ../e2e/test_silence.py http://localhost:8000 && python ../e2e/test_consen
 - 점수는 '두 전사 모두에서 들린 단어 일치율'이다. 음소·억양 같은 발음 품질은 재지 않는다.
 - Whisper 가 학습자 오류를 교정해 받아쓸 수 있다.
 - 두 검출기 AND 는 작게 말하거나 서툰 발화를 놓칠 수 있다.
-- 화면 생성은 식당 카테고리만 연결돼 있다(교통·숙소 계약도 서버에 있으나 화면 코드가 카테고리를 `restaurant` 로 고정).
+- 예시 장소는 관광지·맛집뿐이다. 화면은 장소 종류로 카테고리를 정하지만(`mockup/ai.js` `categoryOfKind`), 관광지는 계약 밖이라 생성 요청은 식당만 나간다. 교통·숙소 계약은 서버에 있다.
 - Render 무료 플랜은 콜드스타트가 있다. 서버를 재시작하면 모델 상태 기억이 사라진다.
 
 ## 10. 문서
@@ -173,3 +173,6 @@ python ../e2e/test_silence.py http://localhost:8000 && python ../e2e/test_consen
 | `agent_contract/README.md` | 카테고리 계약 작성 규칙 |
 | `mockup/README.md`, `mockup/SMOKE.md` | 화면 구성·시연 전 점검 |
 | `prd.md`, `시나리오완료.MD`, `기술스택.md` | 초기 기획(Firebase 기준, 이력) |
+| `docs/AGENT_WORKFLOW.md` | 구현 전 단계 계획, 단계별 에이전트 교차검증, 커밋·푸시, 세션 경로 |
+| `docs/REPO_STATE.md` | 그 시점의 브랜치·구조·열린 요구·다음 작업 후보 |
+| `docs/requirements.md` | 현행 요구사항. 범위가 초기 기획과 다르면 이 문서를 따른다 |
