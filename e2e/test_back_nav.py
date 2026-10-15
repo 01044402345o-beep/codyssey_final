@@ -59,28 +59,40 @@ with sync_playwright() as p:
     check("뒤로가기 → 상자만 닫히고 화면은 그대로",
           page.evaluate("!S.modal") and scr() == "u-sched", f"modal={page.evaluate('!!S.modal')} screen={scr()}")
 
-    # 깊이 상한: 화면을 여러 번 옮겨도 뒤로가기가 무한히 깊어지지 않는다.
-    # 학습 화면에는 탭바(.pnav)가 없으므로 UI 클릭 대신 앱의 go() 를 직접 부른다(같은 경로).
+    # 처음 상태로 되돌린 뒤의 뒤로가기는, 그 앞에 남은 기록으로 화면을 되살리지 않는다.
+    page.evaluate("ACT['reset']()")
+    page.wait_for_timeout(400)
+    page.go_back()
+    page.wait_for_timeout(500)
+    check("처음 상태 뒤의 뒤로가기는 이전 화면을 되살리지 않는다",
+          page.url.split("#")[0] == url0 and scr() == "u-login",
+          f"url={page.url} screen={scr()}")
+
+    # 깊이: 같은 화면이 반복돼도 끊지 않고, 문서 주소가 바뀔 때까지 센다.
+    page.goto(BASE + "/?demo=1")
+    page.wait_for_timeout(700)
+    url1 = page.url.split("#")[0]
     for _ in range(10):
         page.evaluate("go('u-study')")
-        page.wait_for_timeout(90)
+        page.wait_for_timeout(40)
         page.evaluate("go('u-sched')")
-        page.wait_for_timeout(90)
+        page.wait_for_timeout(40)
     depth = 0
-    seen = set()
     for _ in range(12):
-        before = scr()
-        page.go_back()
-        page.wait_for_timeout(350)
-        after = scr()
-        if after == before or page.url.split("#")[0] != url0:
+        try:
+            page.go_back(timeout=3000)
+        except Exception:
+            break
+        page.wait_for_timeout(250)
+        try:
+            same = page.url.split("#")[0] == url1
+        except Exception:
+            break
+        if not same:
             break
         depth += 1
-        if after in seen:
-            break
-        seen.add(after)
+    check("뒤로가기가 앱 안에서 한 칸 이상 움직인다", depth >= 1, f"{depth}회")
     check("뒤로가기 깊이가 상한(6)을 넘지 않는다", depth <= 6, f"{depth}회")
-    check("깊이 상한 안에서 앱이 닫히지 않았다", page.url.split("#")[0] == url0, page.url)
     check("JS 오류 없음", not errors, "; ".join(errors[:2]))
     b.close()
 

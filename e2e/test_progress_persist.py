@@ -84,6 +84,15 @@ with sync_playwright() as p:
     check("그 진도도 새로고침 후 남는다", page.evaluate("progress().done") == done2,
           f"기대 {done2} 실제 {page.evaluate('progress().done')}")
 
+    # 같은 날짜로 예시 여행을 다시 만들어도 이전 완료가 붙지 않는다
+    page.evaluate("preset('zero')")
+    page.wait_for_timeout(500)
+    page.reload()
+    page.wait_for_timeout(900)
+    check("예시 여행은 이전 완료를 가져오지 않는다",
+          page.evaluate("progress().done") == 0,
+          f"완료 {page.evaluate('progress().done')}")
+
     # '처음 상태로' 는 저장분까지 지운다
     page.evaluate("ACT['reset']()")
     page.wait_for_timeout(400)
@@ -92,6 +101,11 @@ with sync_playwright() as p:
     check("'처음 상태로' 뒤에는 저장분이 남지 않는다",
           page.evaluate("progress().done") == 0 and page.evaluate("S.screen") == "u-login",
           f"완료 {page.evaluate('progress().done')} · 화면 {page.evaluate('S.screen')}")
+
+    page.go_back()
+    page.wait_for_timeout(600)
+    here = page.evaluate("typeof S === 'undefined' ? 'left' : S.screen")
+    check("초기화 뒤 뒤로가기가 이전 화면으로 되돌리지 않는다", here in ("left", "u-login"), f"화면 {here}")
 
     check("자바스크립트 오류 없음", not errors, str(errors[:2]))
     b.close()

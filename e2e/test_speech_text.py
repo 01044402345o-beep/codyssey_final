@@ -94,9 +94,16 @@ with sync_playwright() as p:
         page.wait_for_timeout(400)
         shown = page.locator(".face.back .en").first.inner_text().strip()
         page.evaluate("window.__spoken = []")
-        page.locator('[data-act="speak-card"]').first.click(force=True)
-        page.wait_for_timeout(250)
-        fresh = page.evaluate("window.__spoken.slice()")
+        page.locator('[data-act="speak-card"]').first.evaluate("el => el.click()")
+        try:
+            page.wait_for_function(
+                "() => Array.isArray(window.__spoken) && window.__spoken.length > 0",
+                timeout=3000,
+            )
+        except Exception:
+            pass
+        fresh = page.evaluate("Array.isArray(window.__spoken) ? window.__spoken.slice() : []")
+        check("실제로 발화했다", len(fresh) > 0, str(fresh))
         check("학습 카드: 음성 == 화면(대괄호 제외)", fresh == [strip(shown)],
               f"화면={shown!r} 음성={fresh!r}")
     else:
