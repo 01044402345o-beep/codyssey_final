@@ -168,6 +168,7 @@ python ../e2e/test_silence.py http://localhost:8000 && python ../e2e/test_consen
 | `backend/README.md` | API·환경변수·모델 선택·재시도·말하기 파이프라인 |
 | `docs/research/speak-hallucination.md` | 말하기 채점 구조를 바꾼 이유(실측·조사·결정) |
 | `docs/research/references.md` | 참고문헌 34편 |
+| `docs/research/browser-tts.md` | 브라우저 듣기 발음·섞인 단어 조사. `speak()` 는 바꾸지 않음 |
 | `docs/DEPLOY_RUNBOOK.md` | 배포·장애 대응 런북 |
 | `docs/score_측정_실행법.md` | 실측 방법과 결과 |
 | `agent_contract/README.md` | 카테고리 계약 작성 규칙 |

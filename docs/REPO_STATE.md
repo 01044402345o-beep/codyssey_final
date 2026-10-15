@@ -188,3 +188,9 @@
 영어 화면은 `slotText` 가 `[name]`·`[destination]` 을 `[your name]`·`[your destination]` 으로 펼친다. 한국어 줄은 토큰 그대로다. `mockup/data.js` 에 `your` 는 없다. 호출부는 저장 문장을 넘긴다.
 
 검토 에이전트 01a13df2-e184-7002-a12e-8f215493f3e2 은 듣기 음성은 speak가 저장 문장을 slotText로 펼친 뒤 대괄호만 벗긴 값이고, 화면 영어의 대괄호 안 your와 그 음성이 같다고 통과로 봤다.
+
+## 이번 작업 — 브라우저 듣기 조사 (2026-10-15)
+
+기록은 `docs/research/browser-tts.md` 이다. 다음 문장의 이 문서는 그 파일이다. `speak()` 와 `mockup/` 은 고치지 않았다.
+
+검토 에이전트 01a13b96-b142-7882-a604-7214d55f87b7 은 이 문서가 우리 cancel 다음 speak 한 번을 Chromium 41362336 의 재현이라고 단정하지 않고, 검증에서 뺀 주장을 확인된 사실로 다시 적지 않았다고 통과로 봤다.
