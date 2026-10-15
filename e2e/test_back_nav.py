@@ -93,6 +93,28 @@ with sync_playwright() as p:
         depth += 1
     check("뒤로가기가 앱 안에서 한 칸 이상 움직인다", depth >= 1, f"{depth}회")
     check("뒤로가기 깊이가 상한(6)을 넘지 않는다", depth <= 6, f"{depth}회")
+    # 상한: 뒤로가기 '횟수'는 오버레이 칸에 따라 4도 6도 나와 상한을 증명하지 못한다.
+    # 브라우저 기록 길이가 상한 뒤에 더 자라지 않는지를 직접 본다(수정 전에는 쌍마다 +2 였다).
+    page.goto(BASE + "/?demo=1")
+    page.wait_for_timeout(700)
+    for _ in range(10):
+        page.evaluate("go('u-study')")
+        page.wait_for_timeout(40)
+        page.evaluate("go('u-sched')")
+        page.wait_for_timeout(40)
+    h1 = page.evaluate("history.length")
+    for _ in range(6):
+        page.evaluate("go('u-study')")
+        page.wait_for_timeout(40)
+        page.evaluate("go('u-sched')")
+        page.wait_for_timeout(40)
+    h2 = page.evaluate("history.length")
+    check("상한 뒤에는 브라우저 기록이 더 자라지 않는다", h2 == h1, f"{h1} → {h2}")
+    probe = page.evaluate("history.length")
+    page.evaluate("history.pushState({}, '')")
+    check("대조: 기록 길이가 실제로 세어지는 값이다", page.evaluate("history.length") == probe + 1,
+          f"{probe} → {page.evaluate('history.length')}")
+
     check("JS 오류 없음", not errors, "; ".join(errors[:2]))
     b.close()
 
