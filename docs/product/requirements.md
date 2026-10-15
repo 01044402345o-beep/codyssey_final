@@ -29,7 +29,7 @@
 | FR-13 | 녹음 동의 | 첫 녹음 전 동의(보내는 것·받는 곳·처리·보관), 거부해도 나머지 기능 사용 | Must | 완료 | `askVoiceConsent`, 동의 v6 |
 | FR-14 | 여행 종료 요약 | 완료율·학습 문장 수·새 여행 | Should | 완료 | SCR-06 |
 | FR-15 | 교통·숙소 카테고리 생성 | 맛집 외 카테고리 문장 생성 | Should | **부분** | 계약 3종 모두 서버에 있음(`restaurant.json`·`transport.json`·`lodging.json`, 각 상황 10개). 화면 코드는 장소 종류로 카테고리를 정해 (도시, 카테고리)별로 요청함(`categoryOfKind`, `ai.test.js`). 남은 것: 예시 장소 데이터(`data.js`)에 교통·숙소 장소가 없어 실제로는 맛집만 요청됨 |
-| FR-16 | 로그인·사용자별 저장 | 구글 로그인, 서버 저장 | Could | **예정** | 현재 데모 사용자 + 브라우저 저장 |
+| FR-16 | 로그인·사용자별 저장 | 구글 로그인, 서버 저장 | Could | **부분** | 구글·이메일 로그인은 붙었다. `GET/PUT /user/state` 가 검증된 토큰 uid 의 진도·복습 목록·말하기 동의만 읽고 쓴다(`backend/tests/test_user_state.py`, `e2e/test_account_storage.py`). uid 가 없으면 기존 브라우저 키. 여행·장소·문장 본문은 저장하지 않는다. 디스크는 Firestore `(default)` (asia-northeast3) 이고 규칙은 그 데이터베이스에만 배포했다. 같은 프로젝트의 `firestore-native-mode` 는 바꾸지 않았다. 저장소 호출이 실패하면 503 이고 브라우저 기록은 유지된다. 로그인한 계정의 실제 왕복은 아직 보지 못했다. 팀 main 에 머지되기 전에는 공개 사이트에 이 경로가 없다 |
 
 ## 2. 비기능 요구사항
 

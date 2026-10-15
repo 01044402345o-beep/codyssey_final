@@ -1,0 +1,25 @@
+rules_version = '2';
+// 계정 기록은 users/{uid} 하나. 그 uid 의 토큰만 읽고 쓴다.
+// 익명 로그인은 기록을 만들지 못한다. 그 밖 경로는 모두 막는다.
+// 서버는 서비스 계정 없이 사용자 ID 토큰을 그대로 넘긴다.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      function signedIn() {
+        return request.auth != null
+          && request.auth.uid == uid
+          && request.auth.token.firebase.sign_in_provider != 'anonymous';
+      }
+      allow read: if signedIn();
+      allow write: if signedIn()
+        && request.resource.data.keys().hasOnly(['session', 'weak', 'consent'])
+        && request.resource.data.session is string
+        && request.resource.data.weak is string
+        && request.resource.data.consent is string
+        && request.resource.size() < 120000;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
