@@ -105,6 +105,15 @@ def _default_http(url: str, body: bytes, headers: dict[str, str], timeout: float
         return exc.code, {}
 
 
+def _cap_state() -> tuple[int, int]:
+    """로그용: 이 프로세스가 지금까지 예약한 Places 질의 수와 지금의 상한.
+    세는 값은 성공한 HTTP 가 아니라 예약한 질의 수다. 날짜가 바뀌면 0 부터다."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    with _cap_lock:
+        used = _cap_used if _cap_day == today else 0
+        return used, daily_cap()
+
+
 def _off(reason: str) -> dict[str, Any]:
     return {"status": "unavailable", "reason": reason}
 
@@ -443,8 +452,10 @@ def collect_itinerary(req: Any, *, http: Http | None = None, run: Any = None) ->
 
     queries = _queries(str(_attr(req, "city", "") or "").strip(), kinds)
     take = _reserve(len(queries))
+    cap_used, cap_limit = _cap_state()
     if take <= 0:
-        log.info("status=unavailable reason=daily_cap queries=0")
+        log.info("status=unavailable reason=daily_cap queries=0 cap_used=%s cap_limit=%s",
+                 cap_used, cap_limit)
         return _off("daily_cap")
 
     caller = http or _default_http
@@ -479,7 +490,8 @@ def collect_itinerary(req: Any, *, http: Http | None = None, run: Any = None) ->
         "places": places,
     }
     if not places:
-        log.info("status=unavailable reason=no_verified_places queries=%s http_fail=%s", len(done), http_fail)
+        log.info("status=unavailable reason=no_verified_places queries=%s http_fail=%s cap_used=%s cap_limit=%s",
+                 len(done), http_fail, cap_used, cap_limit)
         return {
             **base,
             "status": "unavailable",
@@ -488,7 +500,8 @@ def collect_itinerary(req: Any, *, http: Http | None = None, run: Any = None) ->
             "timing_ms": {"places": places_ms, "prose": 0, "verify": 0},
         }
     if not (os.getenv("GEMINI_API_KEY") or "").strip():
-        log.info("status=unavailable reason=no_gemini_key places=%s", len(places))
+        log.info("status=unavailable reason=no_gemini_key places=%s cap_used=%s cap_limit=%s",
+                 len(places), cap_used, cap_limit)
         return {
             **base,
             "status": "unavailable",
@@ -509,7 +522,8 @@ def collect_itinerary(req: Any, *, http: Http | None = None, run: Any = None) ->
         result = runner("itinerary", once)
     except ai.AttemptsExhausted:
         prose_ms = int((datetime.now(timezone.utc) - t1).total_seconds() * 1000)
-        log.info("status=unavailable reason=prose_failed places=%s", len(places))
+        log.info("status=unavailable reason=prose_failed places=%s cap_used=%s cap_limit=%s",
+                 len(places), cap_used, cap_limit)
         return {
             **base,
             "status": "unavailable",
@@ -526,9 +540,9 @@ def collect_itinerary(req: Any, *, http: Http | None = None, run: Any = None) ->
     status = "verified" if any_block else "unavailable"
     reason = "" if any_block else "all_days_empty"
     log.info(
-        "status=%s reason=%s queries=%s http_fail=%s places=%s dropped=%s places_ms=%s prose_attempts=%s model=%s",
+        "status=%s reason=%s queries=%s http_fail=%s places=%s dropped=%s places_ms=%s prose_attempts=%s model=%s cap_used=%s cap_limit=%s",
         status, reason or "-", len(done), http_fail, len(places), dropped, places_ms,
-        getattr(result, "attempts", None), getattr(result, "model", None),
+        getattr(result, "attempts", None), getattr(result, "model", None), cap_used, cap_limit,
     )
     return {
         **base,
