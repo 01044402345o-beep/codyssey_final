@@ -159,6 +159,36 @@
 - 단계 1: 다른 에이전트 `01a139d0-0f99-7823-bf7c-c9e49a1d9ada` 가 통과라고 적었다.
 - 단계 2: 다른 에이전트 `01a139d5-ea10-7411-8ff7-51085c5c3d72` 가 통과라고 적었다. 백엔드 테스트는 120개 OK다. `node --test mockup/ai.test.js`는 통과했다. `mockup/tokens.test.js` 5개 실패는 이 브랜치의 기준 `63b1809` 화면이고, 이 작업은 `mockup/`을 고치지 않았다. e2e는 이 브랜치를 배포하지 않아 돌리지 않았다.
 
+### 정정 (2026-10-14, 검증)
+
+위 "검증:" 절의 "`mockup/tokens.test.js` 5개 실패는 이 브랜치의 기준 `63b1809` 화면이고"는 **커밋의 사실이 아니다.** 정정한다.
+
+**tokens 5개 실패 = Windows 작업 복사본의 CRLF.** 화면이 되돌아간 커밋은 없다.
+
+| 확인 | 값 |
+|---|---|
+| `mockup/styles.css` blob | `88fb260c7faa37333a7df1e6f7808e2534cc03db` — `e18cb77`·`63b1809`·`1e75d8b`·`85968d0` 모두 동일 |
+| 실패 원인 | `tokens.test.js` 가 `/:root \{\n  color-scheme: light;[\s\S]*?\n\}\n/` 처럼 **LF 를 상정한 정규식**으로 토큰 블록을 걷어낸다. CRLF 면 매치가 실패해 블록이 통째로 "`:root` 밖"으로 남고 그 안의 색이 전부 리터럴로 세어진다 |
+| 재현 | `styles.css` 를 CRLF 로 바꾸면 **2 pass / 5 fail** — 실패 항목은 `:root 밖 리터럴`·다크 두 블록·AA 대비·비텍스트 3:1·`THEME_COLOR` 로 정확히 그 5개. LF 로 되돌리면 **7 pass / 0 fail** |
+| 인덱스 blob(CR 0)에 같은 정규식을 적용 | 라이트·다크 블록이 정상적으로 잡힌다 |
+
+**머지·배포.** PR #61 은 2026-10-14 10:08 UTC 에 squash 머지됐다. 머지 커밋 `85968d0`, 부모는 `5677dcc` 하나. 변경은 `agents/facts.py` 254행, `agents/__init__.py` 1행, `main.py` +23/−2, `tests/test_fact_agents.py` 203행, `REPO_STATE.md` +28. 빈 커밋이 아니다. 라이브 `/health` 도 같은 커밋이다 — `deploy.commit=85968d095ec088d348970d7b8a36172c00f6516b`, `branch=main`. `63b1809` 다음 팀 main 은 `6d0ef68`(진행자 체크리스트), `5677dcc`(루트 패치 네 개 삭제), `85968d0`(사실 조회)이고 `85968d0` 이 끝이다. 이 폴더의 `team/main` 은 fetch 전 로컬 참조라 `63b1809` 로 보인다.
+
+**고친 결함 두 개 (같은 패치).**
+
+1. `allergy_notice` 를 OSM `diet:*` 로 채우지 않는다. `diet:vegetarian=yes` 는 채식 메뉴가 있다는 뜻이고 알레르기 안전과 다른 주장인데, 그 값이 `allergy_notice` 키에 `status=verified` 로 붙었고 프롬프트가 "verified 만 사실"이라고 적으므로 알레르기 문장이 확정처럼 생성될 수 있었다. `OSM_SITUATIONS` 에서 뺐다.
+2. 요청한 장소와 응답한 장소를 이름으로 대조한다. 이전에는 요청 `places` 의 첫 이름 하나를 검색어로 쓰고 응답 문서 최대 5개를 전부 `verified` 로 넣어, 요청하지 않은 가게가 사실이 되고 OSM 원점도 그 첫 문서가 됐다. 지금은 요청 이름의 토큰이 응답 이름의 앞에서 연속으로 시작할 때만 `verified` 다. `Pizza`, `Not Joe's Pizza`, `Joe's Famous Pizza` 는 `Joe's Pizza` 가 아니다. 요청 이름이 없으면 대조 기준이 없으므로 `unavailable` 이다.
+
+**남은 제약.** 카카오 로컬은 한국 지번·도로명 주소 체계 위의 색인이고 국가·로캘 파라미터가 없다([문서](https://developers.kakao.com/docs/latest/ko/local/common), [데브톡 60374](https://devtalk.kakao.com/t/api/60374) "당사에서는 해외지도는 서비스하지 않습니다"). 이 제품의 도시는 전부 해외다(`mockup/data.js` 는 뉴욕·보스턴). 그래서 카카오 조회는 한국 도시로 범위를 좁혔고(`KOREA_CITIES`), `FACT_SOURCES_READY = False` 로 꺼 두었다. **키를 넣지 않는다**는 결정을 코드로도 막는다 — 키가 있어도 외부 호출 0회다. 이름 대조만으로도 해외 도시에서는 0건이 되어 `unavailable` 로 내려가지만, 같은 이름을 쓰는 한국 가게가 하나 있으면 통과하므로 범위 검사가 그 구멍과 헛 호출을 막는다.
+
+검토 에이전트 01a139f2-9cc9-7cb3-86e7-cfdb193c6c13 은 토큰이 중간에 끼는 일치를 실패로 봤고, 고친 뒤 앞부분 연속 일치는 통과라고 적었다.
+
+## 이번 작업 — 듣기 자리표시자 (2026-10-15)
+
+영어 화면은 `slotText` 가 `[name]`·`[destination]` 을 `[your name]`·`[your destination]` 으로 펼친다. 한국어 줄은 토큰 그대로다. `mockup/data.js` 에 `your` 는 없다. 호출부는 저장 문장을 넘긴다.
+
+검토 에이전트 01a13df2-e184-7002-a12e-8f215493f3e2 은 듣기 음성은 speak가 저장 문장을 slotText로 펼친 뒤 대괄호만 벗긴 값이고, 화면 영어의 대괄호 안 your와 그 음성이 같다고 통과로 봤다.
+
 ## 이번 작업 — 브라우저 듣기 조사 (2026-10-15)
 
 기록은 `docs/research/browser-tts.md` 이다. 다음 문장의 이 문서는 그 파일이다. `speak()` 와 `mockup/` 은 고치지 않았다.
