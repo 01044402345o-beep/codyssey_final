@@ -5,7 +5,8 @@
 /* ================= 기본 유틸 ================= */
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const phHtml = s => esc(s).replace(/\[(name|destination)\]/g, '<span class="ph">[$1]</span>');
+const phHtml = (s, lang = 'ko') => esc(lang === 'en' ? slotText(s) : s)
+  .replace(/\[[^\[\]]+\]/g, m => `<span class="ph">${m}</span>`);
 
 const Dt = {
   parse(s) { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d); },
@@ -546,12 +547,17 @@ function ttsState() {
 /* 듣기가 안 될 때 안내: 되는 것도 함께 알린다(녹음이 가능할 때만 '말하기' 언급). 카톡(Android)이면 카톡 자체 메뉴도 안내 — 배너를 닫은 뒤에도 막히지 않게 */
 const ttsOffMsg = () => `이 브라우저는 듣기를 지원하지 않아요. ${API.base !== null && canRecord() ? '말하기와 ' : ''}카드 학습은 계속할 수 있어요.`
   + ((typeof INAPP_INFO !== 'undefined' && INAPP_INFO && INAPP_INFO.name === '카카오톡' && INAPP_INFO.os === 'android') ? " ⋮ 메뉴에서 '다른 브라우저로 열기'를 누르면 듣기도 돼요." : '');
-const ttsText = s => s.replace(/\[name\]/g, 'your name').replace(/\[destination\]/g, 'your destination');
+/* 화면과 음성의 자리표시자는 여기서 한 번만 펼친다. 두 곳에서 각각 펼치면 반드시 어긋난다. */
+const DETERMINER = { name: 'your name', destination: 'your destination' };
+const slotText = s => String(s).replace(/\[(name|destination)\]/g, (_, k) => `[${DETERMINER[k]}]`);
+/* 대괄호만 벗긴다. 펼침은 slotText 한 곳이다. */
+const ttsText = shown => String(shown).replace(/[\[\]]/g, '');
 function speak(text, btn) {
   if (ttsState() !== 'ok') { toast(ttsOffMsg()); return; }
   speechSynthesis.cancel();
   document.querySelectorAll('.playing').forEach(e => e.classList.remove('playing'));
-  const u = new SpeechSynthesisUtterance(ttsText(text));
+  // 호출부는 저장 문장(.en, 편집 input)을 넘긴다. 화면과 같으려면 여기서 slotText 를 먼저 거친다.
+  const u = new SpeechSynthesisUtterance(ttsText(slotText(text)));
   u.lang = 'en-US';
   const v = enVoice(); if (v) u.voice = v;
   u.rate = S.ttsRate;
@@ -585,7 +591,7 @@ const SCREENS = [
     tips: ['날짜를 누르면 그날 카드로 이동해요.', '지난 날짜 중 안 한 날은 "미완료"로 표시돼요.', '새 문장 3일 + 복습 1일, 출발 전 2일 총복습 규칙을 확인하세요.'],
     demos: [['지난 날 일부를 완료로 채우기', 'demo-fill']] },
   { id: 'u-study', no: 'SCR-08', name: '학습 카드', fr: ['FR-STUDY-01', 'FR-STUDY-02', 'FR-STUDY-04'],
-    tips: ['카드를 눌러 뒤집고 "듣기"로 영어 발음을 들어 보세요.', '모든 카드를 한 번 이상 뒤집어야 완료 버튼이 켜져요.', '[name], [destination]은 "your name", "your destination"으로 읽어요.', '사이드바의 "TTS 미지원"을 켜면 듣기 버튼 대신 안내가 나와요.'] },
+    tips: ['카드를 눌러 뒤집고 "듣기"로 영어 발음을 들어 보세요.', '모든 카드를 한 번 이상 뒤집어야 완료 버튼이 켜져요.', '[your name]·[your destination]는 채울 자리예요. 듣기도 그대로 읽어요.', '사이드바의 "TTS 미지원"을 켜면 듣기 버튼 대신 안내가 나와요.'] },
   { id: 'u-coll', no: 'SCR-09', name: '문장 모음', fr: ['FR-STUDY-05', 'FR-SENT-01'],
     tips: ['공통 상황과 장소별 문장을 골라 볼 수 있어요.', '"문장 모음 전용"은 일정에 넣지 않은 문장이에요.', '모든 문장에 듣기 버튼이 있어요.'] },
   { id: 'u-end', no: 'SCR-06', name: '여행 종료 요약', fr: ['FR-END-01', 'FR-TRIP-04'],
@@ -1072,7 +1078,7 @@ function studyView(r) {
         <div class="face front"><div class="ctx">${tag}${aiBadges(s)}${isNew ? '<span class="badge b-new">새 문장</span>' : ''}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
           <div class="ko">${phHtml(s.ko)}</div><div class="hint">탭해서 영어 문장 보기 ↻</div></div>
         <div class="face back"><div class="ctx">${tag}${aiBadges(s)}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
-          <div class="en">${phHtml(s.en)}</div><div class="ko-s">${phHtml(s.ko)}</div>${tts}<div class="speak" data-live="speak">${speakHtml(s)}</div></div>
+          <div class="en">${phHtml(s.en, 'en')}</div><div class="ko-s">${phHtml(s.ko)}</div>${tts}<div class="speak" data-live="speak">${speakHtml(s)}</div></div>
       </div>
     </div>
     <div class="card-nav"><button class="round" data-act="card-prev" ${i === 0 ? 'disabled' : ''}>${I.back}</button>
@@ -1115,7 +1121,7 @@ function updateStudyLive() {
 function scrColl() {
   const tab = S.coll.tab, f = S.coll.filter;
   const learnBadge = s => s.learnPhase === 'none' ? '<span class="badge b-only">문장 모음 전용</span>' : s.learnPhase === 'trip' ? '<span class="badge b-new">여행 중 새 문장</span>' : '';
-  const item = s => `<div class="sent"><div><div class="tags">${learnBadge(s)}${aiBadges(s)}<span class="small">${esc(s.situation)}</span></div><div class="en">${phHtml(s.en)}</div><div class="ko">${phHtml(s.ko)}</div></div>
+  const item = s => `<div class="sent"><div><div class="tags">${learnBadge(s)}${aiBadges(s)}<span class="small">${esc(s.situation)}</span></div><div class="en">${phHtml(s.en, 'en')}</div><div class="ko">${phHtml(s.ko)}</div></div>
     <button class="play" data-act="speak" data-id="${s.id}">${I.speaker}</button></div>`;
   /* 묶음 머리에 '카드로 연습' — 사용자 피드백: 날짜별 말고 상황별로 모아서 연습하고 싶다 */
   const drillBtn = (by, v, n) => `<button class="drill-btn" data-act="drill" data-by="${by}" data-v="${esc(v)}">${I.cards}카드로 연습 ${n}</button>`;
@@ -1227,7 +1233,7 @@ function admCommon() {
   return `<div class="adm-head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div><h2>공통 상황 문장 관리</h2>
     <p class="desc">6개 상황 × 5문장 = 30개. 모든 여행에 똑같이 들어가요 (FR-SENT-01). 저장하면 <b>다음 문장 생성부터</b> 반영돼요.</p></div>
     <div style="display:flex;gap:6px;flex:none"><button class="btn soft sm" data-act="cs-reset" ${dirty ? '' : 'disabled'}>되돌리기</button><button class="btn primary sm" data-act="cs-save" ${dirty ? '' : 'disabled'}>변경 사항 저장</button></div></div>
-    ${notice('이름·목적지는 <b>[name]</b>, <b>[destination]</b> 빈칸으로 적어요. 듣기에서는 "your name", "your destination"으로 읽어요.')}
+    ${notice('이름·목적지는 <b>[name]</b>·<b>[destination]</b> 빈칸으로 적어요. 학습 화면에서는 <b>[your name]</b>·<b>[your destination]</b>으로 보이고, 듣기도 그대로 읽어요.')}
     <div style="height:14px"></div>
     ${S.commonsDraft.map((g, gi) => `<div class="cs-group panel"><h4>${g.label} <span class="small">${g.key}</span></h4>
       <div class="cs-row cs-head" style="font-size:0.6875rem;color:var(--text-3)"><span>#</span><span>상황</span><span>영어 문장</span><span>한국어 뜻</span><span></span></div>

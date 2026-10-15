@@ -79,6 +79,7 @@ jobs:
           python ../e2e/test_consent.py http://localhost:8768 ../e2e-shots
           python ../e2e/test_silence.py http://localhost:8768 ../e2e-shots
           python ../e2e/test_shell.py http://localhost:8768 ../e2e-shots   # 반응형 셸·터치·테마
+          python ../e2e/test_speech_text.py http://localhost:8768
       - uses: actions/upload-artifact@v4
         if: always()
         with:

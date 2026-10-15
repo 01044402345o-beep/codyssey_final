@@ -18,6 +18,13 @@ from typing import Any
 
 WORD_RE = re.compile(r"[A-Za-z']+")
 
+# 자리표시자. 앱(app.js slotText)이 펼칠 수 있는 것만 허용한다.
+PLACEHOLDER_RE = re.compile(r"\[([A-Za-z_][A-Za-z0-9_]*)\]")
+ALLOWED_PLACEHOLDERS = frozenset({"name", "destination"})
+# 자리표시자 앞 한정사. 화면이 [your destination] 으로 펼치므로 'your [destination]' 는
+# 'your [your destination]' 이 되어 표시와 음성이 둘 다 망가진다.
+DETERMINER_BEFORE_SLOT = re.compile(r"\b(?:your|my|the|a|an|his|her|their|our)\s+\[", re.IGNORECASE)
+
 try:  # 배포 환경에 없을 수도 있으므로 선택적으로
     import jsonschema
 except ImportError:  # pragma: no cover
@@ -101,6 +108,24 @@ def validate_sentence(
         })
 
     low = raw_en.lower()
+
+    # 자리표시자 검사. 화면과 음성이 같은 문자열을 쓰므로 생성 단계에서 막는다.
+    for name in PLACEHOLDER_RE.findall(raw_en):
+        if name not in ALLOWED_PLACEHOLDERS:
+            issues.append({
+                "severity": "block",
+                "code": "unknown_placeholder",
+                "detail": (
+                    f"[{name}] 은 앱이 펼칠 수 없는 자리표시자입니다 (표시·음성이 깨집니다). "
+                    f"허용: {sorted(ALLOWED_PLACEHOLDERS)}"
+                ),
+            })
+    if DETERMINER_BEFORE_SLOT.search(raw_en):
+        issues.append({
+            "severity": "block",
+            "code": "determiner_before_placeholder",
+            "detail": f"자리표시자 앞에 한정사가 있습니다: {raw_en}",
+        })
 
     for code in ("forbidden_topic", "not_polite"):
         p = patterns.get(code) or {}
