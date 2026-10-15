@@ -2,6 +2,8 @@
 
 엔드포인트는 3개가 상한. 기능을 더 붙이지 마세요.
 Firebase를 걷어낸 이유가 그대로 재발합니다.
+일정은 새 라우트가 아니라 /generate 응답의 itinerary 형제다.
+ITINERARY_ENABLED 의 기본값은 꺼짐이고, 공개 배포에서 켜지 않는다.
 
   GET  /health       배포·콜드스타트 확인용
   POST /generate     카테고리 문장 생성 (+ 스키마·규칙 검증 후 재생성)
@@ -44,6 +46,11 @@ from .agents.facts import (
     collect_facts,
     facts_clause,
     kakao_configured,
+)
+from .agents.itinerary import (
+    collect_itinerary,
+    google_maps_configured,
+    itinerary_enabled,
 )
 
 from .validators import (
@@ -191,6 +198,11 @@ class GenerateRequest(BaseModel):
     places: list[Place] = Field(default_factory=list, max_length=20)
     # 항목마다 형식·길이를 제한한다. 프롬프트에 들어가고 Gemini 호출은 최소 30회라 긴 문자열은 비용이 된다.
     weak_expressions: list[ContractId] = Field(default_factory=list, max_length=20)
+    # 플래그가 꺼지면 읽지 않는다. 문장 프롬프트에 넣지 않는다.
+    # 범위가 틀려도 요청 전체를 422로 죽이지 않고, 일정 형제만 bad_date 가 된다.
+    days: int | None = None
+    start_date: str | None = Field(default=None, max_length=10)
+    itinerary_kinds: list[str] = Field(default_factory=list, max_length=4)
 
 
 # ---------------------------------------------------------------- 설정 로드
@@ -364,13 +376,17 @@ def health() -> dict[str, Any]:
         "stt_models": stt.cached_models(),
         "stt_selftest": selftest.status(),
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
-        # 사실 조회는 문장 모델과 다른 키다. 구글 장소 검색은 붙이지 않았다.
+        # 사실 경로의 구글 장소 검색은 붙이지 않았다. google_places 는 그 의미로 남긴다.
+        # 일정 플래그와 키는 호출 때마다 읽는다. 임포트 때 고정하지 않는다.
+        "itinerary_enabled": itinerary_enabled(),
         "fact_agents": {
             "kakao": kakao_configured(),
             "osm": "no-key",
             "google_places": False,
-            # False 면 키가 있어도 외부 호출이 0회다. facts.py 의 FACT_SOURCES_READY.
+            # False 면 키가 있어도 사실 경로의 외부 호출이 0회다. facts.py 의 FACT_SOURCES_READY.
             "sources_ready": FACT_SOURCES_READY,
+            "google_places_configured": google_maps_configured(),
+            "itinerary_calling": itinerary_enabled() and google_maps_configured(),
         },
         # 배포된 코드가 어느 커밋인지 응답 한 번으로 알 수 있게 한다. Render 가 빌드·런타임에 주는 기본 환경변수이고,
         # 로컬 실행처럼 값이 없으면 null 이다. (SHA 는 비밀이 아니다.)
@@ -435,7 +451,32 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
             if isinstance(s, dict) and isinstance(s.get("situation_id"), str)
         ],
     )
+    # 일정은 문장 팩 결과에 의존하지 않는다. 겹치면 벽시계는 합이 아니라 큰 쪽이다.
+    box: dict[str, Any] = {}
 
+    def _itinerary_side() -> None:
+        try:
+            box["itinerary"] = collect_itinerary(req)
+        except Exception as exc:  # noqa: BLE001 — 일정 실패가 문장 응답을 지우면 안 된다
+            logging.getLogger("app.itinerary").warning("itinerary error %s", type(exc).__name__)
+            box["itinerary"] = {"status": "unavailable", "reason": "itinerary_error"}
+
+    th = threading.Thread(target=_itinerary_side, name="itinerary")
+    th.start()
+    try:
+        body = _generate_sentences(req, cfg, schema, facts)
+    finally:
+        th.join()
+    body["itinerary"] = box.get("itinerary") or {"status": "unavailable", "reason": "itinerary_error"}
+    return body
+
+
+def _generate_sentences(
+    req: GenerateRequest,
+    cfg: dict[str, Any],
+    schema: dict[str, Any] | None,
+    facts: dict[str, Any],
+) -> dict[str, Any]:
     if not os.getenv("GEMINI_API_KEY"):
         pack = mock_pack(cfg, req)
         try:
