@@ -1,7 +1,8 @@
 """Firebase Auth 확인.
 
 화면 로그인은 Firebase Authentication 이다. 문장 생성과 말하기는 이 모듈을
-거치지 않고 기존 Render 경로에 남는다. 여행 기록은 브라우저에 둔다.
+거치지 않고 기존 Render 경로에 남는다. 로그인한 계정의 진도·복습·동의는
+user_state 가 맡고, 여행·장소·문장 본문은 브라우저가 다시 만든다.
 
 웹 설정(apiKey, authDomain, projectId)은 공개 값이다. 서비스 계정 키는
 읽지 않는다. 토큰 서명은 Google 공개 인증서로 확인한다.

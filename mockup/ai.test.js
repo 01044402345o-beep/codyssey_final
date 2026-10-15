@@ -135,6 +135,30 @@ test('취약 상황 저장: 키는 category_id + id, 구형·불량 기록은 �
   assert.deepEqual(AI.weakIdsFor(list, 'lodging'), []);
 });
 
+test('scopedStorage: uid 가 없으면 기존 키, 있으면 계정마다 갈라지고 다른 계정은 안 보인다', () => {
+  const mem = new Map();
+  const storage = {
+    getItem: k => (mem.has(k) ? mem.get(k) : null),
+    setItem: (k, v) => mem.set(k, String(v)),
+    removeItem: k => mem.delete(k),
+  };
+  const item = { category_id: 'restaurant', id: 'order_menu', situation: '주문', en: 'Water', ko: '물' };
+  AI.saveWeak(AI.scopedStorage(storage, ''), [item]);
+  AI.saveWeak(AI.scopedStorage(storage, 'uidA'), [{ ...item, situation: 'A만' }]);
+  AI.saveWeak(AI.scopedStorage(storage, 'uidB'), [{ ...item, situation: 'B만' }]);
+  assert.equal(AI.loadWeak(AI.scopedStorage(storage, ''))[0].situation, '주문');
+  assert.equal(AI.loadWeak(AI.scopedStorage(storage, 'uidA'))[0].situation, 'A만');
+  assert.equal(AI.loadWeak(AI.scopedStorage(storage, 'uidB'))[0].situation, 'B만');
+  assert.equal(AI.loadWeak(storage)[0].situation, '주문');
+  AI.saveConsent(AI.scopedStorage(storage, 'uidA'), true, new Date('2026-10-15T00:00:00.000Z'));
+  AI.withdrawConsent(AI.scopedStorage(storage, 'uidA'));
+  assert.equal(AI.loadWeak(AI.scopedStorage(storage, 'uidA')).length, 0);
+  assert.equal(AI.loadConsent(AI.scopedStorage(storage, 'uidA')).voice, false);
+  assert.equal(AI.loadWeak(AI.scopedStorage(storage, 'uidB')).length, 1);
+  assert.equal(AI.loadWeak(storage).length, 1);
+  assert.equal(AI.scopedStorage(null, 'uidA'), null);
+});
+
 test('loadWeak/saveWeak: 저장소 예외·깨진 JSON에도 죽지 않는다', () => {
   const bad = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
   assert.deepEqual(AI.loadWeak(bad), []); assert.equal(AI.saveWeak(bad, []), false);

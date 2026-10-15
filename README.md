@@ -39,15 +39,15 @@
 | 맛집별 영어 문장 **AI 생성** + 검증·재생성 | 동작 | `POST /generate`, 화면에 'AI 생성'/'샘플' 표시 |
 | 카드 학습·듣기(TTS)·문장 모음 | 동작 | 브라우저 음성 합성 |
 | **말해 보기** — 녹음 → 받아쓰기 → 채점·피드백 | 동작 | `POST /speak-check`, 녹음 전 동의 |
-| 어려워한 상황 **기억** → 다음 생성에 반영 | 동작 | 브라우저 저장(`localStorage`) |
+| 어려워한 상황 **기억** → 다음 생성에 반영 | 동작 | 브라우저 저장. 로그인한 계정은 `PUT /user/state` 로 같은 목록을 서버에도 둔다 |
 | 보고서(관광지·맛집)·방문 순서 AI | **예시 데이터** | 장소 목록은 미리 준비한 데이터, 화면에 고지 |
-| 로그인 | 흉내 | 데모 사용자 |
+| 로그인·계정 기록 | 부분 | Firebase 가 설정되면 구글·이메일 로그인. 진도·복습·동의만 서버에 둔다. 없으면 데모 사용자 |
 
 ## 4. 기술 스택과 선정 이유
 
 | 구분 | 기술 | 선정 이유 |
 |---|---|---|
-| Backend | Python 3.11, **FastAPI** | API 3개(`/health`·`/generate`·`/speak-check`)로 범위를 묶고 빠르게 배포 |
+| Backend | Python 3.11, **FastAPI** | 문장·말하기는 `/generate`·`/speak-check`. 로그인·계정 기록은 그 뒤에 붙었다 |
 | 문장 생성·피드백 | **Google Gemini** (`google-genai`) | 모델은 고정하지 않고 실행 중 `models.list()` 로 고름 |
 | 받아쓰기(STT) | **Groq Whisper**(→ OpenAI Whisper) + **AssemblyAI**(교차검증) | 범용 LLM 이 아니라 전용 음성인식. 서로 다른 모델 계열 두 개로 교차검증 |
 | 말소리 검출 | **Silero VAD** + **pyannote segmentation-3.0**(ONNX, 서버 내장) | 데시벨이 아닌 신경망. 큰 잡음·신호음은 말소리로 보지 않음 |
@@ -66,6 +66,7 @@
    ▼
 FastAPI (backend/app/main.py) ─ Render
    ├─ GET  /health        배포 커밋·키 상태·모델 상태
+   ├─ GET·PUT /user/state 로그인한 계정의 진도·복습·동의 (여행 본문 없음)
    ├─ POST /generate      카테고리 계약 → Gemini 생성 → 스키마·규칙 검증 → block 이면 재생성
    └─ POST /speak-check   PyAV → Silero VAD ─┐
                           로컬 pyannote ─────┴ 둘 다 말소리? 아니면 끝(외부 호출 0)

@@ -161,6 +161,17 @@
     next.push(...cleanWeak([item]));
     return next;
   }
+  /* uid 가 없으면 기존 키 그대로. 있으면 같은 키에 ':uid' 를 붙인다. 테마·배너는 이 함수를 쓰지 않는다. */
+  function scopedStorage(storage, uid) {
+    if (!storage) return null;
+    if (typeof uid !== 'string' || !uid) return storage;
+    const suffix = ':' + uid;
+    return {
+      getItem(key) { return storage.getItem(String(key) + suffix); },
+      setItem(key, value) { return storage.setItem(String(key) + suffix, value); },
+      removeItem(key) { return storage.removeItem(String(key) + suffix); },
+    };
+  }
   function loadWeak(storage) {
     try { return cleanWeak(JSON.parse(storage.getItem(WEAK_KEY) || '[]')); } catch (e) { return []; }
   }
@@ -302,7 +313,7 @@
     inAppBrowser, WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
     categoryOfKind,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
-    cleanWeak, upsertWeak, loadWeak, saveWeak, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
+    cleanWeak, upsertWeak, loadWeak, saveWeak, scopedStorage, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AI = api;

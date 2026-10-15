@@ -240,3 +240,13 @@
 ## 이번 작업 — 일정 상한 로그 (2026-10-15)
 
 2026-10-15 결정 4가 설계 문서 516행의 "일일 상한 프로세스는 이후 슬라이스"를 대체한다. 상한(ITINERARY_DAILY_CAP, 기본 20)은 1차 범위이고 승인 기록의 요구다. 이 상한은 프로세스 메모리라 프로세스가 새로 뜨면 0부터 센다. 실효 상한은 달력 하루가 아니라 프로세스 수명당이다. 설계 문서 446행의 "플래그 기본 꺼짐과 도시당 1회 첨부가 이 상한을 평상시 0으로 둔다"는 이제 불완전하다. 통제가 둘, 플래그와 상한이다. 승인 기록의 "로그로 Pro 호출 횟수를 센다"에 따라, 플래그와 키를 통과한 일정 로그는 cap_used와 cap_limit을 함께 남긴다. cap_used는 그 프로세스가 그날 예약한 Places 질의 수다. 상한에 걸려 queries=0으로 끝나는 줄에도 넣는다. 이 값은 /health에 올리지 않는다.
+
+## 이번 작업 — 계정 기록 (2026-10-16)
+
+팀 main `652adb6`에서 `feat/account-state`로 분기했다. 로그인한 계정의 진도, 복습 목록, 말하기 동의만 `GET/PUT /user/state`로 읽고 쓴다. uid는 검증된 bearer에서 오고 본문의 uid는 거절한다. 익명 제공자는 403이다. 토큰이 없으면 401이다. `/generate`와 `/speak-check`는 토큰을 요구하지 않는다. uid가 없으면 기존 `cd_session`, `cd_weak`, `cd_consent`를 유지하고, 로그인 전 기록을 첫 계정으로 옮기지 않는다. 테마, 스와이프 힌트, 인앱 배너는 계정으로 나누지 않는다. 여행, 장소, 문장 본문은 저장하지 않는다.
+
+Firestore `(default)`를 asia-northeast3에 만들었다. `firestore.rules`는 그 데이터베이스에만 배포했다. 배포본 sha256은 `6cac63da9ec2a8de9cafdcb33b541362e5b0e5e8b6fe72e2ba94583e1bc011a0`이고 로컬 `firestore.rules`와 같다. `cloud.firestore/firestore-native-mode` 릴리스는 2026-09-05 그대로다. 토큰 없는 `(default)` 문서 읽기는 403 PERMISSION_DENIED다. 로그인한 계정의 쓰기 왕복은 하지 않았다. FR-16은 부분이다. 공개 Render 환경 변수와 `ITINERARY_ENABLED`는 바꾸지 않았다.
+
+이 작업 트리에서 `unittest tests.test_user_state tests.test_firebase_auth`는 17개 통과, `node --test mockup/ai.test.js`는 27개 통과다. 데이터베이스를 만들기 전 같은 `mockup/app.js`에 대해 Playwright `e2e/test_account_storage.py` 14, `e2e/test_progress_persist.py` 16, `e2e/test_consent.py` 37이 통과했다. 그 화면 검사는 다시 돌리지 않았다.
+
+세션 디렉터리: `C:\Users\seong\.grok\sessions\C%3A%5CUsers%5Cseong%5CDesktop%5CProJect%5Ccodyssey_final\01a138a0-a233-7ca1-843c-3de2a5de06b6`

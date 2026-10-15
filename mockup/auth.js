@@ -119,6 +119,12 @@ FirebaseAuth.signInEmail = async function (email, password, name, signup) {
   return account;
 };
 
+FirebaseAuth.idToken = async function () {
+  const user = FirebaseAuth._auth && FirebaseAuth._auth.currentUser;
+  if (!user) return '';
+  try { return await user.getIdToken(); } catch (e) { return ''; }
+};
+
 FirebaseAuth.signOut = async function () {
   if (FirebaseAuth._auth && FirebaseAuth._mod) {
     try { await FirebaseAuth._mod.signOut(FirebaseAuth._auth); } catch (e) { /* 화면 상태는 비운다 */ }

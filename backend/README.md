@@ -1,12 +1,15 @@
 # 백엔드 — 배포 먼저
 
-엔드포인트 **3개가 상한**입니다. 기능을 더 붙이면 Firebase를 걷어낸 이유가 그대로 재발합니다.
+문장 생성과 말하기는 아래 두 경로다. 로그인과 계정 기록은 그 뒤에 붙었다. 생성 경로를 Cloud Functions 로 옮기지 않는다.
 
 | 메서드 | 경로 | 역할 |
 |---|---|---|
 | GET | `/health` | 배포 확인 + 시연 전 콜드스타트 깨우기 |
-| POST | `/generate` | 카테고리 문장 생성 → 스키마·규칙 검증 → 위반 시 재생성 |
-| POST | `/speak-check` | 녹음 → **Silero VAD**(말소리 없으면 끝) → **전용 STT**(Groq Whisper 등, 목표 문장 모름) → 환각 필터·단어 비교(코드) → 피드백(Gemini, 오디오 없음). 근거: `docs/research/speak-hallucination.md` |
+| POST | `/generate` | 카테고리 문장 생성 → 스키마·규칙 검증 → 위반 시 재생성. 토큰 불필요 |
+| POST | `/speak-check` | 녹음 → **Silero VAD**(말소리 없으면 끝) → **전용 STT**(Groq Whisper 등, 목표 문장 모름) → 환각 필터·단어 비교(코드) → 피드백(Gemini, 오디오 없음). 근거: `docs/research/speak-hallucination.md`. 토큰 불필요 |
+| GET | `/auth/config` | Firebase 웹 공개 설정. 없으면 `enabled: false` (데모 로그인) |
+| GET | `/auth/me` | Firebase ID 토큰의 계정 |
+| GET·PUT | `/user/state` | 그 토큰 uid 의 진도·복습 목록·말하기 동의. 여행 본문은 없음. 익명 로그인은 거절 |
 
 `GEMINI_API_KEY` 가 없으면 **목업으로 응답**합니다. 그래서 키 없이도 배포·시연이 됩니다.
 
