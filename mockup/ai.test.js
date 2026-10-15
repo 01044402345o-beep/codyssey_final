@@ -343,3 +343,124 @@ test('inAppBrowser: LINE 은 openExternalBrowser 를 해시 앞에 붙이고, An
   assert.ok(nv.scheme.startsWith('intent://x.onrender.com/p?a=1#u-home#Intent;'));
   assert.ok(nv.scheme.includes('S.browser_fallback_url=' + encodeURIComponent('https://x.onrender.com/p?a=1#u-home')));
 });
+
+test('calendarToday: 로컬 연월일이고 UTC 문자열로 바꾸지 않는다', () => {
+  const morning = new Date(2026, 9, 16, 0, 30);
+  const evening = new Date(2026, 9, 16, 23, 30);
+  const pad = n => String(n).padStart(2, '0');
+  const local = n => n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate());
+  assert.equal(AI.calendarToday(morning), local(morning));
+  assert.equal(AI.calendarToday(evening), local(evening));
+  assert.equal(AI.calendarToday(morning), AI.calendarToday(evening));
+  assert.match(String(AI.calendarToday), /getFullYear/);
+  assert.doesNotMatch(String(AI.calendarToday), /toISOString/);
+});
+
+test('itineraryRequestBody: 세 종류를 보내고 14일을 넘는 구간도 자르지 않는다', () => {
+  const body = AI.itineraryRequestBody({ name: '뉴욕', start: '2026-10-16', end: '2026-11-04' });
+  assert.equal(body.city, '뉴욕');
+  assert.equal(body.days, 20);
+  assert.equal(body.start_date, '2026-10-16');
+  assert.deepEqual(body.itinerary_kinds, ['restaurant', 'cafe', 'attraction']);
+  assert.equal('category_id' in body, false);
+  assert.equal(AI.itineraryRequestBody({ name: '뉴욕', start: '2026-11-10', end: '2026-11-12' }).days, 3);
+});
+
+const rawPlace = (id, name, primary) => ({
+  provider_id: id, name, attribution: 'Google Maps', fetched_at: '2026-10-16T01:02:03Z',
+  source_url: 'https://maps.google.com/?cid=' + id,
+  data: { formatted_address: '7 Carmine St', primary_type: primary, business_status: 'OPERATIONAL' },
+});
+
+test('foldItinerary: 플래그 꺼짐·네트워크 실패는 예시, 빈 결과는 예시 장소가 아니다', () => {
+  const cities = [{ name: '뉴욕', start: '2026-11-10', end: '2026-11-12' }, { name: '보스턴', start: '2026-11-12', end: '2026-11-14' }];
+  const off = { error: null, body: { status: 'unavailable', reason: 'itinerary_disabled' } };
+  assert.equal(AI.foldItinerary(cities, [off, off], {}).mode, 'example');
+  assert.equal(AI.foldItinerary(cities, [{ error: 'network' }, { error: 'network' }], {}).mode, 'example');
+  const empty = { error: null, body: { status: 'unavailable', reason: 'no_verified_places', places: [], days: [], queries: [] } };
+  const none = AI.foldItinerary(cities, [empty, empty], { '뉴욕': 4, '보스턴': 4 });
+  assert.equal(none.mode, 'empty');
+  assert.equal(none.places.length, 0);
+  assert.equal(none.blocksByCity, null);
+  assert.equal(none.meta['뉴욕'].reason, 'no_verified_places');
+  const mixed = AI.foldItinerary(cities, [empty, off], {});
+  assert.equal(mixed.mode, 'empty');
+  assert.equal(mixed.places.length, 0);
+});
+
+test('foldItinerary: 성공한 도시만 남기고, 블록이 없으면 코드 상한까지만 고른다', () => {
+  const cities = [{ name: '뉴욕', start: '2026-11-10', end: '2026-11-12' }, { name: '보스턴', start: '2026-11-12', end: '2026-11-14' }];
+  const places = ['a', 'b', 'c', 'd', 'e'].map((id, i) => rawPlace(id, 'Place ' + i, i === 0 ? 'cafe' : i === 1 ? 'museum' : 'pizza_restaurant'));
+  const live = { error: null, body: { status: 'unavailable', reason: 'no_gemini_key', places, days: [], queries: [{ included_type: 'tourist_attraction', status: 'unavailable', reason: 'http_429' }] } };
+  const empty = { error: null, body: { status: 'unavailable', reason: 'no_verified_places', places: [], days: [] } };
+  const folded = AI.foldItinerary(cities, [live, empty], { '뉴욕': 2, '보스턴': 4 });
+  assert.equal(folded.mode, 'live');
+  assert.equal(folded.blocksByCity, null);
+  assert.deepEqual(folded.places.map(p => p.city), ['뉴욕', '뉴욕', '뉴욕', '뉴욕', '뉴욕']);
+  assert.deepEqual(folded.places.map(p => p.selected), [true, true, false, false, false]);
+  assert.deepEqual(folded.places.map(p => p.kind), ['cafe', 'attraction', 'restaurant', 'restaurant', 'restaurant']);
+  assert.equal(AI.categoryOfKind('attraction'), null);
+  assert.equal(AI.categoryOfKind('cafe'), 'restaurant');
+  assert.equal(folded.meta['뉴욕'].base, 2);
+  assert.equal(folded.meta['보스턴'].mode, 'empty');
+  assert.equal(folded.meta['보스턴'].found, 0);
+  assert.equal(folded.places[0].area, '7 Carmine St');
+  assert.equal(folded.places[0].desc, '');
+  assert.equal(folded.places[0].menuKo, null);
+  assert.equal(folded.places.some(p => p.reason), false);
+});
+
+test('placeBlocksOnDays: 2일은 시작 다음 날이고, 뺀 장소와 why 는 없다', () => {
+  const cities = [{ name: '뉴욕', start: '2026-11-10', end: '2026-11-12' }];
+  const places = [rawPlace('p1', 'Joe', 'pizza_restaurant'), rawPlace('p2', 'Cafe', 'cafe'), rawPlace('p3', 'Museum', 'museum')];
+  const days = [{
+    day: 2, blocks: [
+      { time_label: 'evening', place_id: 'p2', sentence_ko: '', why: 'cafe · 7 Carmine St' },
+      { time_label: 'morning', place_id: 'p1', sentence_ko: '창가 자리 부탁해요.', why: 'pizza_restaurant · 7 Carmine St' },
+      { time_label: 'afternoon', place_id: 'p3', sentence_ko: '입장권 두 장 주세요.', why: 'museum · 7 Carmine St' },
+    ],
+  }];
+  const folded = AI.foldItinerary(cities, [{ error: null, body: { status: 'verified', reason: '', places, days, queries: [] } }], { '뉴욕': 1 });
+  assert.equal(folded.mode, 'live');
+  assert.equal(folded.meta['뉴욕'].base, 3);
+  folded.places.find(p => p.providerId === 'p3').selected = false;
+  const shells = [
+    { date: '2026-11-10', city: '뉴욕', types: ['arrival'], cap: { attr: 1, rest: 1 }, placeIds: ['old'] },
+    { date: '2026-11-11', city: '뉴욕', types: ['normal'], cap: { attr: 2, rest: 2 }, placeIds: [] },
+    { date: '2026-11-12', city: '뉴욕', types: ['departure'], cap: { attr: 1, rest: 1 }, placeIds: [] },
+  ];
+  const out = AI.placeBlocksOnDays(shells, folded.places, cities, folded.blocksByCity);
+  const day2 = out.find(d => d.date === '2026-11-11');
+  assert.deepEqual(day2.blocks.map(b => b.time), ['morning', 'evening']);
+  assert.equal(day2.blocks[0].ko, '창가 자리 부탁해요.');
+  assert.equal(day2.blocks[1].ko, '');
+  assert.equal(day2.blocks.some(b => 'why' in b), false);
+  assert.equal(out.some(d => d.placeIds.includes(folded.places.find(p => p.providerId === 'p3').id)), false);
+  assert.equal(shells[0].placeIds[0], 'old');
+  const joe = folded.places.find(p => p.providerId === 'p1');
+  assert.equal(joe.visitDate, '2026-11-11');
+});
+
+test('collectItinerary: /itinerary 만 부르고 실패한 도시는 나머지를 지우지 않는다', async () => {
+  const bodies = [];
+  const fetchImpl = async (url, opt) => {
+    const body = JSON.parse(opt.body);
+    bodies.push({ url, body });
+    if (body.city === '보스턴') throw new Error('network');
+    return { ok: true, json: async () => ({ status: 'unavailable', reason: 'itinerary_disabled' }) };
+  };
+  const cities = [
+    { name: '뉴욕', start: '2026-11-10', end: '2026-11-12' },
+    { name: '보스턴', start: '2026-11-12', end: '2026-11-14' },
+  ];
+  const out = await AI.collectItinerary({ fetchImpl, base: '', cities });
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0].url, '/itinerary');
+  assert.equal('category_id' in bodies[0].body, false);
+  assert.deepEqual(bodies[0].body.itinerary_kinds, ['restaurant', 'cafe', 'attraction']);
+  assert.equal(out[0].body.reason, 'itinerary_disabled');
+  assert.equal(out[1].error, 'network');
+  assert.equal(AI.foldItinerary(cities, out, {}).mode, 'example');
+  const offline = await AI.collectItinerary({ fetchImpl, base: null, cities });
+  assert.equal(offline.every(r => r.error === 'network'), true);
+});

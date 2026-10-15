@@ -16,8 +16,8 @@
 |---|---|---|---|---|---|
 | FR-01 | 여행 입력 | 나라, 도시 1~5곳, 체류일, 학습 시작일 입력과 검사 | Must | 완료 | `mockup/app.js` `R.validate` |
 | FR-02 | 학습 일정표 계산 | 문장 수·하루 학습량·복습일·총복습을 코드로 계산(AI 아님, 같은 입력이면 같은 결과) | Must | 완료 | `mockup/app.js` `R.counts`·`buildPlan` |
-| FR-03 | 장소 보고서 | 도시별 관광지·맛집 목록, 후보 교체, 출처 표시 | Must | **예시** | `mockup/data.js` — 화면에 "미리 준비한 예시 데이터" 고지 |
-| FR-04 | 방문 순서 | 날짜별 장소 배치와 규칙 검증 | Should | **예시** | 코드 배치(`R.placeByCode`) |
+| FR-03 | 장소 보고서 | 도시별 관광지·맛집 목록, 후보 교체, 출처 표시 | Must | **부분** | 실제 보고서 요청만 `POST /itinerary`를 호출한다. 플래그가 꺼졌거나 모든 도시가 실패하면 예시 목록과 "미리 준비한 예시 데이터" 고지를 유지한다. 확인된 장소가 없으면 예시 장소로 채우지 않는다. 공개 `ITINERARY_ENABLED`는 꺼져 있고, 이 변경을 머지하기 전에는 공개 사이트가 예시 데이터다. 이번 슬라이스에서 Places 왕복은 다시 하지 않았다 |
+| FR-04 | 방문 순서 | 날짜별 장소 배치와 규칙 검증 | Should | **부분** | 서버가 하루 블록을 주면 도시 시작일에 맞춰 보여주고, 없으면 코드 배치(`R.placeByCode`)를 쓴다. 공개 사이트는 플래그가 꺼져 있어 코드 배치다 |
 | FR-05 | **맛집 문장 AI 생성** | 카테고리 계약으로 프롬프트 → Gemini 생성 → 스키마·규칙 검증 → 위반 시 재생성 | Must | 완료 | `POST /generate`, `backend/app/validators.py`, `tests/test_gemini_retry.py` |
 | FR-06 | 생성 결과 신뢰 표시 | 실제 AI 결과는 'AI 생성', 키 없는 샘플은 '샘플', 검증 실패는 학습에 넣지 않음 | Must | 완료 | `usable` 값, `mockup/ai.js` `normalizeAiResponse`, `ai.test.js` |
 | FR-07 | 카드 학습·듣기 | 카드 뒤집기, 브라우저 TTS, 날짜별 완료 처리 | Must | 완료 | `mockup/app.js` SCR-08 |
@@ -29,7 +29,7 @@
 | FR-13 | 녹음 동의 | 첫 녹음 전 동의(보내는 것·받는 곳·처리·보관), 거부해도 나머지 기능 사용 | Must | 완료 | `askVoiceConsent`, 동의 v6 |
 | FR-14 | 여행 종료 요약 | 완료율·학습 문장 수·새 여행 | Should | 완료 | SCR-06 |
 | FR-15 | 교통·숙소 카테고리 생성 | 맛집 외 카테고리 문장 생성 | Should | **부분** | 계약 3종 모두 서버에 있음(`restaurant.json`·`transport.json`·`lodging.json`, 각 상황 10개). 화면 코드는 장소 종류로 카테고리를 정해 (도시, 카테고리)별로 요청함(`categoryOfKind`, `ai.test.js`). 남은 것: 예시 장소 데이터(`data.js`)에 교통·숙소 장소가 없어 실제로는 맛집만 요청됨 |
-| FR-16 | 로그인·사용자별 저장 | 구글 로그인, 서버 저장 | Could | **부분** | 구글·이메일 로그인은 붙었다. `GET/PUT /user/state` 가 검증된 토큰 uid 의 진도·복습 목록·말하기 동의만 읽고 쓴다(`backend/tests/test_user_state.py`, `e2e/test_account_storage.py`). uid 가 없으면 기존 브라우저 키. 여행·장소·문장 본문은 저장하지 않는다. 디스크는 Firestore `(default)` (asia-northeast3) 이고 규칙은 그 데이터베이스에만 배포했다. 같은 프로젝트의 `firestore-native-mode` 는 바꾸지 않았다. 저장소 호출이 실패하면 503 이고 브라우저 기록은 유지된다. 로그인한 계정의 실제 왕복은 아직 보지 못했다. 팀 main 에 머지되기 전에는 공개 사이트에 이 경로가 없다 |
+| FR-16 | 로그인·사용자별 저장 | 구글 로그인, 서버 저장 | Could | **부분** | 구글·이메일 로그인은 붙었다. `GET/PUT /user/state` 가 검증된 토큰 uid 의 진도·복습 목록·말하기 동의만 읽고 쓴다(`backend/tests/test_user_state.py`, `e2e/test_account_storage.py`). uid 가 없으면 기존 브라우저 키. 여행·장소·문장 본문은 저장하지 않는다. 디스크는 Firestore `(default)` (asia-northeast3) 이고 규칙은 그 데이터베이스에만 배포했다. 같은 프로젝트의 `firestore-native-mode` 는 바꾸지 않았다. 저장소 호출이 실패하면 503 이고 브라우저 기록은 유지된다. 로그인한 계정의 실제 왕복은 아직 보지 못했다. 공개 사이트의 토큰 없는 `/user/state`는 401 `missing_token`이다 |
 
 ## 2. 비기능 요구사항
 

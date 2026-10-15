@@ -433,11 +433,13 @@ function defaultDraft(base) {
 
 function initState() {
   cancelGen();
+  const today = AI.calendarToday(new Date());
   S = {
-    screen: 'u-login', user: null, authMode: 'login', today: BASE_TODAY,
+    screen: 'u-login', user: null, authMode: 'login', today,
     flags: { fail: false, stuck: false, routeInvalid: false, noTts: false },
-    draft: defaultDraft(BASE_TODAY), showErrors: false,
-    trip: null, places: [], reportMeta: {}, days: [], sents: [], smap: {}, sched: [], plan: null, aiPools: {}, aiBy: {},
+    draft: defaultDraft(today), showErrors: false,
+    trip: null, places: [], reportMeta: {}, reportMode: 'example', routeView: 'code', itineraryBlocks: null,
+    days: [], sents: [], smap: {}, sched: [], plan: null, aiPools: {}, aiBy: {},
     archived: [], gen: null, cityTab: null, showCand: {},
     studyDate: null, drill: null, card: { date: null, i: 0, flipped: new Set() }, justCompleted: null,
     coll: { tab: 'common', filter: 'all' }, schedFilter: 'all', ttsRate: 0.95,
@@ -459,7 +461,8 @@ function createTrip(d) {
     status: 'input_done', regenerateCount: 0, reportRound: 0, failStreak: 0, genStartedAt: null, error: null,
     routeFallback: false, stageAt: { input_done: Date.now() }, requests: 0, fails: 0, reportSec: null, requestedAt: null, archived: false,
   };
-  S.places = []; S.reportMeta = {}; S.days = []; S.sents = []; S.smap = {}; S.sched = []; S.plan = null;
+  S.places = []; S.reportMeta = {}; S.reportMode = 'example'; S.routeView = 'code'; S.itineraryBlocks = null;
+  S.days = []; S.sents = []; S.smap = {}; S.sched = []; S.plan = null;
   S.cityTab = cities[0].name; S.showCand = {}; S.studyDate = null; S.justCompleted = null; resetCard();
 }
 function archiveTrip() {
@@ -495,13 +498,15 @@ const selCount = city => S.places.filter(p => p.city === city && p.selected).len
 
 /* ---------- 문장 + 일정표 (AI-03 흉내 + FR-SENT-02, FR-SCHED-01·02) ---------- */
 function placeSentences(p, n) {
-  const fill = s => s.replace('{menuEn}', p.menuEn).replace('{menuKo}', p.menuKo).replace('{en}', p.en).replace('{name}', p.name);
+  const fill = s => s.replace('{menuEn}', p.menuEn || '').replace('{menuKo}', p.menuKo || '').replace('{en}', p.en || p.name).replace('{name}', p.name);
   const ai = (S.aiBy[p.id] || []).slice(0, n).map(s => ({
     situation: s.situation, en: s.en, ko: s.ko, categoryId: s.categoryId, situationId: s.situationId, targetsWeak: s.targetsWeak,
     ai: s.kind === 'ai', sample: s.kind === 'sample',
   }));
   const used = new Set(ai.map(s => s.en.toLowerCase()));
-  const rest = PLACE_TEMPLATES[p.kind].map(t => ({ situation: t.situation, en: fill(t.en), ko: fill(t.ko) }))
+  const bank = PLACE_TEMPLATES[p.kind] || (p.kind === 'cafe' ? PLACE_TEMPLATES.restaurant : []);
+  const usable = bank.filter(t => !p.live || !(t.en + t.ko).includes('{menu'));
+  const rest = usable.map(t => ({ situation: t.situation, en: fill(t.en), ko: fill(t.ko) }))
     .filter(t => !used.has(t.en.toLowerCase())).slice(0, Math.max(0, n - ai.length));
   return [...ai, ...rest];
 }
@@ -625,10 +630,17 @@ function tick(tok, stage) {
     if (S.flags.stuck) { g.stuck = true; if (S.screen === 'u-gen') render(); return; }
     if (S.flags.fail) { failStage(stage); return; }
     if (stage === 'sentences') { await runAi(tok); if (tok !== genToken) return; }
+    if (stage === 'report') { await runReport(tok); if (tok !== genToken) return; }
     succeed(stage);
   }, 700);
 }
 
+/* 실제 장소는 맛집만 /generate 로 보낸다. 카페·관광지는 문장 요청에 넣지 않는다.
+   예시 장소는 기존과 같이 categoryOfKind 가 있는 종류만 보낸다. 관광지는 null 이라 빠진다. */
+function sentenceCategory(p) {
+  if (p.live && p.kind !== 'restaurant') return null;
+  return AI.categoryOfKind(p.kind);
+}
 /* 선택한 맛집의 문장만 /generate 로 만든다. 일정·문장 수 계산(R.counts)은 그대로 코드가 한다.
    성공한 도시는 살리고 실패·degraded·형식 불일치 도시만 로컬 템플릿으로 폴백한다. 자동 재시도 없음. */
 async function runAi(tok) {
@@ -637,8 +649,8 @@ async function runAi(tok) {
   S.aiPools = {}; S.aiBy = {};                 // 새 생성 시작: 이전 결과 폐기
   // 한 도시에 맛집과 숙소가 섞일 수 있으니 (도시, 카테고리)마다 따로 요청한다.
   const groups = {};
-  S.places.filter(p => p.selected && AI.categoryOfKind(p.kind)).forEach(p => {
-    const cat = AI.categoryOfKind(p.kind);
+  S.places.filter(p => p.selected && sentenceCategory(p)).forEach(p => {
+    const cat = sentenceCategory(p);
     (groups[aiKey(p.city, cat)] ??= { name: p.city, categoryId: cat, places: [] }).places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind });
   });
   const cities = Object.values(groups);
@@ -660,18 +672,58 @@ function failStage(stage) {
   if (S.gen) S.gen.failed = true;
   S.screen = 'u-gen'; render();
 }
+/* 보고서 요청만 /itinerary 를 부른다. 메뉴로 연 화면(ensure)은 예시 데이터를 유지한다.
+   플래그가 꺼졌거나 모든 도시가 실패하면 genReport 로 돌아간다. */
+async function runReport(tok) {
+  S.reportMode = 'example';
+  S.itineraryBlocks = null;
+  S.reportPlaces = null;
+  S.reportMetaLive = null;
+  if (API.base === null || !S.trip) return;
+  if (genAbort) genAbort.abort();
+  const ctl = genAbort = new AbortController();
+  const caps = {};
+  const baseDays = R.cityBase(R.buildDays(S.trip.cities));
+  S.trip.cities.forEach(c => { const b = baseDays[c.name]; caps[c.name] = b ? b.attr + b.rest : 0; });
+  try {
+    const results = await AI.collectItinerary({
+      fetchImpl: (u, o) => fetch(u, o), base: API.base, cities: S.trip.cities, signal: ctl.signal, timeoutMs: AI.GEN_TIMEOUT_MS,
+    });
+    if (tok !== genToken || ctl.signal.aborted) return;
+    const folded = AI.foldItinerary(S.trip.cities, results, caps);
+    if (tok !== genToken || ctl.signal.aborted) return;
+    if (!folded || folded.mode === 'example') return;
+    S.reportMode = folded.mode;
+    S.reportPlaces = folded.places;
+    S.reportMetaLive = folded.meta;
+    S.itineraryBlocks = folded.blocksByCity;
+  } catch (e) {
+    if (tok !== genToken) return;
+    S.reportMode = 'example';
+  }
+}
 function succeed(stage) {
   const t = S.trip; t.failStreak = 0;
   if (stage === 'report') {
     if (t.reportRound >= 1) t.regenerateCount++;
-    S.places = genReport(t, t.reportRound); t.reportRound++;
+    if (S.reportMode === 'example') S.places = genReport(t, t.reportRound);
+    else { S.places = S.reportPlaces || []; S.reportMeta = S.reportMetaLive || {}; }
+    t.reportRound++;
     t.status = 'report_done'; mark('report_done');
     t.reportSec = Math.round((Date.now() - t.requestedAt) / 1000);
     S.cityTab = t.cities[0].name; S.showCand = {};
     S.screen = 'u-report'; render();
-    toast(t.reportRound > 1 ? `보고서를 다시 만들었어요. 남은 다시 생성 ${3 - t.regenerateCount}번` : '보고서가 준비됐어요. 가지 않을 장소를 빼 주세요.');
+    const again = t.reportRound > 1 ? `보고서를 다시 만들었어요. 남은 다시 생성 ${3 - t.regenerateCount}번` : '보고서가 준비됐어요. 가지 않을 장소를 빼 주세요.';
+    toast(S.reportMode === 'empty' ? '확인된 장소가 없어요.' : S.reportMode === 'live' ? '확인한 장소를 골랐어요. 가지 않을 장소를 빼 주세요.' : again);
   } else if (stage === 'route') {
-    const res = makeRoute(); S.days = res.days; t.routeFallback = res.fallback;
+    if (S.itineraryBlocks) {
+      S.days = AI.placeBlocksOnDays(R.buildDays(t.cities), S.places, t.cities, S.itineraryBlocks);
+      t.routeFallback = false;
+      S.routeView = 'blocks';
+    } else {
+      const res = makeRoute(); S.days = res.days; t.routeFallback = res.fallback;
+      S.routeView = 'code';
+    }
     mark('route_done');
     request('sentences', false); // 서버가 이어서 요청
   } else {
@@ -694,12 +746,22 @@ function ensure(level) {
   const t = S.trip;
   if (!S.places.length) {
     cancelGen();
+    S.reportMode = 'example';
+    S.itineraryBlocks = null;
+    S.routeView = 'code';
     S.places = genReport(t, t.reportRound); t.reportRound++;
     t.status = 'report_done'; mark('report_done'); t.reportSec = 42; did = true;
   }
   if (level === 'plan' && !S.plan) {
     cancelGen();
-    S.days = makeRoute().days; mark('route_done'); buildPlan();
+    if (S.itineraryBlocks) {
+      S.days = AI.placeBlocksOnDays(R.buildDays(t.cities), S.places, t.cities, S.itineraryBlocks);
+      S.routeView = 'blocks';
+    } else {
+      S.days = makeRoute().days;
+      S.routeView = 'code';
+    }
+    mark('route_done'); buildPlan();
     t.status = 'studying'; t.failStreak = 0; mark('studying'); did = true;
   }
   return did;
@@ -1109,19 +1171,31 @@ function elapsed() {
 function scrReport() {
   const t = S.trip, locked = t.status !== 'report_done';
   const city = S.cityTab && t.cities.some(c => c.name === S.cityTab) ? S.cityTab : t.cities[0].name;
-  const meta = S.reportMeta[city], sel = selCount(city);
+  const meta = S.reportMeta[city] || { base: 0, found: 0, mode: S.reportMode === 'example' ? 'example' : 'empty' };
+  const sel = selCount(city);
   const base = S.places.filter(p => p.city === city && !p.isCandidate), cands = S.places.filter(p => p.city === city && p.isCandidate);
   const nonEng = !ENGLISH_COUNTRIES.includes(t.country);
   const total = S.places.filter(p => p.selected).length;
   const open = S.showCand[city] || cands.some(p => p.selected);
+  const tabCount = c => `${selCount(c.name)}/${(S.reportMeta[c.name] || { base: 0 }).base}`;
+  let lead = '';
+  if (locked) lead += notice('장소를 확정했어요. 이제 선택을 바꿀 수 없어요.', 'plain');
+  if (S.reportMode === 'example') {
+    lead += notice('이 장소 목록은 <b>미리 준비한 예시 데이터</b>예요. (AI 웹 검색은 아직 연결 전이에요) 영업시간과 메뉴는 바뀔 수 있으니 방문 전에 확인해 주세요.');
+    if (meta.found < meta.base) lead += notice(`추천할 장소를 충분히 찾지 못했어요. 기본 ${meta.base}곳 중 ${meta.found}곳만 찾았어요. 후보로 채울 수 있어요.`, 'warn');
+  } else if (meta.mode === 'live') {
+    lead += notice('Google Maps에서 확인한 장소예요. 한국어 설명, 메뉴, 영업시간, 평점, 가격은 없어요.');
+    const failed = (meta.queries || []).filter(q => q && q.status && q.status !== 'verified');
+    if (failed.length) lead += notice('일부 종류는 비어 있어요. ' + failed.map(q => `${esc(q.included_type || '')}${q.reason ? ' (' + esc(q.reason) + ')' : ''}`).join(', '), 'warn');
+  } else {
+    lead += notice(meta.reason === 'no_verified_places' ? '확인된 장소가 없어요. 예시 장소로 채우지 않아요.' : '이 도시의 장소를 가져오지 못했어요. 예시 장소로 채우지 않아요.', 'warn');
+  }
+  if (nonEng) lead += notice('현지에서 영어가 통하지 않을 수 있어요.', 'warn');
+  if (meta.base && sel < meta.base / 2) lead += notice('장소가 적어 비어 있는 날(자유 일정)이 생길 수 있어요.', 'warn');
   const inner = `<div class="app-pad">
-    <div class="city-tabs">${t.cities.map(c => `<button class="${c.name === city ? 'on' : ''}" data-act="city-tab" data-city="${esc(c.name)}">${esc(c.name)} <b>${selCount(c.name)}/${S.reportMeta[c.name].base}</b></button>`).join('')}</div>
+    <div class="city-tabs">${t.cities.map(c => `<button class="${c.name === city ? 'on' : ''}" data-act="city-tab" data-city="${esc(c.name)}">${esc(c.name)} <b>${tabCount(c)}</b></button>`).join('')}</div>
     <div class="stack" style="margin-bottom:14px">
-      ${locked ? notice('장소를 확정했어요. 이제 선택을 바꿀 수 없어요.', 'plain') : ''}
-      ${notice('이 장소 목록은 <b>미리 준비한 예시 데이터</b>예요. (AI 웹 검색은 아직 연결 전이에요) 영업시간과 메뉴는 바뀔 수 있으니 방문 전에 확인해 주세요.')}
-      ${nonEng ? notice('현지에서 영어가 통하지 않을 수 있어요.', 'warn') : ''}
-      ${meta.found < meta.base ? notice(`추천할 장소를 충분히 찾지 못했어요. 기본 ${meta.base}곳 중 ${meta.found}곳만 찾았어요. 후보로 채울 수 있어요.`, 'warn') : ''}
-      ${sel < meta.base / 2 ? notice('장소가 적어 비어 있는 날(자유 일정)이 생길 수 있어요.', 'warn') : ''}
+      ${lead}
     </div>
     <div class="city-head"><h3>${esc(city)}</h3><span class="cnt"><b>${sel}</b> / 최대 ${meta.base}곳</span></div>
     ${base.map(p => placeCard(p, locked)).join('')}
@@ -1135,6 +1209,17 @@ function scrReport() {
   return frame(inner, { appbar: appbar('보고서 · 장소 선택', { step: 'STEP 2/3' }), bottom });
 }
 function placeCard(p, locked) {
+  if (p.live) {
+    const tone = p.kind === 'attraction' ? 'attraction' : 'restaurant';
+    const chip = p.primaryType || (p.kind === 'cafe' ? '카페' : p.kind === 'attraction' ? '관광지' : '맛집');
+    const link = (p.sources || []).map(s => `<a href="${esc(s.url)}" data-act="link">${esc(s.title)}</a>`).join('');
+    const when = p.fetchedAt ? ` · ${esc(p.fetchedAt)}` : '';
+    return `<div class="place ${p.selected ? 'on' : 'off'} ${locked ? 'locked' : ''}" data-act="place" data-id="${esc(p.id)}">
+      <div class="check">${p.selected ? I.check : ''}</div>
+      <div><div class="nm"><span class="kind ${tone}">${esc(chip)}</span>${esc(p.name)}</div>
+        ${p.area ? `<div class="meta">${esc(p.area)}</div>` : ''}
+        <div class="src">${link}${link ? ' · ' : ''}${esc(p.attribution || 'Google Maps')}${when}</div></div></div>`;
+  }
   const src = p.sources.length ? p.sources.map(s => `<a href="${s.url}" data-act="link">${esc(s.title)}</a>`).join('') : '<span>출처 없음</span>';
   return `<div class="place ${p.selected ? 'on' : 'off'} ${locked ? 'locked' : ''}" data-act="place" data-id="${p.id}">
     <div class="check">${p.selected ? I.check : ''}</div>
@@ -1146,7 +1231,56 @@ function placeCard(p, locked) {
 }
 
 /* SCR-05 */
+const TIME_KO = { morning: '오전', afternoon: '오후', evening: '저녁' };
+function scrDayBlocks() {
+  const t = S.trip, p = S.plan;
+  const errs = R.validateRoute(S.days, S.places);
+  const groups = {}; p.per.forEach(n => (groups[n] = (groups[n] || 0) + 1));
+  const perTxt = Object.entries(groups).sort((a, b) => b[0] - a[0]).map(([n, c]) => `${n}문장 ${c}곳`).join(' · ');
+  const oneBlock = b => {
+    const pl = S.places.find(x => x.id === b.placeId);
+    if (!pl) return '';
+    const chip = pl.primaryType || (pl.kind === 'cafe' ? '카페' : pl.kind === 'attraction' ? '관광지' : '맛집');
+    const tone = pl.kind === 'attraction' ? 'attraction' : 'restaurant';
+    const link = (pl.sources || []).map(s => `<a href="${esc(s.url)}" data-act="link">${esc(s.title)}</a>`).join('');
+    return `<div><span class="badge t-norm">${esc(TIME_KO[b.time] || b.time)}</span><span class="kind ${tone}">${esc(chip)}</span>${esc(pl.name)}
+      ${pl.area ? `<span class="ar">${esc(pl.area)}</span>` : ''}
+      ${b.ko ? `<div class="desc">${esc(b.ko)}</div>` : ''}
+      <span class="ar">${link}${pl.attribution ? ` · ${esc(pl.attribution)}` : ''}</span></div>`;
+  };
+  const inner = `<div class="app-pad">
+    <div class="card" style="background:var(--inv-bg);color:var(--inv-text);border:0">
+      <div class="eyebrow" style="color:var(--sun)">Plan summary</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;font-size:0.78125rem;color:var(--inv-text-2)">
+        <div>전체 문장<b style="display:block;color:var(--inv-text);font-size:1.25rem;font-family:var(--display)">${p.T}개</b>공통 30 + 장소 ${p.T - 30}</div>
+        <div>하루 학습량<b style="display:block;color:var(--inv-text);font-size:1.25rem;font-family:var(--display)">${p.A ? p.A + '문장' : '없음'}</b>${p.A ? `새 문장 ${p.usedNew}일` : '여행 전 학습 없음'}</div>
+        <div>여행 전 학습<b style="display:block;color:var(--inv-text);font-size:1rem">${p.N}일</b>복습 ${p.review} · 총복습 ${p.final}</div>
+        <div>여행 중 새 문장<b style="display:block;color:var(--inv-text);font-size:1rem">${p.tripNew}개</b>문장 모음 전용 ${p.none}개</div>
+      </div>
+      <div style="margin-top:10px;font-size:0.75rem;color:var(--inv-text-3)">장소당 ${perTxt}</div>
+    </div>
+    <div class="stack" style="margin:12px 0 16px">
+      ${notice('서버가 나눠 준 하루 블록이에요. 빼 둔 장소는 빠졌어요. 이동 시간, 지도, 영업시간, 평점, 가격은 없어요.')}
+      ${errs.length ? notice('검증 실패: ' + errs.join(', '), 'bad') : ''}
+    </div>
+    <div class="timeline">${S.days.map(d => {
+      const blocks = d.blocks || [];
+      const timed = new Set(blocks.map(b => b.placeId));
+      const extra = d.placeIds.filter(id => !timed.has(id)).map(id => {
+        const pl = S.places.find(x => x.id === id);
+        return pl ? `<div><span class="badge t-norm">시간 없음</span>${esc(pl.name)}</div>` : '';
+      }).join('');
+      const rows = blocks.map(oneBlock).join('') + extra;
+      return `<div class="tl-day ${d.placeIds.length ? '' : 'free'}">
+        <div class="d">${Dt.full(d.date)} <span class="city">${esc(d.city)}</span>${d.types.map(ty => `<span class="badge ${DAYTYPE[ty].cls}">${DAYTYPE[ty].label}</span>`).join('')}</div>
+        ${rows || `<div class="freebox">이 날은 블록이 없어요</div>`}
+      </div>`;
+    }).join('')}</div>
+  </div>`;
+  return frame(inner, { appbar: appbar('하루 블록', { step: 'STEP 3/3' }), bottom: `<button class="btn primary block" data-act="tab" data-id="u-home">학습 시작하러 가기</button>` });
+}
 function scrRoute() {
+  if (S.routeView === 'blocks') return scrDayBlocks();
   const t = S.trip, p = S.plan;
   const errs = R.validateRoute(S.days, S.places);
   const groups = {}; p.per.forEach(n => (groups[n] = (groups[n] || 0) + 1));

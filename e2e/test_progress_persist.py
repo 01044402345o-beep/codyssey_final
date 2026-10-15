@@ -36,7 +36,7 @@ with sync_playwright() as p:
     page.wait_for_timeout(600)
     check("일정표 도달", page.evaluate("S.screen") == "u-sched")
 
-    # 학습일은 기본 '오늘'(2026-09-22)보다 뒤다. 완료하려면 오늘을 그 날로 옮겨야 한다(데모 날짜 조정과 같은 경로).
+    # 학습일은 화면의 오늘보다 뒤다. 완료하려면 오늘을 그 날로 옮겨야 한다(데모 날짜 조정과 같은 경로).
     first = page.evaluate("S.sched.filter(r => r.kind !== 'free')[0].date")
     rowN = page.evaluate("S.sched.filter(r => r.kind !== 'free')[0].ids.length")
     page.evaluate(f"S.today = '{first}'")

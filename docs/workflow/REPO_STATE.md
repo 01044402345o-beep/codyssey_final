@@ -250,3 +250,15 @@ Firestore `(default)`를 asia-northeast3에 만들었다. `firestore.rules`는 �
 이 작업 트리에서 `unittest tests.test_user_state tests.test_firebase_auth`는 17개 통과, `node --test mockup/ai.test.js`는 27개 통과다. 데이터베이스를 만들기 전 같은 `mockup/app.js`에 대해 Playwright `e2e/test_account_storage.py` 14, `e2e/test_progress_persist.py` 16, `e2e/test_consent.py` 37이 통과했다. 그 화면 검사는 다시 돌리지 않았다.
 
 세션 디렉터리: `C:\Users\seong\.grok\sessions\C%3A%5CUsers%5Cseong%5CDesktop%5CProJect%5Ccodyssey_final\01a138a0-a233-7ca1-843c-3de2a5de06b6`
+
+## 이번 작업 — 장소 화면 연결 (2026-10-16)
+
+사용자가 목업 동결을 풀었다. 팀 main `d4ad4f7`에서 `feat/itinerary-screen`으로 분기했다. 공개 `ITINERARY_ENABLED`는 켜지 않았고 Render 환경과 배포는 바꾸지 않았다. 이 브랜치는 머지하지 않는다. 머지 전에는 공개 사이트가 예시 데이터다.
+
+`POST /itinerary`는 도시 하나의 장소 수집만 한다. `category_id`가 없고 문장 팩을 만들지 않는다. 플래그가 꺼지면 `itinerary_disabled`를 바로 돌려준다. `/generate`의 itinerary 형제는 그대로다.
+
+화면의 오늘은 로컬 달력일이다. `preset`과 해시 `#u-report`는 예시 장소를 유지하고 `/itinerary`를 부르지 않는다. `preset`은 `BASE_TODAY` 축을 유지한다. 장소가 없을 때 `ensure`는 예시 목록으로 채운다. 확인된 하루 블록이 있으면 메뉴의 계획 진입도 그 블록을 유지한다. 사용자가 보고서를 요청할 때만 `/itinerary`를 도시마다 부른다. 모든 도시가 플래그 꺼짐이거나 네트워크 실패면 예시 목록과 기존 고지로 돌아간다. 확인된 장소가 없으면 예시 장소로 채우지 않는다. 성공한 도시만 남긴다. 하루 블록이 있으면 도시 시작일에 맞춰 보여주고, 선택을 끈 장소는 뺀다. 블록이 없으면 기존 코드 배치를 쓴다. 실제 장소 가운데 관광지와 카페는 `/generate`로 보내지 않는다. 한국어 문장은 비어 있지 않을 때만 보여 주고, `why`는 화면에 복사하지 않는다.
+
+이 작업 트리에서 `unittest tests.test_itinerary`는 23개 통과, `node --test mockup/ai.test.js`는 33개 통과다. Playwright `e2e/test_itinerary_screen.py`는 14가 통과했다. 메뉴로 계획을 열어도 하루 블록이 유지되는 검사가 들어 있다. `e2e/test_progress_persist.py` 16과 `e2e/test_consent.py` 37은 그 메뉴 분기를 넣기 직전 트리에서 통과했고, 이번 재실행에는 넣지 않았다. Places 왕복은 다시 하지 않았다. FR-03과 FR-04는 부분이다.
+
+세션 디렉터리: `C:\Users\seong\.grok\sessions\C%3A%5CUsers%5Cseong%5CDesktop%5CProJect%5Ccodyssey_final\01a138a0-a233-7ca1-843c-3de2a5de06b6`
