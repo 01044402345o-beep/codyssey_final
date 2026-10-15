@@ -1317,7 +1317,7 @@ function go(id) {
    예전에는 pushState·popstate 가 하나도 없어서 하단 < 를 누르면 이전 화면이 아니라
    브라우저가 앱을 닫았다(2차 사용자 피드백). 화면 이동을 히스토리에 쌓고 되돌린다.
    오버레이(확인 상자·서랍)는 열 때 한 칸 쌓아서, 뒤로가기가 그것만 먼저 닫게 한다. */
-const NAV_MAX = 6;      // 이보다 깊이 쌓지 않는다. 뒤로가기를 열 번 눌러야 홈이 되는 것을 막는다.
+const NAV_MAX = 6;      // 이 길이에 닿으면 pushState 대신 현재 항목을 바꾼다. 브라우저 기록은 더 늘지 않는다.
 const navStack = [];
 let navQuiet = false;   // popstate 처리 중에는 push 하지 않는다(무한 루프 방지)
 
@@ -1325,9 +1325,14 @@ function canHist() { return typeof history !== 'undefined' && typeof history.pus
 function pushScreen(id) {
   if (!canHist() || navQuiet) return;
   if (navStack[navStack.length - 1] === id) return;   // 같은 화면 재진입은 쌓지 않는다(탭 연타)
-  if (navStack.length >= NAV_MAX) navStack.shift();
+  const capped = navStack.length >= NAV_MAX;
+  if (capped) navStack.shift();
   navStack.push(id);
-  try { history.pushState({ screen: id }, ''); } catch (e) { /* 상태 객체 제한 등 */ }
+  try {
+    const state = { screen: id };
+    if (capped) history.replaceState(state, '');   // 현재 항목만 바뀐다. 가장 오래된 항목은 그대로다.
+    else history.pushState(state, '');
+  } catch (e) { /* 상태 객체 제한 등 */ }
 }
 function pushOverlay(kind) {
   if (!canHist() || navQuiet) return;
@@ -1346,6 +1351,7 @@ function onPop(state) {
   if (sideOpen()) { closeSide(); return; }
   const target = (state && typeof state.screen === 'string') ? state.screen : null;
   if (!target || target === S.screen) return;         // 같은 화면이면 히스토리만 되감는다
+  if (navStack.indexOf(target) < 0) return;           // 스택에서 빠진 기록(초기화 전 화면)은 되살리지 않는다
   while (navStack.length > 1 && navStack[navStack.length - 1] !== target) navStack.pop();
   navQuiet = true;
   try { go(target); } finally { navQuiet = false; }   // 되돌아가는 이동은 다시 쌓지 않는다
@@ -1401,6 +1407,7 @@ function applyDraftPreset(kind) {
 }
 
 function demoGen(mode) {
+  PROG.done = {}; sessionClear();   // 새 데모 여행 — 날짜가 같아도 이전 완료가 다시 붙지 않게
   ensure('user');
   S.flags.fail = mode === 'fail'; S.flags.stuck = mode === 'stuck';
   createTrip(defaultDraft(S.today));
@@ -1410,6 +1417,7 @@ function demoGen(mode) {
 
 function preset(kind) {
   cancelGen();
+  PROG.done = {}; sessionClear();   // 예시 여행은 직전 완료를 이어받지 않는다
   S.user = DEMO_USER;
   const base = BASE_TODAY;
   const d = defaultDraft(base);
