@@ -267,6 +267,29 @@ class ItineraryTests(unittest.TestCase):
         reasons = [q["reason"] for q in out["queries"]]
         self.assertIn("daily_cap", reasons)
 
+    def test_log_carries_cap_usage_on_the_normal_path(self):
+        """승인 기록의 '로그로 Pro 호출 횟수를 센다'를 로그가 실제로 채우는지."""
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g", GEMINI_API_KEY="k",
+                  ITINERARY_DAILY_CAP="7")
+        with self.assertLogs("app.itinerary", level="INFO") as cap:
+            itinerary.collect_itinerary(
+                self._req(), http=self._http({"places": [_place()]}),
+                run=self._run({"days": []}))
+        line = [m for m in cap.output if "cap_used=" in m][-1]
+        self.assertIn("cap_used=1", line)      # 성공한 HTTP 가 아니라 예약한 질의 수
+        self.assertIn("cap_limit=7", line)
+        self.assertNotIn("X-Goog", line)       # 키는 로그로 나가지 않는다
+
+    def test_log_carries_cap_usage_when_the_cap_is_spent(self):
+        """상한에 걸려 queries=0 으로 끝나는 순간에도 남은 수량을 본다."""
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g", ITINERARY_DAILY_CAP="0")
+        with self.assertLogs("app.itinerary", level="INFO") as cap:
+            out = itinerary.collect_itinerary(self._req(), http=self._http({"places": []}))
+        self.assertEqual(out["reason"], "daily_cap")
+        line = [m for m in cap.output if "reason=daily_cap" in m][-1]
+        self.assertIn("cap_used=0", line)
+        self.assertIn("cap_limit=0", line)
+
     def test_daily_cap_zero_makes_no_http(self):
         self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g", ITINERARY_DAILY_CAP="0")
 
