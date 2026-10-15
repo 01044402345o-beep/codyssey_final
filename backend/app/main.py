@@ -1,11 +1,15 @@
 """Codyssey Final — 최소 백엔드.
 
-엔드포인트는 3개가 상한. 기능을 더 붙이지 마세요.
-Firebase를 걷어낸 이유가 그대로 재발합니다.
-일정은 새 라우트가 아니라 /generate 응답의 itinerary 형제다.
-ITINERARY_ENABLED 의 기본값은 꺼짐이고, 공개 배포에서 켜지 않는다.
+문장 생성과 말하기는 Render 의 이 프로세스에 둔다. 일정은 새 라우트가 아니라
+/generate 응답의 itinerary 형제다. ITINERARY_ENABLED 의 기본값은 꺼짐이고,
+공개 배포에서 켜지 않는다.
+
+로그인은 Firebase Authentication 이다. 화면이 받은 ID 토큰만 확인하고,
+여행 기록은 브라우저에 남긴다. Cloud Functions 로 생성 경로를 옮기지 않는다.
 
   GET  /health       배포·콜드스타트 확인용
+  GET  /auth/config  Firebase 웹 설정. 없으면 enabled=false
+  GET  /auth/me      Authorization: Bearer <Firebase ID 토큰>
   POST /generate     카테고리 문장 생성 (+ 스키마·규칙 검증 후 재생성)
   POST /speak-check  발음 오디오 → 피드백 (멀티모달)
 
@@ -36,6 +40,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
 from starlette.concurrency import run_in_threadpool
 
+from . import firebase_auth
 from . import gemini as ai
 from . import speech_compare as compare
 from . import speech_vad as vad
@@ -376,6 +381,7 @@ def health() -> dict[str, Any]:
         "stt_models": stt.cached_models(),
         "stt_selftest": selftest.status(),
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
+        "firebase_auth": firebase_auth.configured(),
         # 사실 경로의 구글 장소 검색은 붙이지 않았다. google_places 는 그 의미로 남긴다.
         # 일정 플래그와 키는 호출 때마다 읽는다. 임포트 때 고정하지 않는다.
         "itinerary_enabled": itinerary_enabled(),
@@ -789,6 +795,21 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
         "feedback": feedback,
         **meta,
     }
+
+
+@app.get("/auth/config")
+def auth_config() -> dict[str, Any]:
+    """브라우저용 Firebase 공개 설정. 비밀이 아니다. 값이 없으면 화면은 데모 로그인을 쓴다."""
+    return firebase_auth.public_config()
+
+
+@app.get("/auth/me")
+def auth_me(request: Request) -> dict[str, str]:
+    """Firebase ID 토큰의 계정. 생성·말하기는 이 확인을 요구하지 않는다."""
+    try:
+        return firebase_auth.verify_bearer(request.headers.get("authorization") or "")
+    except firebase_auth.AuthError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.code) from exc
 
 
 # 화면(목업)을 같은 서비스에서 서빙한다. 반드시 모든 API 라우트 등록 뒤에 마운트한다.

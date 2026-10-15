@@ -68,6 +68,8 @@ const STATUS_KO = {
 const STALE_MS = 15 * 60 * 1000;
 const BASE_TODAY = '2026-09-22';
 const DEMO_USER = { name: '김여행', email: 'demo.traveler@gmail.com' };
+function userName() { return (S.user && S.user.name) || DEMO_USER.name; }
+function userEmail() { return (S.user && S.user.email) || DEMO_USER.email; }
 
 /* ================= 계산 규칙 (shared/rules) ================= */
 const R = {
@@ -196,6 +198,7 @@ const R = {
 let S;
 let genTimer = null, genToken = 0, placeSeq = 0, genAbort = null;
 const API = AI.apiBase(location);            // 서버 주소(저장하지 않음). base === null 이면 폴백 전용
+if (window.FirebaseAuth) FirebaseAuth.start();
 /* window.localStorage 는 사이트 데이터 차단 시 접근만 해도 SecurityError 를 던진다. 그러면 null — AI.* 저장 함수는 null 을 "저장 불가"로 처리한다 */
 const STORE = (() => { try { return window.localStorage; } catch (e) { return null; } })();
 const weakList = () => AI.loadWeak(STORE);
@@ -255,7 +258,7 @@ function defaultDraft(base) {
 function initState() {
   cancelGen();
   S = {
-    screen: 'u-login', user: null, today: BASE_TODAY,
+    screen: 'u-login', user: null, authMode: 'login', today: BASE_TODAY,
     flags: { fail: false, stuck: false, routeInvalid: false, noTts: false },
     draft: defaultDraft(BASE_TODAY), showErrors: false,
     trip: null, places: [], reportMeta: {}, days: [], sents: [], smap: {}, sched: [], plan: null, aiPools: {}, aiBy: {},
@@ -801,11 +804,21 @@ function userScreen() {
 
 /* SCR-01 */
 function scrLogin() {
+  const initial = esc(userName().slice(0, 1) || '김');
+  const signed = `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:50%;background:var(--sea);color:var(--on-sea);display:grid;place-items:center;font-weight:700">${initial}</div>
+        <div style="flex:1"><b>${esc(userName())}</b><div class="small">${esc(userEmail())}</div></div></div>
+       <div style="display:flex;gap:8px;margin-top:10px"><button class="btn soft" style="flex:1" data-act="logout">로그아웃</button><button class="btn primary" style="flex:2" data-act="after-login">계속하기</button></div>`;
+  const signup = S.authMode === 'signup';
+  const emailForm = `<form data-act="noop" style="display:flex;flex-direction:column;gap:8px" autocomplete="on">
+        ${signup ? '<input class="input" data-auth="name" placeholder="이름" autocomplete="name" maxlength="40">' : ''}
+        <input class="input" type="email" data-auth="email" placeholder="이메일" autocomplete="username">
+        <input class="input" type="password" data-auth="password" placeholder="비밀번호 (6자 이상)" autocomplete="${signup ? 'new-password' : 'current-password'}">
+        <button class="btn primary block" type="button" data-act="login-email">${signup ? '가입하기' : '이메일로 계속하기'}</button>
+        <button class="btn soft block" type="button" data-act="login-switch">${signup ? '이미 계정이 있어요' : '계정이 없어요 · 가입하기'}</button>
+      </form><p class="small" style="text-align:center;margin:8px 0">또는</p>`;
   const body = S.user
-    ? `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:50%;background:var(--sea);color:var(--on-sea);display:grid;place-items:center;font-weight:700">김</div>
-        <div style="flex:1"><b>${DEMO_USER.name}</b><div class="small">${DEMO_USER.email}</div></div></div>
-       <div style="display:flex;gap:8px;margin-top:10px"><button class="btn soft" style="flex:1" data-act="logout">로그아웃</button><button class="btn primary" style="flex:2" data-act="after-login">계속하기</button></div>`
-    : `<button class="gbtn" data-act="login">${I.google}Google로 계속하기</button>`;
+    ? signed
+    : `${window.FirebaseAuth && FirebaseAuth.enabled ? emailForm : ''}<button class="gbtn" data-act="login">${I.google}Google로 계속하기</button>`;
   return frame(`<div class="login">
     <div class="stamp" aria-hidden="true">TRIP · ENGLISH<br>PASSPORT<br>— 2026 —</div>
     <div class="eyebrow" style="margin-top:130px">Travel English, planned</div>
@@ -1022,7 +1035,7 @@ function scrHome() {
   }
   const upcoming = S.sched.filter(x => x.date > S.today).slice(0, 3);
   const inner = `<div class="app-pad">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 12px"><div><div class="small">안녕하세요</div><b style="font-size:1.125rem">${DEMO_USER.name}님</b></div><span class="badge t-norm">${STATUS_KO[t.status]}</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 12px"><div><div class="small">안녕하세요</div><b style="font-size:1.125rem">${esc(userName())}님</b></div><span class="badge t-norm">${STATUS_KO[t.status]}</span></div>
     ${hero}<div style="height:12px"></div>${today}
     ${pr.miss ? `<div style="height:10px"></div>${notice(`지난 학습 ${pr.miss}일이 미완료예요. 일정표에서 여행 종료일까지 언제든 채울 수 있어요.`, 'warn')}` : ''}
     <div class="sec-title"><h4>진도</h4><button data-act="tab" data-id="u-sched">일정표 ›</button></div>
@@ -1290,7 +1303,8 @@ function admUsers() {
     ...(t ? [{ route: tripTitle(t), state: phase() === 'ended' ? '종료' : STATUS_KO[t.status], cur: true }] : []),
     ...S.archived.map(a => ({ route: a.route, state: '보관' })),
   ];
-  const users = [{ email: DEMO_USER.email, name: DEMO_USER.name + ' (데모)', trips: demoTrips, me: true }, ...MOCK_USERS];
+  const me = S.user && S.user.uid ? S.user : DEMO_USER;
+  const users = [{ email: me.email, name: me.name + (me.uid ? '' : ' (데모)'), trips: demoTrips, me: true }, ...MOCK_USERS];
   return `<h2>사용자 · 여행</h2><p class="desc">현재 여행 = <code>archived = false</code>인 내 여행 (FR-TRIP-05). 새 여행을 만들면 이전 여행은 삭제하지 않고 보관해요 (FR-TRIP-04).</p>
     <div class="panel" style="padding:4px 10px">
       <div class="user-row" style="font-size:0.71875rem;color:var(--text-3)"><span>이름</span><span>이메일</span><span>여행</span></div>
@@ -1613,9 +1627,38 @@ const ACT = {
     SPK.result = { ...SPK.result, offer: false, saved: true, savedBy: 'user' }; updateSpeakUi(); renderDemo(); toast('복습 목록에 저장했어요.');
   },
 
-  login: () => { S.user = DEMO_USER; toast('Google 계정으로 로그인했어요.'); ACT['after-login'](); },
+  login: () => {
+    if (window.FirebaseAuth && FirebaseAuth.enabled) {
+      FirebaseAuth.signInGoogle().then(account => {
+        if (!account) return;
+        S.user = account;
+        toast('Google 계정으로 로그인했어요.');
+        ACT['after-login']();
+      }).catch(err => { const msg = FirebaseAuth.koreanError(err); if (msg) toast(msg); });
+      return;
+    }
+    S.user = DEMO_USER; toast('Google 계정으로 로그인했어요.'); ACT['after-login']();
+  },
+  'login-email': () => {
+    const email = (document.querySelector('[data-auth="email"]') || {}).value || '';
+    const password = (document.querySelector('[data-auth="password"]') || {}).value || '';
+    const name = (document.querySelector('[data-auth="name"]') || {}).value || '';
+    if (!email.trim() || !password) { toast('이메일과 비밀번호를 입력해 주세요.'); return; }
+    const signup = S.authMode === 'signup';
+    FirebaseAuth.signInEmail(email.trim(), password, name.trim(), signup).then(account => {
+      if (!account) return;
+      S.user = account;
+      toast(signup ? '가입했어요.' : '로그인했어요.');
+      ACT['after-login']();
+    }).catch(err => { const msg = FirebaseAuth.koreanError(err); if (msg) toast(msg); });
+  },
+  'login-switch': () => { S.authMode = S.authMode === 'signup' ? 'login' : 'signup'; render(); },
   'after-login': () => go(S.trip && !S.trip.archived ? (S.plan ? 'u-home' : S.places.length ? 'u-report' : 'u-gen') : 'u-input'),
-  logout: () => { S.user = null; toast('로그아웃했어요. 로그인 화면 외에는 들어갈 수 없어요.'); go('u-login'); },
+  logout: () => {
+    const leave = () => { S.user = null; toast('로그아웃했어요. 로그인 화면 외에는 들어갈 수 없어요.'); go('u-login'); };
+    if (window.FirebaseAuth && FirebaseAuth.enabled) FirebaseAuth.signOut().then(leave, leave);
+    else leave();
+  },
 
   'add-city': () => {
     if (S.draft.cities.length >= 5) { toast('도시는 최대 5곳까지 입력할 수 있어요.'); return; }
@@ -1823,6 +1866,13 @@ render();
 const startId = location.hash.slice(1);
 if (SCR[startId]) navFromMenu(startId);
 else sessionResume();
+if (window.FirebaseAuth) {
+  FirebaseAuth.ready.then(account => {
+    if (S.screen !== 'u-login') return;
+    if (account && !(S.user && S.user.uid)) S.user = account;
+    render();
+  });
+}
 
 /* ===== 카드 좌우로 밀어 넘기기 (cardSwipe) =====
    가로로 확정된 제스처만 앞/뒤 카드로 넘긴다 — 세로 스크롤은 브라우저가 그대로 처리한다.
