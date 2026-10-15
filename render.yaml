@@ -19,3 +19,13 @@ services:
       - key: ASSEMBLYAI_API_KEY
         sync: false
       # 교차검증 필수: AssemblyAI(다른 모델 계열 전사). 두 번째 말소리 검출은 로컬 pyannote 모델이라 키가 필요 없다.
+      # 로그인(Firebase Authentication). 비어 있으면 화면은 데모 로그인을 유지한다.
+      # 아래는 웹 앱 공개 설정이다. 서비스 계정 JSON 은 넣지 않는다.
+      - key: FIREBASE_API_KEY
+        sync: false
+      - key: FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_APP_ID
+        sync: false
