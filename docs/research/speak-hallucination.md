@@ -143,6 +143,6 @@ AssemblyAI 는 같은 무음에 빈 결과를 냈다(문헌 B3 과 일치).
 - 정상 발화는 외부 호출이 2번이다(전사 + 피드백). 말소리가 없으면 0번.
 
 ## 5. 검증
-- 수정 전·후 실측: `docs/score_측정_실행법.md` "무음 실측"
+- 수정 전·후 실측: `docs/measurement/score_측정_실행법.md` "무음 실측"
 - 테스트: `backend/tests/test_speech_vad.py`(실제 Silero: 무음·큰 잡음·신호음·실제 브라우저 녹음), `backend/tests/test_speak_pipeline.py`(STT 요청에 목표 문장 없음, 말소리 없으면 외부 호출 0회, 환각 필터, 공급자 체인·쿨다운, AI 점수 무시), `e2e/test_silence.py`(디지털 무음·큰 440Hz 신호음 → 서버 VAD 판정)
 - 뮤테이션: VAD 게이트 제거 / STT 요청에 목표 문장 삽입 / 환각 필터 제거 / 공급자 폴백 제거 → 각각 테스트 실패

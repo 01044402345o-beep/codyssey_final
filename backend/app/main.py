@@ -123,7 +123,7 @@ _proxy_logged = False
 def _log_proxy_chain_once(peer: str, xff: str) -> None:
     """TRUSTED_PROXY_HOPS 를 정할 근거. 프로세스마다 X-Forwarded-For 가 붙은 첫 요청 한 번만 남긴다.
 
-    내 공인 IP 가 체인 끝에서 몇 번째인지가 TRUSTED_PROXY_HOPS 값이다 (docs/DEPLOY_RUNBOOK.md F14).
+    내 공인 IP 가 체인 끝에서 몇 번째인지가 TRUSTED_PROXY_HOPS 값이다 (docs/deploy/DEPLOY_RUNBOOK.md F14).
     연결 상대는 uvicorn 이 이미 바꾼 값일 수 있다(연결이 127.0.0.1 에서 오면 X-Forwarded-For 를 반영).
     """
     global _proxy_logged

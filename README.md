@@ -56,7 +56,7 @@
 | 배포 | **Render** (무료) | GitHub `main` 머지 시 자동 배포 |
 | CI | **GitHub Actions** | PR 마다 단위 테스트 + 브라우저 E2E(Playwright) |
 
-기획 초기안은 React + Firebase 였다(`기술스택.md`, `prd.md` — 이력으로 보존). 배포를 먼저 확보하고 범위를 줄이기 위해 Render + FastAPI 로 바꿨다(`backend/README.md`).
+기획 초기안은 React + Firebase 였다(`docs/planning/기술스택.md`, `docs/planning/prd.md` — 이력으로 보존). 배포를 먼저 확보하고 범위를 줄이기 위해 Render + FastAPI 로 바꿨다(`backend/README.md`).
 
 ## 5. 시스템 아키텍처
 
@@ -142,7 +142,7 @@ python ../e2e/test_silence.py http://localhost:8000 && python ../e2e/test_consen
 
 ## 9. 결과
 
-### 말하기 채점 — 배포 서버 실측 (`docs/score_측정_실행법.md`)
+### 말하기 채점 — 배포 서버 실측 (`docs/measurement/score_측정_실행법.md`)
 | 입력 | 처음 구조 (Gemini 에 녹음 + 목표 문장) | 현재 (신경망 VAD 2개 + 전용 STT 교차검증) |
 |---|---|---|
 | 1초 무음 ×10 | 10/10 **95~100점** (목표 문장을 지어냄) | 10/10 **채점 안 함**, 외부 API 0회 |
@@ -169,11 +169,12 @@ python ../e2e/test_silence.py http://localhost:8000 && python ../e2e/test_consen
 | `docs/research/speak-hallucination.md` | 말하기 채점 구조를 바꾼 이유(실측·조사·결정) |
 | `docs/research/references.md` | 참고문헌 34편 |
 | `docs/research/browser-tts.md` | 브라우저 듣기 발음·섞인 단어 조사. `speak()` 는 바꾸지 않음 |
-| `docs/DEPLOY_RUNBOOK.md` | 배포·장애 대응 런북 |
-| `docs/score_측정_실행법.md` | 실측 방법과 결과 |
+| `docs/README.md` | 주제별 문서 목록 |
+| `docs/deploy/DEPLOY_RUNBOOK.md` | 배포·장애 대응 런북 |
+| `docs/measurement/score_측정_실행법.md` | 실측 방법과 결과 |
 | `agent_contract/README.md` | 카테고리 계약 작성 규칙 |
 | `mockup/README.md`, `mockup/SMOKE.md` | 화면 구성·시연 전 점검 |
-| `prd.md`, `시나리오완료.MD`, `기술스택.md` | 초기 기획(Firebase 기준, 이력) |
-| `docs/AGENT_WORKFLOW.md` | 구현 전 단계 계획, 단계별 에이전트 교차검증, 커밋·푸시, 세션 경로 |
-| `docs/REPO_STATE.md` | 그 시점의 브랜치·구조·열린 요구·다음 작업 후보 |
-| `docs/requirements.md` | 현행 요구사항. 범위가 초기 기획과 다르면 이 문서를 따른다 |
+| `docs/planning/prd.md`, `docs/planning/시나리오.md`, `docs/planning/시나리오완료.MD`, `docs/planning/기술스택.md` | 초기 기획(Firebase 기준, 이력) |
+| `docs/workflow/AGENT_WORKFLOW.md` | 구현 전 단계 계획, 단계별 에이전트 교차검증, 커밋·푸시, 세션 경로 |
+| `docs/workflow/REPO_STATE.md` | 그 시점의 브랜치·구조·열린 요구·다음 작업 후보 |
+| `docs/product/requirements.md` | 현행 요구사항. 범위가 초기 기획과 다르면 이 문서를 따른다 |

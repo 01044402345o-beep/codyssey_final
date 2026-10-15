@@ -1,6 +1,6 @@
 # 검토 기록 (review-log)
 
-회차마다 한 블록을 추가한다. 규칙은 `docs/rubric.md`.
+회차마다 한 블록을 추가한다. 규칙은 `docs/assignment/rubric.md`.
 
 ## 회차 N — YYYY-MM-DD
 
