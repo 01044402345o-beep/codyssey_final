@@ -125,3 +125,6 @@ FirebaseAuth.signOut = async function () {
   }
   FirebaseAuth.account = null;
 };
+
+// 클래식 스크립트의 const 는 window 속성이 되지 않는다. app.js 는 window.FirebaseAuth 로 시작한다.
+window.FirebaseAuth = FirebaseAuth;
