@@ -309,9 +309,182 @@
     return { name, os, scheme };
   }
 
+  /* ---------- 일정 수집 (POST /itinerary) ----------
+     문장 팩과 별도다. 날짜는 로컬 달력이 아니라 화면이 가진 YYYY-MM-DD 를 UTC 자정으로 센다.
+     calendarToday 만 브라우저 로컬 연·월·일을 쓴다. toISOString 은 UTC 라 자정 무렵 하루가 밀린다. */
+  function isoDay(s) {
+    const [y, m, d] = String(s || '').split('-').map(Number);
+    if (!y || !m || !d) return NaN;
+    return Date.UTC(y, m - 1, d);
+  }
+  function isoAdd(s, n) {
+    const t = isoDay(s);
+    if (!Number.isFinite(t)) return '';
+    return new Date(t + n * 864e5).toISOString().slice(0, 10);
+  }
+  function isoDiff(a, b) {
+    const x = isoDay(a), y = isoDay(b);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return NaN;
+    return Math.round((x - y) / 864e5);
+  }
+  function calendarToday(now) {
+    const n = now instanceof Date ? now : new Date();
+    const m = String(n.getMonth() + 1).padStart(2, '0');
+    const d = String(n.getDate()).padStart(2, '0');
+    return n.getFullYear() + '-' + m + '-' + d;
+  }
+  const ITINERARY_KINDS = ['restaurant', 'cafe', 'attraction'];
+  function itineraryRequestBody(city) {
+    const days = isoDiff(city && city.end, city && city.start) + 1;
+    return {
+      city: String(city && city.name || '').trim(),
+      days: Number.isFinite(days) ? days : 0,
+      start_date: (city && city.start) || '',
+      itinerary_kinds: ITINERARY_KINDS.slice(),
+    };
+  }
+  /* primary_type 은 서버가 준 영어 값이다. 계약에 없는 종류는 관광지로 두어 문장 생성에 넣지 않는다. */
+  function kindFromPrimary(primary) {
+    const t = String(primary || '').trim().toLowerCase();
+    if (t === 'cafe' || t.endsWith('_cafe') || t === 'coffee_shop') return 'cafe';
+    if (t === 'restaurant' || t.endsWith('_restaurant') || t === 'meal_takeaway' || t === 'meal_delivery' || t === 'bakery' || t === 'bar') return 'restaurant';
+    return 'attraction';
+  }
+  function livePlace(raw, cityName, n) {
+    const data = raw && raw.data && typeof raw.data === 'object' ? raw.data : {};
+    const providerId = String(raw.provider_id);
+    const name = String(raw.name || '').trim();
+    const primary = typeof data.primary_type === 'string' ? data.primary_type : '';
+    const address = typeof data.formatted_address === 'string' ? data.formatted_address : '';
+    const url = typeof raw.source_url === 'string' ? raw.source_url : '';
+    return {
+      id: 'g' + n,
+      providerId, city: cityName, kind: kindFromPrimary(primary), live: true,
+      name, en: name, area: address, desc: '', reason: '',
+      cuisine: null, menuEn: null, menuKo: null,
+      sources: url ? [{ url, title: 'Google Maps' }] : [],
+      primaryType: primary,
+      attribution: typeof raw.attribution === 'string' && raw.attribution ? raw.attribution : 'Google Maps',
+      fetchedAt: typeof raw.fetched_at === 'string' ? raw.fetched_at : '',
+      isCandidate: false, selected: false, visitDate: null, visitOrder: null, count: 0,
+    };
+  }
+  function classifyItinerary(result) {
+    const empty = { places: [], days: [], queries: [] };
+    if (!result || result.error || !result.body || typeof result.body !== 'object') return { kind: 'down', reason: 'network', ...empty };
+    const body = result.body;
+    const reason = typeof body.reason === 'string' ? body.reason : '';
+    const queries = Array.isArray(body.queries) ? body.queries : [];
+    if (reason === 'itinerary_disabled') return { kind: 'disabled', reason, ...empty };
+    const places = Array.isArray(body.places) ? body.places.filter(p => p && typeof p.provider_id === 'string' && p.provider_id && typeof p.name === 'string' && p.name.trim()) : [];
+    const days = Array.isArray(body.days) ? body.days : [];
+    if (!places.length) return { kind: 'empty', reason: reason || 'no_verified_places', places: [], days: [], queries };
+    return { kind: 'live', reason, places, days, queries };
+  }
+  function dayHasBlock(days) {
+    return (days || []).some(d => Array.isArray(d.blocks) && d.blocks.some(b => b && b.place_id));
+  }
+  /* 모든 도시가 플래그 꺼짐이거나 네트워크 실패면 example. 확인된 장소가 없으면 empty. 한 도시라도 있으면 live.
+     빈 도시는 예시 장소로 채우지 않는다. 하루 블록이 하나도 없으면 blocksByCity 는 null 이다. */
+  function foldItinerary(cities, results, caps) {
+    const rows = (cities || []).map((city, i) => ({ city, outcome: classifyItinerary(results && results[i]) }));
+    if (!rows.length || rows.every(r => r.outcome.kind === 'disabled' || r.outcome.kind === 'down')) {
+      return { mode: 'example', places: [], meta: {}, blocksByCity: null };
+    }
+    const places = [];
+    const meta = {};
+    const blocksByCity = {};
+    let seq = 0;
+    let anyBlock = false;
+    rows.forEach(r => {
+      const name = r.city.name;
+      const o = r.outcome;
+      if (o.kind !== 'live') {
+        meta[name] = { base: 0, found: 0, mode: o.kind === 'disabled' ? 'disabled' : 'empty', reason: o.reason, queries: o.queries };
+        blocksByCity[name] = [];
+        return;
+      }
+      const mapped = o.places.map(p => livePlace(p, name, ++seq));
+      const hasBlocks = dayHasBlock(o.days);
+      if (hasBlocks) anyBlock = true;
+      const cap = caps && Number(caps[name]);
+      const limit = Number.isFinite(cap) && cap > 0 ? cap : mapped.length;
+      const base = hasBlocks ? mapped.length : Math.min(mapped.length, limit);
+      mapped.forEach((p, i) => { p.selected = i < base; });
+      places.push(...mapped);
+      meta[name] = { base, found: mapped.length, mode: 'live', reason: o.reason, queries: o.queries };
+      blocksByCity[name] = o.days;
+    });
+    return {
+      mode: places.length ? 'live' : 'empty',
+      places, meta,
+      blocksByCity: anyBlock ? blocksByCity : null,
+    };
+  }
+  const BLOCK_ORDER = { morning: 0, afternoon: 1, evening: 2 };
+  /* 서버 day 는 1부터다. n 은 그 도시 시작일 + (n-1) 이다. 선택을 끈 장소의 블록은 뺀다. why 는 복사하지 않는다. */
+  function placeBlocksOnDays(days, places, cities, blocksByCity) {
+    const out = (days || []).map(d => ({ ...d, cap: { attr: d.cap.attr, rest: d.cap.rest }, placeIds: [], blocks: [] }));
+    const byProvider = {};
+    (places || []).forEach(p => { if (p && p.providerId) byProvider[p.providerId] = p; });
+    const placed = new Set();
+    (cities || []).forEach(city => {
+      const rows = out.filter(d => d.city === city.name);
+      const byDate = {};
+      rows.forEach(d => { byDate[d.date] = d; });
+      const serverDays = (blocksByCity && blocksByCity[city.name]) || [];
+      serverDays.forEach(day => {
+        const n = Number(day && day.day);
+        if (!Number.isFinite(n)) return;
+        const row = byDate[isoAdd(city.start, n - 1)];
+        if (!row) return;
+        const blocks = (Array.isArray(day.blocks) ? day.blocks : []).slice()
+          .sort((a, b) => (BLOCK_ORDER[a.time_label] ?? 9) - (BLOCK_ORDER[b.time_label] ?? 9));
+        blocks.forEach(block => {
+          const p = byProvider[block && block.place_id];
+          if (!p || !p.selected || placed.has(p.id) || p.city !== city.name) return;
+          placed.add(p.id);
+          row.placeIds.push(p.id);
+          p.visitDate = row.date;
+          p.visitOrder = row.placeIds.length;
+          const ko = typeof block.sentence_ko === 'string' ? block.sentence_ko.trim() : '';
+          row.blocks.push({ placeId: p.id, time: block.time_label, ko });
+        });
+      });
+      (places || []).filter(p => p && p.selected && p.city === city.name && !placed.has(p.id)).forEach(p => {
+        const row = rows[0];
+        if (!row) return;
+        placed.add(p.id);
+        row.placeIds.push(p.id);
+        p.visitDate = row.date;
+        p.visitOrder = row.placeIds.length;
+      });
+      rows.forEach(row => {
+        const room = row.cap.attr + row.cap.rest;
+        if (row.placeIds.length > room) row.cap = { attr: row.placeIds.length, rest: 0 };
+      });
+    });
+    return out;
+  }
+  async function collectItinerary({ fetchImpl, base, cities, signal, timeoutMs = GEN_TIMEOUT_MS }) {
+    const list = cities || [];
+    const down = city => ({ city: city.name, error: 'network', body: null });
+    if (base === null || base === undefined) return list.map(down);
+    const jobs = list.map(async city => {
+      const t = withTimeout(signal, timeoutMs);
+      try {
+        const body = await postJson(fetchImpl, base + '/itinerary', itineraryRequestBody(city), t.signal);
+        return { city: city.name, error: null, body };
+      } catch (e) { return down(city); }
+      finally { t.done(); }
+    });
+    return Promise.all(jobs);
+  }
+
   const api = {
     inAppBrowser, WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
     categoryOfKind,
+    calendarToday, itineraryRequestBody, kindFromPrimary, foldItinerary, placeBlocksOnDays, collectItinerary,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, scopedStorage, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
   };

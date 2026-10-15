@@ -356,6 +356,50 @@ class ItineraryTests(unittest.TestCase):
         self.assertLess(elapsed, 0.35)
         self.assertEqual(res.json()["itinerary"]["reason"], "itinerary_disabled")
 
+    def test_itinerary_route_flag_off_skips_sentences(self):
+        self._env(ITINERARY_ENABLED="0", GOOGLE_MAPS_API_KEY="g", GEMINI_API_KEY="gem")
+
+        def boom(*_a, **_k):
+            raise AssertionError("called")
+
+        with mock.patch("app.main._generate_sentences", side_effect=boom), \
+                mock.patch("app.agents.itinerary.ai.generate_text", side_effect=boom), \
+                mock.patch("app.agents.itinerary._default_http", side_effect=boom):
+            res = self.client.post("/itinerary", json={
+                "city": "New York",
+                "days": 3,
+                "start_date": "2026-10-16",
+                "itinerary_kinds": ["restaurant", "cafe", "attraction"],
+            })
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), {"status": "unavailable", "reason": "itinerary_disabled"})
+        self.assertNotIn("pack", res.json())
+
+    def test_itinerary_route_bad_date_is_not_a_validation_error(self):
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g", GEMINI_API_KEY="gem")
+
+        def boom(*_a, **_k):
+            raise AssertionError("called")
+
+        with mock.patch("app.main._generate_sentences", side_effect=boom), \
+                mock.patch("app.agents.itinerary.ai.generate_text", side_effect=boom):
+            res = self.client.post("/itinerary", json={
+                "city": "New York",
+                "days": 20,
+                "start_date": "2026-10-16",
+                "itinerary_kinds": ["restaurant", "cafe", "attraction"],
+            })
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["reason"], "bad_date")
+        self.assertNotIn("pack", res.json())
+
+    def test_itinerary_route_is_rate_limited(self):
+        self._env(ITINERARY_ENABLED="0")
+        last = None
+        for _ in range(main.RATE_LIMIT + 1):
+            last = self.client.post("/itinerary", json={"city": "New York", "days": 1})
+        self.assertEqual(last.status_code, 429)
+
 
 if __name__ == "__main__":
     unittest.main()
