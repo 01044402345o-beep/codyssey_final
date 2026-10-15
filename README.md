@@ -67,6 +67,7 @@
 FastAPI (backend/app/main.py) ─ Render
    ├─ GET  /health        배포 커밋·키 상태·모델 상태
    ├─ GET·PUT /user/state 로그인한 계정의 진도·복습·동의 (여행 본문 없음)
+   ├─ POST /itinerary     도시 하나의 장소 수집. 기본 플래그 꺼짐. 문장 팩은 만들지 않음
    ├─ POST /generate      카테고리 계약 → Gemini 생성 → 스키마·규칙 검증 → block 이면 재생성
    └─ POST /speak-check   PyAV → Silero VAD ─┐
                           로컬 pyannote ─────┴ 둘 다 말소리? 아니면 끝(외부 호출 0)

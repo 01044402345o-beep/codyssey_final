@@ -1,11 +1,12 @@
 # 백엔드 — 배포 먼저
 
-문장 생성과 말하기는 아래 두 경로다. 로그인과 계정 기록은 그 뒤에 붙었다. 생성 경로를 Cloud Functions 로 옮기지 않는다.
+문장 생성과 말하기는 아래 경로다. 장소 수집은 문장 팩과 분리된 `POST /itinerary`다. 로그인과 계정 기록은 그 뒤에 붙었다. 생성 경로를 Cloud Functions 로 옮기지 않는다.
 
 | 메서드 | 경로 | 역할 |
 |---|---|---|
 | GET | `/health` | 배포 확인 + 시연 전 콜드스타트 깨우기 |
 | POST | `/generate` | 카테고리 문장 생성 → 스키마·규칙 검증 → 위반 시 재생성. 토큰 불필요 |
+| POST | `/itinerary` | 도시 하나의 장소 수집. `category_id` 없음. 플래그 기본값은 꺼짐이라 그때는 `itinerary_disabled`. 토큰 불필요 |
 | POST | `/speak-check` | 녹음 → **Silero VAD**(말소리 없으면 끝) → **전용 STT**(Groq Whisper 등, 목표 문장 모름) → 환각 필터·단어 비교(코드) → 피드백(Gemini, 오디오 없음). 근거: `docs/research/speak-hallucination.md`. 토큰 불필요 |
 | GET | `/auth/config` | Firebase 웹 공개 설정. 없으면 `enabled: false` (데모 로그인) |
 | GET | `/auth/me` | Firebase ID 토큰의 계정 |

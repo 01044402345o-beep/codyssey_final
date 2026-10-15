@@ -1,8 +1,8 @@
-"""일정 오케스트레이터. 문장 팩과 분리된 /generate 형제다.
+"""일정 오케스트레이터. 문장 팩과 분리된다.
 
 플래그 ITINERARY_ENABLED 의 기본값은 꺼짐이다. 꺼져 있으면 Places 와 일정 Gemini 를
-호출하지 않는다. 공개 배포에서 이 플래그를 켜지 않는다. 화면은 2026-10-22 이전 2차
-사용자 테스트에 넣지 않는다.
+호출하지 않고 itinerary_disabled 를 돌려준다. 공개 배포에서 이 플래그를 켜지 않는다.
+POST /itinerary 는 이 함수만 호출한다. 문장 팩은 /generate 에 남긴다.
 
 1차 장소 조회는 Google Places Text Search (New) 의 Pro 필드 마스크만 쓴다.
 Kakao, OSM, Routes, 영업시간, 평점, 가격, 그라운딩은 호출하지 않는다.

@@ -83,6 +83,7 @@ jobs:
           python ../e2e/test_back_nav.py http://localhost:8768   # 하단 뒤로가기 = 이전 화면
           python ../e2e/test_progress_persist.py http://localhost:8768   # 새로고침 진도 유지
           python ../e2e/test_account_storage.py http://localhost:8768   # 계정마다 진도·복습 키
+          python ../e2e/test_itinerary_screen.py http://localhost:8768   # 오늘 날짜·예시 보고서·하루 블록
       - uses: actions/upload-artifact@v4
         if: always()
         with:

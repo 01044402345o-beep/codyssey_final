@@ -1,8 +1,10 @@
 """Codyssey Final — 최소 백엔드.
 
-문장 생성과 말하기는 Render 의 이 프로세스에 둔다. 일정은 새 라우트가 아니라
-/generate 응답의 itinerary 형제다. ITINERARY_ENABLED 의 기본값은 꺼짐이고,
-공개 배포에서 켜지 않는다.
+문장 생성과 말하기는 Render 의 이 프로세스에 둔다.
+POST /itinerary 는 장소 수집만 한다. 문장 팩은 만들지 않는다.
+ITINERARY_ENABLED 의 기본값은 꺼짐이고, 공개 배포에서 켜지 않는다.
+플래그가 꺼지면 /itinerary 는 바로 itinerary_disabled 를 돌려준다.
+/generate 의 itinerary 형제는 그대로다.
 
 로그인은 Firebase Authentication 이다. 화면이 받은 ID 토큰만 확인한다.
 로그인한 계정의 진도·복습 목록·말하기 동의는 /user/state 에 둔다.
@@ -14,6 +16,7 @@
   GET  /user/state   그 토큰 uid 의 진도·복습·동의. 없으면 빈 기록
   PUT  /user/state   같은 기록을 갈아 끼운다. 본문의 uid 는 받지 않는다
   POST /generate     카테고리 문장 생성 (+ 스키마·규칙 검증 후 재생성). 토큰 불필요
+  POST /itinerary    도시 하나의 장소 수집. category_id 없음. 토큰 불필요
   POST /speak-check  발음 오디오 → 피드백 (멀티모달). 토큰 불필요
 
 모델은 고정하지 않고 호출 시점의 사용 가능 목록에서 고르며, AI API 호출은
@@ -209,6 +212,15 @@ class GenerateRequest(BaseModel):
     weak_expressions: list[ContractId] = Field(default_factory=list, max_length=20)
     # 플래그가 꺼지면 읽지 않는다. 문장 프롬프트에 넣지 않는다.
     # 범위가 틀려도 요청 전체를 422로 죽이지 않고, 일정 형제만 bad_date 가 된다.
+    days: int | None = None
+    start_date: str | None = Field(default=None, max_length=10)
+    itinerary_kinds: list[str] = Field(default_factory=list, max_length=4)
+
+
+class ItineraryRequest(BaseModel):
+    """문장 팩 없이 도시 하나의 장소만 묻는다. 날짜가 범위를 벗어나도 422로 죽이지 않는다."""
+
+    city: str = Field(min_length=1, max_length=80)
     days: int | None = None
     start_date: str | None = Field(default=None, max_length=10)
     itinerary_kinds: list[str] = Field(default_factory=list, max_length=4)
@@ -439,6 +451,20 @@ def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     res["elapsed_ms"] = res["timing_ms"]["total"]
     res["thinking_budget"] = (os.getenv("GEMINI_THINKING_BUDGET") or "").strip() or None
     return res
+
+
+@app.post("/itinerary")
+def post_itinerary(req: ItineraryRequest, request: Request) -> dict[str, Any]:
+    """장소 수집만 한다. 문장 생성은 호출하지 않는다.
+
+    플래그가 꺼져 있으면 collect_itinerary 가 Places 와 Gemini 를 부르기 전에 돌아온다.
+    """
+    rate_limit(request)
+    try:
+        return collect_itinerary(req)
+    except Exception as exc:  # noqa: BLE001 — 수집 실패는 화면이 예시로 돌아갈 수 있게 unavailable
+        logging.getLogger("app.itinerary").warning("itinerary error %s", type(exc).__name__)
+        return {"status": "unavailable", "reason": "itinerary_error"}
 
 
 def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
