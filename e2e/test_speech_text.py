@@ -93,11 +93,12 @@ with sync_playwright() as p:
         page.locator('[data-act="flip"]').first.click()
         page.wait_for_timeout(400)
         shown = page.locator(".face.back .en").first.inner_text().strip()
+        page.evaluate("window.__spoken = []")
         page.locator('[data-act="speak-card"]').first.click(force=True)
         page.wait_for_timeout(250)
-        spoken = page.evaluate("window.__spoken.at(-1)")
-        check("학습 카드: 음성 == 화면(대괄호 제외)", spoken == strip(shown),
-              f"화면={shown!r} 음성={spoken!r}")
+        fresh = page.evaluate("window.__spoken.slice()")
+        check("학습 카드: 음성 == 화면(대괄호 제외)", fresh == [strip(shown)],
+              f"화면={shown!r} 음성={fresh!r}")
     else:
         check("학습 카드 도달", False, str(page.evaluate("S.screen")))
 

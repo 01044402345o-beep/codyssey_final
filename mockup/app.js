@@ -199,6 +199,45 @@ const API = AI.apiBase(location);            // 서버 주소(저장하지 않�
 /* window.localStorage 는 사이트 데이터 차단 시 접근만 해도 SecurityError 를 던진다. 그러면 null — AI.* 저장 함수는 null 을 "저장 불가"로 처리한다 */
 const STORE = (() => { try { return window.localStorage; } catch (e) { return null; } })();
 const weakList = () => AI.loadWeak(STORE);
+/* ---------- A3: 새로고침해도 학습 진도가 남는다 ----------
+   저장하는 것은 '진도'뿐이다 — 완료한 날짜와 보던 화면·카드 위치.
+   여행·장소·문장은 같은 규칙으로 다시 만들어지므로 담지 않는다(용량 초과와 어긋남을 막는다).
+   저장소가 막힌 브라우저(STORE === null)에서는 기능만 조용히 꺼진다. */
+const SESSION_KEY = 'cd_session';
+const SESSION_V = 1;
+const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000;   /* 30일 지난 기록은 버린다 */
+const PROG = { done: {} };                          /* 'YYYY-MM-DD' → 완료 시각(ms). 계획을 다시 만들어도 날짜로 다시 붙는다 */
+const RESTORE = { screen: null, studyDate: null, card: null };
+let SESS_READY = false;                             /* 복원이 끝나기 전에는 저장하지 않는다 — 빈 진도로 덮어쓰지 않기 위해 */
+
+function sessionRead() {
+  if (!STORE) return null;
+  try {
+    const d = JSON.parse(STORE.getItem(SESSION_KEY) || 'null');
+    if (!d || d.v !== SESSION_V || typeof d.at !== 'number' || Date.now() - d.at > SESSION_MAX_AGE) return null;
+    return d;
+  } catch (e) { return null; }
+}
+function sessionWrite() {
+  if (!STORE || !SESS_READY) return;
+  try {
+    STORE.setItem(SESSION_KEY, JSON.stringify({
+      v: SESSION_V, at: Date.now(), done: PROG.done, screen: S.screen, studyDate: S.studyDate,
+      card: S.card ? { date: S.card.date, i: S.card.i, back: S.card.back ?? null, flipped: [...S.card.flipped] } : null,
+    }));
+  } catch (e) { /* 저장 불가(시크릿 모드·용량 초과): 이번 방문 동안만 유지 */ }
+}
+function sessionClear() { if (!STORE) return; try { STORE.removeItem(SESSION_KEY); } catch (e) { /* 저장소 막힘 */ } }
+/* S.sched 는 매번 새로 만들어지므로, 저장해 둔 완료 기록을 날짜로 다시 붙인다 */
+function applyProgress() {
+  if (!S || !S.sched) return;
+  S.sched.forEach(r => {
+    if (r.kind === 'free') return;
+    const at = PROG.done[r.date];
+    if (at) { r.completed = true; r.completedAt = at; }
+    else { r.completed = false; r.completedAt = null; }
+  });
+}
 /* 생성 취소: 토큰을 올려 오래된 응답이 상태를 덮어쓰지 못하게 하고, 진행 중 요청도 중단한다 */
 function cancelGen() { genToken++; clearTimeout(genTimer); if (genAbort) { genAbort.abort(); genAbort = null; } }
 
@@ -368,6 +407,7 @@ function buildPlan() {
     deferred: deferred.size, tripNew: sents.filter(s => s.learnPhase === 'trip').length, none: sents.filter(s => s.learnPhase === 'none').length,
   };
   resetCard();
+  applyProgress();   /* 계획을 다시 만들어도 저장해 둔 완료 기록이 다시 붙는다 */
 }
 
 function makeRoute() {
@@ -688,6 +728,7 @@ function render() {
   else window.scrollTo(0, same ? prevTop : 0);
   { const nl = $('.split-list'); if (nl && prevListTop) nl.scrollTop = prevListTop; }
   S.lastScreen = S.screen;
+  sessionWrite();   /* 진도·보던 화면 저장 — 모든 상태 변화가 여기를 지난다 */
 }
 
 function notes(sc) {
@@ -740,7 +781,7 @@ function modalHtml(center = false) {
     <div class="acts"><button class="btn soft" data-act="modal-cancel">${m.cancel || '취소'}</button><button class="btn ${m.danger ? 'accent' : 'primary'}" data-act="modal-ok">${m.ok}</button></div></div></div>`;
 }
 let modalFn = null;
-function confirmBox(title, body, ok, fn, o = {}) { S.modal = { title, body, ok, ...o }; modalFn = fn; render(); }
+function confirmBox(title, body, ok, fn, o = {}) { S.modal = { title, body, ok, ...o }; modalFn = fn; pushOverlay('modal'); render(); }
 
 function userScreen() {
   switch (S.screen) {
@@ -1267,7 +1308,52 @@ function toast(msg) {
 
 /* 상황별 연습은 카드 상태(S.card)를 잠시 빌려 쓴다 — 끝낼 때 날짜별 학습의 카드 위치·뒤집은 카드를 그대로 돌려놓는다 */
 function endDrill() { if (S.drill) { S.card = S.drill.savedCard; S.drill = null; } }
-function go(id) { cancelSpeak(); S.card.back = null; if (id !== 'u-study') endDrill(); S.screen = id; S.modal = null; render(); }
+function go(id) {
+  cancelSpeak(); S.card.back = null; if (id !== 'u-study') endDrill();
+  S.screen = id; S.modal = null; pushScreen(id); render();
+}
+
+/* ================= 화면 히스토리 (안드로이드 하단 뒤로가기) =================
+   예전에는 pushState·popstate 가 하나도 없어서 하단 < 를 누르면 이전 화면이 아니라
+   브라우저가 앱을 닫았다(2차 사용자 피드백). 화면 이동을 히스토리에 쌓고 되돌린다.
+   오버레이(확인 상자·서랍)는 열 때 한 칸 쌓아서, 뒤로가기가 그것만 먼저 닫게 한다. */
+const NAV_MAX = 6;      // 이보다 깊이 쌓지 않는다. 뒤로가기를 열 번 눌러야 홈이 되는 것을 막는다.
+const navStack = [];
+let navQuiet = false;   // popstate 처리 중에는 push 하지 않는다(무한 루프 방지)
+
+function canHist() { return typeof history !== 'undefined' && typeof history.pushState === 'function'; }
+function pushScreen(id) {
+  if (!canHist() || navQuiet) return;
+  if (navStack[navStack.length - 1] === id) return;   // 같은 화면 재진입은 쌓지 않는다(탭 연타)
+  if (navStack.length >= NAV_MAX) navStack.shift();
+  navStack.push(id);
+  try { history.pushState({ screen: id }, ''); } catch (e) { /* 상태 객체 제한 등 */ }
+}
+function pushOverlay(kind) {
+  if (!canHist() || navQuiet) return;
+  try { history.pushState({ screen: S.screen, overlay: kind }, ''); } catch (e) { /* 무시 */ }
+}
+function resetHistory(id) {
+  navStack.length = 0; navStack.push(id);
+  if (canHist()) { try { history.replaceState({ screen: id }, ''); } catch (e) { /* 무시 */ } }
+}
+function sideOpen() { const el = $('#side'); return !!(el && el.classList.contains('open')); }
+function closeSide() { const el = $('#side'); if (el) el.classList.remove('open'); }
+
+function onPop(state) {
+  // 열려 있는 것부터 닫는다. 사용자가 '취소'를 기대하는 순서다.
+  if (S.modal) { S.modal = null; modalFn = null; render(); return; }
+  if (sideOpen()) { closeSide(); return; }
+  const target = (state && typeof state.screen === 'string') ? state.screen : null;
+  if (!target || target === S.screen) return;         // 같은 화면이면 히스토리만 되감는다
+  while (navStack.length > 1 && navStack[navStack.length - 1] !== target) navStack.pop();
+  navQuiet = true;
+  try { go(target); } finally { navQuiet = false; }   // 되돌아가는 이동은 다시 쌓지 않는다
+}
+if (canHist()) {
+  window.addEventListener('popstate', e => onPop(e.state || null));
+  resetHistory('u-login');
+}
 
 function navFromMenu(id) {
   S.modal = null;
@@ -1282,6 +1368,27 @@ function navFromMenu(id) {
   if (id === 'u-study') { S.studyDate = null; endDrill(); }
   S.justCompleted = null;
   go(id);
+}
+
+/* 새로고침 복원: 저장해 둔 진도·화면·카드를 되살린다. 저장분이 없거나 못 쓰면 첫 화면 그대로 뜬다 */
+function sessionResume() {
+  const d = sessionRead();
+  if (d) {
+    if (d.done && typeof d.done === 'object')
+      Object.keys(d.done).forEach(k => { if (/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof d.done[k] === 'number') PROG.done[k] = d.done[k]; });
+    RESTORE.screen = typeof d.screen === 'string' ? d.screen : null;
+    RESTORE.studyDate = typeof d.studyDate === 'string' ? d.studyDate : null;
+    const c = d.card;
+    if (c && typeof c.date === 'string' && Number.isInteger(c.i) && c.i >= 0 && Array.isArray(c.flipped))
+      RESTORE.card = { date: c.date, i: c.i, back: Number.isInteger(c.back) ? c.back : null, flipped: c.flipped.filter(k => Number.isInteger(k) && k >= 0) };
+  }
+  const dest = RESTORE.screen && RESTORE.screen !== 'u-login' && SCR[RESTORE.screen] ? RESTORE.screen : null;
+  if (!dest) { SESS_READY = true; return; }
+  navFromMenu(dest);                                   /* 필요한 데이터를 채우고 그 화면으로 — 여기서 S.sched 가 다시 만들어진다 */
+  if (RESTORE.studyDate) S.studyDate = RESTORE.studyDate;
+  if (RESTORE.card) S.card = { date: RESTORE.card.date, i: RESTORE.card.i, back: RESTORE.card.back, flipped: new Set(RESTORE.card.flipped) };
+  render();
+  SESS_READY = true;
 }
 
 function applyDraftPreset(kind) {
@@ -1455,7 +1562,11 @@ async function uploadSpeech(tok, blob, s) {
 
 const ACT = {
   nav: el => { navFromMenu(el.dataset.id); if (!LEGACY) $('#side').classList.remove('open'); },
-  drawer: () => $('#side').classList.toggle('open'),
+  drawer: () => {
+    const el = $('#side'), opening = !el.classList.contains('open');
+    el.classList.toggle('open');
+    if (opening) pushOverlay('side');   // 뒤로가기가 서랍만 닫게
+  },
   theme: el => { setTheme(el.dataset.v); render(); },
   tab: el => {
     const id = el.dataset.id;
@@ -1465,7 +1576,7 @@ const ACT = {
   },
   noop: () => {},
   link: el => window.open(el.getAttribute('href'), '_blank', 'noopener'),
-  reset: () => { const c = S.demoClosed; initState(); S.demoClosed = c; render(); toast('처음 상태로 되돌렸어요.'); },
+  reset: () => { const c = S.demoClosed; PROG.done = {}; sessionClear(); initState(); S.demoClosed = c; resetHistory(S.screen); render(); toast('처음 상태로 되돌렸어요.'); },
   'demo-toggle': () => { S.demoClosed = !S.demoClosed; renderDemo(); },
   'set-today': el => { S.today = el.dataset.date; S.justCompleted = null; render(); toast(`오늘을 ${Dt.full(S.today)}로 바꿨어요.`); },
   preset: el => preset(el.dataset.kind),
@@ -1562,6 +1673,7 @@ const ACT = {
     S.card.back = el.classList.contains('flipped') ? S.card.i : null;
     if (el.classList.contains('flipped')) { S.card.flipped.add(S.card.i); updateStudyLive(); }
     else if (ttsSupported()) speechSynthesis.cancel();
+    sessionWrite();   /* 뒤집은 카드·보던 카드 위치를 남긴다 — 여기만 render 를 거치지 않는다 */
   },
   'card-prev': () => { cancelSpeak(); S.card.i = Math.max(0, S.card.i - 1); render(); },
   'card-next': () => { cancelSpeak(); const r = pickRow(); S.card.i = Math.min(r.ids.length - 1, S.card.i + 1); render(); },
@@ -1571,7 +1683,7 @@ const ACT = {
   complete: () => {
     const r = pickRow();
     if (!canComplete(r) || S.card.flipped.size < r.ids.length) return;
-    r.completed = true; r.completedAt = Date.now(); S.justCompleted = r.date; S.studyDate = r.date;
+    r.completed = true; r.completedAt = Date.now(); PROG.done[r.date] = r.completedAt; S.justCompleted = r.date; S.studyDate = r.date;
     render(); toast('학습 완료! 완료율이 갱신됐어요.');
   },
   restudy: () => { S.justCompleted = null; resetCard(); render(); },
@@ -1579,7 +1691,7 @@ const ACT = {
   'demo-fill': () => {
     if (!S.plan) ensure('plan');
     let n = 0;
-    S.sched.forEach((r, i) => { if (r.date < S.today && r.kind !== 'free' && !r.completed && i % 3 !== 2) { r.completed = true; n++; } });
+    S.sched.forEach((r, i) => { if (r.date < S.today && r.kind !== 'free' && !r.completed && i % 3 !== 2) { r.completed = true; r.completedAt = Date.now(); PROG.done[r.date] = r.completedAt; n++; } });
     render(); toast(n ? `지난 날 ${n}일을 완료로 채웠어요. 나머지는 미완료로 남아요.` : '채울 지난 날이 없어요. 사이드바에서 오늘 날짜를 뒤로 옮겨 보세요.');
   },
   'coll-tab': el => { S.coll = { tab: el.dataset.v, filter: 'all' }; render(); },
@@ -1594,6 +1706,7 @@ const ACT = {
     S.justCompleted = null; resetCard(S.drill.date); go('u-study'); window.scrollTo(0, 0);
   },
   'new-trip': () => confirmBox('새 여행을 만들까요?', '이 여행은 보관되고 더 이상 보이지 않아요. (삭제되지는 않아요)', '보관하고 새로 만들기', () => {
+    PROG.done = {}; sessionClear();   /* 새 여행은 진도를 처음부터 센다 */
     archiveTrip(); S.trip = null; S.places = []; S.sched = []; S.plan = null; S.sents = []; S.days = [];
     S.draft = defaultDraft(S.today); S.showErrors = false; S.modal = null; go('u-input'); toast('이전 여행을 보관했어요.');
   }, { danger: true }),
@@ -1698,8 +1811,10 @@ if (API.base !== null && !API.external) { try { fetch(API.base + '/health', { ca
 $('#demo-fab').hidden = MODE === 'product';
 initInAppBanner();
 render();
-/* index.html#u-home 처럼 주소 뒤에 화면 ID를 붙이면 그 화면으로 바로 열림 */
-if (SCR[location.hash.slice(1)]) navFromMenu(location.hash.slice(1));
+/* 주소 뒤에 화면 ID(#u-home)를 붙이면 그 화면으로 바로 열린다. 없으면 지난번 보던 화면과 진도로 돌아간다(A3: 새로고침 진도 유지) */
+const startId = location.hash.slice(1);
+if (SCR[startId]) navFromMenu(startId);
+else sessionResume();
 
 /* ===== 카드 좌우로 밀어 넘기기 (cardSwipe) =====
    가로로 확정된 제스처만 앞/뒤 카드로 넘긴다 — 세로 스크롤은 브라우저가 그대로 처리한다.
