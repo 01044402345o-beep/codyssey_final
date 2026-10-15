@@ -236,3 +236,7 @@
 팀 main `e8ac770`에서 분기했다. `/generate` 응답에 `itinerary` 형제를 붙인다. 공개 라우트는 그대로 세 개다. `ITINERARY_ENABLED` 기본값은 꺼짐이다. 화면은 2026-10-22 전 2차 사용자 테스트에 넣지 않는다. `GOOGLE_MAPS_API_KEY`는 이 환경에 없어 실호출 JSON은 만들지 않았다. 키가 없는 실행은 수집 성공이 아니다.
 
 검토 에이전트 01a13f22-9fe7-7332-980e-cbdbaa094815 은 backend/app/main.py, backend/app/agents/itinerary.py, backend/tests/test_itinerary.py, backend/scripts/itinerary_live_once.py 네 경로가 커밋에 들어가고 mockup은 그대로이며 새 공개 라우트는 없고 POST /generate에 itinerary 형제가 붙으며 /health의 google_places와 FACT_SOURCES_READY는 거짓으로 남고 ITINERARY_ENABLED는 호출 때 읽어 기본이 꺼지며 itinerary_live_once.py는 플래그나 키가 없으면 종료 코드 2로 끝나고 키를 출력하지 않으며 저장소 안에는 쓰지 않고 _generate가 스레드에서 collect_itinerary와 문장 생성을 겹치며 MIN_ATTEMPTS는 30으로 남고 ITINERARY_DAILY_CAP 기본값은 20이며 검증된 목록에 없는 모델 place_id는 버리고 모델을 다시 부르지 않으며 tests.test_itinerary를 실행해 18개가 통과한 것을 확인하고 변경을 통과로 봤다.
+
+## 이번 작업 — 일정 상한 로그 (2026-10-15)
+
+2026-10-15 결정 4가 설계 516행의 "일일 상한은 이후 슬라이스"를 대체한다. 코드의 상한은 그 결정이고, 프로세스 메모리라 프로세스가 새로 뜨면 0부터 센다. 설계 446행은 플래그 기본 꺼짐과 도시당 1회만 말해 통제가 하나인 것처럼 남아 있다. 플래그와 키를 통과한 일정 로그는 cap_used와 cap_limit을 남긴다. cap_used는 성공한 HTTP가 아니라 그 프로세스가 예약한 Places 질의 수다.
