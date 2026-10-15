@@ -201,10 +201,12 @@ const API = AI.apiBase(location);            // 서버 주소(저장하지 않�
 if (window.FirebaseAuth) FirebaseAuth.start();
 /* window.localStorage 는 사이트 데이터 차단 시 접근만 해도 SecurityError 를 던진다. 그러면 null — AI.* 저장 함수는 null 을 "저장 불가"로 처리한다 */
 const STORE = (() => { try { return window.localStorage; } catch (e) { return null; } })();
-const weakList = () => AI.loadWeak(STORE);
 /* ---------- A3: 새로고침해도 학습 진도가 남는다 ----------
-   저장하는 것은 '진도'뿐이다 — 완료한 날짜와 보던 화면·카드 위치.
-   여행·장소·문장은 같은 규칙으로 다시 만들어지므로 담지 않는다(용량 초과와 어긋남을 막는다).
+   담는 필드는 v, at, done, screen, studyDate, card 의 date·i·back·flipped 다.
+   복습 목록(cd_weak)과 말하기 동의(cd_consent)도 같은 계정 칸에 둔다.
+   여행·장소·문장 본문은 같은 규칙으로 다시 만들어지므로 담지 않는다.
+   uid 가 없으면 기존 키 그대로라 데모·검사의 기록이 남는다. uid 가 있으면 ':uid' 를 붙인다.
+   로그인 계정의 그 세 가지는 서버에도 올린다. 테마·배너·스와이프 안내는 계정과 무관하다.
    저장소가 막힌 브라우저(STORE === null)에서는 기능만 조용히 꺼진다. */
 const SESSION_KEY = 'cd_session';
 const SESSION_V = 1;
@@ -212,25 +214,199 @@ const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000;   /* 30일 지난 기록은 �
 const PROG = { done: {} };                          /* 'YYYY-MM-DD' → 완료 시각(ms). 계획을 다시 만들어도 날짜로 다시 붙는다 */
 const RESTORE = { screen: null, studyDate: null, card: null };
 let SESS_READY = false;                             /* 복원이 끝나기 전에는 저장하지 않는다 — 빈 진도로 덮어쓰지 않기 위해 */
+let skipStateWrite = false;                         /* 계정을 갈아 끼우는 동안 이전 기록을 새 칸에 쓰지 않는다 */
+let stateTimer = null;
+let accountEpoch = 0;
+
+function accountUid() {
+  const u = S && S.user;
+  if (!u || u.provider === 'anonymous') return '';
+  const uid = u.uid;
+  if (typeof uid !== 'string' || !uid || uid.length > 128 || /[:/\\\s?#]/.test(uid)) return '';
+  return uid;
+}
+function personalStore() { return AI.scopedStorage(STORE, accountUid()); }
+const weakList = () => AI.loadWeak(personalStore());
+function saveWeakList(list) {
+  const ok = AI.saveWeak(personalStore(), list);
+  scheduleStatePush();
+  return ok;
+}
+function saveConsentHere(voice) {
+  const ok = AI.saveConsent(personalStore(), voice);
+  scheduleStatePush();
+  return ok;
+}
+function withdrawHere() {
+  const ok = AI.withdrawConsent(personalStore());
+  scheduleStatePush();
+  return ok;
+}
 
 function sessionRead() {
-  if (!STORE) return null;
+  const box = personalStore();
+  if (!box) return null;
   try {
-    const d = JSON.parse(STORE.getItem(SESSION_KEY) || 'null');
+    const d = JSON.parse(box.getItem(SESSION_KEY) || 'null');
     if (!d || d.v !== SESSION_V || typeof d.at !== 'number' || Date.now() - d.at > SESSION_MAX_AGE) return null;
     return d;
   } catch (e) { return null; }
 }
 function sessionWrite() {
-  if (!STORE || !SESS_READY) return;
+  const box = personalStore();
+  if (!box || !SESS_READY || skipStateWrite) return;
   try {
-    STORE.setItem(SESSION_KEY, JSON.stringify({
+    box.setItem(SESSION_KEY, JSON.stringify({
       v: SESSION_V, at: Date.now(), done: PROG.done, screen: S.screen, studyDate: S.studyDate,
       card: S.card ? { date: S.card.date, i: S.card.i, back: S.card.back ?? null, flipped: [...S.card.flipped] } : null,
     }));
   } catch (e) { /* 저장 불가(시크릿 모드·용량 초과): 이번 방문 동안만 유지 */ }
+  scheduleStatePush();
 }
-function sessionClear() { if (!STORE) return; try { STORE.removeItem(SESSION_KEY); } catch (e) { /* 저장소 막힘 */ } }
+function sessionClear() {
+  const box = personalStore();
+  if (!box) return;
+  try { box.removeItem(SESSION_KEY); } catch (e) { /* 저장소 막힘 */ }
+  scheduleStatePush();
+}
+
+function localState() {
+  const box = personalStore();
+  const empty = { session: null, weak: [], consent: null };
+  if (!box) return empty;
+  let session = null;
+  try {
+    const d = JSON.parse(box.getItem(SESSION_KEY) || 'null');
+    if (d && d.v === SESSION_V) session = d;
+  } catch (e) { session = null; }
+  let consent = null;
+  try {
+    const c = JSON.parse(box.getItem(AI.CONSENT_KEY) || 'null');
+    if (c && c.version === AI.CONSENT_VERSION && c.voice === true && typeof c.at === 'string')
+      consent = { version: c.version, voice: true, at: c.at };
+  } catch (e) { consent = null; }
+  return { session, weak: AI.loadWeak(box), consent };
+}
+function stateHas(state) {
+  if (!state) return false;
+  if (state.session) return true;
+  if (Array.isArray(state.weak) && state.weak.length) return true;
+  return !!(state.consent && state.consent.voice === true);
+}
+function writeLocalState(state) {
+  const box = personalStore();
+  if (!box || !state) return;
+  try {
+    if (state.session) box.setItem(SESSION_KEY, JSON.stringify(state.session));
+    else box.removeItem(SESSION_KEY);
+  } catch (e) { /* 저장소 막힘 */ }
+  AI.saveWeak(box, Array.isArray(state.weak) ? state.weak : []);
+  try {
+    if (state.consent && state.consent.voice === true)
+      box.setItem(AI.CONSENT_KEY, JSON.stringify({ version: state.consent.version, voice: true, at: state.consent.at }));
+    else box.removeItem(AI.CONSENT_KEY);
+  } catch (e) { /* 저장소 막힘 */ }
+}
+async function pushPayload(uid, payload) {
+  if (!uid || !payload || API.base === null || !window.FirebaseAuth || !FirebaseAuth.idToken) return;
+  let token = '';
+  try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
+  if (!token) return;
+  const live = FirebaseAuth.account && FirebaseAuth.account.uid;
+  if (live && live !== uid) return;
+  try {
+    await fetch((API.base || '') + '/user/state', {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+  } catch (e) { /* 서버가 막혀도 이 브라우저 기록은 남는다 */ }
+}
+function scheduleStatePush() {
+  const uid = accountUid();
+  if (!uid || !personalStore() || API.base === null || !SESS_READY || skipStateWrite) return;
+  const payload = localState();
+  if (stateTimer) clearTimeout(stateTimer);
+  stateTimer = setTimeout(() => { stateTimer = null; pushPayload(uid, payload); }, 600);
+}
+function pushStateNow() {
+  if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; }
+  const uid = accountUid();
+  if (!uid || !SESS_READY || skipStateWrite) return Promise.resolve();
+  return pushPayload(uid, localState());
+}
+async function pullAccount(epoch) {
+  const uid = accountUid();
+  if (!uid || API.base === null || !window.FirebaseAuth || !FirebaseAuth.idToken) return { failed: true };
+  let token = '';
+  try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
+  if (epoch !== accountEpoch) return { dropped: true };
+  if (!token) return { failed: true };
+  try {
+    const res = await fetch((API.base || '') + '/user/state', {
+      headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+      cache: 'no-store',
+    });
+    if (epoch !== accountEpoch) return { dropped: true };
+    if (!res.ok) return { failed: true };
+    return { failed: false, remote: await res.json() };
+  } catch (e) { return { failed: true }; }
+}
+function fillProgress(d) {
+  if (!d) return;
+  if (d.done && typeof d.done === 'object')
+    Object.keys(d.done).forEach(k => { if (/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof d.done[k] === 'number') PROG.done[k] = d.done[k]; });
+  RESTORE.screen = typeof d.screen === 'string' ? d.screen : null;
+  RESTORE.studyDate = typeof d.studyDate === 'string' ? d.studyDate : null;
+  const c = d.card;
+  if (c && typeof c.date === 'string' && Number.isInteger(c.i) && c.i >= 0 && Array.isArray(c.flipped))
+    RESTORE.card = { date: c.date, i: c.i, back: Number.isInteger(c.back) ? c.back : null, flipped: c.flipped.filter(k => Number.isInteger(k) && k >= 0) };
+  else RESTORE.card = null;
+}
+function resumeScreen() {
+  const dest = RESTORE.screen && RESTORE.screen !== 'u-login' && SCR[RESTORE.screen] ? RESTORE.screen : null;
+  if (!dest) { SESS_READY = true; skipStateWrite = false; return; }
+  navFromMenu(dest);
+  if (RESTORE.studyDate) S.studyDate = RESTORE.studyDate;
+  if (RESTORE.card) S.card = { date: RESTORE.card.date, i: RESTORE.card.i, back: RESTORE.card.back, flipped: new Set(RESTORE.card.flipped) };
+  render();
+  SESS_READY = true;
+  skipStateWrite = false;
+}
+async function adoptAccount(account, opts) {
+  const epoch = ++accountEpoch;
+  const navigate = !opts || opts.navigate !== false;
+  skipStateWrite = true;
+  SESS_READY = false;
+  if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; }
+  S.user = account || null;
+  PROG.done = {};
+  RESTORE.screen = null;
+  RESTORE.studyDate = null;
+  RESTORE.card = null;
+  fillProgress(sessionRead());
+  const hadLocal = stateHas(localState());
+  const pulled = await pullAccount(epoch);
+  if (pulled.dropped || epoch !== accountEpoch) return;
+  if (!pulled.failed && stateHas(pulled.remote)) {
+    writeLocalState(pulled.remote);
+    PROG.done = {};
+    RESTORE.screen = null;
+    RESTORE.studyDate = null;
+    RESTORE.card = null;
+    fillProgress(sessionRead());
+  } else if (!pulled.failed && hadLocal) {
+    SESS_READY = true;
+    skipStateWrite = false;
+    await pushStateNow();
+    if (epoch !== accountEpoch) return;
+    skipStateWrite = true;
+    SESS_READY = false;
+  }
+  if (navigate) resumeScreen();
+  else { SESS_READY = true; skipStateWrite = true; }
+}
 /* S.sched 는 매번 새로 만들어지므로, 저장해 둔 완료 기록을 날짜로 다시 붙인다 */
 function applyProgress() {
   if (!S || !S.sched) return;
@@ -1323,6 +1499,7 @@ function toast(msg) {
 /* 상황별 연습은 카드 상태(S.card)를 잠시 빌려 쓴다 — 끝낼 때 날짜별 학습의 카드 위치·뒤집은 카드를 그대로 돌려놓는다 */
 function endDrill() { if (S.drill) { S.card = S.drill.savedCard; S.drill = null; } }
 function go(id) {
+  skipStateWrite = false;
   cancelSpeak(); S.card.back = null; if (id !== 'u-study') endDrill();
   S.screen = id; S.modal = null; pushScreen(id); render();
 }
@@ -1392,23 +1569,12 @@ function navFromMenu(id) {
 
 /* 새로고침 복원: 저장해 둔 진도·화면·카드를 되살린다. 저장분이 없거나 못 쓰면 첫 화면 그대로 뜬다 */
 function sessionResume() {
-  const d = sessionRead();
-  if (d) {
-    if (d.done && typeof d.done === 'object')
-      Object.keys(d.done).forEach(k => { if (/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof d.done[k] === 'number') PROG.done[k] = d.done[k]; });
-    RESTORE.screen = typeof d.screen === 'string' ? d.screen : null;
-    RESTORE.studyDate = typeof d.studyDate === 'string' ? d.studyDate : null;
-    const c = d.card;
-    if (c && typeof c.date === 'string' && Number.isInteger(c.i) && c.i >= 0 && Array.isArray(c.flipped))
-      RESTORE.card = { date: c.date, i: c.i, back: Number.isInteger(c.back) ? c.back : null, flipped: c.flipped.filter(k => Number.isInteger(k) && k >= 0) };
-  }
-  const dest = RESTORE.screen && RESTORE.screen !== 'u-login' && SCR[RESTORE.screen] ? RESTORE.screen : null;
-  if (!dest) { SESS_READY = true; return; }
-  navFromMenu(dest);                                   /* 필요한 데이터를 채우고 그 화면으로 — 여기서 S.sched 가 다시 만들어진다 */
-  if (RESTORE.studyDate) S.studyDate = RESTORE.studyDate;
-  if (RESTORE.card) S.card = { date: RESTORE.card.date, i: RESTORE.card.i, back: RESTORE.card.back, flipped: new Set(RESTORE.card.flipped) };
-  render();
-  SESS_READY = true;
+  PROG.done = {};
+  RESTORE.screen = null;
+  RESTORE.studyDate = null;
+  RESTORE.card = null;
+  fillProgress(sessionRead());
+  resumeScreen();                                      /* 필요한 데이터를 채우고 그 화면으로 — 여기서 S.sched 가 다시 만들어진다 */
 }
 
 function applyDraftPreset(kind) {
@@ -1431,8 +1597,9 @@ function demoGen(mode) {
 
 function preset(kind) {
   cancelGen();
-  PROG.done = {}; sessionClear();   // 예시 여행은 직전 완료를 이어받지 않는다
+  pushStateNow();                   // 계정에 남아 있던 진도를 데모 키로 옮기지 않고 먼저 올린다
   S.user = DEMO_USER;
+  PROG.done = {}; sessionClear();   // 예시 여행은 직전 완료를 이어받지 않는다. 데모 키만 지운다.
   const base = BASE_TODAY;
   const d = defaultDraft(base);
   d.studyStart = kind === 'short' ? Dt.add(d.cities[0].start, -3) : d.cities[0].start;
@@ -1485,7 +1652,7 @@ function speakHtml(s) {
 /* 말하기 연습 동의 — 녹음이 서버와 Google 로 나가고 복습 목록이 쌓이므로 첫 녹음 전에 받는다.
    저장소가 막힌 브라우저에서는 이번 접속 동안만 기억한다(consentMem). */
 let consentMem = false;
-const voiceConsent = () => { const c = AI.loadConsent(STORE); return c.voice ? c : consentMem ? { voice: true, at: null } : c; };
+const voiceConsent = () => { const c = AI.loadConsent(personalStore()); return c.voice ? c : consentMem ? { voice: true, at: null } : c; };
 function askVoiceConsent() {
   const host = esc(API.host || location.host);
   confirmBox('말하기 연습 전에 확인해 주세요',
@@ -1495,11 +1662,11 @@ function askVoiceConsent() {
      <b>목적</b> · 말하기 연습 피드백 (피드백 문장은 AI가 만든 결과예요)<br>
      <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요. 전사 AI 회사의 처리·보관은 각 회사 약관을 따라요.<br>
      <b>Google 처리</b> · 무료 등급 API에서는 Google이 전송된 내용을 제품 개선에 사용하고 사람 검토자가 읽을 수 있어요(계정·키와는 분리돼요). <b>민감한 개인정보는 말하지 마세요.</b><br>
-     <b>이 브라우저에 저장</b> · 채점 결과로 고른 '어려워한 상황'(복습 목록). 다음 문장을 만들 때 상황 이름만 서버로 보내요.<br><br>
+     <b>이 브라우저에 저장</b> · 채점 결과로 고른 '어려워한 상황'(복습 목록). 다음 문장을 만들 때 상황 이름만 서버로 보내요. 로그인한 계정은 학습 진도·복습 목록·이 동의를 그 계정 기록으로 서버에 올려요. 녹음 파일은 올리지 않아요.<br><br>
      동의하지 않아도 카드 학습과 듣기는 그대로 쓸 수 있어요. 동의는 홈 화면에서 언제든 철회할 수 있고, 철회하면 복습 목록도 지워져요.`,
     '동의하고 녹음하기', () => {
       S.modal = null;
-      if (!AI.saveConsent(STORE, true)) consentMem = true;
+      if (!saveConsentHere(true)) consentMem = true;
       render(); toggleSpeak();
     }, { cancel: '동의하지 않기' });
 }
@@ -1510,7 +1677,7 @@ function privacyCard() {
     <p class="small" style="line-height:1.7">· 'AI 생성' 표시가 붙은 문장과 말하기 채점은 AI가 만든 결과예요. 틀릴 수 있어요.<br>
       · AI 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API로 전송돼요.<br>
       · 말하기 연습 동의: <b>${c.voice ? `동의함 (${when})` : '동의하지 않음'}</b>${c.voice ? '' : ' — 처음 녹음할 때 물어봐요'}<br>
-      · 복습 목록: <b>${n}개</b> · 이 브라우저에만 저장돼요</p>
+      · 복습 목록: <b>${n}개</b> · ${accountUid() ? '이 계정에 저장돼요' : '이 브라우저에만 저장돼요'}</p>
     ${c.voice || n ? `<div style="display:flex;gap:8px;margin-top:10px">
       ${c.voice ? '<button class="btn soft" style="flex:1" data-act="consent-withdraw">동의 철회</button>' : ''}
       ${n ? '<button class="btn soft" style="flex:1" data-act="weak-delete">복습 목록 삭제</button>' : ''}</div>` : ''}
@@ -1577,7 +1744,7 @@ async function uploadSpeech(tok, blob, s) {
   SPK.state = 'idle'; SPK.ctl = null;
   const decision = AI.weakDecision(s, res);
   const save = decision === 'auto';
-  if (save) AI.saveWeak(STORE, AI.upsertWeak(weakList(), weakItem(s)));
+  if (save) saveWeakList(AI.upsertWeak(weakList(), weakItem(s)));
   SPK.result = { ...res, saved: save, savedBy: save ? 'auto' : null, offer: decision === 'ask', coverage: typeof res.heard === 'string' ? AI.heardCoverage(s.en, res.heard) : null };
   updateSpeakUi(); renderDemo();
 }
@@ -1602,38 +1769,39 @@ const ACT = {
   'demo-toggle': () => { S.demoClosed = !S.demoClosed; renderDemo(); },
   'set-today': el => { S.today = el.dataset.date; S.justCompleted = null; render(); toast(`오늘을 ${Dt.full(S.today)}로 바꿨어요.`); },
   preset: el => preset(el.dataset.kind),
-  'weak-demo': () => { AI.saveWeak(STORE, DEMO_WEAK.reduce((l, w) => AI.upsertWeak(l, w), weakList())); renderDemo(); toast('데모 학습 기록을 불러왔어요. 실제 학습에서 생긴 기록이 아니에요.'); },
-  'weak-clear': () => { AI.saveWeak(STORE, []); renderDemo(); toast('복습 목록을 비웠어요.'); },
+  'weak-demo': () => { saveWeakList(DEMO_WEAK.reduce((l, w) => AI.upsertWeak(l, w), weakList())); renderDemo(); toast('데모 학습 기록을 불러왔어요. 실제 학습에서 생긴 기록이 아니에요.'); },
+  'weak-clear': () => { saveWeakList([]); renderDemo(); toast('복습 목록을 비웠어요.'); },
   'speak-rec': () => toggleSpeak(),
   'consent-withdraw': () => confirmBox('동의를 철회할까요?',
-    `말하기 연습을 다시 쓰려면 새로 동의해야 해요. 이 브라우저에 저장된 복습 목록 ${weakList().length}개도 함께 지워요.`,
+    `말하기 연습을 다시 쓰려면 새로 동의해야 해요. ${accountUid() ? '이 계정' : '이 브라우저'}에 저장된 복습 목록 ${weakList().length}개도 함께 지워요.`,
     '철회하고 지우기', () => {
       S.modal = null; cancelSpeak(); consentMem = false;
-      const ok = AI.withdrawConsent(STORE);
+      const ok = withdrawHere();
       render(); renderDemo();
       toast(ok ? '동의를 철회하고 복습 목록을 지웠어요.' : '브라우저 저장소에 접근하지 못했어요. 브라우저 설정에서 이 사이트 데이터를 지워 주세요.');
     }, { danger: true }),
   'weak-delete': () => confirmBox('복습 목록을 지울까요?',
-    `이 브라우저에 저장된 어려워한 상황 ${weakList().length}개를 지워요. 다음 문장 생성부터 반영돼요.`,
+    `${accountUid() ? '이 계정' : '이 브라우저'}에 저장된 어려워한 상황 ${weakList().length}개를 지워요. 다음 문장 생성부터 반영돼요.`,
     '지우기', () => {
       S.modal = null;
-      const ok = AI.saveWeak(STORE, []);
+      const ok = saveWeakList([]);
       render(); renderDemo(); toast(ok ? '복습 목록을 지웠어요.' : '브라우저 저장소에 접근하지 못했어요.');
     }, { danger: true }),
   'weak-save': () => {
     const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]];
     if (!s || SPK.sid !== s.id || !SPK.result || !SPK.result.offer) return;       // 다른 카드·취소된 결과에는 저장하지 않는다
-    AI.saveWeak(STORE, AI.upsertWeak(weakList(), weakItem(s)));
+    saveWeakList(AI.upsertWeak(weakList(), weakItem(s)));
     SPK.result = { ...SPK.result, offer: false, saved: true, savedBy: 'user' }; updateSpeakUi(); renderDemo(); toast('복습 목록에 저장했어요.');
   },
 
   login: () => {
     if (window.FirebaseAuth && FirebaseAuth.enabled) {
       FirebaseAuth.signInGoogle().then(account => {
-        if (!account) return;
-        S.user = account;
-        toast('Google 계정으로 로그인했어요.');
-        ACT['after-login']();
+        if (!account || account.provider === 'anonymous') return;
+        adoptAccount(account, { navigate: false }).then(() => {
+          toast('Google 계정으로 로그인했어요.');
+          ACT['after-login']();
+        });
       }).catch(err => { const msg = FirebaseAuth.koreanError(err); if (msg) toast(msg); });
       return;
     }
@@ -1646,18 +1814,38 @@ const ACT = {
     if (!email.trim() || !password) { toast('이메일과 비밀번호를 입력해 주세요.'); return; }
     const signup = S.authMode === 'signup';
     FirebaseAuth.signInEmail(email.trim(), password, name.trim(), signup).then(account => {
-      if (!account) return;
-      S.user = account;
-      toast(signup ? '가입했어요.' : '로그인했어요.');
-      ACT['after-login']();
+      if (!account || account.provider === 'anonymous') return;
+      adoptAccount(account, { navigate: false }).then(() => {
+        toast(signup ? '가입했어요.' : '로그인했어요.');
+        ACT['after-login']();
+      });
     }).catch(err => { const msg = FirebaseAuth.koreanError(err); if (msg) toast(msg); });
   },
   'login-switch': () => { S.authMode = S.authMode === 'signup' ? 'login' : 'signup'; render(); },
   'after-login': () => go(S.trip && !S.trip.archived ? (S.plan ? 'u-home' : S.places.length ? 'u-report' : 'u-gen') : 'u-input'),
   logout: () => {
-    const leave = () => { S.user = null; toast('로그아웃했어요. 로그인 화면 외에는 들어갈 수 없어요.'); go('u-login'); };
-    if (window.FirebaseAuth && FirebaseAuth.enabled) FirebaseAuth.signOut().then(leave, leave);
-    else leave();
+    const finish = () => {
+      SESS_READY = false;
+      skipStateWrite = true;
+      S.user = null;
+      PROG.done = {};
+      RESTORE.screen = null;
+      RESTORE.studyDate = null;
+      RESTORE.card = null;
+      fillProgress(sessionRead());
+      SESS_READY = true;
+      skipStateWrite = false;
+      toast('로그아웃했어요. 로그인 화면 외에는 들어갈 수 없어요.');
+      go('u-login');
+    };
+    const run = async () => {
+      try { await pushStateNow(); } catch (e) { /* 올리지 못해도 이 브라우저 기록은 계정 칸에 남는다 */ }
+      if (window.FirebaseAuth && FirebaseAuth.enabled) {
+        try { await FirebaseAuth.signOut(); } catch (e) { /* 화면 상태는 비운다 */ }
+      }
+      finish();
+    };
+    run();
   },
 
   'add-city': () => {
@@ -1819,6 +2007,7 @@ setInterval(() => {
 }, 1000);
 /* 앱이 다시 보일 때 화면 갱신 (NFR-03) */
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+window.addEventListener('pagehide', () => { pushStateNow(); });
 
 /* 배너는 판정이 바뀌면 다시 그린다 — 음성 목록(speechSynthesis.getVoices)은 늦게 채워져서 첫 판정은 'ok' 로 나올 수 있다 */
 const INAPP_INFO = AI.inAppBrowser(navigator.userAgent, location.href);
@@ -1864,15 +2053,21 @@ initInAppBanner();
 render();
 /* 주소 뒤에 화면 ID(#u-home)를 붙이면 그 화면으로 바로 열린다. 없으면 지난번 보던 화면과 진도로 돌아간다(A3: 새로고침 진도 유지) */
 const startId = location.hash.slice(1);
-if (SCR[startId]) navFromMenu(startId);
-else sessionResume();
-if (window.FirebaseAuth) {
-  FirebaseAuth.ready.then(account => {
-    if (S.screen !== 'u-login') return;
-    if (account && !(S.user && S.user.uid)) S.user = account;
-    render();
-  });
+function bootScreen() {
+  if (SCR[startId]) navFromMenu(startId);
+  else sessionResume();
 }
+/* 로그인 계정이 있으면 그 칸을 읽기 전에 공용 기록을 화면에 올리지 않는다.
+   계정이 없거나 설정이 없으면 기존처럼 공용 키를 바로 복원한다. */
+if (window.FirebaseAuth && API.base !== null) {
+  FirebaseAuth.ready.then(account => {
+    if (account && account.provider !== 'anonymous' && account.uid) {
+      adoptAccount(account, { navigate: !SCR[startId] }).then(() => {
+        if (SCR[startId]) navFromMenu(startId);
+      });
+    } else bootScreen();
+  });
+} else bootScreen();
 
 /* ===== 카드 좌우로 밀어 넘기기 (cardSwipe) =====
    가로로 확정된 제스처만 앞/뒤 카드로 넘긴다 — 세로 스크롤은 브라우저가 그대로 처리한다.

@@ -31,7 +31,7 @@
 | 프론트 주소 | **기본: 위 배포 URL 과 동일** (`mockup/` 을 같은 서비스의 `/` 에서 서빙) | 별도 프론트를 쓸 때만 CORS `ALLOW_ORIGINS` 에 추가 |
 | Gemini API 키 발급처 | Google AI Studio (`aistudio.google.com/apikey`) | |
 | 키 보관 위치 | Render → Environment → `GEMINI_API_KEY`, `GROQ_API_KEY`(전사), 보충 `OPENAI_API_KEY`·`ASSEMBLYAI_API_KEY` | **코드·깃에 절대 넣지 않음** |
-| 로그인 | `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_APP_ID` | 웹 앱 공개 설정. 비어 있으면 데모 로그인. 서비스 계정 JSON 은 넣지 않음. Firebase 콘솔에서 이메일/비밀번호와 Google 제공자를 켠다 |
+| 로그인·계정 기록 | `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_APP_ID` | 웹 앱 공개 설정. 비어 있으면 데모 로그인. 서비스 계정 JSON 은 넣지 않음. Firebase 콘솔에서 이메일/비밀번호와 Google 제공자를 켠다. 로그인한 계정의 진도·복습·동의는 `GET/PUT /user/state` 가 같은 프로젝트의 Firestore `(default)` (asia-northeast3) `users/{uid}` 에 둔다. 규칙은 그 데이터베이스에만 있다. `firestore-native-mode` 는 쓰지 않는다. 저장소 호출이 실패하면 그 경로는 503 이고 브라우저 기록은 남는다. 녹음 파일과 여행 본문은 저장하지 않는다 |
 | 담당(배포) | 최성빈 | |
 | 담당(대리) | ____________ | 한 사람이 막히면 여기서 멈춥니다 — 반드시 지정 |
 | 비상 연락 채널 | Discord `#일반` | |

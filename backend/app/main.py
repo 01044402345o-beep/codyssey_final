@@ -4,14 +4,17 @@
 /generate 응답의 itinerary 형제다. ITINERARY_ENABLED 의 기본값은 꺼짐이고,
 공개 배포에서 켜지 않는다.
 
-로그인은 Firebase Authentication 이다. 화면이 받은 ID 토큰만 확인하고,
-여행 기록은 브라우저에 남긴다. Cloud Functions 로 생성 경로를 옮기지 않는다.
+로그인은 Firebase Authentication 이다. 화면이 받은 ID 토큰만 확인한다.
+로그인한 계정의 진도·복습 목록·말하기 동의는 /user/state 에 둔다.
+여행·장소·문장 본문은 브라우저가 규칙으로 다시 만든다. Cloud Functions 로 생성 경로를 옮기지 않는다.
 
   GET  /health       배포·콜드스타트 확인용
   GET  /auth/config  Firebase 웹 설정. 없으면 enabled=false
   GET  /auth/me      Authorization: Bearer <Firebase ID 토큰>
-  POST /generate     카테고리 문장 생성 (+ 스키마·규칙 검증 후 재생성)
-  POST /speak-check  발음 오디오 → 피드백 (멀티모달)
+  GET  /user/state   그 토큰 uid 의 진도·복습·동의. 없으면 빈 기록
+  PUT  /user/state   같은 기록을 갈아 끼운다. 본문의 uid 는 받지 않는다
+  POST /generate     카테고리 문장 생성 (+ 스키마·규칙 검증 후 재생성). 토큰 불필요
+  POST /speak-check  발음 오디오 → 피드백 (멀티모달). 토큰 불필요
 
 모델은 고정하지 않고 호출 시점의 사용 가능 목록에서 고르며, AI API 호출은
 하나당 최소 30회 시도한다 (app/gemini.py).
@@ -41,6 +44,7 @@ from pydantic import BaseModel, Field, StringConstraints
 from starlette.concurrency import run_in_threadpool
 
 from . import firebase_auth
+from . import user_state
 from . import gemini as ai
 from . import speech_compare as compare
 from . import speech_vad as vad
@@ -810,6 +814,54 @@ def auth_me(request: Request) -> dict[str, str]:
         return firebase_auth.verify_bearer(request.headers.get("authorization") or "")
     except firebase_auth.AuthError as exc:
         raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+
+
+def _bearer_token(request: Request) -> str:
+    scheme, _, token = (request.headers.get("authorization") or "").partition(" ")
+    if scheme.lower() != "bearer":
+        return ""
+    return token.strip()
+
+
+async def _account_token(request: Request) -> tuple[dict[str, str], str]:
+    """토큰의 uid. 익명 로그인은 계정 기록을 만들지 않는다."""
+    try:
+        account = await run_in_threadpool(
+            firebase_auth.verify_bearer, request.headers.get("authorization") or "",
+        )
+    except firebase_auth.AuthError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+    if account.get("provider") == "anonymous":
+        raise HTTPException(status_code=403, detail="anonymous_rejected")
+    return account, _bearer_token(request)
+
+
+@app.get("/user/state")
+async def user_state_get(request: Request) -> dict[str, Any]:
+    """이 계정의 진도·복습·동의. 문서가 없으면 빈 기록. 생성·말하기는 이 경로를 타지 않는다."""
+    account, token = await _account_token(request)
+    try:
+        found = await run_in_threadpool(user_state.read_for, account["uid"], token)
+    except user_state.StoreError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+    return found if found is not None else user_state.EMPTY_STATE
+
+
+@app.put("/user/state")
+async def user_state_put(request: Request) -> dict[str, Any]:
+    """진도·복습·동의만 갈아 끼운다. uid 는 토큰에서 나오고 본문에서는 받지 않는다."""
+    account, token = await _account_token(request)
+    raw = await request.body()
+    if len(raw) > user_state.MAX_STATE_BYTES:
+        raise HTTPException(status_code=413, detail="state_too_large")
+    try:
+        state = user_state.parse_state(json.loads(raw))
+        await run_in_threadpool(user_state.write_for, account["uid"], token, state)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="invalid_state") from exc
+    except user_state.StoreError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+    return state
 
 
 # 화면(목업)을 같은 서비스에서 서빙한다. 반드시 모든 API 라우트 등록 뒤에 마운트한다.
