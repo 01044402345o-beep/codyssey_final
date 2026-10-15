@@ -1,4 +1,4 @@
-"""제품 셸 반응형 E2E (Playwright + Chromium).  docs/RESPONSIVE_STRATEGY.md §3·§10.
+"""제품 셸 반응형 E2E (Playwright + Chromium).  docs/design/RESPONSIVE_STRATEGY.md §3·§10.
 
     cd backend && uvicorn app.main:app --port 8769 &
     python ../e2e/test_shell.py http://localhost:8769 /tmp/shots

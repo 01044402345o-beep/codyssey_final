@@ -1,6 +1,6 @@
 # 에이전트 작업 규칙
 
-이 문서는 이 저장소에서 작업하는 에이전트가 매번 따르는 절차다. 제품이 무엇을 해야 하는지는 [`docs/requirements.md`](requirements.md)가 정한다. 이 문서는 그 요구를 어떤 순서로 고칠지만 정한다.
+이 문서는 이 저장소에서 작업하는 에이전트가 매번 따르는 절차다. 제품이 무엇을 해야 하는지는 [`docs/product/requirements.md`](../product/requirements.md)가 정한다. 이 문서는 그 요구를 어떤 순서로 고칠지만 정한다.
 
 ## 1. 아이디어를 가져오는 곳
 
@@ -8,17 +8,17 @@
 
 | 위치 | 무엇을 보나 |
 |---|---|
-| `.` (저장소 루트) | 지금 제품. `README.md`, `docs/requirements.md`, `mockup/`, `backend/`, `agent_contract/` |
+| `.` (저장소 루트) | 지금 제품. `README.md`, `docs/product/requirements.md`, `mockup/`, `backend/`, `agent_contract/` |
 | `./other` | 이전 자료. 디자인 DC, 기획 PDF, 발표, 예전 스냅샷 |
 
-`other/Project261000/codyssey_final` 은 루트보다 오래된 사본이다. 루트와 다르면 루트의 코드와 `docs/requirements.md`를 따른다. `other/Project261000/transcribe_app` 은 다른 프로그램이라 이 제품의 기능으로 가져오지 않는다.
+`other/Project261000/codyssey_final` 은 루트보다 오래된 사본이다. 루트와 다르면 루트의 코드와 `docs/product/requirements.md`를 따른다. `other/Project261000/transcribe_app` 은 다른 프로그램이라 이 제품의 기능으로 가져오지 않는다.
 
 저장소 밖에 있는 기능 아이디어로 범위를 늘리지 않는다. 필요한 디자인·참고 파일이 트리 안에 없으면 구현을 멈추고 사용자에게 그 파일을 요청한다.
 
 ## 2. 세션을 열면
 
 1. `git status`, 브랜치, 원격, `HEAD`를 다시 읽는다. 조사 도중에도 브랜치가 움직일 수 있다.
-2. [`docs/REPO_STATE.md`](REPO_STATE.md)를 그 시점의 사실로 고친다. 구조, 열린 요구사항, `.`와 `./other`에서 고를 수 있는 다음 작업, 문서끼리 다른 점을 적는다.
+2. [`docs/workflow/REPO_STATE.md`](REPO_STATE.md)를 그 시점의 사실로 고친다. 구조, 열린 요구사항, `.`와 `./other`에서 고를 수 있는 다음 작업, 문서끼리 다른 점을 적는다.
 3. 사용자에게 이번 세션 디렉터리의 절대 경로를 밝힌다.
 4. 이번 세션이 어떤 파일을 왜 만지는지 구체적으로 말한다.
 
@@ -35,7 +35,7 @@
 - 완료 조건
 - 무엇을 읽고 맞는지 볼지
 
-단계를 구현한 에이전트는 그 단계를 통과로 적지 않는다. 다른 에이전트가 완료 조건과 근거 파일(코드, `docs/requirements.md`, 해당 단계가 따른 디자인 자료)을 대조한다.
+단계를 구현한 에이전트는 그 단계를 통과로 적지 않는다. 다른 에이전트가 완료 조건과 근거 파일(코드, `docs/product/requirements.md`, 해당 단계가 따른 디자인 자료)을 대조한다.
 
 - 통과하면 다음 단계로 간다.
 - 불일치가 있으면 고친 뒤 같은 단계를 다시 검증한다.
@@ -75,11 +75,11 @@ PR 은 `gh pr create --fill --base main` 으로 연다. 대상 저장소는 `010
 ## 6. 사실이 서로 다를 때
 
 1. 현재 코드와 테스트
-2. `docs/requirements.md`
+2. `docs/product/requirements.md`
 3. `README.md`
-4. 설계 문서 (`docs/RESPONSIVE_STRATEGY.md`, `docs/ENRICHMENT_PIPELINE.md` 등)
+4. 설계 문서 (`docs/design/RESPONSIVE_STRATEGY.md`, `docs/product/ENRICHMENT_PIPELINE.md` 등)
 5. `other/Project261000/design/`
-6. `prd.md`, `시나리오완료.MD`, `기술스택.md` (초기 기획, 이력)
+6. `docs/planning/prd.md`, `docs/planning/시나리오완료.MD`, `docs/planning/기술스택.md` (초기 기획, 이력)
 
 위에 있는 것을 따른다. 차이를 발견하면 `REPO_STATE.md`에 적고, 고친 문장이 있으면 그 커밋에 함께 넣는다.
 

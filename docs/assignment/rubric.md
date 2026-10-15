@@ -1,7 +1,7 @@
 # 검토 루브릭 (Final Project)
 
 문서·코드를 다른 맥락의 검토자(다른 Claude 대화/세션, 또는 팀원)에게 맡길 때 쓰는 기준이다.
-회차마다 이 파일 전체를 검토자에게 주고, 결과는 `docs/review-log.md`에 남긴다.
+회차마다 이 파일 전체를 검토자에게 주고, 결과는 `docs/assignment/review-log.md`에 남긴다.
 
 > **원문 인용 출처**: R1~R5와 팀 인원 문구는 과제 원문(`과제원문.html`)에서 인용한 것으로 2026-10-07 검토 의견 문서(docx)가 전달했다.
 > 2026-10-14에 그 원문과 대조했다. 같은 파일은 이 기기의 `other/Project261000/resorce/과제원문.html`과 `C:\Users\seong\Downloads\과제원문.html`이고, sha256은 `85b7eec5898e687b31528492e0522b97f730b8c7d1206d7808917500ae271fc7`이다. git 추적 파일은 아니다. 문장 단위 차이는 [`ASSIGNMENT.md`](ASSIGNMENT.md)에 있다.

@@ -60,7 +60,7 @@
 
 수집과 반영이 둘 다 있다. 4절 주제와 6절은 피드백을 수집해야 한다고 하고, 2절과 4절 수행은 피드백을 반영한다고 한다.
 
-## 3. `docs/rubric.md` 인용
+## 3. `docs/assignment/rubric.md` 인용
 
 | ID | 루브릭 인용 | 원문 |
 |---|---|---|
@@ -78,18 +78,18 @@
 
 | 원문 | 저장소에 적힌 곳 | 읽는 시점의 차이 |
 |---|---|---|
-| 생성형 AI 또는 AI Agent가 핵심 | `README.md` 6-1, `docs/requirements.md` FR-05·3절 | README는 생성→검증→재생성 루프를 AI Agent로 적는다. 원문 정의는 "사용자 의도를 파악하고 도구를 활용하여 목표를 달성하는 Agent"이다. 두 문장이 같은지는 이 문서가 판정하지 않는다 |
+| 생성형 AI 또는 AI Agent가 핵심 | `README.md` 6-1, `docs/product/requirements.md` FR-05·3절 | README는 생성→검증→재생성 루프를 AI Agent로 적는다. 원문 정의는 "사용자 의도를 파악하고 도구를 활용하여 목표를 달성하는 Agent"이다. 두 문장이 같은지는 이 문서가 판정하지 않는다 |
 | 기술 요소 2개 이상 | `README.md` 6절 제목 "필수 기술 요소 중 3개" | 주장하는 셋은 AI Agent, 멀티모달(말하기 녹음), Long-term Memory이다. RAG와 자동화 워크플로우는 필수로 세지 않는다. 원문은 다섯 중 둘이면 된다 |
-| Long-term Memory | `README.md` 6-3, `docs/requirements.md` FR-11, `docs/rubric.md` 알려진 사실 | 원문 정의는 "사용자별 대화 기록 및 선호도를 저장·활용"이다. README는 낮은 점수의 상황 ID를 브라우저 `localStorage`에 두고, 다른 기기에서는 이어지지 않는다고 적는다 |
-| 멀티모달 | `README.md` 6-2, `docs/requirements.md` FR-09 | 음성 입력을 받아 전사한다고 적는다 |
+| Long-term Memory | `README.md` 6-3, `docs/product/requirements.md` FR-11, `docs/assignment/rubric.md` 알려진 사실 | 원문 정의는 "사용자별 대화 기록 및 선호도를 저장·활용"이다. README는 낮은 점수의 상황 ID를 브라우저 `localStorage`에 두고, 다른 기기에서는 이어지지 않는다고 적는다 |
+| 멀티모달 | `README.md` 6-2, `docs/product/requirements.md` FR-09 | 음성 입력을 받아 전사한다고 적는다 |
 | 외부 배포 | `README.md` 1절 `https://codyssey-final.onrender.com` | 이 대조에서 그 주소를 다시 열지 않았다 |
 | 5명 이상 제공·수집, 그리고 반영 | `docs/user-test/results.md`, `docs/user-test/README.md`, `README.md` 9절 | `results.md`는 P1~P5를 적고, P1~P4는 2026-10-11 관찰, P5는 2026-10-13 코멘트만이라고 한다. 과업 성공률·설문 칸은 비어 있고, 영어 수준·구두 동의는 미기록이다. 피드백 일부는 반영란에 PR 번호가 있다. `README.md` 9절은 "실사용자 5명 이상 테스트 예정이다"라고 되어 있어 `results.md`와 다르다. 2차 테스트는 2026-10-22에 끝난다 |
-| 팀 3~5인, 역할, 전원 기여 | `README.md` 2절 | 이름이 6명이다. 최성빈, 이영애, 이창진, 함명자, 이주란, 한재정. 역할 칸은 있다. 운영진 예외 승인은 추적된 문서에 없고, `docs/rubric.md`가 확인을 요구한다 |
+| 팀 3~5인, 역할, 전원 기여 | `README.md` 2절 | 이름이 6명이다. 최성빈, 이영애, 이창진, 함명자, 이주란, 한재정. 역할 칸은 있다. 운영진 예외 승인은 추적된 문서에 없고, `docs/assignment/rubric.md`가 확인을 요구한다 |
 | README 개요·역할·스택·실행·결과 | `README.md` 1·2·4·8·9절 | 9절 사용자 테스트 문장은 위 행과 같이 `results.md`보다 이전 상태다 |
 | 스택 선정 이유 | `README.md` 4절 | 이유 칸이 있다 |
 | GitHub 버전 관리 | 이 저장소의 git 기록 | 기록은 있다. 평가·배포 기준은 팀 저장소 `main`이고, 이 브랜치 `docs/agent-workflow`는 `origin`에만 푸시한다 |
-| AI 생성 표시, 개인정보 동의 | `README.md` 7절, `docs/requirements.md` FR-06·FR-13·NFR-05 | 문서가 그렇게 적는다. 이 대조에서 화면을 다시 열지 않았다 |
-| 기획서·요구 명세서·아키텍처 | `prd.md`(초기, Firebase), `docs/requirements.md`, `README.md` 5절 | 현행 범위는 `docs/requirements.md`가 연다. `prd.md`와 다르면 그 문서를 따른다고 `docs/requirements.md`가 적는다 |
+| AI 생성 표시, 개인정보 동의 | `README.md` 7절, `docs/product/requirements.md` FR-06·FR-13·NFR-05 | 문서가 그렇게 적는다. 이 대조에서 화면을 다시 열지 않았다 |
+| 기획서·요구 명세서·아키텍처 | `docs/planning/prd.md`(초기, Firebase), `docs/product/requirements.md`, `README.md` 5절 | 현행 범위는 `docs/product/requirements.md`가 연다. `docs/planning/prd.md`와 다르면 그 문서를 따른다고 `docs/product/requirements.md`가 적는다 |
 | 발표 자료 | 작업 트리 `other/Project261000/output/` | git 추적 밖이다 |
 
 ## 5. 이 대조에서 하지 않은 일
