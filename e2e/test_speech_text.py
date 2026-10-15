@@ -1,4 +1,4 @@
-"""듣기(음성)와 화면 문장의 동일성 E2E.  docs/REPO_STATE.md 불변식.
+"""듣기(음성)와 화면 문장의 동일성 E2E.  docs/workflow/REPO_STATE.md 불변식.
 
 화면: How do I get to [your destination]?
 음성: How do I get to your destination?

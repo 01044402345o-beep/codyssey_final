@@ -206,3 +206,27 @@
 화면 기록이 6에 닿으면 현재 항목만 바꾼다. 스택에 없는 화면은 되살리지 않는다. 예시 여행과 데모 생성은 완료 기록을 비운다.
 
 검토 에이전트 01a13e6e-714f-7583-9d35-c218498a667f 은 pushScreen이 navStack이 NAV_MAX 6 이상이면 shift한 뒤 현재 히스토리 항목을 replaceState하고 그 전에는 pushState하며, onPop은 navStack.indexOf(target)가 0보다 작으면 go하지 않고, preset과 demoGen은 PROG.done을 비우고 sessionClear를 부르며, 학습 카드 듣기는 먼저 window.__spoken을 빈 배열로 두고 그 다음 버튼의 click을 직접 부른 뒤 길이가 0보다 큰지와 그 배열이 화면 원문이 아니라 대괄호를 뺀 문장 하나를 담은 배열과 같은지를 보는 통과로 봤다.
+
+## 이번 작업 — 문서 폴더 (2026-10-15)
+
+루트 `README.md` 는 저장소 입구로 루트에 둔다. 나머지 루트 기획 문서와 `docs/` 문서를 주제 폴더로 옮겼다. `docs/` 와 그 하위 폴더마다 `README.md` 가 있다.
+
+| 폴더 | 문서 |
+|---|---|
+| `docs/product/` | `requirements.md`, `ENRICHMENT_PIPELINE.md` |
+| `docs/planning/` | `prd.md`, `기술스택.md`, `시나리오.md`, `시나리오완료.MD` |
+| `docs/assignment/` | `ASSIGNMENT.md`, `rubric.md`, `review-log.md` |
+| `docs/workflow/` | `AGENT_WORKFLOW.md`, `REPO_STATE.md` |
+| `docs/deploy/` | `DEPLOY_RUNBOOK.md`, `go-nogo-flow.html`, `배포시나리오트래커.xlsx` |
+| `docs/measurement/` | `LATENCY_분석과_측정.md`, `score_측정_실행법.md` |
+| `docs/design/` | `RESPONSIVE_STRATEGY.md` |
+| `docs/research/` | 그대로. `README.md` 를 더했다 |
+| `docs/user-test/` | 그 자리. README 에 문서 목록 링크 한 줄 |
+
+이 절보다 위의 경로는 그 시점의 경로다. `mockup/README.md`, `mockup/app.js`, `mockup/audit/responsive_audit.js` 는 2026-10-22 동결이라 `docs/RESPONSIVE_STRATEGY.md`, `../prd.md`, `../시나리오완료.MD`, `../기술스택.md` 를 그대로 둔다. 외부 문서 URL 은 그대로다. `docs/user-test/results.md` 2·3·4절은 비어 있다.
+
+세션 디렉터리: `C:\Users\seong\.grok\sessions\C%3A%5CUsers%5Cseong%5CDesktop%5CProJect%5Ccodyssey_final\01a138a0-a233-7ca1-843c-3de2a5de06b6`
+
+계획 검토 에이전트 01a13eab-83cf-79f3-8cb6-edbb472c512b 은 폴더 묶음과 고칠 링크 목록을 통과로 봤다.
+
+검토 에이전트 01a13eb8-74aa-7332-9b4e-3442f09397cd 은 루트 README.md가 루트에 남고 prd.md와 기술스택.md와 시나리오.md와 시나리오완료.MD가 docs/planning에 있으며 그 MD 대소문자가 유지되고 requirements.md와 ENRICHMENT_PIPELINE.md가 docs/product에 있고 ASSIGNMENT.md와 rubric.md와 review-log.md가 docs/assignment에 있고 AGENT_WORKFLOW.md와 REPO_STATE.md가 docs/workflow에 있고 DEPLOY_RUNBOOK.md와 go-nogo-flow.html과 배포시나리오트래커.xlsx가 docs/deploy에 있고 LATENCY_분석과_측정.md와 score_측정_실행법.md가 docs/measurement에 있고 RESPONSIVE_STRATEGY.md가 docs/design에 있고 research 세 문서가 그 자리에 있으며 docs와 그 하위 폴더마다 README.md가 있고 user-test README에 문서 목록 링크 한 줄이 더해졌고 REPO_STATE.md는 docs/workflow로 옮겨졌고 이전 docs/REPO_STATE.md 대비 본문 차이는 끝의 문서 폴더 절 추가뿐이며 그 앞 01a13e6e 문장은 이전 파일과 같고 루트 README와 prd.md와 requirements.md와 AGENT_WORKFLOW.md와 ASSIGNMENT.md와 rubric.md와 review-log.md와 user-test README와 speak-hallucination.md와 ENRICHMENT_PIPELINE.md와 e2e/test_speech_text.py와 e2e/test_shell.py와 backend/app/main.py와 backend/README.md의 현재 위치 링크가 새 경로이며 docs와 루트 README.md와 backend README.md의 상대 마크다운 링크가 실제 파일을 가리키고 mockup의 예전 경로 인용이 남아 있는 변경을 통과로 봤다.
