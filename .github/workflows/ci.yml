@@ -80,6 +80,8 @@ jobs:
           python ../e2e/test_silence.py http://localhost:8768 ../e2e-shots
           python ../e2e/test_shell.py http://localhost:8768 ../e2e-shots   # 반응형 셸·터치·테마
           python ../e2e/test_speech_text.py http://localhost:8768
+          python ../e2e/test_back_nav.py http://localhost:8768   # 하단 뒤로가기 = 이전 화면
+          python ../e2e/test_progress_persist.py http://localhost:8768   # 새로고침 진도 유지
       - uses: actions/upload-artifact@v4
         if: always()
         with:
