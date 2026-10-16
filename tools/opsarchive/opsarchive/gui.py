@@ -97,6 +97,13 @@ class App:
         def worker() -> None:
             try:
                 result = fn()
+                if isinstance(result, dict) and result.get("error"):
+                    # rotate 처럼 "부분 성공 + error" 를 돌려주는 경우를 성공으로 보지 않는다.
+                    self.last[label] = "✘ " + str(result["error"])
+                    self.log("✘ 실패: %s" % result["error"], "err")
+                    for key, value in result.items():
+                        self.log("   %s: %s" % (key, value))
+                    return
                 if isinstance(result, dict):
                     for key, value in result.items():
                         self.log("   %s: %s" % (key, value))
@@ -278,6 +285,7 @@ class App:
         bar = ttk.Frame(frame)
         bar.pack(fill="x", padx=8)
         self._button(bar, "settings.json 저장", self.save_settings)
+        self._button(bar, "Render 서비스 선택", self.pick_service)
         self._button(bar, "파일 위치 열기", lambda: self.log(config.settings_path()))
 
         ttk.Separator(frame).pack(fill="x", padx=8, pady=8)
@@ -466,6 +474,57 @@ class App:
         if not value:
             raise commands.CommandError("설정_누락:" + key)
         return value
+
+    def pick_service(self) -> None:
+        """Render 서비스 이름 선택 — 워크스페이스 목록에서 골라 settings.json 에 넣는다.
+
+        이름을 손으로 적으면 밑줄/하이픈 차이로 `not_found` 가 나기 쉽다(실제로 그렇게 막혔다).
+        목록에서 고르면 그 실수가 사라지고, 직접 입력도 허용한다.
+        """
+        names: list[str] = []
+        error = ""
+        try:
+            names = render.service_names()
+        except Exception as exc:      # noqa: BLE001 — CLI 없음·미로그인 등을 화면에 보여준다
+            error = "%s%s" % (getattr(exc, "code", ""), type(exc).__name__)
+
+        window = tk.Toplevel(self.root)
+        window.title("Render 서비스 선택")
+        window.geometry("640x200")
+        window.transient(self.root)
+        ttk.Label(window, text="워크스페이스의 서비스 %d개%s" % (len(names), (" — 조회 실패(%s)" % error) if error else "")).pack(
+            anchor="w", padx=12, pady=(10, 2))
+        ttk.Label(window, text="앱 주소(호스트)와 서비스 이름은 다를 수 있습니다 — 이름은 여기서 고르세요.",
+                  foreground="#666").pack(anchor="w", padx=12)
+        var = tk.StringVar(value=str(self.settings.get("service") or (names[0] if names else "")))
+        ttk.Combobox(window, textvariable=var, values=names, width=60, state="normal").pack(fill="x", padx=12, pady=8)
+        status = ttk.Label(window, text="", foreground="#060")
+        status.pack(anchor="w", padx=12)
+
+        def confirm() -> None:
+            chosen = (var.get() or "").strip()
+            if not chosen:
+                return
+            if names and chosen not in names:
+                status.configure(text="⚠ 목록에 없는 이름입니다(그래도 저장할 수 있습니다).", foreground="#c00")
+            self.settings["service"] = chosen
+            if "service" in self.setting_vars:
+                self.setting_vars["service"].set(chosen)
+            try:
+                config.write_settings(self.settings)
+            except OSError:
+                pass
+            self.log("서비스 이름을 '%s' 로 저장했습니다." % chosen)
+            window.destroy()
+
+        bar = ttk.Frame(window)
+        bar.pack(fill="x", padx=12, pady=10)
+        ttk.Button(bar, text="목록 새로 고침", command=lambda: (window.destroy(), self.pick_service())).pack(side="left")
+        ttk.Button(bar, text="확인", command=confirm).pack(side="right")
+        ttk.Button(bar, text="취소", command=window.destroy).pack(side="right", padx=6)
+        window.bind("<Return>", lambda _e: confirm())
+        window.bind("<Escape>", lambda _e: window.destroy())
+        self.root.wait_window(window)
 
     def pick_key(self, kind: str = "admin") -> str:
         """키 파일 선택 창 — ① 드롭다운(자동 발견) ② 파일 열기 ③ 경로 직접 입력.
