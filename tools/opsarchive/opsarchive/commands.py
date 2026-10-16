@@ -18,7 +18,7 @@ import urllib.request
 import uuid
 
 from . import container as C
-from . import firebase, gcp, pins, render
+from . import chain, firebase, gcp, pins, render
 
 DEFAULT_ENV_KEY = "EVIDENCE_PUBKEY"
 DEFAULT_DIR = os.path.join(os.path.expanduser("~"), ".opsarchive")
@@ -203,6 +203,91 @@ def rotate(service: str, key_file: str, passphrase: str, *, out_dir: str | None 
 
 # ------------------------------------------------------------------ 아카이브 열람
 
+# ------------------------------------------------------------------ 서명 키 · 체크포인트 앵커((b)+(d))
+
+def signkey(out_dir: str | None = None, passphrase: str | None = None) -> dict:
+    """관리자 **서명 키**(Ed25519). 봉투 키(X25519)와 용도가 다르다 — 이 키는 체크포인트에 서명한다."""
+    directory = out_dir or DEFAULT_DIR
+    os.makedirs(directory, exist_ok=True)
+    seed, public = C.sign_keypair()
+    kid = C.key_id(public).hex()
+    phrase = passphrase or ask_passphrase(confirm=True, prompt="새 서명키 패스프레이즈: ")
+    path = os.path.join(directory, "sign-%s.key" % kid)
+    if os.path.exists(path):
+        raise CommandError("exists")
+    narrowed = C.save_private_key(path, seed, phrase)
+    return {"key_id": kid, "public_key": C.pack_public_key(public),
+            "fingerprint": C.fingerprint(public), "path": path,
+            "permissions": "owner_only" if narrowed else "inherited_warning"}
+
+
+def anchor(project_id: str, sa_path: str, sign_key_file: str, passphrase: str, *,
+           out_dir: str = "checkpoints") -> dict:
+    """지금 저장소의 아카이브 체인을 확인하고, (seq, count, head, 집합 해시)를 **서명해 앵커**한다.
+
+    체크포인트를 로컬/저장소에 남긴다 — 앱이 나중에 개수를 줄이거나 head 를 바꾸면 검증에서 걸린다.
+    """
+    store = gcp.Firestore(project_id, sa_path)
+    metas = store.list("evidence_archives", page_size=300)
+    chain_state = chain.check_chain(metas)
+    seed = C.load_private_key(sign_key_file, passphrase)
+    os.makedirs(out_dir, exist_ok=True)
+    seq = 1
+    for name in os.listdir(out_dir):
+        if name.endswith(".json") and name[:-5].isdigit():
+            seq = max(seq, int(name[:-5]) + 1)
+    ids = sorted(str(m.get("archive_id", "")) for m in metas)
+    body = chain.checkpoint_body(seq=seq, count=chain_state["count"],
+                                 head_digest=chain_state["head"], archive_ids=ids,
+                                 created_at=int(time.time()))
+    signed = chain.sign_checkpoint(seed, body)
+    path = os.path.join(out_dir, "%d.json" % seq)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(signed, fh, ensure_ascii=False, indent=2, sort_keys=True)
+        fh.write("\n")
+    # 개별 대조용 목록(아이디만 — 개인정보 없음). 나중에 "앵커한 뒤 사라진 아카이브"를 찾는다.
+    anchor_dir = os.path.join(out_dir, "anchors")
+    os.makedirs(anchor_dir, exist_ok=True)
+    with open(os.path.join(anchor_dir, "%d.json" % seq), "w", encoding="utf-8") as fh:
+        json.dump({"seq": seq, "archive_ids": ids}, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+    return {"seq": seq, "path": path, "count": chain_state["count"], "head": chain_state["head"],
+            "chain_ok": chain_state["ok"], "problems": chain_state["problems"],
+            "forks": chain_state["forks"], "signing_key_id": signed["signing_key_id"]}
+
+
+def verify_chain(project_id: str, sa_path: str, pin_file: str, *, out_dir: str = "checkpoints") -> dict:
+    """체크포인트 서명·연속성·롤백을 검증하고, 앵커한 뒤 **사라진 아카이브**가 있는지 본다."""
+    pin = pins.read(pin_file)
+    packed = pin.get("signing_public_key", "")
+    if not packed:
+        raise CommandError("no_signing_key")          # 핀에 서명 키가 없으면 검증할 수 없다
+    signing_public = C.unpack_public_key(packed)
+    checkpoints = []
+    for name in sorted(os.listdir(out_dir)) if os.path.isdir(out_dir) else []:
+        if name.endswith(".json") and name[:-5].isdigit():
+            with open(os.path.join(out_dir, name), encoding="utf-8") as fh:
+                checkpoints.append(json.load(fh))
+    if not checkpoints:
+        raise CommandError("not_found")
+    store = gcp.Firestore(project_id, sa_path)
+    metas = store.list("evidence_archives", page_size=300)
+    result = chain.verify_chain(checkpoints, signing_public, metas)
+
+    latest = max(checkpoints, key=lambda c: int(c.get("seq", 0)))
+    anchor_path = os.path.join(out_dir, "anchors", "%s.json" % latest.get("seq"))
+    if os.path.exists(anchor_path):
+        anchored = set(chain.load_archive_ids(anchor_path))
+        present = {str(m.get("archive_id", "")) for m in metas}
+        result["missing_now"] = sorted(anchored - present)      # 앵커한 뒤 사라졌다 = 삭제 의심
+        result["new_since_anchor"] = sorted(present - anchored)
+        result["ok"] = bool(result["ok"] and not result["missing_now"])
+    else:
+        result["missing_now"] = None
+        result["note"] = "anchors/<seq>.json 이 없어 개별 누락 대조를 건너뛰었다"
+    return result
+
+
 def firebase_preflight(project_id: str) -> dict:
     """firebase CLI 가 있고 그 프로젝트에 접근 가능한지 본다(사전 점검).
 
@@ -216,7 +301,8 @@ def firebase_preflight(project_id: str) -> dict:
 # ------------------------------------------------------------------ 핀 고정(예상 밖 키 탐지)
 
 def make_pin(key_file: str, passphrase: str, *, health_url: str, out: str,
-             generation: int | None = None, commit: str = "", note: str = "") -> dict:
+             generation: int | None = None, commit: str = "", note: str = "",
+             signing_public: bytes | None = None) -> dict:
     """개인키에서 **역산한** 공개키로 핀 파일을 만든다.
 
     generation 을 주지 않으면 기존 핀의 다음 세대로 올린다. 앱이 알려준 값을 핀에 넣지 않는다
@@ -231,7 +317,7 @@ def make_pin(key_file: str, passphrase: str, *, health_url: str, out: str,
             generation = 1
     document = pins.make(public, C.fingerprint(public), C.key_id(public).hex(),
                          generation=generation, health_url=health_url, commit=commit,
-                         armed=True, note=note)
+                         armed=True, note=note, signing_public=signing_public)
     return pins.write(out, document)
 
 

@@ -19,6 +19,7 @@ import json
 import sys
 
 from . import VERSION, commands
+from . import container as C
 
 
 def _print(data: object) -> None:
@@ -53,6 +54,22 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--generation", type=int, default=None, help="세대(기본: 기존+1)")
     q.add_argument("--commit", default="", help="회전을 일으킨 커밋 sha")
     q.add_argument("--note", default="")
+    q.add_argument("--sign-key", default="", help="서명 키 파일(주면 그 공개키도 핀에 넣는다)")
+
+    q = sub.add_parser("signkey", help="관리자 서명 키(Ed25519) 생성 — 체크포인트 서명용")
+    q.add_argument("--dir", default="", help="저장 디렉터리(기본 ~/.opsarchive)")
+
+    q = sub.add_parser("anchor", help="아카이브 체인을 확인하고 체크포인트를 서명해 앵커한다")
+    q.add_argument("--project", required=True)
+    q.add_argument("--sa", required=True)
+    q.add_argument("--sign-key", required=True, help="서명 키 파일 경로")
+    q.add_argument("--out", default="checkpoints")
+
+    q = sub.add_parser("verify-chain", help="체크포인트 서명·연속성·사라진 아카이브를 검증한다")
+    q.add_argument("--project", required=True)
+    q.add_argument("--sa", required=True)
+    q.add_argument("--pin", default="security/evidence-key-pin.json")
+    q.add_argument("--out", default="checkpoints")
 
     q = sub.add_parser("pin-check", help="핀 파일과 배포된 /health 를 대조한다(CI 와 같은 검사)")
     q.add_argument("--pin", default="security/evidence-key-pin.json")
@@ -105,9 +122,27 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.cmd == "pin":
             phrase = commands.ask_passphrase(prompt="개인키 패스프레이즈: ")
+            signing = None
+            if args.sign_key:
+                signing = C.sign_public(C.load_private_key(
+                    args.sign_key, commands.ask_passphrase(prompt="서명키 패스프레이즈: ")))
             _print(commands.make_pin(args.key, phrase, health_url=args.health_url, out=args.out,
-                                     generation=args.generation, commit=args.commit, note=args.note))
+                                     generation=args.generation, commit=args.commit, note=args.note,
+                                     signing_public=signing))
             return 0
+        if args.cmd == "signkey":
+            made = commands.signkey(out_dir=args.dir or None)
+            made.pop("path", None)
+            _print(made)
+            return 0
+        if args.cmd == "anchor":
+            phrase = commands.ask_passphrase(prompt="서명키 패스프레이즈: ")
+            _print(commands.anchor(args.project, args.sa, args.sign_key, phrase, out_dir=args.out))
+            return 0
+        if args.cmd == "verify-chain":
+            result = commands.verify_chain(args.project, args.sa, args.pin, out_dir=args.out)
+            _print(result)
+            return 0 if result.get("ok") else 1
         if args.cmd == "pin-check":
             result = commands.check_pin(args.pin, health_url=args.health_url)
             _print(result)
