@@ -379,6 +379,29 @@ def observe_requests(project_id: str, sa_path: str, service: str, *, path: str =
     return result
 
 
+def env_set(service: str, key: str, value: str, *, api_key_value: str | None = None) -> dict:
+    """Render 서비스의 환경변수 하나를 올린다(REST API).
+
+    **값을 명령줄 인자로 받지 않는 경로를 쓰는 게 안전하다** — 인자는 셸 히스토리·프로세스 목록에
+    남는다. CLI 는 `--from-file`(파일) 또는 표준입력만 허용하고, 화면·로그에는 값 대신 **길이만** 남긴다.
+    여러 줄 값(서비스 계정 JSON 등)은 대시보드 복붙보다 이쪽이 실수가 적다.
+    """
+    if not key.strip():
+        raise CommandError("bad_input:key")
+    sid = render.service_id(service)
+    render.put_env(sid, key.strip(), value, api_key_value=api_key_value)
+    return {"service_id": sid, "key": key.strip(), "value_length": len(value),
+            "note": "값은 화면·로그에 남기지 않았습니다. 재배포해야 앱에 반영됩니다."}
+
+
+def env_read(service: str, key: str, *, api_key_value: str | None = None) -> dict:
+    """환경변수가 설정돼 있는지만 확인한다(값은 길이만)."""
+    sid = render.service_id(service)
+    value = render.get_env(sid, key.strip(), api_key_value=api_key_value)
+    return {"service_id": sid, "key": key.strip(), "set": bool(value),
+            "value_length": len(value or "")}
+
+
 def firebase_preflight(project_id: str) -> dict:
     """firebase CLI 가 있고 그 프로젝트에 접근 가능한지 본다(사전 점검).
 
