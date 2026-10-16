@@ -58,6 +58,7 @@ class App:
         self.last_rows: list = []
         self.log_window = None
         self.output = None
+        self.log_lines: list = []               # 창을 닫아도 로그를 잃지 않게 메모리에 남긴다
         self._wrapped: list = []
         self._build()
         self.open_log_window()                  # 로그는 탭이 아니라 **별도 창**이다
@@ -89,11 +90,17 @@ class App:
                 self.status_var.set(text)          # 메인 창 아래 상태 줄(로그 창이 닫혀 있어도 보인다)
                 continue
             if self.output is None or not self.output.winfo_exists():
-                continue                            # 로그 창이 닫혀 있으면 버린다(작업은 계속)
+                self.log_lines.append((tag, text))    # 창이 닫혀 있어도 기록은 남긴다
+                if len(self.log_lines) > 3000:
+                    del self.log_lines[:1000]
+                continue
             self.output.configure(state="normal")
             self.output.insert("end", text + "\n", tag)
             self.output.see("end")
             self.output.configure(state="disabled")
+            self.log_lines.append((tag, text))
+            if len(self.log_lines) > 3000:
+                del self.log_lines[:1000]
         self.root.after(120, self._drain)
 
     def ask_pass(self, prompt: str = "패스프레이즈") -> str:
@@ -243,7 +250,9 @@ class App:
         if getattr(self, "verify_hint", None) is not None:
             keys = config.key_files()
             self.verify_hint.set("다음 할 일: " + ("② anchor 로 지금 상태를 서명하세요(주기적으로 반복)" if keys["sign"]
-                                                 else "키 탭 ③ 에서 서명 키를 먼저 만드세요"))
+                                                 else "키 탭 ③ 에서 서명 키를 먼저 만드세요")
+                                 + " · 키를 회전했다면 **핀을 다시 만들고**(Render 탭 ⑤) 서명 키도 새 키를 고르세요"
+                                 + " · anchor 가 key_mismatch 면 서명 키 패스프레이즈가 그 키의 것이 아닙니다")
 
     def _update_hint(self) -> None:
         keys = config.key_files()
@@ -937,6 +946,12 @@ class App:
         output.tag_configure("ok", foreground="#06c")
         output.tag_configure("err", foreground="#c00")
         self.output = output
+        for tag, text in self.log_lines:          # 다시 열면 이전 로그를 되살린다
+            output.configure(state="normal")
+            output.insert("end", text + "\n", tag)
+            output.configure(state="disabled")
+        if self.log_lines:
+            output.see("end")
         bar = ttk.Frame(window)
         bar.pack(fill="x", padx=8, pady=(0, 8))
         self._button(bar, "복사", self.copy_log)
