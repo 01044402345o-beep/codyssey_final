@@ -72,6 +72,33 @@ with sync_playwright() as p:
     check("진도 기록이 비워진다(로그인 화면만 남음)", after["sess_done"] == 0 and after["sess_screen"] == "u-login", str(after))
     check("로그인 화면으로 돌아가고 사용자 정보가 비워진다", after["scr"] == "u-login" and after["user"] is None, str(after))
 
+    # --- 계정 칸(:uid)과, 로그인 전에 남은 공용 칸의 같은 기록을 함께 지운다 ---
+    page.evaluate("""() => {
+      ensure('plan');                       // 계획 준비(데모)
+      S.user = { uid: 'uidX', provider: 'google.com', name: 'X', email: 'x@example.com' };
+      const weak = [{ category_id: 'restaurant', id: 'order_menu', situation: 'x', en: 'Water', ko: '물' }];
+      const trip = { country: '미국', cities: [{ name: '뉴욕', start: '2026-11-10', end: '2026-11-13' }], studyStart: '2026-10-01' };
+      localStorage.setItem('cd_weak:uidX', JSON.stringify(weak));
+      localStorage.setItem('cd_trip:uidX', JSON.stringify(trip));
+      localStorage.setItem('cd_weak', JSON.stringify(weak));
+      localStorage.setItem('cd_trip', JSON.stringify(trip));
+      go('u-home');
+    }""")
+    page.wait_for_timeout(250)
+    seeded = page.evaluate("({ sw: !!localStorage.getItem('cd_weak:uidX'), st: !!localStorage.getItem('cd_trip:uidX'), w: !!localStorage.getItem('cd_weak'), t: !!localStorage.getItem('cd_trip') })")
+    check("계정 칸과 공용 칸에 같은 이름의 기록을 심었다", all(seeded.values()), str(seeded))
+    page.click('[data-act="withdraw"]')
+    page.wait_for_timeout(200)
+    page.click('[data-act="modal-ok"]')
+    page.wait_for_timeout(600)
+    twin = page.evaluate("""() => ({
+      scoped_weak: localStorage.getItem('cd_weak:uidX'), scoped_trip: localStorage.getItem('cd_trip:uidX'),
+      shared_weak: localStorage.getItem('cd_weak'), shared_trip: localStorage.getItem('cd_trip'), scr: S.screen,
+    })""")
+    check("계정 칸(:uid)과 공용 칸의 같은 기록을 함께 지운다",
+          twin["scoped_weak"] is None and twin["scoped_trip"] is None and twin["shared_weak"] is None and twin["shared_trip"] is None,
+          str(twin))
+
     check("자바스크립트 오류 없음", not errors, str(errors[:3]))
     b.close()
 
