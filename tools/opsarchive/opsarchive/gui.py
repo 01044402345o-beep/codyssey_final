@@ -214,6 +214,10 @@ class App:
                 self.log_queue.put(("status", "✔ %s 완료" % label))
             except Exception as exc:  # noqa: BLE001 — GUI 는 어떤 예외도 창을 닫지 않게
                 code = getattr(exc, "code", "")
+                if code == "no_pin_file":
+                    # 핀 파일이 아직 없을 때 "무엇을 먼저 해야 하는지"를 화면에 남긴다.
+                    code = "no_pin_file — Render 탭 ⑤ [핀 만들기] 를 먼저 실행하세요 (핀 파일: %s)" % (
+                        self.settings.get("pin_path") or "경로 미설정")
                 self.last[label] = "✘ 실패: " + str(code or type(exc).__name__)
                 self.log("✘ %s%s" % (type(exc).__name__, (": " + str(code)) if code else ""), "err")
                 self.log_queue.put(("status", "✘ %s 실패: %s" % (label, code or type(exc).__name__)))
@@ -870,10 +874,12 @@ class App:
                    "앱이 지울 수 없는 플랫폼 로그의 /account/erase 요청 수와 체인 기록을 비교합니다(누락 탐지).",
                    "observe", "observe 실행", self.do_observe)
         self._step(steps, 4, "⑤", "핀 파일",
-                   "개인키에서 역산한 지문을 저장소 파일에 기록합니다. 이후 핀 검사·CI 가 '예상 밖 키'를 잡습니다.",
+                   "개인키에서 역산한 지문을 저장소 **밖**(~/.opsarchive)에 기록합니다. "
+                   "CI 가 읽는 값은 ⑨ 에서 Actions 변수로 올립니다.",
                    "pin", "핀 만들기", self.do_pin)
-        self._step(steps, 5, "⑥", "핀 검사",
-                   "핀 파일과 배포된 /health 의 지문·세대를 대조합니다(CI cron 과 같은 검사).",
+        self._step(steps, 5, "⑥", "핀 검사(로컬)",
+                   "**로컬** 핀과 배포된 /health 의 지문·세대를 대조합니다. CI 는 같은 검사를 Actions 변수로 하므로, "
+                   "변수가 낡았는지는 ⑩ 원격 대조로 확인하세요.",
                    "pin-check", "핀 검사 실행", self.do_pin_check)
         self._step(steps, 6, "⑦", "IAM 검사",
                    "앱 서비스 계정이 증거를 지울 수 있는지 시험합니다(목표: 만들 수는 있고 지울 수는 없다).",
@@ -882,6 +888,14 @@ class App:
                    "워크플로우 env 노드를 [Render에 반영] 한 뒤 이 버튼으로 재배포합니다(환경변수는 재배포해야 실제로 적용됩니다). "
                    "환경변수 반영 뒤 이 버튼으로 재배포한다 — 재배포가 끝나면 ② doctor 로 지문을 다시 대조하세요.",
                    "redeploy", "재배포 실행", self.do_redeploy)
+        self._step(steps, 8, "⑨", "핀을 Actions 변수로",
+                   "핀의 공개값을 GitHub Actions 변수(vars.EVIDENCE_PIN_*)로 올립니다. "
+                   "**키를 회전했으면 여기서 반드시 갱신하세요** — 그러지 않으면 CI 가 빨강이 됩니다.",
+                   "pin-publish", "변수로 올리기", self.do_pin_publish)
+        self._step(steps, 9, "⑩", "원격 변수 대조",
+                   "원격 Actions 변수와 로컬 핀이 같은지 봅니다(다르면 ⑨ 로 올리세요). "
+                   "로컬 ⑥ 은 초록인데 CI 는 빨강인 상태를 이 검사가 잡아냅니다.",
+                   "pin-remote", "원격 대조 실행", self.do_pin_remote_check)
         self.render_hint = self._hint(frame)
 
     def check_remote_status(self) -> None:
@@ -1142,9 +1156,15 @@ class App:
         phrase = self.ask_key_pass(key_file, "개인키 패스프레이즈")
         if not key_file or not phrase:
             return
-        self.run("publish", lambda: commands.publish(
-            self.require("service"), key_file, phrase, env_key=self.settings.get("env_key"),
-            base_url=self.settings.get("base_url"), on_step=self.log))
+        def work() -> dict:
+            result = commands.publish(
+                self.require("service"), key_file, phrase, env_key=self.settings.get("env_key"),
+                base_url=self.settings.get("base_url"), on_step=self.log)
+            # 회전·재발행 뒤 CI 가 읽는 값(Actions 변수)은 자동으로 바뀌지 않는다 — 다음 행동을 알려준다.
+            self.log("※ 개인키를 바꿨습니다 — CI 가 읽는 값은 Render 탭 ⑨ [변수로 올리기] 로 갱신하고, "
+                     "⑩ [원격 대조] 로 확인하세요.")
+            return result
+        self.run("publish", work)
 
     def do_doctor(self) -> None:
         key_file = self.pick_key("admin")
@@ -1190,6 +1210,23 @@ class App:
     def do_pin_check(self) -> None:
         self.run("pin-check", lambda: commands.check_pin(self.settings.get("pin_path"),
                                                          health_url=self.require("base_url")))
+
+    def _gh_repo(self) -> str:
+        """Actions 변수를 올릴/대조할 저장소(환경변수 EVIDENCE_GH_REPO → 설정 → 기본 팀 저장소)."""
+        return (self.settings.get("gh_repo") or os.environ.get("EVIDENCE_GH_REPO")
+                or "01044402345o-beep/codyssey_final")
+
+    def do_pin_publish(self) -> None:
+        """핀의 공개값을 GitHub Actions 변수로 올린다(저장소 파일로는 올리지 않는다)."""
+        repo = self._gh_repo()
+        self.run("핀 변수 올리기", lambda: commands.pin_publish(
+            self.settings.get("pin_path") or "", repo=repo))
+
+    def do_pin_remote_check(self) -> None:
+        """원격 Actions 변수와 로컬 핀의 드리프트를 본다(회전 뒤 갱신을 잊었는지)."""
+        repo = self._gh_repo()
+        self.run("원격 변수 대조", lambda: commands.pin_remote_check(
+            self.settings.get("pin_path") or "", repo=repo))
 
     def do_iam(self) -> None:
         self.run("iam-check", lambda: commands.iam_check(self.require("project_id"),
