@@ -66,6 +66,7 @@ admin-*.key
 
 # opsarchive 관리자 비밀·설정 — 저장소에 절대 넣지 않는다
 tools/opsarchive/.env
+/security/
 .env
 settings.json
 
