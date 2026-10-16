@@ -265,9 +265,9 @@ Firestore `(default)`를 asia-northeast3에 만들었다. `firestore.rules`는 �
 
 세션 디렉터리: `C:\Users\seong\.grok\sessions\C%3A%5CUsers%5Cseong%5CDesktop%5CProJect%5Ccodyssey_final\01a138a0-a233-7ca1-843c-3de2a5de06b6`
 
-## 이번 작업 — 홈 편의 기능 · 여행 입력 저장 (2026-10-16, 미커밋)
+## 이번 작업 — 홈 편의 기능 · 여행 입력 저장 (2026-10-16)
 
-브랜치 `feat/itinerary-screen` 작업 트리다. 커밋·푸시·배포는 하지 않았다. 공개 사이트는 아직 `5f94fb5` 이다.
+브랜치 `feat/home-trip-settings`(`team/main` = `5f94fb5` 에서 분기, 커밋 `6089399` 하나). 포크 `origin`(seongbin45)에 푸시했고 **PR #77**(`01044402345o-beep/codyssey_final`, base `main`)을 열었다. 규칙은 머지 전에 먼저 배포했다(아래). 백엔드는 아직 머지·배포 전이라 공개 사이트는 여전히 `5f94fb5` 다.
 
 홈(메인화면)에 편의 기능을 더한다. 맨 아래 계정 카드에 로그아웃 버튼과 안내를 하나의 카드로 두고(누르면 확인 창), D-Day 카드는 `<button>` 이라 누르거나 Enter 로 여행 설정 수정 화면(`u-edit`, SCR-10)을 연다. 온보딩 입력(나라·도시별 체류 날짜·학습 시작일)을 계정 기록에 저장·복원한다. 날짜만 바뀌면 장소·문장은 그대로 두고 학습 일정표만 다시 계산하고, 도시·나라가 바뀌면 보고서부터 다시 만든다.
 
@@ -275,9 +275,9 @@ Firestore `(default)`를 asia-northeast3에 만들었다. `firestore.rules`는 �
 
 **규칙 배포 순서 (중요)**: `firestore.rules` 는 `session·weak·consent` 를 필수, `trip` 을 선택(있으면 문자열)으로 둔다. `trip` 을 무조건 요구하면 지금 배포된 백엔드(3필드)의 `PUT /user/state` 가 `PERMISSION_DENIED` 다. 규칙만 먼저 올려도 안전하다. 여행 입력 저장은 `encode_document` 가 `trip` 을 쓰는 백엔드가 Render 에 **같이** 올라가야 켜진다.
 
-- 커밋본(`HEAD`) `firestore.rules` sha256 = `6cac63da9ec2a8de9cafdcb33b541362e5b0e5e8b6fe72e2ba94583e1bc011a0` (= 배포본).
-- 작업 복사본 sha256 = `c89dc98330f5ff73c805cd43df98d62f052adf9b3b8c666d450f40f5bdcb6486` (trip 선택, 1708 바이트).
+- 머지 전 규칙 sha256 = `6cac63da9ec2a8de9cafdcb33b541362e5b0e5e8b6fe72e2ba94583e1bc011a0`(3필드, `5f94fb5`).
+- 선택형 규칙 sha256 = `c89dc98330f5ff73c805cd43df98d62f052adf9b3b8c666d450f40f5bdcb6486`(trip 선택, 1708 바이트). **2026-10-16 `firebase deploy --only firestore:rules --project com-example-myapplicatio-3bb36` 로 `(default)` 에 배포 완료**(CLI 컴파일 통과). 이제 배포본 = 이 값이다.
 - `firebase.json` 은 `(default)` 만 가리킨다. `firestore-native-mode` 는 바꾸지 않았다.
 - 규칙 파일에 `'trip' in request.resource.data` 가드와, `encode_document` 필드 ↔ 규칙 `hasOnly` 대조 테스트(`backend/tests/test_user_state.py`)가 들어 있다.
 
-이 작업 트리에서 백엔드 `unittest discover` 186 통과(규칙 대조 2 포함), 프론트 `node --test ai.test.js` 34·`tokens.test.js` 7 통과. Playwright e2e 9종 279 통과(`home_settings 29` 신규 포함: 새로고침 복원·D-Day 수정 저장·하단 로그아웃·계정 칸 분리). Firebase 를 켠 로컬 서버(`--env-file .env`)에서 `/auth/config` enabled=true, 로그인 화면 이메일 폼 노출, JS 오류 0 을 확인했다. `trip` 을 쓰는 화면·백엔드는 아직 커밋하지 않았다. 계정 쓰기 왕복(로그인 상태에서 서버 반영)은 아직 관찰하지 않아 FR-16 은 부분이다.
+커밋 `6089399` 기준 백엔드 `unittest discover` 186 통과(규칙 대조 2 포함), 프론트 `node --test ai.test.js` 34·`tokens.test.js` 7 통과. Playwright e2e 9종 279 통과(`home_settings 29` 신규 포함: 새로고침 복원·D-Day 수정 저장·하단 로그아웃·계정 칸 분리). Firebase 를 켠 로컬 서버(`--env-file .env`)에서 `/auth/config` enabled=true, 로그인 화면 이메일 폼 노출, JS 오류 0 을 확인했다. PR CI 는 push 시점에 `test`·`e2e` 잡이 돌았다. 계정 쓰기 왕복(로그인 상태에서 서버 반영)은 아직 관찰하지 않아 FR-16 은 부분이다. **남은 순서: PR CI 통과 → 머지(Render 자동 배포). 규칙은 이미 올라가 있어 머지 시 계정 저장이 깨지지 않는다.**
