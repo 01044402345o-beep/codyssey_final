@@ -46,7 +46,8 @@ class App:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("opsarchive — 탈퇴 실패 증거 봉인")
-        self.root.geometry("900x680")
+        self.root.geometry("1180x780")          # 설명이 잘리지 않도록 넉넉하게 시작한다
+        self.root.minsize(960, 620)
         self.log_queue: queue.Queue[tuple[str, str]] = queue.Queue()
         self.busy = False
         self.settings = config.bootstrap()
@@ -55,7 +56,12 @@ class App:
         self.step_status: dict[str, tk.StringVar] = {}
         self.last: dict[str, str] = {}
         self.last_rows: list = []
+        self.log_window = None
+        self.output = None
+        self._wrapped: list = []
         self._build()
+        self.open_log_window()                  # 로그는 탭이 아니라 **별도 창**이다
+        self.root.bind("<Configure>", self._rewrap_all, add="+")
         self.root.after(120, self._drain)
         self.refresh_overview()
 
@@ -79,6 +85,11 @@ class App:
             if tag == "refresh":
                 self.refresh_steps()
                 continue
+            if tag == "status":
+                self.status_var.set(text)          # 메인 창 아래 상태 줄(로그 창이 닫혀 있어도 보인다)
+                continue
+            if self.output is None or not self.output.winfo_exists():
+                continue                            # 로그 창이 닫혀 있으면 버린다(작업은 계속)
             self.output.configure(state="normal")
             self.output.insert("end", text + "\n", tag)
             self.output.see("end")
@@ -95,6 +106,7 @@ class App:
             return
         self.busy = True
         self.log("▶ " + label, "head")
+        self.log_queue.put(("status", "작업 중: " + label))
 
         def worker() -> None:
             try:
@@ -113,10 +125,12 @@ class App:
                     self.log("   " + str(result))
                 self.last[label] = "✔ 완료"
                 self.log("✔ 끝", "ok")
+                self.log_queue.put(("status", "✔ %s 완료" % label))
             except Exception as exc:  # noqa: BLE001 — GUI 는 어떤 예외도 창을 닫지 않게
                 code = getattr(exc, "code", "")
                 self.last[label] = "✘ 실패: " + str(code or type(exc).__name__)
                 self.log("✘ %s%s" % (type(exc).__name__, (": " + str(code)) if code else ""), "err")
+                self.log_queue.put(("status", "✘ %s 실패: %s" % (label, code or type(exc).__name__)))
                 if str(exc):
                     self.log("   " + str(exc)[:400], "err")
             finally:
@@ -126,31 +140,62 @@ class App:
 
         threading.Thread(target=worker, name="opsarchive-gui", daemon=True).start()
 
-    # ------------------------------------------------------------ 단계 카드(설명 + 상태 + 버튼)
+    def _wrap(self, label, container, pad: int = 46) -> None:
+        """창 너비에 맞춰 **줄바꿈 폭을 다시 계산**한다(가로로 잘리는 문제를 없앤다).
+
+        wraplength 를 상수로 두면 창이 좁을 때 잘리고, 넓을 때는 과하게 접힌다. 컨테이너와
+        루트 창의 <Configure> 에서 다시 잡는다.
+        """
+        self._wrapped.append((label, container, pad))
+
+        def apply(event=None) -> None:
+            width = getattr(event, "width", 0) or container.winfo_width()
+            try:
+                label.configure(wraplength=max(260, int(width) - pad))
+            except tk.TclError:
+                pass
+
+        container.bind("<Configure>", apply, add="+")
+        apply()
+
+    def _rewrap_all(self, event=None) -> None:
+        """창 크기가 바뀌면 등록된 모든 설명 라벨의 줄바꿈 폭을 다시 잡는다."""
+        for label, container, pad in list(self._wrapped):
+            try:
+                width = container.winfo_width()
+                label.configure(wraplength=max(260, int(width) - pad))
+            except tk.TclError:
+                self._wrapped.remove((label, container, pad))
+
+    # ------------------------------------------------------------ 단계 카드(제목·상태·버튼 + 설명)
     def _step(self, parent, row: int, no: str, title: str, desc: str, key: str,
               button: str, command) -> None:
-        """한 단계 = 번호/제목 · 하는 일 · 현재 상태 · 실행 버튼. 한 줄씩 읽으면 순서가 보이게 한다."""
-        ttk.Label(parent, text="%s %s" % (no, title), width=22, anchor="w",
-                  font=("", 10, "bold")).grid(row=row, column=0, sticky="nw", padx=(8, 4), pady=(8, 0))
-        ttk.Label(parent, text=desc, wraplength=430, justify="left").grid(
-            row=row, column=1, sticky="w", padx=4, pady=(8, 0))
+        """한 단계 = ① 줄: 번호·제목 + 현재 상태 + 실행 버튼  ② 줄: 설명(창 너비에 맞춰 줄바꿈)."""
+        box = ttk.Frame(parent)
+        box.grid(row=row, column=0, sticky="we", pady=(6, 2))
+        box.columnconfigure(1, weight=1)
+        ttk.Label(box, text="%s %s" % (no, title), font=("", 10, "bold")).grid(
+            row=0, column=0, sticky="w", padx=(8, 10))
         var = tk.StringVar(value="—")
         self.step_status[key] = var
-        ttk.Label(parent, textvariable=var, width=30, anchor="w", foreground="#06c").grid(
-            row=row, column=2, sticky="w", padx=4, pady=(8, 0))
-        ttk.Button(parent, text=button, command=command, width=22).grid(
-            row=row, column=3, sticky="e", padx=8, pady=(8, 0))
+        ttk.Label(box, textvariable=var, foreground="#06c").grid(row=0, column=1, sticky="w")
+        ttk.Button(box, text=button, command=command, width=22).grid(
+            row=0, column=2, sticky="e", padx=8)
+        label = ttk.Label(box, text=desc, justify="left")
+        label.grid(row=1, column=0, columnspan=3, sticky="we", padx=(8, 8), pady=(0, 2))
+        self._wrap(label, box)
 
     def _steps_frame(self, parent) -> ttk.Frame:
         frame = ttk.Frame(parent)
         frame.pack(fill="x", padx=4, pady=2)
-        frame.columnconfigure(1, weight=1)
+        frame.columnconfigure(0, weight=1)
         return frame
 
     def _hint(self, parent) -> tk.StringVar:
         var = tk.StringVar(value="")
-        ttk.Label(parent, textvariable=var, wraplength=840, justify="left",
-                  foreground="#060").pack(anchor="w", padx=10, pady=(10, 4))
+        label = ttk.Label(parent, textvariable=var, justify="left", foreground="#060")
+        label.pack(anchor="w", padx=10, pady=(10, 4), fill="x")
+        self._wrap(label, parent)
         return var
 
     def state(self, key: str) -> str:
@@ -219,15 +264,22 @@ class App:
                 var.set(text)
 
     def _build(self) -> None:
+        # 아래 상태 줄을 먼저 자리잡게 하고, 노트북이 남은 공간을 채운다.
+        bar = ttk.Frame(self.root)
+        bar.pack(fill="x", side="bottom", padx=10, pady=(0, 8))
+        self.status_var = tk.StringVar(value="준비됨")
+        ttk.Label(bar, textvariable=self.status_var, foreground="#06c",
+                  anchor="w").pack(side="left", fill="x", expand=True)
+        ttk.Button(bar, text="로그 창 열기", command=self.open_log_window).pack(side="right")
+
         notebook = ttk.Notebook(self.root)
-        notebook.pack(fill="both", expand=True, padx=8, pady=8)
+        notebook.pack(fill="both", expand=True, padx=8, pady=8, side="top")
         self._tab_overview(notebook)
         self._tab_settings(notebook)
         self._tab_keys(notebook)
         self._tab_render(notebook)
         self._tab_store(notebook)
         self._tab_verify(notebook)
-        self._tab_log(notebook)
 
     def _frame(self, notebook: ttk.Notebook, title: str) -> ttk.Frame:
         frame = ttk.Frame(notebook)
@@ -867,24 +919,43 @@ class App:
             self.do_verify(value.strip().lower())
 
     # ------------------------------------------------------------ 탭 7: 로그
-    def _tab_log(self, notebook) -> None:
-        frame = self._frame(notebook, "로그")
-        self.output = tk.Text(frame, wrap="word", state="disabled")
-        self.output.pack(fill="both", expand=True, padx=8, pady=4)
-        self.output.tag_configure("head", foreground="#0b6")
-        self.output.tag_configure("ok", foreground="#06c")
-        self.output.tag_configure("err", foreground="#c00")
-        bar = ttk.Frame(frame)
-        bar.pack(fill="x", padx=8, pady=4)
+    # ------------------------------------------------------------ 로그 창(별도 창)
+    def open_log_window(self) -> None:
+        """로그는 메인 창의 탭이 아니라 **별도 창**이다(작업 화면을 가리지 않고, 크게 볼 수 있다)."""
+        if self.log_window is not None and self.log_window.winfo_exists():
+            self.log_window.deiconify()
+            self.log_window.lift()
+            return
+        window = tk.Toplevel(self.root)
+        window.title("opsarchive — 로그")
+        window.geometry("760x520+1220+80")
+        window.transient(self.root)
+        self.log_window = window
+        output = tk.Text(window, wrap="word", state="disabled")
+        output.pack(fill="both", expand=True, padx=8, pady=6)
+        output.tag_configure("head", foreground="#0b6")
+        output.tag_configure("ok", foreground="#06c")
+        output.tag_configure("err", foreground="#c00")
+        self.output = output
+        bar = ttk.Frame(window)
+        bar.pack(fill="x", padx=8, pady=(0, 8))
         self._button(bar, "복사", self.copy_log)
         self._button(bar, "지우기", self.clear_log)
+        ttk.Label(bar, text="이 창을 닫아도 작업은 계속됩니다 — '로그 창 열기'로 다시 엽니다.",
+                  foreground="#666").pack(side="right", padx=6)
 
     def copy_log(self) -> None:
+        if self.output is None or not self.output.winfo_exists():
+            self.open_log_window()
+            return
         self.root.clipboard_clear()
         self.root.clipboard_append(self.output.get("1.0", "end"))
         self.log("로그를 클립보드에 복사했습니다.")
 
     def clear_log(self) -> None:
+        if self.output is None or not self.output.winfo_exists():
+            self.open_log_window()
+            return
         self.output.configure(state="normal")
         self.output.delete("1.0", "end")
         self.output.configure(state="disabled")
