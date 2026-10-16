@@ -20,9 +20,11 @@ services:
         sync: false
       # 교차검증 필수: AssemblyAI(다른 모델 계열 전사). 두 번째 말소리 검출은 로컬 pyannote 모델이라 키가 필요 없다.
       # 로그인(Firebase Authentication). 비어 있으면 화면은 데모 로그인을 유지한다.
-      # 아래는 웹 앱 공개 설정이다. 서비스 계정 JSON 은 넣지 않는다.
+      # 아래는 웹 앱 공개 설정이다. 서비스 계정 JSON 은 여기(공개 설정)에 넣지 않는다 —
+      # 탈퇴용 키는 맨 아래 FIREBASE_SERVICE_ACCOUNT_JSON 하나로만 받는다.
       # 계정 진도(GET/PUT /user/state)는 이 프로젝트의 Firestore (default) 데이터베이스를 쓴다.
-      # 토큰은 사용자 ID 토큰이다. 새 환경 변수는 없다. firestore-native-mode 는 쓰지 않는다.
+      # 토큰은 사용자 ID 토큰이다. firestore-native-mode 는 쓰지 않는다.
+      # 탈퇴(선택)는 아래 FIREBASE_SERVICE_ACCOUNT_JSON 만 추가한다 — 없으면 화면이 폴백 경로로 돌아간다.
       - key: FIREBASE_API_KEY
         sync: false
       - key: FIREBASE_AUTH_DOMAIN
@@ -30,4 +32,8 @@ services:
       - key: FIREBASE_PROJECT_ID
         sync: false
       - key: FIREBASE_APP_ID
+        sync: false
+      # 탈퇴(POST /account/erase) 전용 서비스 계정 키. JSON 문자열 전체를 넣는다. 비어 있으면 화면은 폴백 경로로 돌아간다.
+      # 절대 저장소에 두지 않는다(docs/deploy/DEPLOY_RUNBOOK.md E).
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
         sync: false
