@@ -36,23 +36,27 @@ jobs:
       - name: 핀 파일 가져오기 (GitHub API — 액션 설치 없이)
         env:
           GH_TOKEN: ${{ github.token }}
+          # 검사 대상 리비전: PR 이면 그 PR 의 head, 그 외에는 현재 커밋(=기본 브랜치 HEAD).
+          # 기본 브랜치에서 읽으면 "핀 파일을 추가하는 PR" 이 404 로 실패한다(실제로 그렇게 실패했다).
+          PIN_REF: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           curl -fsS -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github.raw" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/security/evidence-key-pin.json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/security/evidence-key-pin.json?ref=${PIN_REF}" \
             -o pin.json
           echo "핀 파일:"; cat pin.json
 
       - name: 검증 스크립트 가져오기
         env:
           GH_TOKEN: ${{ github.token }}
+          PIN_REF: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           mkdir -p .ci
           curl -fsS -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github.raw" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/.github/scripts/verify_key_pin.py" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/.github/scripts/verify_key_pin.py?ref=${PIN_REF}" \
             -o .ci/verify_key_pin.py
 
       - name: 런타임 지문·세대 대조
