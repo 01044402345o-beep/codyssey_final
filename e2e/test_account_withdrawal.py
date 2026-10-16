@@ -232,6 +232,28 @@ with sync_playwright() as p:
     check("늦게 도착한 다른 계정의 탈퇴 응답은 무시한다",
           other["scr"] == "u-home" and other["user"] is not None and other["local_trip"] is not None, str(other))
 
+    # --- 탈퇴 증명 카드: 영수증이 있으면 '영수증 받음', 없으면 '상태 불명'을 사용자에게 보여준다 ---
+    page.evaluate("""() => {
+      S.user = null; S.screen = 'u-login'; render();
+      localStorage.setItem('cd_withdraw_proof', JSON.stringify({ challenge: 'ab'.repeat(16), at: Date.now(),
+        receipt: { challenge: 'ab'.repeat(16), outcome: 'ok', seq: 7, digest: 'd', created_at: Date.now(), schema: 'SEAL-RECEIPT-v1' } }));
+      render();
+    }""")
+    page.wait_for_timeout(200)
+    confirmed = page.evaluate("({ text: document.body.innerText, dl: !!document.querySelector('[data-act=\"proof-download\"]') })")
+    check("탈퇴 증명(영수증 있음): '영수증 받음'과 내려받기 버튼을 보여준다",
+          "영수증 받음" in confirmed["text"] and confirmed["dl"], str(confirmed["text"])[:200])
+
+    page.evaluate("""() => {
+      localStorage.setItem('cd_withdraw_proof', JSON.stringify({ challenge: 'cd'.repeat(16), at: Date.now(), receipt: null }));
+      render();
+    }""")
+    page.wait_for_timeout(200)
+    unknown = page.evaluate("({ text: document.body.innerText, rep: !!document.querySelector('[data-act=\"proof-report\"]') })")
+    check("탈퇴 증명(영수증 없음): '상태 불명'을 보여주고 서버 보고 버튼을 제공한다",
+          "상태 불명" in unknown["text"] and unknown["rep"], str(unknown["text"])[:200])
+    page.evaluate("() => { localStorage.removeItem('cd_withdraw_proof'); render(); }")
+
     check("자바스크립트 오류 없음", not errors, str(errors[:3]))
     b.close()
 
