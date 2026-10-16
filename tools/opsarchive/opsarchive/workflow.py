@@ -39,15 +39,15 @@ NODES: list[dict] = [
      "default": True, "desc": "탈퇴(계정 삭제) 처리에 실패하면 그 실패 증거를 봉인해 남긴다.",
      "env": "EVIDENCE_SEAL_FAILURES", "requires": [], "redeploy": True},
     {"id": "daily_cap", "label": "일일 봉인 상한", "group": "탈퇴 대응", "kind": "number",
-     "default": 50, "min": 1, "max": 100000,
+     "default": 5, "min": 1, "max": 100000,
      "desc": "하루에 봉인할 수 있는 증거(아카이브) 수 상한. 넘으면 추가 봉인을 막는다.",
      "env": "EVIDENCE_DAILY_CAP", "requires": [], "redeploy": True},
     {"id": "per_uid_seconds", "label": "사용자별 최소 간격(초)", "group": "탈퇴 대응", "kind": "number",
-     "default": 60, "min": 1, "max": 86400,
+     "default": 3600, "min": 1, "max": 86400,
      "desc": "같은 사용자의 탈퇴 시도 사이 최소 간격(초). 연속 시도를 제한한다.",
      "env": "EVIDENCE_PER_UID_SECONDS", "requires": [], "redeploy": True},
     {"id": "ttl_days", "label": "증거 보존 기간(일)", "group": "탈퇴 대응", "kind": "number",
-     "default": 30, "min": 1, "max": 3650,
+     "default": 90, "min": 1, "max": 3650,
      "desc": "봉인한 증거를 TTL 로 자동 만료하기까지의 일수.",
      "env": "EVIDENCE_TTL_DAYS", "requires": [], "redeploy": True},
     {"id": "issue_notify", "label": "실패 시 이슈 알림", "group": "탈퇴 대응", "kind": "toggle",
@@ -187,7 +187,7 @@ def load(path: Optional[str] = None) -> dict:
     try:
         with open(workflow_path(path), "r", encoding="utf-8-sig") as fh:
             got = json.load(fh)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):     # JSONDecodeError·UnicodeDecodeError(손편집 cp949) 까지 포함
         got = None
     return _normalize(got)
 
@@ -429,6 +429,8 @@ def automation_loop(policy: dict, *, on_log: Optional[Callable[[str], None]] = N
     """
     log = on_log if on_log is not None else (lambda _message: None)
     policy = _normalize(policy)
+    # 앵커 주기가 '수동'이면 자동 앵커를 하지 않는다(설명과 실제가 어긋나면 안 된다).
+    manual_anchor = str(policy.get("anchor_interval") or "0").strip() in ("0", "", "None")
     cycles = 0
     violations: list[str] = []
     last: dict = {}
@@ -446,6 +448,9 @@ def automation_loop(policy: dict, *, on_log: Optional[Callable[[str], None]] = N
             log("계획 실패: %s" % getattr(exc, "code", exc))
             steps = []
         for item in steps:
+            if manual_anchor and item.get("id") == "anchor":
+                log("앵커 주기가 '수동'이라 이번 주기에는 앵커하지 않는다")
+                continue
             if not item.get("ok"):
                 if item.get("reason"):
                     log("건너뜀 %s — %s" % (item["id"], item["reason"]))
