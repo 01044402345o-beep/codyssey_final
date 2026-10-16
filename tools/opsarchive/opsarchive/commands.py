@@ -18,7 +18,7 @@ import urllib.request
 import uuid
 
 from . import container as C
-from . import chain, firebase, gcp, pins, render
+from . import chain, firebase, gcp, pins, render, witness
 
 DEFAULT_ENV_KEY = "EVIDENCE_PUBKEY"
 DEFAULT_DIR = os.path.join(os.path.expanduser("~"), ".opsarchive")
@@ -303,6 +303,32 @@ def verify_chain(project_id: str, sa_path: str, pin_file: str, *, out_dir: str =
         result["challenge_check"] = check
         if check["verdict"] in ("missing_from_chain",):
             result["ok"] = False                                # 누락 의심은 실패로 올린다
+    return result
+
+
+def observe_requests(project_id: str, sa_path: str, service: str, *, path: str = "/account/erase",
+                     since_minutes: int = 60, tolerance: int = 0) -> dict:
+    """**앱 밖 증인**: 플랫폼 접근 로그(앱이 지울 수 없다)와 체인의 시도 항목 수를 비교한다.
+
+    사전 커밋먼트는 사용자가 챌린지를 제시해야 작동한다. 이 명령은 그 요구 없이 **개수 수준**으로
+    "요청은 왔는데 체인에 시도가 없다"를 드러낸다. 로그 보존 기간이 곧 관측 범위이므로 자주 돌린다.
+    """
+    store = gcp.Firestore(project_id, sa_path)
+    entries = store.list("evidence_chain/entries", page_size=300)
+    cutoff = int(time.time()) - max(1, int(since_minutes)) * 60
+    attempts = [e for e in entries
+                if str(e.get("kind", "")) == "attempt"
+                and int(e.get("created_at", 0) or 0) >= cutoff]
+    sid = render.service_id(service)
+    logs = render.logs(sid, text=path, limit=1000)         # render CLI — 앱과 독립된 관찰자
+    observed = witness.count_requests(logs, path)
+    result = witness.compare(observed=observed, attempts=len(attempts), tolerance=int(tolerance))
+    result.update({
+        "service_id": sid, "path": path, "since_minutes": int(since_minutes),
+        "window_start": cutoff,
+        "attempt_challenges": sorted(str(e.get("challenge", "")) for e in attempts)[:20],
+        "caveat": "플랫폼 로그 보존 기간만큼만 관측된다(짧으면 그 구간은 보이지 않는다). 로그에는 헤더가 없어 개별 요청을 챌린지에 연결하지는 못한다.",
+    })
     return result
 
 
