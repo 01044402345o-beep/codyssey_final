@@ -181,14 +181,15 @@ def doctor(service: str, key_file: str, passphrase: str, *, base_url: str = "",
 
 def rotate(service: str, key_file: str, passphrase: str, *, out_dir: str | None = None,
            env_key: str = DEFAULT_ENV_KEY, api_key_value: str | None = None,
-           base_url: str = "", redeploy: bool = True) -> dict:
+           base_url: str = "", redeploy: bool = True, pass_new: str | None = None) -> dict:
     """새 키를 만들고 발행한다. **이전 개인키 파일은 지우지 않는다** — 옛 아카이브를 열어야 한다.
 
     새 키 경로는 **발행 전에** 돌려주는 값에 넣는다 — 재배포가 실패해도 운영자가 새 키 파일을
     찾을 수 있어야 한다(환경변수는 이미 새 키를 가리키고 있을 수 있다).
+    `pass_new` 를 주면 새 키 패스프레이즈를 묻지 않는다(GUI 가 입력 창으로 먼저 받는다).
     """
     old = C.load_private_key(key_file, passphrase)
-    new_phrase = ask_passphrase(confirm=True, prompt="새 개인키 패스프레이즈: ")
+    new_phrase = pass_new if pass_new is not None else ask_passphrase(confirm=True, prompt="새 개인키 패스프레이즈: ")
     made = keygen(out_dir=out_dir, passphrase=new_phrase)     # 프롬프트는 여기서 한 번만
     try:
         published = publish(service, made["path"], new_phrase, env_key=env_key,
