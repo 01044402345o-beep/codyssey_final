@@ -548,6 +548,15 @@ function sameTripCities(a, b) {
   if (a.length !== b.length) return false;
   return a.every((c, i) => String(c.name || '').trim() === b[i].name);
 }
+/* 날짜만 바꿀 때 만들어질 일정표의 날짜 집합. 완료한 날이 일정에서 빠지는지 저장 전에 확인하는 데 쓴다.
+   buildPlan 의 일정 구성과 같은 규칙(여행 전 날짜 + studyStart 이후의 여행 날짜)을 따른다. */
+function tripSchedDates(d) {
+  const cities = d.cities.map(c => ({ ...c, name: String(c.name || '').trim() }));
+  const pre = R.preDays(d.studyStart, cities[0].start);
+  const from = d.studyStart > cities[0].start ? d.studyStart : cities[0].start;
+  const trip = R.buildDays(cities).map(x => x.date).filter(dt => dt >= from);
+  return new Set([...pre, ...trip]);
+}
 /* 홈 D-Day 카드·사이드바에서 여행 설정 수정 화면을 연다. 현재 여행 입력을 초안으로 채운다. */
 function openTripEdit() {
   if (!S.trip) { navFromMenu('u-input'); return; }
@@ -2161,10 +2170,23 @@ const ACT = {
     const d = S.draft;
     const sameCities = String(d.country || '').trim() === t.country && sameTripCities(d.cities, t.cities);
     if (sameCities) {
-      const ok = applyTripDates(d);
-      S.draft = defaultDraft(S.today); S.showErrors = false;
-      go('u-home');
-      toast(ok ? '여행 설정을 저장하고 학습 일정표를 다시 계산했어요.' : '학습 일정표는 다시 계산했지만, 이 브라우저에 저장하지 못했어요.');
+      // 날짜가 바뀌어 완료한 날이 일정에서 빠지면 조용히 지우지 않고 먼저 확인한다.
+      const keep = tripSchedDates(d);
+      const lost = (S.sched || []).filter(r => r.kind !== 'free' && r.completed && !keep.has(r.date)).length;
+      const saveDates = () => {
+        S.modal = null;
+        const ok = applyTripDates(d);
+        S.draft = defaultDraft(S.today); S.showErrors = false;
+        go('u-home');
+        toast(ok ? '여행 설정을 저장하고 학습 일정표를 다시 계산했어요.' : '학습 일정표는 다시 계산했지만, 이 브라우저에 저장하지 못했어요.');
+      };
+      if (lost > 0) {
+        confirmBox('학습 시작일을 바꿀까요?',
+          `바꾸면 완료한 날 <b>${lost}일</b>이 일정에서 빠져 완료 표시가 사라져요. 계속할까요?`,
+          '저장하기', saveDates, { danger: true });
+        return;
+      }
+      saveDates();
       return;
     }
     confirmBox('여행을 다시 만들까요?',
