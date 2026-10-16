@@ -355,6 +355,62 @@ def _chain_head() -> tuple[int, str]:
     return seq, digest
 
 
+def record_attempt(challenge: str, uid: str, trigger: str = "erase_attempt") -> dict[str, Any]:
+    """삭제를 **시도하기 전에** 체인에 커밋한다(사전 커밋먼트의 서버 쪽 절반).
+
+    이 순서가 핵심이다: 뒤에서 무엇이 실패하든(크래시 포함) "이 챌린지로 시도했다"가 체인에 남는다.
+    클라이언트는 같은 챌린지를 요청 전에 이미 기기에 저장해 두었으므로, 앱이 이 기록을 건너뛰면
+    사용자가 들고 있는 챌린지와 관리자의 앵커된 체인을 대조해 **누락이 드러난다**.
+    """
+    return _commit_entry({"kind": "attempt", "challenge": str(challenge)[:128],
+                          "uid_hash": hashlib.sha256(uid.encode()).hexdigest()[:16] if uid else "",
+                          "trigger": trigger, "outcome": "pending", "archive_id": ""})
+
+
+def record_outcome(challenge: str, outcome: str, *, archive_id: str = "", uid: str = "",
+                   note: str = "") -> dict[str, Any]:
+    """시도 결과를 체인에 덧붙인다(성공·실패 모두). 영수증은 이 항목을 가리킨다."""
+    return _commit_entry({"kind": "outcome", "challenge": str(challenge)[:128],
+                          "uid_hash": hashlib.sha256(uid.encode()).hexdigest()[:16] if uid else "",
+                          "trigger": "erase_outcome", "outcome": str(outcome)[:32],
+                          "archive_id": archive_id, "note": str(note)[:200]})
+
+
+def _commit_entry(extra: dict[str, Any]) -> dict[str, Any]:
+    """체인 항목 하나를 만든다: seq·prev_digest 를 읽어 digest 를 계산하고, 항목·머리를 쓴다.
+
+    체인은 아카이브 매니페스트와 같은 방식(digest = sha256(도메인 ‖ canonical(prev 포함)))으로 이어지므로
+    `anchor`/`verify-chain` 이 한 체인으로 검증한다.
+    """
+    admin = firebase_admin.get_admin()
+    seq, prev_digest = _chain_head()
+    entry = {
+        "schema": MANIFEST_SCHEMA,
+        "created_at": int(time.time()),
+        "recipient_key_id": key_id_hex(),
+        "seq": seq + 1,
+        "prev_digest": prev_digest,
+        **extra,
+    }
+    entry["digest"] = manifest_digest(entry)
+    admin.firestore("PATCH", "evidence_chain/entries/%d" % entry["seq"], _encode_fields(entry))
+    admin.firestore("PATCH", "evidence_chain/head", _encode_fields(
+        {"seq": entry["seq"], "digest": entry["digest"], "created_at": entry["created_at"],
+         "expire_at": entry["created_at"] + _int_env("EVIDENCE_TTL_DAYS", 90) * 86400}))
+    return entry
+
+
+def receipt_for(challenge: str, entry: dict[str, Any], outcome: str) -> dict[str, Any]:
+    """클라이언트가 보관하는 영수증. 서명은 없다 — 앱에 서명 키를 두지 않기 때문이다.
+
+    영수증의 가치는 서명이 아니라 **앵커된 체인의 위치(seq·digest)** 다: 관리자가 앵커한 범위에
+    이 챌린지가 없으면 누락이 드러나고, 있으면 "그 시점에 시도가 있었다"가 뒷받침된다.
+    """
+    return {"challenge": challenge, "outcome": outcome, "seq": entry.get("seq"),
+            "digest": entry.get("digest"), "created_at": entry.get("created_at", 0),
+            "schema": "SEAL-RECEIPT-v1"}
+
+
 def _encode_fields(data: dict[str, Any]) -> dict[str, Any]:
     def value(item: Any) -> dict[str, Any]:
         if isinstance(item, bool):

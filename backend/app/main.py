@@ -36,6 +36,7 @@ import os
 import re
 import threading
 import time
+import uuid
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from functools import lru_cache
@@ -957,20 +958,41 @@ async def account_erase(request: Request) -> dict[str, Any]:
     if not firebase_admin.configured():
         raise HTTPException(status_code=503, detail="admin_unavailable")
     rate_limit(request)
+    challenge = _challenge_from(request)                 # 클라이언트가 요청 **전에** 만든 값(없으면 서버가 만든다)
+    attempt = {}
+    if evidence.configured():
+        attempt = await run_in_threadpool(evidence.record_attempt, challenge, account["uid"])
     ledger: list[dict[str, Any]] = []
     try:
         await run_in_threadpool(firebase_admin.erase_account, account["uid"], ledger)
-    except firebase_admin.AdminError as exc:
+    except (firebase_admin.AdminError, Exception) as exc:   # noqa: BLE001 — 아래에서 상태로 나눈다
+        if evidence.configured():
+            await run_in_threadpool(evidence.record_outcome, challenge, "failed",
+                                    uid=account["uid"], note=getattr(exc, "code", "") or "")
         _seal_in_background("erase_failed", account["uid"], ledger, None, exc)
-        raise HTTPException(status_code=exc.status, detail=exc.code) from exc
-    except Exception as exc:  # noqa: BLE001 — 예상 못 한 오류도 500 대신 503 으로(추적 로그에 자격증명이 남지 않게)
-        _seal_in_background("erase_failed", account["uid"], ledger, None, exc)
+        if isinstance(exc, firebase_admin.AdminError):
+            raise HTTPException(status_code=exc.status, detail=exc.code) from exc
         raise HTTPException(status_code=503, detail="admin_failed") from exc
 
     check = await run_in_threadpool(firebase_admin.verify_erased, account["uid"])
+    outcome = "ok" if check.get("ok", True) else "verify_mismatch"
+    if evidence.configured():
+        await run_in_threadpool(evidence.record_outcome, challenge, outcome, uid=account["uid"])
     if check.get("ok") is False:
         _seal_in_background("verify_mismatch", account["uid"], ledger, check, None)
-    return {"erased": True}
+    return {"erased": True, "receipt": evidence.receipt_for(challenge, attempt, outcome)}
+
+
+def _challenge_from(request: Request) -> str:
+    """요청의 챌린지(헤더 또는 본문). 클라이언트가 보내지 않으면 서버가 만든다.
+
+    서버가 만든 챌린지는 **사전 커밋 효과가 없다**(앱이 그 순간에 만들기 때문) — 그래서 화면이
+    챌린지를 보내고, 영수증이 없으면 "상태 불명"을 보여야 한다. 여기서는 최소한 값을 남긴다.
+    """
+    raw = (request.headers.get("x-withdraw-challenge") or "").strip().lower()
+    if re.fullmatch(r"[0-9a-f]{16,128}", raw or ""):
+        return raw
+    return uuid.uuid4().hex
 
 
 def _seal_in_background(trigger: str, uid: str, ledger: list[dict[str, Any]],
