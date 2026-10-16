@@ -15,3 +15,5 @@ onnxruntime==1.23.2
 # 탈퇴 관리자 경로(app/firebase_admin.py)가 service_account 자격증명을 직접 쓴다.
 # google-genai 의 전이 의존에만 기대면 그 의존이 바뀌는 순간 탈퇴가 깨진다. 확인한 버전으로 못박는다.
 google-auth==2.61.0
+# 탈퇴 실패 증거 봉인(MFA1 컨테이너)과 관리자 CLI 가 쓴다. 전이 의존성에 기대지 않고 고정한다.
+cryptography==50.0.2
