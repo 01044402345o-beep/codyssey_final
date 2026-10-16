@@ -106,43 +106,69 @@ def erase_account(uid: str) -> None:
 # 탈퇴한 uid 를 흔적(deleted/{uid})으로 남겨 그 uid 의 쓰기를 거부한다.
 #   - 흔적은 서비스 계정(관리자)으로만 읽고 쓴다 → Firestore 규칙을 거치지 않아 규칙 변경이 필요 없다.
 #   - 담는 것은 uid 와 시각뿐이다(개인정보 없음).
-TOMBSTONE_TTL = 3600        # ID 토큰 최대 수명보다 짧지 않게 — 그 뒤에는 토큰 자체가 만료된다
-NEGATIVE_TTL = 60           # '아직 흔적 없음' 캐시. 다른 인스턴스의 탈퇴를 이 시간 안에 반영한다
-_erased: dict[str, float] = {}     # uid -> 캐시 만료 시각(양성)
-_checked: dict[str, float] = {}    # uid -> 확인 시각(음성)
+TOMBSTONE_TTL = 3600        # 양성 캐시 수명. 탈퇴는 되돌리지 않으므로 길게 잡아도 안전하다
+FAIL_TTL = 5                # 흔적 조회 실패를 잠깐 기억한다(저장소 장애 때 요청마다 재시도로 몰리지 않게)
+CACHE_MAX = 4096            # 캐시가 이보다 커지면 만료분을 정리한다
+_erased: dict[str, float] = {}     # uid -> 캐시 만료 시각(양성만)
+_failed: dict[str, float] = {}     # uid -> 마지막 조회 실패 시각
 
 
 def reset_cache() -> None:
     """테스트가 캐시를 비운다."""
     _erased.clear()
-    _checked.clear()
+    _failed.clear()
+
+
+def _drop_expired(now: float) -> None:
+    for box, ttl in ((_erased, TOMBSTONE_TTL), (_failed, FAIL_TTL)):
+        if len(box) < CACHE_MAX:
+            continue
+        for key, stamp in list(box.items()):
+            if stamp + ttl <= now:
+                box.pop(key, None)
 
 
 def mark_erased(uid: str) -> None:
     """이 프로세스가 탈퇴를 처리했음을 캐시에 남긴다(같은 인스턴스는 즉시 차단)."""
-    _erased[uid] = time.time() + TOMBSTONE_TTL
-    _checked.pop(uid, None)
+    _remember(uid, time.time())
+    _failed.pop(uid, None)
+
+
+def _remember(uid: str, now: float) -> None:
+    if len(_erased) >= CACHE_MAX:
+        _drop_expired(now)
+        if len(_erased) >= CACHE_MAX:      # 만료분이 없으면 절반을 버린다(다시 읽으면 그만이다)
+            for key in list(_erased)[: CACHE_MAX // 2]:
+                _erased.pop(key, None)
+    _erased[uid] = now + TOMBSTONE_TTL
 
 
 def is_erased(uid: str) -> bool:
-    """이 uid 가 탈퇴했는가. 흔적을 읽지 못하면 통과시킨다(일시적 저장소 장애가 앱 전체를 막지 않게)."""
+    """이 uid 가 탈퇴했는가.
+
+    **양성만 캐시한다.** 탈퇴는 되돌리지 않으므로 '흔적 있음'은 안전하게 캐시할 수 있지만,
+    '흔적 없음'을 캐시하면 다른 인스턴스가 방금 쓴 흔적을 그 시간 동안 못 보고 통과시킨다(재생성 창).
+    흔적을 읽지 못하면 통과시킨다(fail-open) — 일시적 저장소 장애가 앱 전체 쓰기를 막지 않게.
+    """
     if _admin is None and not configured():
         return False
     now = time.time()
     if _erased.get(uid, 0) > now:
         return True
-    if now - _checked.get(uid, 0) < NEGATIVE_TTL:
+    if now - _failed.get(uid, 0) < FAIL_TTL:
         return False
     try:
         found = bool(get_admin().read_tombstone(uid))
     except AdminError:
+        _failed[uid] = now
+        _drop_expired(now)
         logging.getLogger("app.firebase_admin").warning("탈퇴 흔적을 읽지 못했습니다 — 이번 요청은 통과시킵니다")
         return False
-    if found:
-        _erased[uid] = now + TOMBSTONE_TTL
-    else:
-        _checked[uid] = now
-    return found
+    _failed.pop(uid, None)
+    if not found:
+        return False
+    _remember(uid, now)
+    return True
 
 
 def _http_message(exc: urllib.error.HTTPError) -> str:
@@ -185,7 +211,12 @@ class ServiceAccountAdmin:
             self._creds.refresh(Request())
         return str(self._creds.token)
 
-    def _call(self, method: str, url: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _call(self, method: str, url: str, body: dict[str, Any] | None = None,
+              already_there: bool = False) -> dict[str, Any]:
+        """`already_there` 는 '이미 있으면 그대로 둔다'는 호출(흔적 만들기)에만 켠다.
+
+        계정 취소·삭제에 409 를 성공으로 삼키면 토큰이 그대로 살아 있는데 성공으로 보고하게 된다.
+        """
         data = None if body is None else json.dumps(body).encode()
         req = urllib.request.Request(url, data=data, method=method)
         try:
@@ -204,7 +235,7 @@ class ServiceAccountAdmin:
         except urllib.error.HTTPError as exc:
             if exc.code in (400, 404) and _missing(_http_message(exc)):
                 return {}   # 이미 없는 대상(계정·문서) — 성공으로 본다
-            if exc.code == 409:
+            if exc.code == 409 and already_there:
                 return {}   # 이미 있는 대상(흔적 중복) — 원하는 상태이므로 성공으로 본다
             raise AdminError(503, "admin_failed") from exc
         except AdminError:
@@ -242,7 +273,11 @@ class ServiceAccountAdmin:
         url = (FIRESTORE + "/projects/" + urllib.request.quote(self.project_id, safe="")
                + "/databases/(default)/documents/deleted?documentId=" + urllib.request.quote(uid, safe=""))
         body = {"fields": {"at": {"stringValue": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}}}
-        self._call("POST", url, body)
+        self._call("POST", url, body, already_there=True)
+
+    def remove_tombstone(self, uid: str) -> None:
+        """흔적을 되돌린다(탈퇴가 도중 실패해 계정이 살아 있을 때). 없는 흔적(404)은 성공이다."""
+        self._call("DELETE", self._tombstone_url(uid))
 
     def read_tombstone(self, uid: str) -> bool:
         """흔적이 있으면 True. 없는 문서(404)는 False 로 온다."""
@@ -253,9 +288,19 @@ class ServiceAccountAdmin:
 
         흔적을 가장 먼저 남긴다 — 뒤 단계가 실패해도 이미 발급된 ID 토큰이 문서를 되살리지 못하게.
         계정 삭제가 마지막이라 도중 실패해도 다시 시도할 수 있다.
+        도중에 실패하면 흔적을 **되돌린다** — 계정이 아직 살아 있는데 흔적만 남으면 그 사용자는
+        로그인한 채로 기록을 올릴 수 없고(403), 화면은 그것을 탈퇴로 오인해 로컬 기록까지 지운다.
         """
+        logger = logging.getLogger("app.firebase_admin")
         self.write_tombstone(uid)
-        self.revoke(uid)
-        self.delete_document(uid)
-        self.delete_user(uid)
+        try:
+            self.revoke(uid)
+            self.delete_document(uid)
+            self.delete_user(uid)
+        except AdminError:
+            try:
+                self.remove_tombstone(uid)
+            except AdminError:
+                logger.warning("탈퇴 흔적을 되돌리지 못했습니다 — 그 계정의 기록 저장이 막힐 수 있습니다")
+            raise
         mark_erased(uid)

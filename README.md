@@ -136,9 +136,9 @@ uvicorn app.main:app --reload      # http://127.0.0.1:8000  (화면도 같은 �
 ### 테스트
 ```bash
 cd backend
-python -m unittest discover -s tests -t .          # 백엔드 73
+python -m unittest discover -s tests -t .          # 백엔드 227
 python scripts/check_negatives.py                   # 카테고리 금지 예 검사
-node --test ../mockup/ai.test.js                    # 프론트 20
+node --test ../mockup/ai.test.js                    # 프론트 34 (tokens.test.js 7)
 # E2E (서버를 켠 뒤)
 python ../e2e/test_silence.py http://localhost:8000 && python ../e2e/test_consent.py http://localhost:8000
 ```
