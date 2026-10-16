@@ -72,3 +72,6 @@ settings.json
 # 파이썬 캐시(테스트 실행 때 생긴다)
 __pycache__/
 *.pyc
+
+# 가상환경(관리자 CLI 는 tools/opsarchive/.venv 를 쓴다)
+.venv/
