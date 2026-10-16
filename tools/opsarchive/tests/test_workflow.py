@@ -22,6 +22,8 @@ REQUIRED_IDS = {
     "observe", "iam_check", "pin_check",
     "anchor_interval", "anchor", "verify_chain",
     "include_secrets",
+    # 앱(evidence.py)이 실제로 읽는 변수에 대응하는 새 개념 노드들.
+    "max_bytes", "key_generation", "gh_repo", "max_source_logs",
 }
 
 SETTINGS = {
@@ -75,6 +77,29 @@ class NodeSchemaTest(unittest.TestCase):
         self.assertEqual(workflow.DEFAULTS["ttl_days"], 90)   # 앱(evidence.py)의 기본 TTL 과 맞춘다
         self.assertEqual(workflow.DEFAULTS["include_secrets"], False)
         self.assertEqual(workflow.DEFAULTS["observe"], "60")
+        self.assertEqual(workflow.DEFAULTS["max_bytes"], 1000000)
+        self.assertEqual(workflow.DEFAULTS["key_generation"], 1)
+
+    def test_new_nodes_match_app_env_vars(self):
+        by_id = {node["id"]: node for node in workflow.NODES}
+        max_bytes = by_id["max_bytes"]
+        self.assertEqual(max_bytes["kind"], "number")
+        self.assertEqual(max_bytes["env"], "EVIDENCE_MAX_BYTES")
+        self.assertEqual((max_bytes["min"], max_bytes["max"]), (100000, 10000000))
+        self.assertTrue(max_bytes["redeploy"])
+        generation = by_id["key_generation"]
+        self.assertEqual(generation["kind"], "number")
+        self.assertEqual(generation["env"], "EVIDENCE_KEY_GENERATION")
+        self.assertEqual((generation["min"], generation["max"]), (1, 100000))
+        self.assertTrue(generation["redeploy"])
+        self.assertIn("핀 세대", generation["desc"])     # 핀 세대와 같아야 한다는 경고
+        # 값이 owner/repo 문자열인 노드는 값을 받지 않고 안내만 한다(env 없음).
+        self.assertIsNone(by_id["gh_repo"]["env"])
+        self.assertEqual(by_id["gh_repo"]["kind"], "toggle")
+        self.assertIn("owner/repo", by_id["gh_repo"]["desc"])
+        self.assertIsNone(by_id["max_source_logs"]["env"])
+        self.assertEqual(by_id["max_source_logs"]["kind"], "toggle")
+        self.assertIn("EVIDENCE_MAX_SOURCE_BYTES", by_id["max_source_logs"]["desc"])
 
 
 class LoadSaveTest(unittest.TestCase):
@@ -198,6 +223,45 @@ class PlanTest(unittest.TestCase):
         for node_id in ("anchor_interval", "issue_notify", "client_report"):
             self.assertFalse(by_id[node_id]["ok"])
 
+    def test_every_plan_item_has_an_action(self):
+        with mock.patch.object(workflow, "_load_settings", return_value=dict(SETTINGS)):
+            items = workflow.plan(workflow.DEFAULTS)
+        for item in items:
+            self.assertIn("action", item)
+            self.assertIn(item["action"], ("run", "env", "info"), item["id"])
+
+    def test_runnable_nodes_are_action_run(self):
+        with mock.patch.object(workflow, "_load_settings", return_value=dict(SETTINGS)):
+            items = workflow.plan(workflow.DEFAULTS)
+        by_id = {i["id"]: i for i in items}
+        for node_id in ("observe", "pin_check", "iam_check", "anchor", "verify_chain"):
+            self.assertEqual(by_id[node_id]["action"], "run", node_id)
+
+    def test_env_nodes_are_action_env(self):
+        # 실행이 아니라 '환경변수 밀어넣기' 대상임을 action 으로 구분한다(run_step 은 이들을 실행하지 않는다).
+        with mock.patch.object(workflow, "_load_settings", return_value=dict(SETTINGS)):
+            items = workflow.plan(workflow.DEFAULTS)
+        by_id = {i["id"]: i for i in items}
+        for node_id in ("seal_failures", "daily_cap", "per_uid_seconds", "ttl_days",
+                        "include_secrets", "max_bytes", "key_generation"):
+            self.assertEqual(by_id[node_id]["action"], "env", node_id)
+
+    def test_info_nodes_are_action_info_with_reason(self):
+        with mock.patch.object(workflow, "_load_settings", return_value=dict(SETTINGS)):
+            items = workflow.plan(workflow.DEFAULTS)
+        by_id = {i["id"]: i for i in items}
+        for node_id in ("anchor_interval", "issue_notify", "gh_repo", "client_report",
+                        "max_source_logs"):
+            self.assertEqual(by_id[node_id]["action"], "info", node_id)
+            self.assertFalse(by_id[node_id]["ok"], node_id)
+            self.assertEqual(by_id[node_id]["reason"], "안내 노드", node_id)
+
+    def test_env_action_node_is_not_locally_runnable(self):
+        # action="env" 인 노드는 run_step 이 실행하지 못한다(즉시 not_runnable) — 계획의 ok 와 실제가 어긋나지 않게 구분한다.
+        with self.assertRaises(commands.CommandError) as caught:
+            workflow.run_step("max_bytes", workflow.DEFAULTS)
+        self.assertEqual(caught.exception.code, "not_runnable")
+
     def test_order_is_policy_then_observe_then_checks_then_anchor_then_verify(self):
         with mock.patch.object(workflow, "_load_settings", return_value=dict(SETTINGS)):
             items = workflow.plan(workflow.DEFAULTS)
@@ -302,6 +366,23 @@ class PushEnvTest(unittest.TestCase):
             out = workflow.push_env("daily_cap", self.policy, service="codyssey_final")
         self.assertTrue(out["needs_redeploy"])        # daily_cap 은 재배포가 필요하다
 
+    def test_new_env_nodes_are_pushable(self):
+        self.policy["max_bytes"] = 2000000
+        with mock.patch.object(workflow.commands, "env_set", return_value={}) as fn:
+            out = workflow.push_env("max_bytes", self.policy, service="codyssey_final")
+        self.assertEqual(fn.call_args.args, ("codyssey_final", "EVIDENCE_MAX_BYTES", "2000000"))
+        self.assertTrue(out["needs_redeploy"])
+        self.policy["key_generation"] = 3
+        with mock.patch.object(workflow.commands, "env_set", return_value={}) as fn2:
+            workflow.push_env("key_generation", self.policy, service="codyssey_final")
+        self.assertEqual(fn2.call_args.args, ("codyssey_final", "EVIDENCE_KEY_GENERATION", "3"))
+
+    def test_info_nodes_have_no_env(self):
+        for node_id in ("gh_repo", "max_source_logs"):
+            with self.assertRaises(commands.CommandError) as caught:
+                workflow.push_env(node_id, self.policy, service="codyssey_final")
+            self.assertEqual(caught.exception.code, "no_env", node_id)
+
 
 class AutomationLoopTest(unittest.TestCase):
     def setUp(self):
@@ -346,6 +427,49 @@ class AutomationLoopTest(unittest.TestCase):
         with mock.patch.object(workflow, "run_step", return_value=good):
             workflow.automation_loop(self.policy, on_log=lines.append, max_cycles=1)
         self.assertTrue(any("주기 1 시작" in line for line in lines))
+
+    @staticmethod
+    def _runner(overrides):
+        def run(node_id, *args, **kwargs):
+            result = overrides.get(node_id, {"ok": True})
+            return {"id": node_id, "label": node_id, "result": result}
+        return run
+
+    def test_notices_key_is_always_present(self):
+        good = {"id": "observe", "label": "x", "result": {"verdict": "ok", "ok": True}}
+        with mock.patch.object(workflow, "run_step", return_value=good):
+            out = workflow.automation_loop(self.policy, max_cycles=1)
+        self.assertIn("notices", out)
+        self.assertEqual(out["notices"], [])
+
+    def test_pin_check_ok_none_is_a_notice_not_a_violation(self):
+        # 핀 미활성(armed=False) → ok=None. 위반은 아니지만 '확인 못 함'으로 남겨야 한다.
+        runner = self._runner({"pin_check": {"ok": None, "armed": False, "reasons": ["unarmed"]}})
+        with mock.patch.object(workflow, "run_step", side_effect=runner):
+            out = workflow.automation_loop(self.policy, max_cycles=1)
+        self.assertTrue(any("pin_check" in n for n in out["notices"]))
+        self.assertFalse(any("pin_check" in v for v in out["violations"]))
+
+    def test_observe_empty_result_is_a_notice(self):
+        runner = self._runner({"observe": {}})
+        with mock.patch.object(workflow, "run_step", side_effect=runner):
+            out = workflow.automation_loop(self.policy, max_cycles=1)
+        self.assertEqual(out["violations"], [])
+        self.assertTrue(any("observe" in n for n in out["notices"]))
+
+    def test_clear_failure_is_violation_not_notice(self):
+        runner = self._runner({"pin_check": {"ok": False}})
+        with mock.patch.object(workflow, "run_step", side_effect=runner):
+            out = workflow.automation_loop(self.policy, max_cycles=1)
+        self.assertTrue(any("pin_check" in v for v in out["violations"]))
+        self.assertFalse(any("pin_check" in n for n in out["notices"]))
+
+    def test_notices_are_logged_with_caution_prefix(self):
+        lines: list[str] = []
+        runner = self._runner({"pin_check": {"ok": None, "armed": False, "reasons": ["unarmed"]}})
+        with mock.patch.object(workflow, "run_step", side_effect=runner):
+            workflow.automation_loop(self.policy, on_log=lines.append, max_cycles=1)
+        self.assertTrue(any(line.startswith("주의:") for line in lines))
 
 
 if __name__ == "__main__":

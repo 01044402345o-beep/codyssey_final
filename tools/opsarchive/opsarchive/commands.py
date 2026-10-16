@@ -13,6 +13,7 @@ import base64
 import getpass
 import json
 import os
+import tempfile
 import time
 import urllib.request
 import uuid
@@ -164,6 +165,43 @@ def publish(service: str, key_file: str, passphrase: str, *, env_key: str = DEFA
     return result
 
 
+_CONFIG_ERROR_CODES = ("no_cli", "no_api_key", "not_found")
+
+
+def _as_command_error(exc: render.RenderError) -> CommandError | None:
+    """설정 오류(CLI 없음·키 없음·서비스 못 찾음)는 사용자가 조치할 수 있게 CommandError 로 올린다."""
+    code = str(exc.code)
+    for prefix in _CONFIG_ERROR_CODES:
+        if code == prefix or code.startswith(prefix):
+            return CommandError(code)
+    return None
+
+
+def deploy(service: str, *, api_key_value: str | None = None, timeout: int = 300) -> dict:
+    """Render 서비스를 이름으로 찾아 재배포한다(환경변수 발행 뒤 반영용).
+
+    `render.deploy` 는 이미 dict(`{"ok","note"}`)를 돌려준다 — 예외를 올리지 않고 그대로 전달한다.
+    다만 `no_cli`/`no_api_key`/`not_found` 같은 **설정 오류**는 사용자가 조치해야 하므로
+    `CommandError` 로 올린다(그래야 CLI/GUI 가 원인을 코드로 보여줄 수 있다).
+    """
+    try:
+        sid = render.service_id(service)
+    except render.RenderError as exc:
+        mapped = _as_command_error(exc)
+        if mapped is not None:
+            raise mapped from exc
+        return {"service_id": "", "ok": False, "note": "서비스 조회 실패: " + str(exc.code)}
+    try:
+        outcome = render.deploy(sid, timeout=timeout)
+    except render.RenderError as exc:
+        mapped = _as_command_error(exc)
+        if mapped is not None:
+            raise mapped from exc
+        return {"service_id": sid, "ok": False, "note": "재배포 실패: " + str(exc.code)}
+    return {"service_id": sid, "ok": bool(outcome.get("ok")),
+            "note": str(outcome.get("note", ""))}
+
+
 def doctor(service: str, key_file: str, passphrase: str, *, base_url: str = "",
            api_key_value: str | None = None, env_key: str = DEFAULT_ENV_KEY,
            project_id: str = "", pin_file: str = "") -> dict:
@@ -239,11 +277,84 @@ def signkey(out_dir: str | None = None, passphrase: str | None = None) -> dict:
             "permissions": "owner_only" if narrowed else "inherited_warning"}
 
 
+# ------------------------------------------------------------------ 체크포인트 잠금 · 원자적 쓰기
+
+LOCK_NAME = ".lock"
+LOCK_TIMEOUT = 5.0          # 잠금을 잡지 못하면 이만큼 기다린 뒤 실패한다(초)
+LOCK_POLL = 0.05            # 재시도 간격(초)
+
+
+def _acquire_lock(out_dir: str, timeout: float | None = None) -> int:
+    """`out_dir/.lock` 을 `O_CREAT|O_EXCL` 로 **원자적으로** 만든다(경합 방지).
+
+    이미 있으면 최대 `timeout`(기본 `LOCK_TIMEOUT`) 초 동안 재시도하고, 그래도 못 잡으면
+    `CommandError("locked")` 로 실패한다. 성공하면 fd 를 돌려준다(호출자가 finally 에서 해제).
+    """
+    if timeout is None:
+        timeout = LOCK_TIMEOUT
+    path = os.path.join(out_dir, LOCK_NAME)
+    deadline = time.monotonic() + max(0.0, float(timeout))
+    while True:
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            if time.monotonic() >= deadline:
+                raise CommandError("locked — 다른 anchor 가 %s 를 쓰고 있습니다" % path)
+            time.sleep(LOCK_POLL)
+        except OSError as exc:
+            raise CommandError("lock_failed") from exc
+        else:
+            try:
+                os.write(fd, str(os.getpid()).encode("ascii"))
+            except OSError:
+                pass
+            return fd
+
+
+def _release_lock(out_dir: str, fd: int) -> None:
+    """fd 를 닫고 잠금 파일을 지운다(없어도 조용히 넘어간다 — finally 에서 부른다)."""
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+    try:
+        os.remove(os.path.join(out_dir, LOCK_NAME))
+    except OSError:
+        pass
+
+
+def _write_json_atomic(path: str, data: dict, *, sort_keys: bool = True) -> None:
+    """임시 파일에 쓰고 `flush`+`fsync` 한 뒤 `os.replace` 로 교체한다.
+
+    전원이 나가도 반쪽 파일이 남지 않고, 독자는 항상 완성본을 본다(원자적 교체).
+    """
+    directory = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(prefix=".tmp-", suffix=".json", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2, sort_keys=sort_keys)
+            fh.write("\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def anchor(project_id: str, sa_path: str, sign_key_file: str, passphrase: str, *,
            out_dir: str = "checkpoints") -> dict:
     """지금 저장소의 아카이브 체인을 확인하고, (seq, count, head, 집합 해시)를 **서명해 앵커**한다.
 
     체크포인트를 로컬/저장소에 남긴다 — 앱이 나중에 개수를 줄이거나 head 를 바꾸면 검증에서 걸린다.
+
+    **경합 방지**: seq 를 정하는 일과 쓰기가 동시에 일어나면 같은 seq 를 덮어쓸 수 있다. 그래서
+    `out_dir/.lock` 을 `O_CREAT|O_EXCL` 로 잡고(있으면 최대 `LOCK_TIMEOUT` 초 대기) 그 안에서
+    seq 결정·쓰기를 끝낸다. 파일은 임시 파일에 쓰고 `os.replace` 로 교체하며, `flush`+`fsync` 로
+    전원이 나가도 반쪽 파일이 남지 않게 한다.
     """
     store = gcp.Firestore(project_id, sa_path)
     metas = archives(project_id, sa_path)
@@ -257,30 +368,31 @@ def anchor(project_id: str, sa_path: str, sign_key_file: str, passphrase: str, *
     seed = C.load_private_key(sign_key_file, passphrase)
     out_dir = config.resolve(out_dir)
     os.makedirs(out_dir, exist_ok=True)
-    seq = 1
-    for name in os.listdir(out_dir):
-        if name.endswith(".json") and name[:-5].isdigit():
-            seq = max(seq, int(name[:-5]) + 1)
-    ids = sorted(str(m.get("archive_id", "")) for m in metas)
-    body = chain.checkpoint_body(seq=seq, count=chain_state["count"],
-                                 head_digest=chain_state["head"], archive_ids=ids,
-                                 created_at=int(time.time()),
-                                 entry_ids=[str(e.get("seq", "")) for e in entries],
-                                 head_seq=chain_state.get("max_seq"))
-    signed = chain.sign_checkpoint(seed, body)
-    path = os.path.join(out_dir, "%d.json" % seq)
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(signed, fh, ensure_ascii=False, indent=2, sort_keys=True)
-        fh.write("\n")
-    # 개별 대조용 목록(아이디만 — 개인정보 없음). 나중에 "앵커한 뒤 사라진 아카이브"와
-    # "이 챌린지가 앵커 범위 안이었는가"를 찾는다.
-    anchor_dir = os.path.join(out_dir, "anchors")
-    os.makedirs(anchor_dir, exist_ok=True)
-    with open(os.path.join(anchor_dir, "%d.json" % seq), "w", encoding="utf-8") as fh:
-        json.dump({"seq": seq, "archive_ids": ids,
-                   "challenges": sorted({str(e.get("challenge", "")) for e in entries
-                                         if e.get("challenge")})}, fh, ensure_ascii=False, indent=2)
-        fh.write("\n")
+    lock_fd = _acquire_lock(out_dir)
+    try:
+        seq = 1
+        for name in os.listdir(out_dir):
+            if name.endswith(".json") and name[:-5].isdigit():
+                seq = max(seq, int(name[:-5]) + 1)
+        ids = sorted(str(m.get("archive_id", "")) for m in metas)
+        body = chain.checkpoint_body(seq=seq, count=chain_state["count"],
+                                     head_digest=chain_state["head"], archive_ids=ids,
+                                     created_at=int(time.time()),
+                                     entry_ids=[str(e.get("seq", "")) for e in entries],
+                                     head_seq=chain_state.get("max_seq"))
+        signed = chain.sign_checkpoint(seed, body)
+        path = os.path.join(out_dir, "%d.json" % seq)
+        _write_json_atomic(path, signed, sort_keys=True)
+        # 개별 대조용 목록(아이디만 — 개인정보 없음). 나중에 "앵커한 뒤 사라진 아카이브"와
+        # "이 챌린지가 앵커 범위 안이었는가"를 찾는다.
+        anchor_dir = os.path.join(out_dir, "anchors")
+        os.makedirs(anchor_dir, exist_ok=True)
+        _write_json_atomic(os.path.join(anchor_dir, "%d.json" % seq),
+                           {"seq": seq, "archive_ids": ids,
+                            "challenges": sorted({str(e.get("challenge", "")) for e in entries
+                                                  if e.get("challenge")})}, sort_keys=False)
+    finally:
+        _release_lock(out_dir, lock_fd)                             # 실패해도 반드시 지운다
     return {"seq": seq, "path": path, "count": chain_state["count"], "archives": len(metas),
             "entries": len(entries), "head": chain_state["head"], "head_seq": chain_state.get("max_seq"),
             "chain_ok": chain_state["ok"], "problems": chain_state["problems"],
