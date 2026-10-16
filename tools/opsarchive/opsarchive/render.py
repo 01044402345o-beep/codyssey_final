@@ -177,9 +177,22 @@ def get_env(sid: str, key: str, *, api_key_value: str | None = None) -> str | No
     return got.get("value") if isinstance(got, dict) else None
 
 
-def deploy(sid: str) -> None:
-    """재배포하고 끝날 때까지 기다린다(render CLI)."""
-    run_cli(["deploys", "create", sid, "--wait", "--confirm", "-o", "text"])
+def deploy(sid: str, timeout: int = 300) -> dict:
+    """재배포를 트리거하고 (가능하면) 끝날 때까지 기다린다.
+
+    **소프트 실패**: `--wait` 는 빌드·배포가 끝날 때까지 수 분 걸리고 출력도 그때 한꺼번에 나온다.
+    그래서 기다리다 끊겨도 예외로 올리지 않고 결과로 알린다 — 환경변수는 이미 설정됐기 때문에
+    재배포가 진행 중이어도 다음 단계(지문 대조)는 할 수 있다.
+    """
+    try:
+        run_cli(["deploys", "create", sid, "--wait", "--confirm", "-o", "text"], timeout=timeout)
+        return {"ok": True, "note": "재배포 완료"}
+    except RenderError as exc:
+        if exc.code == "cli_timeout":
+            return {"ok": False, "note": "재배포가 아직 진행 중입니다(%d초 대기 후 중단) — 대시보드에서 확인하세요" % timeout}
+        if str(exc.code).startswith("cli_failed"):
+            return {"ok": False, "note": "재배포 실패: %s" % exc.code}
+        raise
 
 
 def logs(sid: str, text: str = "", limit: int = 50) -> str:

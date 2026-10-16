@@ -627,12 +627,14 @@ class App:
 
     def do_publish(self) -> None:
         key_file = self.pick_key("admin")
+        if not key_file:
+            return
         phrase = self.ask_pass("개인키 패스프레이즈")
         if not key_file or not phrase:
             return
         self.run("publish", lambda: commands.publish(
             self.require("service"), key_file, phrase, env_key=self.settings.get("env_key"),
-            base_url=self.settings.get("base_url")))
+            base_url=self.settings.get("base_url"), on_step=self.log))
 
     def do_doctor(self) -> None:
         key_file = self.pick_key("admin")
