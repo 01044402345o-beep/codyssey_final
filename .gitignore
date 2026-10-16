@@ -1,0 +1,55 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# e2e 스크린샷
+/e2e-shots
+# e2e:reset이 고른 검사 날짜 (기계마다 다름)
+/.e2e-date
+
+# 참고 자료 (다른 저장소·개인 자료 포함 — 커밋하지 않음)
+/reference/
+/other/
+/sub_agent_output/
+
+# 이 레포에 적용한 패치 파일은 코드가 아니다 (루트에만 해당 — .yarn/patches는 남긴다)
+/*.patch

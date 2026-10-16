@@ -533,6 +533,7 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 
 /* home */
 .hero {
+  display: block; width: 100%; text-align: left;
   border-radius: 22px; padding: 20px; color: var(--inv-text); position: relative; overflow: hidden;
   background: var(--inv-bg);
 }
@@ -544,6 +545,11 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .hero.trip { background: var(--sea); }
 .hero.trip .route, .hero.trip .dates { color: var(--hero-trip-text); }
 .hero.ended { background: var(--accent); }
+/* 홈 D-Day 카드 = 여행 설정 수정 진입점. 흐름 안에 두어 좁은 화면·글자 확대에서도 겹치지 않는다. */
+.hero { cursor: pointer; }
+.hero:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.hero .hero-edit { display: inline-flex; align-items: center; margin-top: 12px; padding: 4px 10px; border-radius: 999px; background: var(--inv-a10); color: var(--inv-text-1); font-size: var(--fs-caption); }
+.hero.trip .hero-edit { color: var(--hero-trip-text); background: var(--inv-a14); }
 .today-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 16px; }
 .today-card .top { display: flex; justify-content: space-between; align-items: center; }
 .today-card h3 { margin: 10px 0 4px; font-size: 1.1875rem; letter-spacing: -0.02em; }
@@ -561,6 +567,13 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .sec-title { display: flex; justify-content: space-between; align-items: center; margin: 22px 0 10px; }
 .sec-title h4 { margin: 0; font-size: 0.9375rem; }
 .sec-title button { font-size: 0.78125rem; color: var(--text-soft); }
+/* 홈 맨 아래 계정 블록 — 로그아웃 버튼과 안내를 하나의 카드로. 패딩은 .card 의 16px 한 곳에서 온다. */
+.account-card { display: flex; flex-direction: column; gap: 10px; }
+.account-card .acc-row { display: flex; align-items: center; gap: 12px; }
+.account-card .acc-avatar { width: 40px; height: 40px; flex: none; border-radius: 50%; background: var(--sea); color: var(--on-sea); display: grid; place-items: center; font-weight: 700; }
+.account-card .acc-who { display: flex; flex-direction: column; min-width: 0; }
+.account-card .acc-who b { overflow-wrap: anywhere; }
+.account-card .acc-note { margin: 0; line-height: 1.6; }
 
 /* schedule */
 .srow { display: grid; grid-template-columns: 54px 1fr auto; gap: 10px; align-items: center; padding: 11px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 6px; cursor: pointer; text-align: left; width: 100%; }

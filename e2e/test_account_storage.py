@@ -104,6 +104,15 @@ with sync_playwright() as p:
           left["demo"])
     check("로그아웃 화면은 로그인", left["screen"] == "u-login", left["screen"])
 
+    wiped = page.evaluate(f"""() => {{
+      S.user = {UID_B};
+      AI.saveTrip(personalStore(), {{ country: '미국', cities: [{{ name: '뉴욕', start: '2026-11-10', end: '2026-11-13' }}], studyStart: '2026-10-01' }});
+      const before = localStorage.getItem('cd_trip:uidB');
+      ACT.reset();
+      return {{ before: !!before, after: localStorage.getItem('cd_trip:uidB') }};
+    }}""")
+    check("초기화는 그 계정 칸의 여행 입력을 지운다", wiped["before"] and wiped["after"] is None, str(wiped))
+
     check("자바스크립트 오류 없음", not errors, str(errors[:3]))
     b.close()
 

@@ -6,7 +6,7 @@
   const WEAK_KEY = 'cd_weak';
   /* 말하기 연습 동의. 문구를 바꾸면 CONSENT_VERSION 을 올려 다시 동의를 받는다. */
   const CONSENT_KEY = 'cd_consent';
-  const CONSENT_VERSION = 6;   // v2 Gemini 무료 등급·민감정보 / v3 2단계 처리 / v4 서버 VAD + 전용 STT / v5 교차검증 전송 / v6 말소리 재확인은 서버 안(pyannoteAI 미전송)
+  const CONSENT_VERSION = 7;   // v2 Gemini 무료 등급·민감정보 / v3 2단계 처리 / v4 서버 VAD + 전용 STT / v5 교차검증 전송 / v6 말소리 재확인은 서버 안(pyannoteAI 미전송) / v7 계정에 올리는 것에 여행 설정 포함
   /* 임시 제품 규칙: 이 점수 미만이면 "취약 상황" 후보로 저장한다. 검증된 학습 기준이 아니다. */
   const WEAK_THRESHOLD = 70;
   /* 참고 신호: 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 "다르게 들렸어요"로 표시한다 (저장 판정에 쓰지 않음). */
@@ -198,6 +198,47 @@
     let ok = saveConsent(storage, false);
     try { storage.removeItem(WEAK_KEY); } catch (e) { ok = false; }
     return ok;
+  }
+
+  /* ---------- 여행 입력 저장 (온보딩 1단계) ----------
+     진도·복습·동의와 같은 계정 칸에 둔다. 담는 것은 입력뿐이고, 장소·문장 본문은 담지 않는다 —
+     화면이 이 입력으로 규칙을 다시 돌려 같은 계획을 만든다. 서버(backend/app/user_state.py `_trip`)와 규칙이 같다. */
+  const TRIP_KEY = 'cd_trip';
+  const TRIP_DATE = /^\d{4}-\d{2}-\d{2}$/;
+  function cleanTrip(trip) {
+    if (!trip || typeof trip !== 'object') return null;
+    const country = typeof trip.country === 'string' ? trip.country.trim() : '';
+    if (!country || country.length > 80) return null;
+    if (!Array.isArray(trip.cities) || trip.cities.length < 1 || trip.cities.length > 5) return null;
+    const cities = [];
+    for (const c of trip.cities) {
+      if (!c || typeof c !== 'object') return null;
+      const name = typeof c.name === 'string' ? c.name.trim() : '';
+      if (!name || name.length > 80) return null;
+      if (typeof c.start !== 'string' || !TRIP_DATE.test(c.start)) return null;
+      if (typeof c.end !== 'string' || !TRIP_DATE.test(c.end)) return null;
+      cities.push({ name: name, start: c.start, end: c.end });
+    }
+    const studyStart = trip.studyStart;
+    if (typeof studyStart !== 'string' || !TRIP_DATE.test(studyStart)) return null;
+    return { country: country, cities: cities, studyStart: studyStart };
+  }
+  function loadTrip(storage) {
+    try { return cleanTrip(JSON.parse(storage.getItem(TRIP_KEY) || 'null')); } catch (e) { return null; }
+  }
+  function saveTrip(storage, trip) {
+    const clean = cleanTrip(trip);
+    try {
+      if (clean) storage.setItem(TRIP_KEY, JSON.stringify(clean));
+      else storage.removeItem(TRIP_KEY);
+      return true;
+    } catch (e) { return false; }
+  }
+  /* 서버 문서가 여행 입력을 갖고 있으면 서버가 이긴다.
+     서버 값이 없거나 규칙 밖이면 이 브라우저 입력을 남긴다.
+     예전 문서는 trip 칸이 없어 null 로 읽히므로, 그 null 이 방금 저장한 여행을 지우면 안 된다. */
+  function preferTrip(remoteTrip, localTrip) {
+    return cleanTrip(remoteTrip) || cleanTrip(localTrip);
   }
 
   /* 장소 종류 → 카테고리 계약 id. 서버 계약(agent_contract/categories/*.json)의 place_types 와 맞춘다.
@@ -483,6 +524,7 @@
 
   const api = {
     inAppBrowser, WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
+    TRIP_KEY, cleanTrip, loadTrip, saveTrip, preferTrip,
     categoryOfKind,
     calendarToday, itineraryRequestBody, kindFromPrimary, foldItinerary, placeBlocksOnDays, collectItinerary,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,

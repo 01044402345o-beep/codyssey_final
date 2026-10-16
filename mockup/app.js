@@ -203,16 +203,16 @@ if (window.FirebaseAuth) FirebaseAuth.start();
 const STORE = (() => { try { return window.localStorage; } catch (e) { return null; } })();
 /* ---------- A3: 새로고침해도 학습 진도가 남는다 ----------
    담는 필드는 v, at, done, screen, studyDate, card 의 date·i·back·flipped 다.
-   복습 목록(cd_weak)과 말하기 동의(cd_consent)도 같은 계정 칸에 둔다.
-   여행·장소·문장 본문은 같은 규칙으로 다시 만들어지므로 담지 않는다.
+   복습 목록(cd_weak), 말하기 동의(cd_consent), 여행 입력(cd_trip)도 같은 계정 칸에 둔다.
+   여행 입력은 나라·도시별 체류 날짜·학습 시작일만이다. 장소·문장 본문은 담지 않는다.
    uid 가 없으면 기존 키 그대로라 데모·검사의 기록이 남는다. uid 가 있으면 ':uid' 를 붙인다.
-   로그인 계정의 그 세 가지는 서버에도 올린다. 테마·배너·스와이프 안내는 계정과 무관하다.
+   로그인 계정의 진도·복습·동의·여행 입력은 서버에도 올린다. 테마·배너·스와이프 안내는 계정과 무관하다.
    저장소가 막힌 브라우저(STORE === null)에서는 기능만 조용히 꺼진다. */
 const SESSION_KEY = 'cd_session';
 const SESSION_V = 1;
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000;   /* 30일 지난 기록은 버린다 */
 const PROG = { done: {} };                          /* 'YYYY-MM-DD' → 완료 시각(ms). 계획을 다시 만들어도 날짜로 다시 붙는다 */
-const RESTORE = { screen: null, studyDate: null, card: null };
+const RESTORE = { screen: null, studyDate: null, card: null, trip: null };
 let SESS_READY = false;                             /* 복원이 끝나기 전에는 저장하지 않는다 — 빈 진도로 덮어쓰지 않기 위해 */
 let skipStateWrite = false;                         /* 계정을 갈아 끼우는 동안 이전 기록을 새 칸에 쓰지 않는다 */
 let stateTimer = null;
@@ -226,6 +226,13 @@ function accountUid() {
   return uid;
 }
 function personalStore() { return AI.scopedStorage(STORE, accountUid()); }
+/* 여행 입력(온보딩 1단계)도 같은 계정 칸에 둔다. 장소·문장 본문은 담지 않는다 — 화면이 규칙으로 다시 만든다. */
+function loadTripHere() { return AI.loadTrip(personalStore()); }
+function saveTripHere(t) {
+  const ok = AI.saveTrip(personalStore(), t ? tripInputOf(t) : null);
+  scheduleStatePush();
+  return ok;
+}
 const weakList = () => AI.loadWeak(personalStore());
 function saveWeakList(list) {
   const ok = AI.saveWeak(personalStore(), list);
@@ -252,13 +259,19 @@ function sessionRead() {
     return d;
   } catch (e) { return null; }
 }
+/* 학습 카드를 연 적 없으면 date 가 null 이다. 서버는 그 객체를 거절하므로, 그때는 카드 없음(null)으로 보낸다. */
+function sessionCard(card) {
+  if (!card || typeof card.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(card.date)) return null;
+  const flipped = card.flipped instanceof Set ? [...card.flipped] : (Array.isArray(card.flipped) ? card.flipped : []);
+  return { date: card.date, i: card.i, back: Number.isInteger(card.back) ? card.back : null, flipped };
+}
 function sessionWrite() {
   const box = personalStore();
   if (!box || !SESS_READY || skipStateWrite) return;
   try {
     box.setItem(SESSION_KEY, JSON.stringify({
       v: SESSION_V, at: Date.now(), done: PROG.done, screen: S.screen, studyDate: S.studyDate,
-      card: S.card ? { date: S.card.date, i: S.card.i, back: S.card.back ?? null, flipped: [...S.card.flipped] } : null,
+      card: sessionCard(S.card),
     }));
   } catch (e) { /* 저장 불가(시크릿 모드·용량 초과): 이번 방문 동안만 유지 */ }
   scheduleStatePush();
@@ -272,12 +285,12 @@ function sessionClear() {
 
 function localState() {
   const box = personalStore();
-  const empty = { session: null, weak: [], consent: null };
+  const empty = { session: null, weak: [], consent: null, trip: null };
   if (!box) return empty;
   let session = null;
   try {
     const d = JSON.parse(box.getItem(SESSION_KEY) || 'null');
-    if (d && d.v === SESSION_V) session = d;
+    if (d && d.v === SESSION_V) session = { ...d, card: sessionCard(d.card) };
   } catch (e) { session = null; }
   let consent = null;
   try {
@@ -285,12 +298,13 @@ function localState() {
     if (c && c.version === AI.CONSENT_VERSION && c.voice === true && typeof c.at === 'string')
       consent = { version: c.version, voice: true, at: c.at };
   } catch (e) { consent = null; }
-  return { session, weak: AI.loadWeak(box), consent };
+  return { session, weak: AI.loadWeak(box), consent, trip: AI.loadTrip(box) };
 }
 function stateHas(state) {
   if (!state) return false;
   if (state.session) return true;
   if (Array.isArray(state.weak) && state.weak.length) return true;
+  if (state.trip) return true;
   return !!(state.consent && state.consent.voice === true);
 }
 function writeLocalState(state) {
@@ -301,6 +315,7 @@ function writeLocalState(state) {
     else box.removeItem(SESSION_KEY);
   } catch (e) { /* 저장소 막힘 */ }
   AI.saveWeak(box, Array.isArray(state.weak) ? state.weak : []);
+  AI.saveTrip(box, state.trip || null);
   try {
     if (state.consent && state.consent.voice === true)
       box.setItem(AI.CONSENT_KEY, JSON.stringify({ version: state.consent.version, voice: true, at: state.consent.at }));
@@ -365,8 +380,19 @@ function fillProgress(d) {
   else RESTORE.card = null;
 }
 function resumeScreen() {
-  const dest = RESTORE.screen && RESTORE.screen !== 'u-login' && SCR[RESTORE.screen] ? RESTORE.screen : null;
-  if (!dest) { SESS_READY = true; skipStateWrite = false; return; }
+  /* 저장해 둔 여행 입력으로 실제 여행을 되살린다. 계획은 그 화면에 들어갈 때 규칙으로 다시 만들어진다. */
+  if (RESTORE.trip && !S.trip) S.trip = tripFromInput(RESTORE.trip);
+  let dest = RESTORE.screen && RESTORE.screen !== 'u-login' && SCR[RESTORE.screen] ? RESTORE.screen : null;
+  /* 만들던 보고서·문장 생성은 메모리에서 진행돼 새로고침으로 이어지지 않는다 — 실제 여행이 있으면 홈으로 보낸다. */
+  if (dest && S.trip && (dest === 'u-gen' || dest === 'u-report')) dest = 'u-home';
+  if (!dest) {
+    /* 첫 렌더는 FirebaseAuth.ready 전이라 로그인 화면이 아직 이메일 폼을 모른다.
+       준비가 끝난 지금 다시 그려야 Firebase 가 켜진 환경에서 이메일 로그인이 보인다. */
+    render();
+    SESS_READY = true;
+    skipStateWrite = false;
+    return;
+  }
   navFromMenu(dest);
   if (RESTORE.studyDate) S.studyDate = RESTORE.studyDate;
   if (RESTORE.card) S.card = { date: RESTORE.card.date, i: RESTORE.card.i, back: RESTORE.card.back, flipped: new Set(RESTORE.card.flipped) };
@@ -381,21 +407,35 @@ async function adoptAccount(account, opts) {
   SESS_READY = false;
   if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; }
   S.user = account || null;
+  S.trip = null; resetDerived();          // 계정을 갈아 끼우면 이전 계정의 여행·계획을 들고 가지 않는다
   PROG.done = {};
   RESTORE.screen = null;
   RESTORE.studyDate = null;
   RESTORE.card = null;
+  RESTORE.trip = null;
   fillProgress(sessionRead());
   const hadLocal = stateHas(localState());
   const pulled = await pullAccount(epoch);
   if (pulled.dropped || epoch !== accountEpoch) return;
   if (!pulled.failed && stateHas(pulled.remote)) {
-    writeLocalState(pulled.remote);
+    const remote = pulled.remote;
+    const remoteTrip = AI.cleanTrip(remote.trip);
+    remote.trip = AI.preferTrip(remote.trip, loadTripHere());
+    writeLocalState(remote);
     PROG.done = {};
     RESTORE.screen = null;
     RESTORE.studyDate = null;
     RESTORE.card = null;
     fillProgress(sessionRead());
+    // 서버 문서에 여행 입력이 없고 이 브라우저에만 있으면, 그 입력을 서버로 올려 다음 로그인에서 지워지지 않게 한다.
+    if (!remoteTrip && remote.trip) {
+      SESS_READY = true;
+      skipStateWrite = false;
+      await pushStateNow();
+      if (epoch !== accountEpoch) return;
+      skipStateWrite = true;
+      SESS_READY = false;
+    }
   } else if (!pulled.failed && hadLocal) {
     SESS_READY = true;
     skipStateWrite = false;
@@ -404,8 +444,13 @@ async function adoptAccount(account, opts) {
     skipStateWrite = true;
     SESS_READY = false;
   }
+  RESTORE.trip = loadTripHere();
   if (navigate) resumeScreen();
-  else { SESS_READY = true; skipStateWrite = true; }
+  else {
+    SESS_READY = true; skipStateWrite = true;
+    // 로그인 직후(navigate:false): 계정에 실제 여행이 있으면 계획을 다시 만들어 곧바로 홈으로 갈 수 있게 한다.
+    if (RESTORE.trip && !S.trip) { S.trip = tripFromInput(RESTORE.trip); ensure('plan'); }
+  }
 }
 /* S.sched 는 매번 새로 만들어지므로, 저장해 둔 완료 기록을 날짜로 다시 붙인다 */
 function applyProgress() {
@@ -454,17 +499,63 @@ const isStale = () => S.trip?.genStartedAt && /_generating$/.test(S.trip.status)
 
 function createTrip(d) {
   if (S.trip && !S.trip.archived) archiveTrip();
-  const cities = d.cities.map(c => ({ ...c, name: c.name.trim() }));
-  S.trip = {
-    id: 'tr_' + Math.random().toString(16).slice(2, 6), country: d.country.trim(), cities,
+  S.trip = tripFromInput(d);
+  resetDerived();
+  saveTripHere(S.trip);
+}
+/* 여행 입력만 뽑는다 — 저장하는 값. 장소·문장 본문은 담지 않는다(화면이 규칙으로 다시 만든다). */
+function tripInputOf(t) {
+  return { country: t.country, cities: t.cities.map(c => ({ name: c.name, start: c.start, end: c.end })), studyStart: t.studyStart };
+}
+function tripFromInput(d, id) {
+  const cities = d.cities.map(c => ({ ...c, name: String(c.name || '').trim() }));
+  return {
+    id: id || 'tr_' + Math.random().toString(16).slice(2, 6), country: String(d.country || '').trim(), cities,
     studyStart: d.studyStart, tripStart: cities[0].start, tripEnd: cities[cities.length - 1].end,
     status: 'input_done', regenerateCount: 0, reportRound: 0, failStreak: 0, genStartedAt: null, error: null,
     routeFallback: false, stageAt: { input_done: Date.now() }, requests: 0, fails: 0, reportSec: null, requestedAt: null, archived: false,
   };
+}
+/* 입력이 바뀌면 여행에서 파생된 것(장소·방문 순서·문장·일정표)을 모두 버린다. 계획은 다시 만들어야 한다. */
+function resetDerived() {
   S.places = []; S.reportMeta = {}; S.reportMode = 'example'; S.routeView = 'code'; S.itineraryBlocks = null;
   S.days = []; S.sents = []; S.smap = {}; S.sched = []; S.plan = null;
-  S.cityTab = cities[0].name; S.showCand = {}; S.studyDate = null; S.justCompleted = null; resetCard();
+  S.cityTab = S.trip ? S.trip.cities[0].name : null; S.showCand = {}; S.studyDate = null; S.justCompleted = null; resetCard();
 }
+/* 여행 설정 수정: id 와 진행 기록은 두고 입력만 바꾼 뒤 보고서·방문 순서·문장을 다시 만든다. */
+function editTrip(d) {
+  const t = S.trip;
+  if (!t) return createTrip(d);
+  Object.assign(t, tripFromInput(d, t.id));
+  resetDerived();
+  saveTripHere(t);
+}
+/* 날짜만 바뀐 경우: 도시·문장은 그대로 두고 여행 날짜와 학습 일정표만 다시 계산한다. */
+function applyTripDates(d) {
+  const t = S.trip;
+  t.studyStart = d.studyStart;
+  t.cities = d.cities.map(c => ({ ...c, name: String(c.name || '').trim() }));
+  t.tripStart = t.cities[0].start; t.tripEnd = t.cities[t.cities.length - 1].end;
+  const ok = saveTripHere(t);
+  S.days = S.itineraryBlocks
+    ? AI.placeBlocksOnDays(R.buildDays(t.cities), S.places, t.cities, S.itineraryBlocks)
+    : makeRoute().days;
+  buildPlan();
+  return ok;
+}
+/* 도시 이름 목록(순서 포함)이 같은가. 같으면 장소·문장을 다시 만들 필요가 없다(날짜만 다시 계산). */
+function sameTripCities(a, b) {
+  if (a.length !== b.length) return false;
+  return a.every((c, i) => String(c.name || '').trim() === b[i].name);
+}
+/* 홈 D-Day 카드·사이드바에서 여행 설정 수정 화면을 연다. 현재 여행 입력을 초안으로 채운다. */
+function openTripEdit() {
+  if (!S.trip) { navFromMenu('u-input'); return; }
+  S.draft = tripInputOf(S.trip);
+  S.showErrors = false;
+  go('u-edit');
+}
+
 function archiveTrip() {
   S.trip.archived = true;
   S.archived.unshift({ id: S.trip.id, route: tripTitle(S.trip), dates: `${Dt.md(S.trip.tripStart)}~${Dt.md(S.trip.tripEnd)}` });
@@ -737,12 +828,18 @@ function retry() {
   if (/_failed$/.test(t.status) || isStale()) request(stage);
 }
 
-/* 메뉴에서 바로 화면을 열 때 필요한 데이터를 데모로 채움 */
+/* 메뉴에서 바로 화면을 열 때 필요한 데이터를 채움.
+   저장된 여행 입력이 있으면 그것으로 다시 만들고(데모 여행으로 덮지 않는다), 없을 때만 데모 여행을 만든다.
+   해시로 화면을 바로 열어도(#u-home) 저장된 여행을 덮어쓰지 않는다 — SESS_READY 가 아니므로 저장도 하지 않는다. */
 function ensure(level) {
   let did = false;
   if (!S.user) { S.user = DEMO_USER; did = true; }
   if (level === 'user') return did;
-  if (!S.trip) { createTrip(defaultDraft(S.today)); did = true; }
+  if (!S.trip) {
+    const saved = loadTripHere();
+    if (saved) { S.trip = tripFromInput(saved); resetDerived(); }
+    else { createTrip(defaultDraft(S.today)); did = true; }
+  }
   const t = S.trip;
   if (!S.places.length) {
     cancelGen();
@@ -877,6 +974,8 @@ const SCREENS = [
     tips: ['공통 상황과 장소별 문장을 골라 볼 수 있어요.', '"문장 모음 전용"은 일정에 넣지 않은 문장이에요.', '모든 문장에 듣기 버튼이 있어요.'] },
   { id: 'u-end', no: 'SCR-06', name: '여행 종료 요약', fr: ['FR-END-01', 'FR-TRIP-04'],
     tips: ['이 메뉴를 누르면 "오늘"이 여행 종료 다음 날로 바뀌어요.', '종료 후에는 완료 처리를 할 수 없어요.', '"새 여행 만들기"는 이 여행을 보관(비활성화)해요.'] },
+  { id: 'u-edit', no: 'SCR-10', name: '여행 설정 수정', fr: ['FR-TRIP-01', 'FR-SENT-02'],
+    tips: ['홈의 D-Day 카드를 눌러도 이 화면이 열려요.', '날짜만 바꾸면 문장은 그대로 두고 학습 일정표만 다시 계산해요.', '도시나 나라를 바꾸면 보고서·방문 순서·문장을 다시 만들어요.'] },
   { group: '관리자 화면', tag: 'PRD 외 제안', id: 'a-metrics', no: 'ADM-01', name: '운영 지표', fr: ['PRD 2-2', 'stageAt'], prop: true,
     tips: ['PRD 성공 지표 4개를 stageAt 기반으로 계산해요.', '데모 여행 진행 상태도 함께 반영돼요.'] },
   { id: 'a-jobs', no: 'ADM-02', name: '생성 작업 모니터', fr: ['FR-GEN-01', 'FR-GEN-02', 'FR-GEN-03'], prop: true,
@@ -1035,6 +1134,7 @@ function userScreen() {
     case 'u-sched': return scrSched();
     case 'u-study': return scrStudy();
     case 'u-coll': return scrColl();
+    case 'u-edit': return scrEdit();
     case 'u-end': return frame(`<div class="app-pad">${endBody()}</div>`, { tabbar: true, tab: 'u-home' });
   }
   return '';
@@ -1063,13 +1163,25 @@ function scrLogin() {
     <h1 style="margin-top:10px">Speak where<br>you'll <em>actually</em><br>be.</h1>
     <p class="sub">여행지와 일정을 입력하면, 실제로 갈 관광지와 맛집에서 쓸 영어 문장을 만들어 출발 전부터 매일 학습하게 해 드려요.</p>
     <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">로그인하지 않으면 다른 화면에 들어갈 수 없어요.</p>
-      <p class="small" style="text-align:center;margin-top:8px">맛집 문장은 AI가 만들고 'AI 생성' 표시가 붙어요 · 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API로 전송돼요 · 장소 목록은 예시 데이터예요 · 학습 기록은 이 브라우저에만 저장돼요 · 말하기 연습은 동의한 뒤에만 녹음을 채점 서버로 보내요.</p></div>
+      <p class="small" style="text-align:center;margin-top:8px">맛집 문장은 AI가 만들고 'AI 생성' 표시가 붙어요 · 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API로 전송돼요 · 장소 목록은 예시 데이터예요 · 로그인하면 학습 진도·복습 목록·여행 설정이 계정에 저장되고, 로그인하지 않으면 이 브라우저에만 남아요 · 말하기 연습은 동의한 뒤에만 녹음을 채점 서버로 보내요.</p></div>
   </div>`);
 }
 
 /* SCR-02 */
 function scrInput() {
   const d = S.draft, v = R.validate(d, S.today), E = S.showErrors ? v.errors : {};
+  const inner = `<div class="app-pad">
+    <div class="eyebrow">New trip</div>
+    <div class="title-lg">어디로 떠나세요?</div>
+    <p class="sub" style="margin-bottom:18px">도시별 체류 날짜와 학습 시작일만 정하면 나머지는 자동으로 계산돼요.</p>
+    ${S.trip && !S.trip.archived ? notice(`진행 중인 여행 <b>${esc(tripTitle(S.trip))}</b>이 있어요. 새 여행을 만들면 기존 여행은 보관돼요.`, 'warn') + '<div style="height:12px"></div>' : ''}
+    ${tripFields(d, E, v)}
+  </div>`;
+  return frame(inner, { appbar: appbar('여행 입력', { step: 'STEP 1/3' }), bottom: `<button class="btn primary block" data-act="submit-trip">보고서 만들기</button>` });
+}
+/* 나라·도시·학습 시작일 입력 묶음. 여행 입력(SCR-02)과 여행 설정 수정(SCR-10)이 같은 마크업을 쓴다.
+   [data-bind] 는 S.draft 를 고치고 updateInputLive 가 요약·경고·오류를 갱신한다. */
+function tripFields(d, E, v) {
   const cities = d.cities.map((c, i) => `
     <div class="city-card"><span class="num">CITY ${i + 1}</span>
       ${d.cities.length > 1 ? `<button class="del" data-act="del-city" data-i="${i}" title="삭제">${I.x}</button>` : ''}
@@ -1081,12 +1193,7 @@ function scrInput() {
       </div>
       <div class="err" data-err="cd${i}">${E['cd' + i] || ''}</div>
     </div>`).join('');
-  const inner = `<div class="app-pad">
-    <div class="eyebrow">New trip</div>
-    <div class="title-lg">어디로 떠나세요?</div>
-    <p class="sub" style="margin-bottom:18px">도시별 체류 날짜와 학습 시작일만 정하면 나머지는 자동으로 계산돼요.</p>
-    ${S.trip && !S.trip.archived ? notice(`진행 중인 여행 <b>${esc(tripTitle(S.trip))}</b>이 있어요. 새 여행을 만들면 기존 여행은 보관돼요.`, 'warn') + '<div style="height:12px"></div>' : ''}
-    <div class="field"><label>나라</label><input class="input" data-bind="country" value="${esc(d.country)}" placeholder="예: 미국">
+  return `<div class="field"><label>나라</label><input class="input" data-bind="country" value="${esc(d.country)}" placeholder="예: 미국">
       <div class="err" data-err="country">${E.country || ''}</div>
       <div data-live="noneng" style="margin-top:8px;${d.country.trim() && !ENGLISH_COUNTRIES.includes(d.country.trim()) ? '' : 'display:none'}">${notice('현지에서 영어가 통하지 않을 수 있어요. 문장은 여행자가 흔히 쓰는 쉬운 영어로 만들어요.', 'warn')}</div>
     </div>
@@ -1101,9 +1208,18 @@ function scrInput() {
       <div class="hint">학습 종료일은 여행 종료일로 자동 설정돼요.</div>
     </div>
     <div class="summary-strip" data-live="summary">${inputSummary(d)}</div>
-    <div data-live="warn" style="margin-top:10px">${v.warnings.map(w => notice(w, 'warn')).join('')}</div>
+    <div data-live="warn" style="margin-top:10px">${v.warnings.map(w => notice(w, 'warn')).join('')}</div>`;
+}
+/* SCR-10: 홈 D-Day 카드에서 여는 여행 설정 수정. 저장하면 날짜만인지에 따라 계획을 다시 만든다. */
+function scrEdit() {
+  const d = S.draft, v = R.validate(d, S.today), E = S.showErrors ? v.errors : {};
+  const inner = `<div class="app-pad">
+    <div class="eyebrow">Trip settings</div>
+    <div class="title-lg">여행 설정 수정</div>
+    <p class="sub" style="margin-bottom:18px">처음 입력한 여행 정보를 고칠 수 있어요. 날짜만 바꾸면 문장은 그대로 두고 학습 일정표만 다시 계산해요.</p>
+    ${tripFields(d, E, v)}
   </div>`;
-  return frame(inner, { appbar: appbar('여행 입력', { step: 'STEP 1/3' }), bottom: `<button class="btn primary block" data-act="submit-trip">보고서 만들기</button>` });
+  return frame(inner, { appbar: appbar('여행 설정 수정', { back: 'u-home' }), bottom: `<button class="btn primary block" data-act="save-trip">저장</button>` });
 }
 function inputSummary(d) {
   const first = d.cities[0]?.start, last = d.cities[d.cities.length - 1]?.end;
@@ -1314,19 +1430,19 @@ function scrRoute() {
 /* SCR-06 */
 function scrHome() {
   const t = S.trip, ph = phase();
-  if (ph === 'ended') return frame(`<div class="app-pad">${endBody()}${themeCard()}${privacyCard()}</div>`, { tabbar: true });
+  if (ph === 'ended') return frame(`<div class="app-pad">${endBody()}${themeCard()}${privacyCard()}${accountCard()}</div>`, { tabbar: true });
   const pr = progress();
   let hero;
   if (ph === 'trip') {
     const day = S.days.find(d => d.date === S.today);
-    hero = `<div class="hero trip"><div class="route">${esc(tripTitle(t))}</div><div class="big">${Dt.diff(S.today, t.tripStart) + 1}<small>일차</small></div>
-      <div class="dates">오늘 도시 · ${esc(day?.city || '')} ${day ? day.types.map(ty => DAYTYPE[ty].label).join('·') : ''}</div></div>`;
+    hero = `<button type="button" class="hero trip" data-act="edit-trip" aria-label="여행 설정 수정"><div class="route">${esc(tripTitle(t))}</div><div class="big">${Dt.diff(S.today, t.tripStart) + 1}<small>일차</small></div>
+      <div class="dates">오늘 도시 · ${esc(day?.city || '')} ${day ? day.types.map(ty => DAYTYPE[ty].label).join('·') : ''}</div><span class="hero-edit">여행 설정 수정 ›</span></button>`;
   } else if (ph === 'before') {
-    hero = `<div class="hero"><div class="route">${esc(tripTitle(t))}</div><div class="big">D-${Dt.diff(t.studyStart, S.today)}<small>학습 시작까지</small></div>
-      <div class="dates">학습 ${Dt.md(t.studyStart)} → 여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)}</div></div>`;
+    hero = `<button type="button" class="hero" data-act="edit-trip" aria-label="여행 설정 수정"><div class="route">${esc(tripTitle(t))}</div><div class="big">D-${Dt.diff(t.studyStart, S.today)}<small>학습 시작까지</small></div>
+      <div class="dates">학습 ${Dt.md(t.studyStart)} → 여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)}</div><span class="hero-edit">여행 설정 수정 ›</span></button>`;
   } else {
-    hero = `<div class="hero"><div class="route">${esc(tripTitle(t))}</div><div class="big">D-${Dt.diff(t.tripStart, S.today)}<small>여행까지</small></div>
-      <div class="dates">여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)} · 학습 종료 ${Dt.md(t.tripEnd)}</div></div>`;
+    hero = `<button type="button" class="hero" data-act="edit-trip" aria-label="여행 설정 수정"><div class="route">${esc(tripTitle(t))}</div><div class="big">D-${Dt.diff(t.tripStart, S.today)}<small>여행까지</small></div>
+      <div class="dates">여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)} · 학습 종료 ${Dt.md(t.tripEnd)}</div><span class="hero-edit">여행 설정 수정 ›</span></button>`;
   }
   const r = S.sched.find(x => x.date === S.today);
   let today;
@@ -1355,6 +1471,7 @@ function scrHome() {
     ${upcoming.length ? `<div class="sec-title"><h4>다가오는 일정</h4></div>${upcoming.map(srow).join('')}` : ''}
     ${themeCard()}
     ${privacyCard()}
+    ${accountCard()}
   </div>`;
   return frame(inner, { tabbar: true });
 }
@@ -1691,6 +1808,7 @@ function navFromMenu(id) {
   let did = false;
   if (id.startsWith('a-')) { if (id === 'a-common') S.commonsDraft = null; go(id); return; }
   if (id === 'u-login') { go(id); return; }
+  if (id === 'u-edit') { ensure('plan'); openTripEdit(); return; }   // 여행 설정 수정: 현재 여행 입력을 초안으로 채운다
   if (id === 'u-input' || id === 'u-gen') did = ensure('user');
   if (id === 'u-report') did = ensure('report');
   if (['u-route', 'u-home', 'u-sched', 'u-study', 'u-coll', 'u-end'].includes(id)) did = ensure('plan');
@@ -1707,7 +1825,9 @@ function sessionResume() {
   RESTORE.screen = null;
   RESTORE.studyDate = null;
   RESTORE.card = null;
+  RESTORE.trip = null;
   fillProgress(sessionRead());
+  RESTORE.trip = loadTripHere();
   resumeScreen();                                      /* 필요한 데이터를 채우고 그 화면으로 — 여기서 S.sched 가 다시 만들어진다 */
 }
 
@@ -1796,7 +1916,7 @@ function askVoiceConsent() {
      <b>목적</b> · 말하기 연습 피드백 (피드백 문장은 AI가 만든 결과예요)<br>
      <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요. 전사 AI 회사의 처리·보관은 각 회사 약관을 따라요.<br>
      <b>Google 처리</b> · 무료 등급 API에서는 Google이 전송된 내용을 제품 개선에 사용하고 사람 검토자가 읽을 수 있어요(계정·키와는 분리돼요). <b>민감한 개인정보는 말하지 마세요.</b><br>
-     <b>이 브라우저에 저장</b> · 채점 결과로 고른 '어려워한 상황'(복습 목록). 다음 문장을 만들 때 상황 이름만 서버로 보내요. 로그인한 계정은 학습 진도·복습 목록·이 동의를 그 계정 기록으로 서버에 올려요. 녹음 파일은 올리지 않아요.<br><br>
+     <b>이 브라우저에 저장</b> · 채점 결과로 고른 '어려워한 상황'(복습 목록). 다음 문장을 만들 때 상황 이름만 서버로 보내요. 로그인한 계정은 학습 진도·복습 목록·여행 설정·이 동의를 그 계정 기록으로 서버에 올려요. 녹음 파일은 올리지 않아요.<br><br>
      동의하지 않아도 카드 학습과 듣기는 그대로 쓸 수 있어요. 동의는 홈 화면에서 언제든 철회할 수 있고, 철회하면 복습 목록도 지워져요.`,
     '동의하고 녹음하기', () => {
       S.modal = null;
@@ -1811,10 +1931,26 @@ function privacyCard() {
     <p class="small" style="line-height:1.7">· 'AI 생성' 표시가 붙은 문장과 말하기 채점은 AI가 만든 결과예요. 틀릴 수 있어요.<br>
       · AI 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API로 전송돼요.<br>
       · 말하기 연습 동의: <b>${c.voice ? `동의함 (${when})` : '동의하지 않음'}</b>${c.voice ? '' : ' — 처음 녹음할 때 물어봐요'}<br>
-      · 복습 목록: <b>${n}개</b> · ${accountUid() ? '이 계정에 저장돼요' : '이 브라우저에만 저장돼요'}</p>
+      · 복습 목록: <b>${n}개</b> · ${accountUid() ? '이 계정에 저장돼요' : '이 브라우저에만 저장돼요'}<br>
+      · 여행 설정(나라·도시·날짜): ${accountUid() ? '이 계정에 저장돼요' : '이 브라우저에만 저장돼요'}</p>
     ${c.voice || n ? `<div style="display:flex;gap:8px;margin-top:10px">
       ${c.voice ? '<button class="btn soft" style="flex:1" data-act="consent-withdraw">동의 철회</button>' : ''}
       ${n ? '<button class="btn soft" style="flex:1" data-act="weak-delete">복습 목록 삭제</button>' : ''}</div>` : ''}
+  </div>`;
+}
+/* 홈 맨 아래 계정 블록. 로그아웃 버튼과 안내를 하나의 카드(.card = 패딩 한 곳)에 담는다. */
+function accountCard() {
+  const signed = !!S.user;
+  const initial = esc(userName().slice(0, 1) || '김');
+  return `<div class="sec-title"><h4>계정</h4></div><div class="card account-card">
+    <div class="acc-row"><span class="acc-avatar">${initial}</span>
+      <span class="acc-who"><b>${esc(userName())}</b><span class="small">${esc(userEmail())}</span></span></div>
+    <p class="small acc-note">${signed
+      ? '학습 진도와 여행 설정은 계정에 저장돼요. 로그아웃하면 이 브라우저에서만 나가고, 다시 로그인하면 이어서 할 수 있어요.'
+      : '로그인하면 학습 진도·복습 목록·여행 설정이 계정에 저장돼요.'}</p>
+    ${signed
+      ? '<button class="btn soft block" data-act="logout-home">로그아웃</button>'
+      : '<button class="btn primary block" data-act="tab" data-id="u-login">로그인</button>'}
   </div>`;
 }
 const weakItem = s => ({ category_id: s.categoryId, id: s.situationId, situation: s.situation, en: s.en, ko: s.ko });
@@ -1899,7 +2035,18 @@ const ACT = {
   },
   noop: () => {},
   link: el => window.open(el.getAttribute('href'), '_blank', 'noopener'),
-  reset: () => { const c = S.demoClosed; PROG.done = {}; sessionClear(); initState(); S.demoClosed = c; resetHistory(S.screen); render(); toast('처음 상태로 되돌렸어요.'); },
+  reset: () => {
+    const c = S.demoClosed;
+    PROG.done = {};
+    // 여행을 먼저 지운 뒤에 진도를 비워야 한다. sessionClear 가 지금 저장소를 서버로 올리므로, 순서가 반대면 지운 여행이 다시 올라간다.
+    AI.saveTrip(personalStore(), null);
+    sessionClear();
+    initState();
+    S.demoClosed = c;
+    resetHistory(S.screen);
+    render();
+    toast('처음 상태로 되돌렸어요.');
+  },
   'demo-toggle': () => { S.demoClosed = !S.demoClosed; renderDemo(); },
   'set-today': el => { S.today = el.dataset.date; S.justCompleted = null; render(); toast(`오늘을 ${Dt.full(S.today)}로 바꿨어요.`); },
   preset: el => preset(el.dataset.kind),
@@ -1942,6 +2089,7 @@ const ACT = {
     S.user = DEMO_USER; toast('Google 계정으로 로그인했어요.'); ACT['after-login']();
   },
   'login-email': () => {
+    if (!window.FirebaseAuth || !FirebaseAuth.enabled) { toast('이 환경에서는 이메일 로그인을 쓸 수 없어요.'); return; }
     const email = (document.querySelector('[data-auth="email"]') || {}).value || '';
     const password = (document.querySelector('[data-auth="password"]') || {}).value || '';
     const name = (document.querySelector('[data-auth="name"]') || {}).value || '';
@@ -1956,16 +2104,31 @@ const ACT = {
     }).catch(err => { const msg = FirebaseAuth.koreanError(err); if (msg) toast(msg); });
   },
   'login-switch': () => { S.authMode = S.authMode === 'signup' ? 'login' : 'signup'; render(); },
-  'after-login': () => go(S.trip && !S.trip.archived ? (S.plan ? 'u-home' : S.places.length ? 'u-report' : 'u-gen') : 'u-input'),
+  'after-login': () => {
+    // 저장된 여행이 있으면 계획을 다시 만들어 곧바로 홈까지 보낸다(새로고침·재로그인 뒤 메인화면 도달).
+    if (!S.trip || S.trip.archived) {
+      const saved = loadTripHere();
+      if (saved) { S.trip = tripFromInput(saved); resetDerived(); }
+    }
+    if (S.trip && !S.trip.archived) {
+      if (!S.plan && !S.places.length) ensure('plan');
+      go(S.plan ? 'u-home' : S.places.length ? 'u-report' : 'u-gen');
+      return;
+    }
+    go('u-input');
+  },
   logout: () => {
     const finish = () => {
       SESS_READY = false;
       skipStateWrite = true;
       S.user = null;
+      S.trip = null;
+      resetDerived();
       PROG.done = {};
       RESTORE.screen = null;
       RESTORE.studyDate = null;
       RESTORE.card = null;
+      RESTORE.trip = null;
       fillProgress(sessionRead());
       SESS_READY = true;
       skipStateWrite = false;
@@ -1980,6 +2143,38 @@ const ACT = {
       finish();
     };
     run();
+  },
+  // 홈 맨 아래 계정 카드의 로그아웃 — 실수로 눌리지 않게 한 번 확인한다.
+  'logout-home': () => confirmBox('로그아웃할까요?',
+    '학습 진도와 여행 설정은 계정에 저장돼 있어요. 다시 로그인하면 이어서 할 수 있어요.',
+    '로그아웃', () => { S.modal = null; ACT.logout(); }, { danger: true }),
+
+  // 홈 D-Day 카드·사이드바에서 여행 설정 수정 화면을 연다.
+  'edit-trip': () => openTripEdit(),
+  // 수정 내용 저장: 날짜만 바뀌면 계획만 다시 계산하고, 도시·나라가 바뀌면 보고서부터 다시 만든다.
+  'save-trip': () => {
+    S.showErrors = true;
+    const v = R.validate(S.draft, S.today);
+    if (!v.ok) { render(); toast('입력 내용을 확인해 주세요.'); return; }
+    const t = S.trip;
+    if (!t) { go('u-input'); return; }
+    const d = S.draft;
+    const sameCities = String(d.country || '').trim() === t.country && sameTripCities(d.cities, t.cities);
+    if (sameCities) {
+      const ok = applyTripDates(d);
+      S.draft = defaultDraft(S.today); S.showErrors = false;
+      go('u-home');
+      toast(ok ? '여행 설정을 저장하고 학습 일정표를 다시 계산했어요.' : '학습 일정표는 다시 계산했지만, 이 브라우저에 저장하지 못했어요.');
+      return;
+    }
+    confirmBox('여행을 다시 만들까요?',
+      '도시나 나라가 바뀌면 장소와 문장을 처음부터 다시 만들어요. 학습 진도는 날짜가 같으면 이어지고, 다르면 다시 학습해야 해요.',
+      '다시 만들기', () => {
+        S.modal = null;
+        editTrip(d);
+        S.draft = defaultDraft(S.today); S.showErrors = false;
+        request('report');
+      }, { danger: true });
   },
 
   'add-city': () => {
@@ -2079,8 +2274,12 @@ const ACT = {
     S.justCompleted = null; resetCard(S.drill.date); go('u-study'); window.scrollTo(0, 0);
   },
   'new-trip': () => confirmBox('새 여행을 만들까요?', '이 여행은 보관되고 더 이상 보이지 않아요. (삭제되지는 않아요)', '보관하고 새로 만들기', () => {
-    PROG.done = {}; sessionClear();   /* 새 여행은 진도를 처음부터 센다 */
-    archiveTrip(); S.trip = null; S.places = []; S.sched = []; S.plan = null; S.sents = []; S.days = [];
+    PROG.done = {};
+    archiveTrip();
+    // 저장해 둔 여행 입력을 먼저 지운 뒤 진도를 비운다. 반대로 하면 서버에 이전 여행이 다시 올라간다.
+    AI.saveTrip(personalStore(), null);
+    sessionClear();
+    S.trip = null; S.places = []; S.sched = []; S.plan = null; S.sents = []; S.days = [];
     S.draft = defaultDraft(S.today); S.showErrors = false; S.modal = null; go('u-input'); toast('이전 여행을 보관했어요.');
   }, { danger: true }),
 
