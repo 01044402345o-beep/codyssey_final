@@ -468,15 +468,103 @@ class App:
         return value
 
     def pick_key(self, kind: str = "admin") -> str:
-        keys = config.key_files()[kind]
-        if not keys:
-            messagebox.showinfo("opsarchive", "%s 키가 없습니다. 키 탭에서 먼저 만드세요." % kind)
-            return ""
-        if len(keys) == 1:
-            return keys[0]
-        from tkinter import simpledialog as sd
-        choice = sd.askstring("opsarchive", "키 파일 선택:\n" + "\n".join(keys))
-        return choice if choice in keys else ""
+        """키 파일 선택 창 — ① 드롭다운(자동 발견) ② 파일 열기 ③ 경로 직접 입력.
+
+        파일 이름에는 키 id 가 들어 있고(admin-<id>.key / sign-<id>.key), 창은 **내용을 읽지 않는다**.
+        종류가 어긋난 파일(예: 봉투 키 자리에 sign-)을 고르면 경고를 띄운다 — 그대로 쓰면 나중에
+        `key_mismatch` 로 막히기 때문이다. 마지막 선택은 settings.json 에 기억한다.
+        """
+        found = config.key_files()
+        candidates = [str(p) for p in (found.get(kind) or [])]
+        remembered = str(self.settings.get("last_%s_key" % kind) or "")
+        if remembered and remembered not in candidates:
+            candidates.insert(0, remembered)
+        if candidates and remembered in candidates:
+            candidates.remove(remembered)
+            candidates.insert(0, remembered)
+
+        wanted = {"admin": ("봉투 키(X25519) — 증거 복호화용", "admin-"),
+                  "sign": ("서명 키(Ed25519) — 체크포인트 서명용", "sign-")}.get(
+                      kind, (kind, ""))
+        label, prefix = wanted
+
+        window = tk.Toplevel(self.root)
+        window.title("키 파일 선택 — %s" % label)
+        window.geometry("680x260")
+        window.transient(self.root)
+        ttk.Label(window, text="찾을 키: %s" % label, justify="left").pack(anchor="w", padx=12, pady=(10, 2))
+        ttk.Label(window, text="발견된 키: %d개 (%s)" % (len(found.get(kind) or []),
+                                                      found.get("dir", "")),
+                  foreground="#666").pack(anchor="w", padx=12)
+
+        var = tk.StringVar(value=remembered or (candidates[0] if candidates else ""))
+        combo = ttk.Combobox(window, textvariable=var, values=candidates, width=72, state="normal")
+        combo.pack(fill="x", padx=12, pady=6)
+        info = ttk.Label(window, text="", wraplength=640, justify="left")
+        info.pack(anchor="w", padx=12, pady=4)
+
+        def refresh_info(*_args) -> None:
+            path = (var.get() or "").strip()
+            if not path:
+                info.configure(text="경로가 비어 있습니다. 드롭다운에서 고르거나 [파일 열기]를 누르세요.",
+                               foreground="#c00")
+                return
+            name = os.path.basename(path)
+            exists = os.path.exists(path)
+            parts = ["파일: %s" % name, "존재: %s" % ("예" if exists else "아니오")]
+            if exists:
+                try:
+                    stat = os.stat(path)
+                    parts.append("크기 %d바이트" % stat.st_size)
+                except OSError:
+                    pass
+            if prefix and name and not name.startswith(prefix):
+                parts.append("⚠ 이 창에서 기대하는 이름은 '%s…' 입니다 — 다른 종류의 키일 수 있습니다" % prefix)
+            info.configure(text=" · ".join(parts),
+                           foreground="#c00" if (not exists or (prefix and not name.startswith(prefix))) else "#060")
+
+        def browse() -> None:
+            chosen = filedialog.askopenfilename(
+                parent=window, title="키 파일 선택",
+                initialdir=str(self.settings.get("key_dir") or config.config_dir()),
+                filetypes=[("opsarchive 키", "*.key"), ("모든 파일", "*.*")])
+            if chosen:
+                var.set(chosen)
+                refresh_info()
+
+        result = {"path": ""}
+
+        def confirm() -> None:
+            path = (var.get() or "").strip()
+            if not path:
+                messagebox.showinfo("opsarchive", "키 파일을 고르세요.", parent=window)
+                return
+            if not os.path.exists(path):
+                if not messagebox.askyesno("opsarchive", "파일이 없습니다. 그래도 이 경로를 쓸까요?", parent=window):
+                    return
+            result["path"] = path
+            window.destroy()
+
+        bar = ttk.Frame(window)
+        bar.pack(fill="x", padx=12, pady=10)
+        ttk.Button(bar, text="파일 열기…", command=browse).pack(side="left")
+        ttk.Button(bar, text="확인", command=confirm).pack(side="right")
+        ttk.Button(bar, text="취소", command=window.destroy).pack(side="right", padx=6)
+        combo.bind("<<ComboboxSelected>>", refresh_info)
+        var.trace_add("write", refresh_info)
+        window.bind("<Return>", lambda _e: confirm())
+        window.bind("<Escape>", lambda _e: window.destroy())
+        refresh_info()
+        combo.focus_set()
+        self.root.wait_window(window)
+
+        if result["path"]:
+            self.settings["last_%s_key" % kind] = result["path"]
+            try:
+                config.write_settings(self.settings)      # 다음에 열 때 미리 선택되게
+            except OSError:
+                pass
+        return result["path"]
 
     def do_publish(self) -> None:
         key_file = self.pick_key("admin")
