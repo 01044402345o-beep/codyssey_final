@@ -247,7 +247,7 @@
 
 Firestore `(default)`를 asia-northeast3에 만들었다. `firestore.rules`는 그 데이터베이스에만 배포했다. 배포본 sha256은 `6cac63da9ec2a8de9cafdcb33b541362e5b0e5e8b6fe72e2ba94583e1bc011a0`이고 로컬 `firestore.rules`와 같다. `cloud.firestore/firestore-native-mode` 릴리스는 2026-09-05 그대로다. 토큰 없는 `(default)` 문서 읽기는 403 PERMISSION_DENIED다. 로그인한 계정의 쓰기 왕복은 하지 않았다. FR-16은 부분이다. 공개 Render 환경 변수와 `ITINERARY_ENABLED`는 바꾸지 않았다.
 
-> ※ 위 sha 는 그 시점 기록이다. 이후 '홈 편의 기능' 절에서 작업 복사본이 `trip` 을 더해 달라졌다(배포본은 아직 `6cac63da…`).
+> ※ 위 sha 는 그 시점 기록이다. 이후 '홈 편의 기능' 절에서 작업 복사본이 `trip` 을 선택 필드로 더했다. 그 선택형 규칙(`c89dc983…`)을 2026-10-16 `(default)` 에 먼저 배포했다(머지 전). 그 전까지의 배포본이 위 `6cac63da…`(3필드)다.
 
 이 작업 트리에서 `unittest tests.test_user_state tests.test_firebase_auth`는 17개 통과, `node --test mockup/ai.test.js`는 27개 통과다. 데이터베이스를 만들기 전 같은 `mockup/app.js`에 대해 Playwright `e2e/test_account_storage.py` 14, `e2e/test_progress_persist.py` 16, `e2e/test_consent.py` 37이 통과했다. 그 화면 검사는 다시 돌리지 않았다.
 
