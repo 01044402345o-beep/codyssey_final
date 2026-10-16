@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 import queue
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
@@ -53,6 +54,7 @@ class App:
         self.setting_vars: dict[str, tk.StringVar] = {}
         self.step_status: dict[str, tk.StringVar] = {}
         self.last: dict[str, str] = {}
+        self.last_rows: list = []
         self._build()
         self.root.after(120, self._drain)
         self.refresh_overview()
@@ -173,7 +175,30 @@ class App:
             ("핀 파일 있음" if pin_exists else "핀 파일 없음") + " · " + self.state("pin"))
         self.step_status.get("pin-check", tk.StringVar()).set(self.state("pin-check"))
         self.step_status.get("iam", tk.StringVar()).set(self.state("iam-check"))
+        self._refresh_store_and_verify()
         self._update_hint()
+
+    def _refresh_store_and_verify(self) -> None:
+        """보관소·검증 탭의 상태 칸을 채운다(파일·설정만 보고 네트워크는 쓰지 않는다)."""
+        picked = (self.archive_var.get() if getattr(self, "archive_var", None) else "") or ""
+        self.step_status.get("list", tk.StringVar()).set(
+            ("%d개" % len(self.last_rows)) if self.last_rows else self.state("목록"))
+        self.step_status.get("pick", tk.StringVar()).set(
+            ("선택: " + picked[:18] + ("…" if len(picked) > 18 else "")) if picked else "표에서 줄을 클릭하세요")
+        self.step_status.get("decrypt", tk.StringVar()).set(self.state("복호화"))
+        self._fill_tree(self.last_rows)
+
+        self.step_status.get("vstatus", tk.StringVar()).set(self.state("검증 상태"))
+        self.step_status.get("anchor", tk.StringVar()).set(self.state("anchor"))
+        self.step_status.get("verify", tk.StringVar()).set(self.state("verify-chain"))
+        self.step_status.get("challenge", tk.StringVar()).set(self.state("verify-chain"))
+        if getattr(self, "store_hint", None) is not None:
+            self.store_hint.set("아카이브가 0개여도 오류가 아닙니다(아직 탈퇴 실패 봉인이 없었다는 뜻). "
+                                "카나리아(IAM 검사용)는 목록에서 빠집니다.")
+        if getattr(self, "verify_hint", None) is not None:
+            keys = config.key_files()
+            self.verify_hint.set("다음 할 일: " + ("② anchor 로 지금 상태를 서명하세요(주기적으로 반복)" if keys["sign"]
+                                                 else "키 탭 ③ 에서 서명 키를 먼저 만드세요"))
 
     def _update_hint(self) -> None:
         keys = config.key_files()
@@ -674,41 +699,153 @@ class App:
     # ------------------------------------------------------------ 탭 5: 보관소
     def _tab_store(self, notebook) -> None:
         frame = self._frame(notebook, "보관소")
-        ttk.Label(frame, text="봉인된 아카이브 목록을 보고, 개인키로 열어 내용을 확인합니다(개인정보 포함).",
-                  wraplength=820).pack(anchor="w", padx=8, pady=6)
-        bar = ttk.Frame(frame)
-        bar.pack(fill="x", padx=8)
-        self._button(bar, "목록(list)", self.do_list)
-        self._button(bar, "복호화(decrypt)", self.do_decrypt)
+        ttk.Label(frame, text="탈퇴 실패 때 앱이 봉인해 둔 증거입니다. 목록을 보고, 개인키로 열어 내용을 확인합니다.",
+                  wraplength=840).pack(anchor="w", padx=10, pady=(8, 0))
+        steps = self._steps_frame(frame)
+        self._step(steps, 0, "①", "목록 새로 고침",
+                   "봉인된 아카이브 목록을 아래 표에 채웁니다(IAM 검사용 카나리아는 제외).",
+                   "list", "목록 새로 고침", self.do_list)
+        self._step(steps, 1, "②", "아카이브 선택",
+                   "표에서 줄을 클릭하면 그 id 가 선택됩니다. 직접 입력하거나 붙여넣어도 됩니다.",
+                   "pick", "선택 지우기", self.clear_archive_pick)
+        self._step(steps, 2, "③", "복호화(열기)",
+                   "이 PC의 **개인키로만** 열립니다. 내용에는 사용자 개인정보가 들어 있습니다 — 필요한 때만 여세요.",
+                   "decrypt", "복호화 실행", self.do_decrypt)
+        self.store_hint = self._hint(frame)
+
+        pick = ttk.Frame(frame)
+        pick.pack(fill="x", padx=10)
+        ttk.Label(pick, text="선택한 id", width=12).pack(side="left")
+        self.archive_var = tk.StringVar(value="")
+        ttk.Entry(pick, textvariable=self.archive_var, width=46).pack(side="left", padx=4)
+        ttk.Label(pick, text="만료(TTL) 전에 확인하세요", foreground="#a60").pack(side="left", padx=8)
+
+        columns = ("id", "created", "trigger", "key", "size", "expire")
+        titles = {"id": "아카이브 id", "created": "만든 시각", "trigger": "사유",
+                  "key": "키 id", "size": "크기", "expire": "만료"}
+        self.tree = ttk.Treeview(frame, columns=columns, show="headings", height=8)
+        for name in columns:
+            self.tree.heading(name, text=titles[name])
+            self.tree.column(name, width=200 if name == "id" else 110, anchor="w")
+        self.tree.pack(fill="both", expand=True, padx=10, pady=8)
+        self.tree.bind("<<TreeviewSelect>>", self._on_pick_archive)
+        ttk.Label(frame, text="복호화하면 사용자 개인정보가 화면·파일에 나타납니다(출력 폴더는 설정의 체크포인트 폴더).",
+                  wraplength=840, foreground="#a60").pack(anchor="w", padx=10, pady=(0, 8))
+
+    def _on_pick_archive(self, _event=None) -> None:
+        selection = self.tree.selection()
+        if selection:
+            values = self.tree.item(selection[0], "values")
+            if values:
+                self.archive_var.set(values[0])
+                self.log("선택한 아카이브: %s" % values[0])
+
+    def clear_archive_pick(self) -> None:
+        self.archive_var.set("")
+
+    def _fill_tree(self, rows: list) -> None:
+        """표를 다시 채운다(메인 스레드에서만 호출 — Tk 규칙)."""
+        if not hasattr(self, "tree"):
+            return
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        for row in rows:
+            created = ""
+            try:
+                created = time.strftime("%Y-%m-%d %H:%M", time.localtime(float(row.get("created_at", 0) or 0)))
+            except (ValueError, OSError):
+                created = str(row.get("created_at", ""))
+            expire = ""
+            try:
+                expire = time.strftime("%Y-%m-%d", time.localtime(float(row.get("expire_at", 0) or 0)))
+            except (ValueError, OSError):
+                expire = ""
+            self.tree.insert("", "end", values=(row.get("_id", ""), created, row.get("trigger", ""),
+                                                str(row.get("key_id", ""))[:12],
+                                                "%s B" % row.get("size", "?"), expire))
 
     def do_list(self) -> None:
-        self.run("list", lambda: {"아카이브": len(commands.list_archives(
-            self.require("project_id"), self.require("sa_path")))})
+        def work() -> dict:
+            rows = commands.list_archives(self.require("project_id"), self.require("sa_path"))
+            self.last_rows = rows
+            return {"아카이브": "%d개" % len(rows),
+                    "최신": (rows[0].get("_id", "") if rows else "없음")}
+
+        self.run("목록", work)
 
     def do_decrypt(self) -> None:
-        archive_id = simpledialog.askstring("opsarchive", "아카이브 ID", parent=self.root) or ""
+        archive_id = (self.archive_var.get() or "").strip()
+        if not archive_id:
+            archive_id = simpledialog.askstring("opsarchive", "아카이브 id(표에서 고르면 자동 입력)",
+                                                parent=self.root) or ""
         if not archive_id:
             return
         key_file = self.pick_key("admin")
-        phrase = self.ask_pass("개인키 패스프레이즈")
-        out_dir = self.settings.get("checkpoints_dir")
-        if not key_file or not phrase:
+        if not key_file:
             return
-        self.run("decrypt", lambda: {"결과": str(commands.decrypt_archive(
-            self.require("project_id"), self.require("sa_path"), archive_id, key_file, phrase,
-            out_dir=out_dir))[:120]})
+        phrase = self.ask_pass("개인키 패스프레이즈")
+        if not phrase:
+            return
+        out_dir = self.settings.get("checkpoints_dir")
 
-    # ------------------------------------------------------------ 탭 6: 검증
+        def work() -> dict:
+            report = commands.decrypt_archive(self.require("project_id"), self.require("sa_path"),
+                                             archive_id, key_file, phrase, out_dir=out_dir)
+            keys = ", ".join(sorted(report.keys())[:12]) if isinstance(report, dict) else ""
+            return {"열림": "예", "최상위 키": keys or "(요약 없음)",
+                    "저장 위치": report.get("_written", "(요약만)") if isinstance(report, dict) else ""}
+
+        self.run("복호화", work)
+
     def _tab_verify(self, notebook) -> None:
         frame = self._frame(notebook, "검증")
-        ttk.Label(frame, text="체크포인트를 서명해 앵커하고(anchor), 서명·연속성·누락을 검증합니다.\n"
-                             "사용자가 준 챌린지(증명 파일)가 있으면 함께 대조하세요.",
-                  wraplength=820, justify="left").pack(anchor="w", padx=8, pady=6)
-        bar = ttk.Frame(frame)
-        bar.pack(fill="x", padx=8)
-        self._button(bar, "anchor(서명)", self.do_anchor)
-        self._button(bar, "verify-chain", self.do_verify)
-        self._button(bar, "verify-chain + 챌린지", self.do_verify_challenge)
+        ttk.Label(frame, text="증거가 **사라지거나 순서가 바뀌지 않았는지**를 관리자가 앱 밖에서 확인하는 단계입니다.\n"
+                             "anchor 는 지금 상태를 서명해 봉인하는 일이고, verify-chain 은 그 서명들을 검사합니다.",
+                  wraplength=840, justify="left").pack(anchor="w", padx=10, pady=(8, 0))
+        steps = self._steps_frame(frame)
+        self._step(steps, 0, "①", "서명 키·핀 상태",
+                   "서명 키가 있고 핀에 그 공개키가 들어 있는지 봅니다(없으면 핀을 다시 만들어야 합니다).",
+                   "vstatus", "상태 확인", self.do_verify_status)
+        self._step(steps, 1, "②", "체크포인트 만들기(anchor)",
+                   "지금 저장소의 (아카이브·시도 항목) 개수와 머리를 서명해 앵커합니다. 주기적으로 돌리세요.",
+                   "anchor", "anchor 실행", self.do_anchor)
+        self._step(steps, 2, "③", "체인 검증(verify-chain)",
+                   "서명·seq 연속성·개수 롤백·체인 갈래·**앵커 뒤 사라진 아카이브**를 검사합니다.",
+                   "verify", "verify 실행", self.do_verify)
+        self._step(steps, 3, "④", "챌린지 대조(사용자 증명)",
+                   "사용자가 보낸 챌린지가 앵커 범위 안에 있는지 봅니다 — 없으면 **누락 의심**입니다.",
+                   "challenge", "챌린지로 검증", self.do_verify_challenge)
+        self.verify_hint = self._hint(frame)
+
+    def do_verify_status(self) -> None:
+        def work() -> dict:
+            out: dict = {}
+            pin_path = str(self.settings.get("pin_path") or "")
+            try:
+                pin = pins.read(config.resolve(pin_path))
+                out["핀"] = "armed=%s 세대=%s" % (pin.get("armed"), pin.get("generation"))
+                out["핀에 서명 키"] = "있음" if pin.get("signing_public_key") else \
+                    "없음 — Render 탭 ⑤ 핀 만들기에서 **서명 키를 골라** 다시 만드세요"
+            except FileNotFoundError:
+                out["핀"] = "없음 — Render 탭 ⑤ 핀 만들기"
+            except Exception as exc:      # noqa: BLE001
+                out["핀"] = "읽기 실패(%s)" % getattr(exc, "code", type(exc).__name__)
+            keys = config.key_files()
+            out["서명 키 파일"] = os.path.basename(keys["sign"][0]) if keys["sign"] else "없음 — 키 탭 ③"
+            directory = config.resolve(str(self.settings.get("checkpoints_dir") or ""))
+            seqs = sorted(int(n[:-5]) for n in (os.listdir(directory) if os.path.isdir(directory) else [])
+                          if n.endswith(".json") and n[:-5].isdigit())
+            out["체크포인트"] = ("%d개 (마지막 seq %d)" % (len(seqs), seqs[-1])) if seqs else "없음 — ② anchor 실행"
+            out["앵커 목록 파일"] = "있음" if os.path.isdir(os.path.join(directory, "anchors")) else "없음"
+            try:
+                entries = gcp.Firestore(self.require("project_id"), self.require("sa_path")).list(
+                    "evidence_chain/entries", page_size=300)
+                out["체인 시도·결과 항목"] = "%d개" % len(entries)
+            except Exception as exc:      # noqa: BLE001
+                out["체인 항목"] = "확인 실패(%s)" % getattr(exc, "code", type(exc).__name__)
+            return out
+
+        self.run("검증 상태", work)
 
     def do_anchor(self) -> None:
         sign_file = self.pick_key("sign")
