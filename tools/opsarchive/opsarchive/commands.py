@@ -553,10 +553,17 @@ def make_pin(key_file: str, passphrase: str, *, health_url: str, out: str,
 
 def pin_variables(pin_path: str) -> dict:
     """핀 파일에서 GitHub Actions 변수로 올릴 이름/값을 만든다(공개키·지문만 — 비밀 없음)."""
-    pin = pins.read(config.resolve(pin_path))
+    resolved = config.resolve(pin_path)
+    try:
+        pin = pins.read(resolved)
+    except FileNotFoundError as exc:
+        raise CommandError("no_pin_file") from exc          # pin-check 와 같은 코드로 맞춘다
     import hashlib
-    with open(config.resolve(pin_path), "rb") as fh:
-        digest = hashlib.sha256(fh.read()).hexdigest()
+    try:
+        with open(resolved, "rb") as fh:
+            digest = hashlib.sha256(fh.read()).hexdigest()
+    except OSError as exc:
+        raise CommandError("no_pin_file") from exc
     return {
         "EVIDENCE_PIN_FINGERPRINT": str(pin.get("fingerprint_sha256", "")),
         "EVIDENCE_PIN_GENERATION": str(pin.get("generation", 0)),

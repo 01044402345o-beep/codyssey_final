@@ -1185,7 +1185,7 @@ class App:
             return
         self.run("pin", lambda: commands.make_pin(
             key_file, phrase, health_url=self.require("base_url"), out=self.settings.get("pin_path"),
-            generation=int(self.settings.get("generation") or 1), signing_public=signing))
+            generation=None, signing_public=signing))
 
     def do_pin_check(self) -> None:
         self.run("pin-check", lambda: commands.check_pin(self.settings.get("pin_path"),
