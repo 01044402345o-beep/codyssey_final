@@ -23,6 +23,15 @@ jobs:
       - name: 의존성 설치
         run: pip install -r backend/requirements.txt
 
+      - name: 증거 봉인 도구 의존성 설치
+        run: pip install -r tools/opsarchive/requirements.txt
+
+      - name: 증거 봉인 도구 테스트 (앱과 독립 CLI)
+        working-directory: tools/opsarchive
+        env:
+          PYTHONPATH: .
+        run: python -m unittest discover -s tests -t . -v
+
       - name: 백엔드 테스트 (모델 동적 선택 · 최소 30회 시도)
         working-directory: backend
         run: python -m unittest discover -s tests -t . -v
