@@ -273,6 +273,7 @@ def main(argv: list[str] | None = None) -> int:
         print("실패: " + (getattr(exc, "code", "") or type(exc).__name__), file=sys.stderr)
         return 3
     except Exception as exc:            # noqa: BLE001 — 값만 남긴다(스택에 비밀을 싣지 않는다)
-        print("실패: %s" % type(exc).__name__, file=sys.stderr)
+        # 타입만 찍으면 원인을 알 수 없다(실제로 그 때문에 막혔다). 메시지를 잘라서 함께 보여준다.
+        print("실패: %s: %s" % (type(exc).__name__, str(exc)[:300]), file=sys.stderr)
         return 3
     return 2
