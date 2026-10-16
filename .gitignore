@@ -64,6 +64,11 @@ serviceAccountKey*.json
 admin-*.key
 *.mfa
 
+# opsarchive 관리자 비밀·설정 — 저장소에 절대 넣지 않는다
+tools/opsarchive/.env
+.env
+settings.json
+
 # 파이썬 캐시(테스트 실행 때 생긴다)
 __pycache__/
 *.pyc

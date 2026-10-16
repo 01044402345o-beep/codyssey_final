@@ -19,7 +19,7 @@ import json
 import sys
 
 from . import VERSION, commands
-from . import container as C
+from . import chain, config, container as C, firebase, gcp, pins, render, witness
 
 
 def _print(data: object) -> None:
@@ -103,10 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--out", default="", help="평문을 저장할 디렉터리(없으면 요약만)")
 
     sub.add_parser("tui", help="rich 기반 화면(없으면 안내만)")
+    sub.add_parser("gui", help="관리자 창(tkinter — 설치 필요 없음). 키·발행·검증을 버튼으로")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
+    config.bootstrap()                     # .env 를 환경변수로 올리고 settings.json 을 읽는다
     args = build_parser().parse_args(argv)
     try:
         if args.cmd == "selftest":
@@ -190,8 +192,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "tui":
             from . import tui
             return tui.run()
-    except commands.CommandError as exc:
-        print("실패: " + exc.code, file=sys.stderr)
+        if args.cmd == "gui":
+            from . import gui
+            return gui.run()
+    except (commands.CommandError, render.RenderError, gcp.GcpError, firebase.FirebaseError,
+            pins.PinError, chain.ChainError, C.ContainerError, witness.WitnessError) as exc:
+        # 원인을 **코드로** 보여준다(RenderError 만 던지면 운영자가 원인을 알 수 없다 —
+        # 실제로 그 때문에 막힌 사례가 있었다). 값에는 토큰·개인키가 담기지 않는다.
+        print("실패: " + (getattr(exc, "code", "") or type(exc).__name__), file=sys.stderr)
         return 3
     except Exception as exc:            # noqa: BLE001 — 값만 남긴다(스택에 비밀을 싣지 않는다)
         print("실패: %s" % type(exc).__name__, file=sys.stderr)

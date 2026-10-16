@@ -49,17 +49,45 @@ def render_bin() -> str:
     return found
 
 
+def _argv(binary: str, args: list[str]) -> list[str]:
+    """Windows 에서 `render` 는 `render.cmd` 다 — .cmd/.bat 은 CreateProcess 로 직접 못 띄우므로
+    `cmd.exe /c` 를 거친다(이걸 빼면 'cli_failed' 만 보이고 원인을 알 수 없다)."""
+    if os.name == "nt" and binary.lower().endswith((".cmd", ".bat")):
+        return [os.environ.get("COMSPEC", "cmd.exe"), "/c", binary] + args
+    return [binary] + args
+
+
 def run_cli(args: list[str], timeout: int = CLI_TIMEOUT) -> str:
-    """`render` CLI 실행(비대화형). 출력만 돌려주고 실패는 값으로 알린다."""
+    """`render` CLI 실행(비대화형). 출력만 돌려주고 실패는 값으로 알린다.
+
+    실패 시 `stderr` 의 **첫 줄을 정리해** 힌트로 담는다(토큰·경로 노출은 마스킹). 운영자가
+    "왜 실패했는지"를 볼 수 없으면 도구가 쓸모없다 — 다만 자격증명은 절대 담지 않는다.
+    """
     env = dict(os.environ, RENDER_OUTPUT=os.environ.get("RENDER_OUTPUT", "text"))
+    command = _argv(render_bin(), args)
     try:
-        done = subprocess.run([render_bin()] + args, capture_output=True, text=True,
-                              timeout=timeout, shell=False, env=env)  # noqa: S603
+        done = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=timeout, shell=False, env=env)  # noqa: S603
+    except FileNotFoundError as exc:
+        raise RenderError("no_cli") from exc
     except subprocess.TimeoutExpired as exc:
-        raise RenderError("cli_failed") from exc
+        raise RenderError("cli_timeout") from exc
     if done.returncode != 0:
-        raise RenderError("cli_failed")
+        raise RenderError("cli_failed:" + _hint(done.stderr or done.stdout))
     return done.stdout
+
+
+def _hint(text: str, width: int = 160) -> str:
+    """stderr 에서 사람이 읽을 한 줄만 남긴다(시크릿·긴 경로 마스킹)."""
+    import re
+    line = ""
+    for candidate in (text or "").splitlines():
+        cleaned = candidate.strip()
+        if cleaned:
+            line = cleaned
+            break
+    line = re.sub(r"(rnd_|ghp_|github_pat_|AIza)[A-Za-z0-9_\-]{6,}", "[MASKED]", line)
+    return line[:width]
 
 
 def services() -> list[dict]:

@@ -1,7 +1,7 @@
-# 관리자 CLI 전용 의존성. 앱(backend/requirements.txt)과 독립이다.
-# 컨테이너 형식(MFA1)은 cryptography 만 쓴다 — 다른 앱과 버전을 맞추기 위해 고정한다.
+# Admin CLI dependencies for opsarchive (independent from backend/requirements.txt).
+# NOTE: keep this file ASCII-only. pip reads requirements.txt with the OS locale encoding on
+# Windows (cp949), so non-ASCII comments here break `pip install -r requirements.txt`.
 cryptography==50.0.2
-# Firestore 접근은 서비스 계정 토큰만 필요하다(google-auth 는 urllib3 트랜스포트를 포함한다).
 google-auth==2.61.0
-# TUI 는 선택이다. 없으면 CLI 로 그대로 쓸 수 있다.
+# TUI/GUI: rich is optional (the GUI uses tkinter from the standard library).
 rich>=13.7
