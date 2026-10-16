@@ -1275,9 +1275,10 @@ function scrLogin() {
         <button class="btn primary block" type="button" data-act="login-email">${signup ? '가입하기' : '이메일로 계속하기'}</button>
         <button class="btn soft block" type="button" data-act="login-switch">${signup ? '이미 계정이 있어요' : '계정이 없어요 · 가입하기'}</button>
       </form><p class="small" style="text-align:center;margin:8px 0">또는</p>`;
-  const body = S.user
+  const body = (S.user
     ? signed
-    : `${window.FirebaseAuth && FirebaseAuth.enabled ? emailForm : ''}<button class="gbtn" data-act="login">${I.google}Google로 계속하기</button>`;
+    : `${window.FirebaseAuth && FirebaseAuth.enabled ? emailForm : ''}<button class="gbtn" data-act="login">${I.google}Google로 계속하기</button>`)
+    + withdrawProofBlock();
   return frame(`<div class="login">
     <div class="stamp" aria-hidden="true">TRIP · ENGLISH<br>PASSPORT<br>— 2026 —</div>
     <div class="eyebrow" style="margin-top:130px">Travel English, planned</div>
@@ -2172,6 +2173,74 @@ function saveWithdrawProof(proof) {
 function withdrawProof() {
   try { const raw = STORE && STORE.getItem(WITHDRAW_PROOF_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
 }
+/* 증명 상태: none(요청한 적 없음) · unknown(요청했는데 영수증이 없다 = **상태 불명**) · confirmed(영수증 받음) */
+function withdrawProofState() {
+  const proof = withdrawProof();
+  if (!proof || !proof.challenge) return { state: 'none', proof: null };
+  return { state: proof.receipt ? 'confirmed' : 'unknown', proof: proof };
+}
+function proofWhen(ms) {
+  try { return new Date(ms).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }); }
+  catch (e) { return ''; }
+}
+/* 탈퇴 증명 카드 — 사용자가 자기 눈으로 "영수증을 받았는지"를 볼 수 있게 한다.
+   영수증이 없으면 조용히 넘어가지 않고 "상태 불명"으로 보여주고, 보관·보고·삭제를 제공한다.
+   (사전 커밋먼트는 사용자가 챌린지를 들고 있어야 의미가 있다 — 기기를 잃으면 증거도 잃는다.) */
+function withdrawProofBlock() {
+  const info = withdrawProofState();
+  if (info.state === 'none') return '';
+  const when = proofWhen(info.proof.at);
+  const confirmed = info.state === 'confirmed';
+  const receipt = info.proof.receipt || {};
+  const title = confirmed ? '탈퇴 증명: 영수증 받음' : '탈퇴 증명: 상태 불명';
+  const detail = confirmed
+    ? `이 기기에서 탈퇴를 요청했고 서버가 영수증을 돌려줬어요(${esc(when)}). 관리자가 앵커된 기록과 대조할 수 있어요.`
+    : `이 기기에서 탈퇴를 요청했는데 <b>서버 영수증을 받지 못했어요</b>(${esc(when)}). 탈퇴가 끝났는지 확인되지 않은 상태예요 — 다시 시도하거나, 증명을 내려받아 관리자에게 보여 주세요.`;
+  const seq = (receipt.seq === undefined || receipt.seq === null) ? '-' : String(receipt.seq);
+  return `<div class="card" style="margin-top:10px">
+    <b>${title}</b>
+    <div class="small" style="margin:6px 0">${detail}</div>
+    <div class="small" style="opacity:.75">챌린지 ${esc(String(info.proof.challenge).slice(0, 16))}… · 순번 ${esc(seq)} · 결과 ${esc(String(receipt.outcome || '-'))}</div>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <button class="btn soft" data-act="proof-download">증명 내려받기</button>
+      ${confirmed ? '' : '<button class="btn soft" data-act="proof-report">서버에 보고</button>'}
+      <button class="btn soft" data-act="proof-clear">이 기기에서 지우기</button>
+    </div></div>`;
+}
+function downloadWithdrawProof() {
+  const info = withdrawProofState();
+  if (info.state === 'none') return;
+  const payload = JSON.stringify({
+    schema: 'SEAL-RECEIPT-v1', exported_at: new Date().toISOString(),
+    challenge: info.proof.challenge, requested_at: new Date(info.proof.at).toISOString(),
+    receipt: info.proof.receipt || null,
+    note: info.proof.receipt
+      ? '이 파일을 보관하세요. 관리자가 앵커된 기록과 대조할 수 있습니다.'
+      : '서버 영수증을 받지 못했습니다(상태 불명). 관리자에게 이 파일을 보여 주세요.',
+  }, null, 2);
+  try {
+    const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'withdraw-proof-' + String(info.proof.challenge).slice(0, 12) + '.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('증명 파일을 내려받았어요. 기기를 바꾸기 전에 보관해 두세요.');
+  } catch (e) { toast('이 브라우저에서는 파일로 저장할 수 없어요.'); }
+}
+function clearWithdrawProof() {
+  try { if (STORE) STORE.removeItem(WITHDRAW_PROOF_KEY); } catch (e) { /* 저장소 막힘 */ }
+  toast('이 기기에서 증명을 지웠어요.');
+  render();
+}
+function reportSavedProof() {
+  const info = withdrawProofState();
+  if (info.state !== 'unknown') return Promise.resolve();
+  // 서버에 "영수증을 못 받았다"고 보고한다(증거 봉인 트리거). 로그인 상태에서만 가능하다.
+  return reportWithdrawIssue('no_receipt', true);
+}
 /* 관리자 경로: 서버가 서비스 계정으로 탈퇴 흔적·토큰 취소·기록 삭제·계정 삭제를 한 번에 한다.
    반환: { status: 'ok'|'unavailable'|'failed', receipt: {...}|null }
    200 이어도 본문 계약(erased:true)을 확인한다 — 프록시·CDN 의 200 을 성공으로 오인하지 않게. */
@@ -2386,6 +2455,10 @@ const ACT = {
   'logout-home': () => confirmBox('로그아웃할까요?',
     '학습 진도와 여행 설정은 계정에 저장돼 있어요. 다시 로그인하면 이어서 할 수 있어요.',
     '로그아웃', () => { S.modal = null; ACT.logout(); }, { danger: true }),
+  // 탈퇴 증명 카드 동작
+  'proof-download': () => downloadWithdrawProof(),
+  'proof-report': () => { reportSavedProof().catch(() => {}); toast('관리자에게 보고했어요.'); },
+  'proof-clear': () => clearWithdrawProof(),
   // 탈퇴: 계정과 저장된 기록을 모두 지운다(되돌릴 수 없음).
   'withdraw': () => confirmBox('탈퇴하면 계정과 기록이 모두 지워져요',
     `학습 진도·복습 목록·말하기 동의·여행 설정이 계정에서 지워지고, 이 브라우저에 저장된 같은 기록도 함께 지워져요. <b>되돌릴 수 없어요.</b>`,
