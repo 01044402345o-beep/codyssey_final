@@ -767,12 +767,26 @@ class App:
 
     def do_pin(self) -> None:
         key_file = self.pick_key("admin")
-        phrase = self.ask_key_pass(key_file, "개인키 패스프레이즈")
-        if not key_file or not phrase:
+        if not key_file:
             return
-        sign_file = self.pick_key("sign")
-        sign_phrase = self.ask_pass("서명키 패스프레이즈") if sign_file else ""
-        signing = C.sign_public(C.load_private_key(sign_file, sign_phrase)) if sign_file else None
+        sign_files = config.key_files()["sign"]
+        signing = None
+        if sign_files:
+            sign_file = self.pick_key("sign")
+            if sign_file:
+                phrase = self.ask_key_pass(sign_file, "서명 키 패스프레이즈")
+                if phrase:
+                    signing = C.sign_public(C.load_private_key(sign_file, phrase))
+            if signing is None:
+                # 서명 키 없는 핀은 anchor/verify-chain 을 못 쓰게 만든다 — 이 고리를 여기서 끊는다.
+                if not messagebox.askyesno(
+                        "opsarchive",
+                        "서명 키를 넣지 않으면 검증 탭의 anchor/verify-chain 을 쓸 수 없습니다.\n"
+                        "서명 키를 고르는 것을 권합니다. 그래도 서명 키 없이 핀을 만들까요?"):
+                    return
+        phrase = self.ask_key_pass(key_file, "개인키 패스프레이즈")
+        if not phrase:
+            return
         self.run("pin", lambda: commands.make_pin(
             key_file, phrase, health_url=self.require("base_url"), out=self.settings.get("pin_path"),
             generation=int(self.settings.get("generation") or 1), signing_public=signing))
