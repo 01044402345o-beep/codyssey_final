@@ -105,14 +105,32 @@ def services() -> list[dict]:
     return out
 
 
+def _norm(name: str) -> str:
+    """이름 비교용 정규화 — 대소문자·하이픈/밑줄 차이를 흡수한다.
+
+    앱 호스트는 `codyssey-final.onrender.com`(하이픈)인데 Render **서비스 이름**은
+    `codyssey_final`(밑줄)이다. 사람이 자주 바꿔 쓰고, 그 차이로 not_found 가 나면 원인을 찾기 어렵다.
+    """
+    return (name or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def service_names() -> list[str]:
+    """이 워크스페이스의 서비스 이름(선택 창에서 쓰라고 그대로 노출한다)."""
+    return [s["name"] for s in services()]
+
+
 def service_id(name: str) -> str:
-    """이름으로 서비스 ID 찾기(부분 일치 허용, 여러 개면 실패)."""
+    """이름으로 서비스 ID 찾기(정규화 후 부분 일치 허용). 못 찾으면 **후보 목록을 함께** 알린다."""
     items = services()
-    exact = [s for s in items if s["name"] == name]
-    near = exact or [s for s in items if name and name in s["name"]]
-    if len(near) != 1:
-        raise RenderError("not_found")
-    return near[0]["id"]
+    exact = [s["id"] for s in items if s["name"] == name]
+    if len(exact) == 1:
+        return exact[0]
+    wanted = _norm(name)
+    near = [s["id"] for s in items if wanted and wanted in _norm(s["name"])]
+    if len(near) == 1:
+        return near[0]
+    hint = ", ".join(s["name"] for s in items)[:180]
+    raise RenderError("not_found('%s') — 사용 가능: %s" % (name, hint or "(없음)"))
 
 
 def _call(method: str, url: str, body=None, key: str | None = None) -> dict:
