@@ -63,3 +63,7 @@ serviceAccountKey*.json
 # 실수로 --dir . 로 만들었을 때를 막는 안전망이다(잃으면 증거를 영영 못 연다).
 admin-*.key
 *.mfa
+
+# 파이썬 캐시(테스트 실행 때 생긴다)
+__pycache__/
+*.pyc
