@@ -11,6 +11,9 @@ on:
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "security/evidence-key-pin.json"
   push:
     branches: [main]
     paths:
