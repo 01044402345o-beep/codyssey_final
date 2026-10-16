@@ -24,6 +24,7 @@ REQUIRED_IDS = {
     "include_secrets",
     # 앱(evidence.py)이 실제로 읽는 변수에 대응하는 새 개념 노드들.
     "max_bytes", "key_generation", "gh_repo", "max_source_logs",
+    "iam_check_enabled",
 }
 
 SETTINGS = {
