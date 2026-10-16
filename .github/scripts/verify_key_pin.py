@@ -52,11 +52,34 @@ def check(pin: dict, health: dict) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="증거 봉인 키 핀 검증")
-    parser.add_argument("pin")
+    parser.add_argument("pin", nargs="?", default="", help="핀 JSON 파일(저장소 밖). CI 는 쓰지 않는다")
+    parser.add_argument("--expected-fingerprint", default="",
+                        help="CI: Actions 변수 vars.EVIDENCE_PIN_FINGERPRINT")
+    parser.add_argument("--expected-generation", default="",
+                        help="CI: Actions 변수 vars.EVIDENCE_PIN_GENERATION")
+    parser.add_argument("--health-url", default="", help="CI: Actions 변수 vars.EVIDENCE_PIN_HEALTH_URL")
     parser.add_argument("--health-file", default="", help="테스트용: /health JSON 파일")
     args = parser.parse_args(argv)
 
-    pin = load_pin(args.pin)
+    if args.expected_fingerprint or args.expected_generation:
+        # CI 경로: 기대값은 **Actions 변수**에서 온다(공개키·지문이라도 저장소에는 두지 않는다).
+        if not args.expected_fingerprint:
+            print("::error::Actions 변수 EVIDENCE_PIN_FINGERPRINT 가 비어 있습니다 — "
+                  "fail-closed 로 실패합니다(opsarchive pin-publish 로 올리세요)")
+            return 1
+        try:
+            generation = int(args.expected_generation)
+        except ValueError:
+            print("::error::Actions 변수 EVIDENCE_PIN_GENERATION 이 숫자가 아닙니다 — fail-closed")
+            return 1
+        pin = {"armed": True, "fingerprint_sha256": args.expected_fingerprint,
+               "generation": generation,
+               "health_url": args.health_url or "https://codyssey-final.onrender.com"}
+    else:
+        if not args.pin:
+            print("::error::핀 파일 경로나 --expected-fingerprint 중 하나가 필요합니다")
+            return 1
+        pin = load_pin(args.pin)
     if not pin.get("armed"):
         print("::warning::핀 미활성(armed=false) — keygen/pin 후 활성화하세요")
         return 0
