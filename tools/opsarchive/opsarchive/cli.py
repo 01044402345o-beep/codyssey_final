@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
 from . import VERSION, commands
@@ -75,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--service", required=True)
     q.add_argument("--key", required=True)
 
-    sub.add_parser("observe", help="플랫폼 접근 로그(앱 밖 증인)와 체인 시도 항목을 비교한다")
+    q = sub.add_parser("observe", help="플랫폼 접근 로그(앱 밖 증인)와 체인 시도 항목을 비교한다")
     q.add_argument("--project", required=True)
     q.add_argument("--sa", required=True)
     q.add_argument("--service", required=True, help="Render 서비스 이름")
@@ -169,16 +170,44 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.cmd == "env-set":
             # 값은 **절대 명령줄 인자로 받지 않는다**(셸 히스토리·프로세스 목록에 남는다).
+            value = ""
+            source = ""
             if args.from_file:
-                with open(args.from_file, "r", encoding="utf-8-sig") as fh:
-                    value = fh.read()
+                path = config.resolve(args.from_file)      # 저장소 상대 경로도 허용
+                try:
+                    with open(path, "r", encoding="utf-8-sig") as fh:
+                        value = fh.read()
+                    source = path
+                except OSError as exc:
+                    print("실패: no_value_file('%s') — %s" % (path, exc.strerror or "열 수 없음"),
+                          file=sys.stderr)
+                    print("힌트: .env 의 GOOGLE_APPLICATION_CREDENTIALS 경로를 쓰려면 --from-file 을 생략하세요.",
+                          file=sys.stderr)
+                    return 3
             elif args.stdin:
-                value = sys.stdin.read()
+                value, source = sys.stdin.read(), "stdin"
+            elif os.environ.get(args.key):
+                # .env(또는 셸 환경)에 같은 이름이 있으면 그것을 쓴다 — 같은 값을 두 번 입력하지 않게.
+                # (PowerShell 세션에는 .env 값이 없다. 그래서 `$env:X | ...` 는 빈 값이 됐다.)
+                value, source = os.environ[args.key], ".env/환경변수 %s" % args.key
+            elif args.key == "FIREBASE_SERVICE_ACCOUNT_JSON" and os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+                # .env 에 이미 적어 둔 서비스 계정 경로를 기본값으로 쓴다(같은 경로를 또 입력하지 않게).
+                path = config.resolve(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
+                try:
+                    with open(path, "r", encoding="utf-8-sig") as fh:
+                        value = fh.read()
+                    source = path
+                except OSError as exc:
+                    print("실패: no_value_file('%s') — %s" % (path, exc.strerror or "열 수 없음"),
+                          file=sys.stderr)
+                    return 3
             else:
                 print("실패: --from-file <파일> 또는 --stdin 을 쓰세요(값을 인자로 받지 않습니다)",
                       file=sys.stderr)
                 return 2
-            _print(commands.env_set(args.service, args.key, value.strip()))
+            result = commands.env_set(args.service, args.key, value.strip())
+            result["source"] = source
+            _print(result)
             return 0
         if args.cmd == "env-read":
             _print(commands.env_read(args.service, args.key))
