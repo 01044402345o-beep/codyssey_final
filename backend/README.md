@@ -11,7 +11,8 @@
 | GET | `/auth/config` | Firebase 웹 공개 설정. 없으면 `enabled: false` (데모 로그인) |
 | GET | `/auth/me` | Firebase ID 토큰의 계정 |
 | GET·PUT·DELETE | `/user/state` | 그 토큰 uid 의 진도·복습 목록·말하기 동의·여행 입력(나라·도시·날짜·학습 시작일). 홈에서 고친 여행 입력도 같은 문서다. 학습 카드를 열기 전의 빈 카드는 카드 없음으로 저장한다. 장소·문장 본문은 없음(화면이 규칙으로 다시 만든다). DELETE 는 그 기록만 지운다(탈퇴의 폴백). 익명 로그인은 거절. 탈퇴한 uid(흔적 `deleted/{uid}` 있음)는 GET·PUT 모두 **403 `account_deleted`** 로 거부한다 |
-| POST | `/account/erase` | 탈퇴(관리자). 서비스 계정으로 탈퇴 흔적 `deleted/{uid}` 기록 → 토큰 취소(`validSince`) → Firestore 문서 삭제 → Auth 계정 삭제(최근 로그인 불필요). 흔적은 관리자만 접근하므로 규칙 변경이 필요 없다. 키(`FIREBASE_SERVICE_ACCOUNT_JSON`)가 없으면 503 `admin_unavailable`. 토큰 필요 |
+| POST | `/diagnostics/withdraw` | 화면이 보고하는 탈퇴 불일치(부분 실패·다른 기기 탈퇴). 인증·레이트리밋 필요. 개인정보·토큰은 받지 않는다(상태 코드만). `EVIDENCE_PUBKEY` 가 있으면 증거를 봉인해 Firestore 에 남기고 이슈로 메타데이터만 통보한다(스로틀: uid 1시간 1회·전역 5/일) |
+| POST | `/account/erase` | 탈퇴(관리자). 서비스 계정으로 탈퇴 흔적 `deleted/{uid}` 기록 → 토큰 취소(`validSince`) → Firestore 문서 삭제 → Auth 계정 삭제(최근 로그인 불필요). 흔적은 관리자만 접근하므로 규칙 변경이 필요 없다. **실패하면 단계 원장과 함께 증거를 봉인**하고, 성공해도 사후 검증(`verify_erased`)이 불일치면 봉인한다. 키(`FIREBASE_SERVICE_ACCOUNT_JSON`)가 없으면 503 `admin_unavailable`. 토큰 필요 |
 
 `GEMINI_API_KEY` 가 없으면 **목업으로 응답**합니다. 그래서 키 없이도 배포·시연이 됩니다.
 
@@ -80,6 +81,13 @@ python scripts/check_negatives.py
 | `AI_CALL_TIMEOUT` | `60` (초) | API 요청 1회의 제한 시간 (전체 제한 시간은 없음) |
 | `AI_MODELS_TTL` | `600` (초) | 모델 목록 캐시 시간 |
 | `ALLOW_ORIGINS` | 프론트 배포 주소 | 기본 `*` |
+| `EVIDENCE_PUBKEY` | 관리자 공개키 `x25519:<base64url>` | 탈퇴 실패 **증거 봉인**의 수신자 공개키. **없으면 기능 전체가 꺼진다**(기본 꺼짐). 개인키는 관리자 로컬(`tools/opsarchive`)에만 있고 앱은 복호화할 수 없다. `docs/ops/EVIDENCE_SEAL.md` 참조 |
+| `EVIDENCE_KEY_GENERATION` | 정수(기본 1) | 키 회전 세대. `/health` 의 `evidence.generation` 으로 노출되어 핀 검증이 대조한다(회전과 대입 구분) |
+| `EVIDENCE_GH_TOKEN` / `EVIDENCE_GH_REPO` | PAT(`issues:write` 한정) / `owner/repo` | 증거 이슈 통보용. 없으면 보관만 하고 통보는 건너뛴다. 이슈에는 **메타데이터만** 간다 |
+| `EVIDENCE_MAX_BYTES` / `EVIDENCE_MAX_SOURCE_BYTES` / `EVIDENCE_MAX_LOGS_BYTES` | 바이트(기본 1MB/512KB/64KB) | 수집 하드 캡. 넘으면 잘라내고 `truncated` 표시 |
+| `EVIDENCE_PER_UID_SECONDS` / `EVIDENCE_DAILY_CAP` | 초(3600) / 회(5) | 스로틀(프로세스 단위). 남용 시 아카이브 폭주를 막는다 |
+| `EVIDENCE_TTL_DAYS` | 일(기본 90) | Firestore `expire_at` — TTL 정책이 자동 삭제한다(암호 파기) |
+| `EVIDENCE_INCLUDE_SECRETS` | `1` 이면 스크럽 해제 | 기본은 자격증명을 `[MASKED]` 로 지운다. 권장하지 않는다 |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | 서비스 계정 JSON **문자열 전체** | 탈퇴(`POST /account/erase`) 전용. 있으면 탈퇴 흔적(`deleted/{uid}`) + 토큰 취소 + 문서 삭제 + Auth 계정 삭제(최근 로그인 불필요). 없으면 503 `admin_unavailable` 이고 화면은 규칙 삭제 + 클라이언트 `deleteUser` 로 되돌아간다. **코드·저장소에 두지 않는다**(Render 환경변수 시크릿). `docs/deploy/DEPLOY_RUNBOOK.md` E 참조 |
 
 ### 무료 플랜 주의

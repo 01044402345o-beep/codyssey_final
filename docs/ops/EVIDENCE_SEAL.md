@@ -122,10 +122,21 @@ scrypt(n=2^15, r=8, p=1) 로 패스프레이즈 유도. 파일 권한 0600.
 - 비밀은 `bytearray` 로 다루고 사용 즉시 덮어쓴다(최선노력).
 - CLI 는 앱 상태를 읽지 않는다(아카이브만 다룬다).
 
-## 7. 앱 훅 (`backend/app/evidence.py`) — **다음 단계(아직 없음)**
+## 7. 앱 훅 (`backend/app/evidence.py`) — **구현됨**
 
-아래는 설계이며, 이 파일과 배선(원장·사후 검증·`POST /diagnostics/withdraw`·`/health` 의 `evidence` 지문)은
-다음 PR 에서 만든다. 그 전까지 `publish`/`doctor` 의 `/health` 지문 대조는 `health_has_evidence: false` 로 보고된다.
+- `EVIDENCE_PUBKEY` 가 없으면 **완전 비활성**(기본 꺼짐). 있으면 수집·봉인·보관·통보가 켜지고, 루트 로거에 링 버퍼가 붙는다.
+- 수집(`collect`): 신원(uuid·시각·커밋·서비스), 단계 원장, 사후 검증 결과, 예외(타입·메시지·트레이스백), 최근 로그(링 버퍼), **소스 트리**(경로·크기 + 내용), 런타임(환경변수 **이름**만·파이썬 버전), `uid`는 솔트 없는 해시 16자.
+- 캡: 총 1MB / 소스 512KB / 로그 64KB — 넘으면 잘라내고 `truncated` 에 표시한다. **자격증명은 기본 스크럽**(`[MASKED]`), `EVIDENCE_INCLUDE_SECRETS=1` 로 해제.
+- 저장(`store`): MFA1 봉인문을 512KB 청크로 `evidence_archives/{id}` + `.../parts/{n}` 에 쓴다(관리자 권한, 규칙 우회). 모든 문서에 `expire_at`(기본 90일) → TTL 자동 삭제 = 암호 파기.
+- 통보(`notify`): GitHub 이슈에 **메타데이터만**(id·trigger·key_id·commit·sha256·크기·원장·검증·경로). 토큰/리포가 없으면 건너뛴다. 실패해도 보관은 되돌리지 않는다.
+- 스로틀: uid 당 1시간 1회, 전역 하루 5회(프로세스 단위 — 다중 인스턴스면 느슨해진다). **어떤 실패도 예외를 밖으로 내보내지 않는다.**
+- 배선: `POST /account/erase` 가 단계 원장을 넘기고, 실패하면 `erase_failed`, 성공해도 `verify_erased` 가 불일치면 `verify_mismatch` 로 백그라운드 봉인. 화면 보고는 `POST /diagnostics/withdraw`(인증·레이트리밋).
+- `/health` 에 `evidence: {key_id, fingerprint, generation}` 노출 — 핀 검증이 보는 값이다.
+- 스코프: 기존 `datastore` 로 충분하다(Storage 를 쓰지 않는다). 저장은 REST 직접 호출이라 새 무거운 의존성이 없다(`cryptography` 는 requirements 에 고정).
+
+환경변수: `EVIDENCE_PUBKEY`, `EVIDENCE_KEY_GENERATION`, `EVIDENCE_GH_TOKEN`, `EVIDENCE_GH_REPO`,
+`EVIDENCE_MAX_BYTES`, `EVIDENCE_MAX_SOURCE_BYTES`, `EVIDENCE_MAX_LOGS_BYTES`,
+`EVIDENCE_PER_UID_SECONDS`, `EVIDENCE_DAILY_CAP`, `EVIDENCE_TTL_DAYS`, `EVIDENCE_INCLUDE_SECRETS`.
 
 - `EVIDENCE_PUBKEY` 가 없으면 **완전 비활성**(기본 꺼짐). 있으면 봉인·업로드가 켜진다.
 - 저장은 기존 스타일대로 **REST 직접 호출**(Firestore 문서 쓰기) — 새 무거운 의존성을 넣지 않는다. 서비스 계정에 `roles/datastore.user`(이미 있음)만 필요하다.
@@ -172,7 +183,7 @@ scrypt(n=2^15, r=8, p=1) 로 패스프레이즈 유도. 파일 권한 0600.
 - 회전과 대입을 구분한다: 회전이면 `generation` 을 **올려서** 커밋한다. 파일이 세대를 **낮추는 것을 거부**한다(`PinError: generation_regression`).
 - CI `.github/workflows/verify-key-pin.yml`(cron 6시간): 핀 파일과 `/health` 의 `evidence.fingerprint`·`generation` 을 대조한다. 서드파티 액션을 쓰지 않고 `curl`+표준 라이브러리만 쓴다(액션 SHA 고정 대상 자체를 없앤다).
   - `armed: false` 동안은 **경고만** 하고 통과(레드 크론 소음 방지), `armed: true` 부터는 불일치·미보고·연결 실패가 **실패**다.
-- 지금은 `armed: false` 다 — 앱 훅이 `/health` 에 `evidence.key_id/fingerprint/generation` 을 노출해야 활성화된다(§7 미구현 항목).
+- 지금은 `armed: false` 다 — 앱은 이미 `/health` 에 `evidence` 를 노출하므로, 관리자가 키를 만들고 `pin` 으로 채우면 활성화된다(§8 7단계).
 
 ### 아직 안 넣은 겹(다음 단계)
 - **(b) 매니페스트 서명 + (d) 해시체인·앱 밖 앵커**: 관리자 오프라인 Ed25519 키로 `{count, head, prev_head}` 체크포인트를 서명하고 저장소 밖(로컬·서명 태그·투명성 로그)에 앵커. 누락 대조는 `verify` 가 한다.
@@ -188,7 +199,7 @@ scrypt(n=2^15, r=8, p=1) 로 패스프레이즈 유도. 파일 권한 0600.
 
 ## 10. 남은 위험 / 미검증 (라운드 6 교차검증 + 발신자 인증 조사 뒤 갱신)
 
-- **앱 훅이 아직 없다**(§7). 그래서 지금은 "탈퇴 실패 → 봉인 → 이슈"가 실제로 돌지 않는다. 실계정 왕복도 미관측이다.
+- **실제 탈퇴 실패 왕복은 아직 관측하지 않았다**(§7 은 구현됐지만 실계정·실배포에서 돌려보지 않았다).
 - **발신자 인증 없음**(§1). 지문 핀 고정으로 "예상 밖 키"만 잡는다.
 - **Python 메모리 0화 불가** — 언어 한계. 경계는 "앱에 복호화 가능한 것 없음"이다.
 - **아카이브가 곧 미삭제 개인정보의 사본**이다 — TTL·암호 파기로 수명을 제한한다.

@@ -206,9 +206,10 @@ with sync_playwright() as p:
     page.wait_for_timeout(150)
     page.evaluate("pushPayload('uidY', { session: null, weak: [], consent: null, trip: null })")
     page.wait_for_timeout(500)
-    alive = page.evaluate("({ scr: S.screen, user: S.user, local_trip: localStorage.getItem('cd_trip:uidY') })")
-    check("계정이 살아 있으면(흔적만 남은 경우) 지우지 않는다: 화면·기록 유지",
-          alive["scr"] == "u-home" and alive["user"] is not None and alive["local_trip"] is not None, str(alive))
+    alive = page.evaluate("({ scr: S.screen, user: S.user, local_trip: localStorage.getItem('cd_trip:uidY'), calls: window.__calls })")
+    check("계정이 살아 있으면(흔적만 남은 경우) 지우지 않고 서버에 보고한다: 화면·기록 유지",
+          alive["scr"] == "u-home" and alive["user"] is not None and alive["local_trip"] is not None
+          and has(alive["calls"], "POST /diagnostics/withdraw"), str(alive))
 
     # --- 늦게 도착한 403 이 다른 계정을 지우지 않는다(계정을 갈아 끼운 뒤 도착) ---
     page.evaluate("""() => {
