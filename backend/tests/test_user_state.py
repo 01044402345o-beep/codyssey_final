@@ -128,6 +128,12 @@ class T(unittest.TestCase):
         ):
             return self.http.get("/user/state", headers={"Authorization": "Bearer " + token})
 
+    def delete(self, claims, token="signed-token"):
+        with mock.patch.dict(os.environ, ENV), mock.patch.object(
+            firebase_auth.id_token, "verify_firebase_token", return_value=claims,
+        ):
+            return self.http.delete("/user/state", headers={"Authorization": "Bearer " + token})
+
     def test_put_requires_a_bearer_token(self):
         with mock.patch.dict(os.environ, ENV):
             res = self.http.put("/user/state", json=BODY)
@@ -262,6 +268,33 @@ class T(unittest.TestCase):
         # session·weak·consent 는 옛 백엔드도 항상 쓰므로 필수로 남는다.
         for name in ("session", "weak", "consent"):
             self.assertRegex(text, rf"request\.resource\.data\.{name}\s+is\s+string")
+
+    def test_firestore_rules_allow_the_owner_to_delete(self):
+        """탈퇴는 본인 문서 삭제가 필요하다. 삭제에는 request.resource.data 가 없어 allow delete 로만 허용한다."""
+        text = (REPO_ROOT / "firestore.rules").read_text(encoding="utf-8")
+        self.assertRegex(text, r"allow delete:\s*if signedIn\(\);")
+        self.assertRegex(text, r"allow create, update:\s*if signedIn\(\)")   # 쓰기 필드 검사는 create/update 에만
+
+    def test_delete_removes_the_document_and_is_idempotent(self):
+        self.put(claims_for("uid-1"), {**BODY, "trip": TRIP})
+        self.assertIn("uid-1", self.mem.docs)
+        first = self.delete(claims_for("uid-1"))
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(first.json(), {"deleted": True})
+        self.assertNotIn("uid-1", self.mem.docs)
+        again = self.delete(claims_for("uid-1"))          # 이미 없는 문서를 지워도 성공(탈퇴 재시도)
+        self.assertEqual(again.status_code, 200, again.text)
+
+    def test_delete_requires_a_token(self):
+        with mock.patch.dict(os.environ, ENV):
+            res = self.http.delete("/user/state")
+        self.assertEqual(res.status_code, 401)
+        self.assertEqual(res.json()["detail"], "missing_token")
+
+    def test_delete_rejects_anonymous(self):
+        res = self.delete(claims_for("uid-1", "anonymous"))
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.json()["detail"], "anonymous_rejected")
 
     def test_firestore_get_missing_is_empty_and_database_missing_is_unavailable(self):
         missing = Script([http_error(404, 'Document "projects/demo-project/databases/(default)/documents/users/uid-1" not found.')])
