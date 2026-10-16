@@ -246,9 +246,14 @@ def anchor(project_id: str, sa_path: str, sign_key_file: str, passphrase: str, *
     체크포인트를 로컬/저장소에 남긴다 — 앱이 나중에 개수를 줄이거나 head 를 바꾸면 검증에서 걸린다.
     """
     store = gcp.Firestore(project_id, sa_path)
-    metas = store.list("evidence_archives", page_size=300)
-    entries = store.list("evidence_chain/entries", page_size=300)   # 시도·결과 항목(사전 커밋먼트)
+    metas = archives(project_id, sa_path)
+    entries = chain_entries(project_id, sa_path)                    # 시도·결과 항목(사전 커밋먼트)
     chain_state = chain.check_chain(metas + entries)               # 한 체인으로 이어진다
+    if not chain_state["ok"]:
+        # 매니페스트가 아닌 문서나 끊긴 체인을 그대로 서명하면 **나중에 검증이 계속 실패**한다.
+        # 그래서 기본은 거부한다(문제를 먼저 해결해야 한다).
+        raise CommandError("chain_broken: " + "; ".join(
+            "%s/%s" % (p.get("issue"), p.get("archive_id") or "-") for p in chain_state["problems"][:3]))
     seed = C.load_private_key(sign_key_file, passphrase)
     out_dir = config.resolve(out_dir)
     os.makedirs(out_dir, exist_ok=True)
@@ -303,8 +308,8 @@ def verify_chain(project_id: str, sa_path: str, pin_file: str, *, out_dir: str =
     if not checkpoints:
         raise CommandError("not_found")
     store = gcp.Firestore(project_id, sa_path)
-    metas = store.list("evidence_archives", page_size=300)
-    entries = store.list("evidence_chain/entries", page_size=300)
+    metas = archives(project_id, sa_path)
+    entries = chain_entries(project_id, sa_path)
     result = chain.verify_chain(checkpoints, signing_public, metas + entries)
     result["archives"] = len(metas)
     result["entries"] = len(entries)
@@ -327,6 +332,24 @@ def verify_chain(project_id: str, sa_path: str, pin_file: str, *, out_dir: str =
         if check["verdict"] in ("missing_from_chain",):
             result["ok"] = False                                # 누락 의심은 실패로 올린다
     return result
+
+
+def archives(project_id: str, sa_path: str, *, limit: int = 300) -> list[dict]:
+    """증거 아카이브(매니페스트가 있는 문서)만 고른다.
+
+    IAM 검사 카나리아(`iam-canary-*`)는 증거가 아니다 — 섞이면 목록 개수가 부풀고,
+    체인 검사에서 매니페스트가 없어 `digest_mismatch` 로 보고된다(실제로 그랬다).
+    """
+    store = gcp.Firestore(project_id, sa_path)
+    items = store.list("evidence_archives", page_size=limit)
+    return [item for item in items
+            if item.get("schema") == "SEAL-SIG-v1"
+            and not str(item.get("_id", "")).startswith("iam-canary-")]
+
+
+def chain_entries(project_id: str, sa_path: str, *, limit: int = 300) -> list[dict]:
+    """시도·결과 체인 항목(문서가 없으면 빈 목록 — 404 를 오류로 보지 않는다)."""
+    return gcp.Firestore(project_id, sa_path).list("evidence_chain/entries", page_size=limit)
 
 
 def observe_requests(project_id: str, sa_path: str, service: str, *, path: str = "/account/erase",
@@ -453,9 +476,7 @@ def iam_check(project_id: str, sa_path: str, *, canary_id: str = "") -> dict:
 def list_archives(project_id: str, sa_path: str, *, limit: int = 200) -> list[dict]:
     """Firestore 의 봉인 아카이브 목록(최신 먼저). 본문은 받지 않는다(메타만)."""
     store = gcp.Firestore(project_id, sa_path)
-    items = store.list("evidence_archives", page_size=limit)
-    # 예전 버전이 만든 카나리아가 증거 목록에 섞여 있을 수 있다(지금은 별도 컬렉션을 쓴다).
-    items = [item for item in items if not str(item.get("_id", "")).startswith("iam-canary-")]
+    items = archives(project_id, sa_path, limit=limit)
     for item in items:
         item["age_seconds"] = int(time.time() - float(item.get("created_at", 0) or 0))
     items.sort(key=lambda d: float(d.get("created_at", 0) or 0), reverse=True)
