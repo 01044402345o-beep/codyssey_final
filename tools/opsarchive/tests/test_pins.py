@@ -134,7 +134,8 @@ class IamCheckTest(unittest.TestCase):
     def test_canary_id_is_marked(self):
         result = self._run()
         self.assertTrue(result["canary"].startswith("iam-canary-"))
-        self.assertIn("expire_at", result["note"]) or self.assertIn("TTL", result["note"])
+        # 카나리아는 별도 컬렉션에 둔다 — 증거 목록·체인 앵커를 오염시키지 않기 위해
+        self.assertIn("별도 컬렉션", result["note"])
 
 
 class MakePinTest(unittest.TestCase):
