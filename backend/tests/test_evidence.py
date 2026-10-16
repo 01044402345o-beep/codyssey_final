@@ -136,10 +136,11 @@ class StoreTest(unittest.TestCase):
     class Admin:
         def __init__(self):
             self.calls = []
+            self.head = {}
 
         def firestore(self, method, subpath, body=None):
             self.calls.append((method, subpath, body))
-            return {}
+            return self.head if subpath == "evidence_chain/head" else {}
 
     def test_chunks_are_written_with_ttl(self):
         admin = StoreTest.Admin()
@@ -153,12 +154,35 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(document["chunks"], 2)
         self.assertEqual(document["size"], len(blob))
         paths = [c[1] for c in admin.calls]
-        self.assertEqual(paths[0], "evidence_archives/aid1")             # 메타가 먼저
-        self.assertEqual(paths[1:], ["evidence_archives/aid1/parts/0", "evidence_archives/aid1/parts/1"])
-        part = admin.calls[1][2]["fields"]
+        writes = [c[1] for c in admin.calls if c[0] == "PATCH"]
+        self.assertEqual(paths[0], "evidence_chain/head")                # 먼저 체인 머리를 읽는다
+        self.assertEqual(writes[0], "evidence_archives/aid1")            # 메타가 먼저 쓰인다
+        self.assertEqual(writes[1:3], ["evidence_archives/aid1/parts/0", "evidence_archives/aid1/parts/1"])
+        self.assertEqual(writes[-1], "evidence_chain/head")              # 마지막에 머리를 옮긴다
+        part = admin.calls[2][2]["fields"]
         self.assertEqual(part["seq"]["integerValue"], "0")
         self.assertEqual(part["expire_at"]["integerValue"], "123")
         self.assertEqual(base64.b64decode(part["data"]["stringValue"]), blob[:evidence.CHUNK_BYTES])
+
+    def test_manifest_chains_to_the_previous_head(self):
+        admin = StoreTest.Admin()
+        admin.head = {"fields": {"seq": {"integerValue": "4"},
+                                 "digest": {"stringValue": "prev-digest"}}}
+        from app import firebase_admin
+        firebase_admin.set_admin(admin)
+        try:
+            document = evidence.store(b"x", {"archive_id": "aid2", "created_at": 7, "expire_at": 9})
+        finally:
+            firebase_admin.set_admin(None)
+        self.assertEqual(document["seq"], 5)
+        self.assertEqual(document["prev_digest"], "prev-digest")
+        self.assertEqual(document["schema"], evidence.MANIFEST_SCHEMA)
+        # digest 는 **매니페스트 필드만**으로 (prev_digest 포함) 계산된다 → 체인이 된다
+        body = {k: v for k, v in document.items()
+                if k in ("schema", "archive_id", "created_at", "ciphertext_sha256", "size",
+                         "chunks", "recipient_key_id", "trigger", "seq", "prev_digest")}
+        self.assertEqual(evidence.manifest_digest(body), document["digest"])
+        self.assertNotEqual(evidence.manifest_digest(dict(body, prev_digest="other")), document["digest"])
 
 
 class NotifyTest(unittest.TestCase):

@@ -330,6 +330,31 @@ def collect(trigger: str, *, uid: str = "", ledger: list[dict[str, Any]] | None 
 
 # ---------------------------------------------------------------- 보관(청크) · 통보
 
+MANIFEST_SCHEMA = "SEAL-SIG-v1"
+DOMAIN_MANIFEST = b"EVIDENCE-SEAL/v1/manifest"
+
+
+def manifest_digest(manifest: dict[str, Any]) -> str:
+    """매니페스트 digest — `prev_digest` 를 포함하므로 순서가 사슬로 묶인다(CLI `chain.py` 와 같은 식)."""
+    body = {k: v for k, v in manifest.items() if k != "digest"}
+    canonical = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(DOMAIN_MANIFEST + canonical).hexdigest()
+
+
+def _chain_head() -> tuple[int, str]:
+    """체인의 현재 (seq, digest). 없으면 (0, ""). 관리자 권한으로 읽는다(규칙 우회)."""
+    got = firebase_admin.get_admin().firestore("GET", "evidence_chain/head")
+    fields = got.get("fields") if isinstance(got, dict) else None
+    if not isinstance(fields, dict):
+        return 0, ""
+    try:
+        seq = int(fields["seq"]["integerValue"])
+    except (KeyError, TypeError, ValueError):
+        return 0, ""
+    digest = str((fields.get("digest") or {}).get("stringValue", ""))
+    return seq, digest
+
+
 def _encode_fields(data: dict[str, Any]) -> dict[str, Any]:
     def value(item: Any) -> dict[str, Any]:
         if isinstance(item, bool):
@@ -346,18 +371,41 @@ def _encode_fields(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def store(blob: bytes, meta: dict[str, Any]) -> dict[str, Any]:
-    """청크로 나눠 Firestore 에 넣는다(문서 1MiB 제한 회피). 규칙을 거치지 않는다(관리자)."""
+    """청크로 나눠 Firestore 에 넣는다(문서 1MiB 제한 회피). 규칙을 거치지 않는다(관리자).
+
+    메타에는 **매니페스트**(`SEAL-SIG-v1`)를 넣는다: 암호문 해시·크기·청크 수·수신자 키 id, 그리고
+    `seq`/`prev_digest`/`digest` 로 이어지는 **해시체인**. 체인은 앱이 만들지만, 관리자가 앱 밖에서
+    서명한 체크포인트와 대조하면 "앵커한 뒤 사라진 아카이브"가 드러난다(누락 가시화).
+    """
     admin = firebase_admin.get_admin()
     archive_id = meta["archive_id"]
     parts = [blob[i:i + CHUNK_BYTES] for i in range(0, len(blob), CHUNK_BYTES)] or [b""]
+    seq, prev_digest = _chain_head()
+    manifest = {
+        "schema": MANIFEST_SCHEMA,
+        "archive_id": archive_id,
+        "created_at": int(meta.get("created_at", 0)),
+        "ciphertext_sha256": hashlib.sha256(blob).hexdigest(),
+        "size": len(blob),
+        "chunks": len(parts),
+        "recipient_key_id": key_id_hex(),
+        "trigger": str(meta.get("trigger", "")),
+        "seq": seq + 1,
+        "prev_digest": prev_digest,
+    }
+    manifest["digest"] = manifest_digest(manifest)
     document = dict(meta)
-    document.update({"sha256": hashlib.sha256(blob).hexdigest(), "size": len(blob),
-                     "chunks": len(parts)})
+    document.update(manifest)
     admin.firestore("PATCH", "evidence_archives/%s" % archive_id, _encode_fields(document))
     for index, part in enumerate(parts):
         admin.firestore("PATCH", "evidence_archives/%s/parts/%d" % (archive_id, index),
                         _encode_fields({"seq": index, "expire_at": document.get("expire_at", 0),
                                         "data": base64.b64encode(part).decode()}))
+    # 체인 머리를 옮긴다. 실패해도 아카이브는 남는다(다음 아카이브가 옛 머리에 붙어 갈래가 되고,
+    # 검증(`verify-chain`)이 그 갈래를 보고한다 — 조용히 덮지 않는 편이 낫다).
+    admin.firestore("PATCH", "evidence_chain/head", _encode_fields(
+        {"seq": manifest["seq"], "digest": manifest["digest"], "created_at": manifest["created_at"],
+         "expire_at": manifest["created_at"] + _int_env("EVIDENCE_TTL_DAYS", 90) * 86400}))
     return document
 
 
@@ -374,7 +422,9 @@ def notify(document: dict[str, Any]) -> bool:
         "- trigger: `%s`" % document.get("trigger", ""),
         "- key_id: `%s`" % document.get("key_id", ""),
         "- commit: `%s`" % document.get("commit", ""),
-        "- sha256: `%s`" % document.get("sha256", ""),
+        "- sha256: `%s`" % (document.get("ciphertext_sha256") or document.get("sha256", "")),
+        "- chain: seq=%s prev=%s.. digest=%s" % (document.get("seq"), str(document.get("prev_digest", ""))[:12],
+                                                 str(document.get("digest", ""))[:12]),
         "- size: %s bytes · chunks: %s" % (document.get("size"), document.get("chunks")),
         "- ledger: %s" % json.dumps(document.get("ledger", []), ensure_ascii=False),
         "- verification: %s" % json.dumps(document.get("verification", {}), ensure_ascii=False),
