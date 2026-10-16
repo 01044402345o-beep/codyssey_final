@@ -399,6 +399,7 @@ function resumeScreen() {
   render();
   SESS_READY = true;
   skipStateWrite = false;
+  if (RESTORE.trip) refreshAiSentences();   // 규칙으로 다시 만든 틀 문장을 AI 문장으로 채운다(백그라운드)
 }
 async function adoptAccount(account, opts) {
   const epoch = ++accountEpoch;
@@ -450,6 +451,7 @@ async function adoptAccount(account, opts) {
     SESS_READY = true; skipStateWrite = true;
     // 로그인 직후(navigate:false): 계정에 실제 여행이 있으면 계획을 다시 만들어 곧바로 홈으로 갈 수 있게 한다.
     if (RESTORE.trip && !S.trip) { S.trip = tripFromInput(RESTORE.trip); ensure('plan'); }
+    if (RESTORE.trip) refreshAiSentences();   // 틀 문장을 AI 문장으로 채운다(백그라운드)
   }
 }
 /* S.sched 는 매번 새로 만들어지므로, 저장해 둔 완료 기록을 날짜로 다시 붙인다 */
@@ -755,6 +757,35 @@ async function runAi(tok) {
   } finally { clearTimeout(slow); }
   if (tok !== genToken || ctl.signal.aborted) return;   // 오래된 요청은 상태를 덮어쓰지 못한다
   out.forEach(o => { if (o.pools) S.aiPools[aiKey(o.city, o.categoryId)] = { kind: o.kind, pools: o.pools }; });
+}
+/* 새로고침·재로그인으로 계획을 규칙으로 다시 만들면 /generate 로 만든 AI 문장이 사라진다.
+   저장된 여행을 되살린 경우에만, 서버가 살아 있으면 한 번 더 생성해 AI 문장을 채운다.
+   문장 본문을 저장하지 않는 원칙은 지키고, 화면만 복구한다(응답이 늦어도 학습을 막지 않는다). */
+let aiRefreshKey = null;
+async function refreshAiSentences() {
+  const trip = S.trip;
+  if (!trip || !S.plan || API.base === null) return;                 // 계획이 없으면 채울 대상도 없다
+  if (Object.keys(S.aiPools).length) return;                         // 이번 세션에 이미 만든 결과가 있으면 그대로
+  if (!S.places.some(p => p.selected && sentenceCategory(p))) return;   // AI 대상 장소가 없으면(예: 관광지만) 그만
+  const key = [trip.id, trip.studyStart, trip.cities.map(c => c.name + c.start).join(',')].join('|');
+  if (aiRefreshKey === key) return;                                  // 같은 여행은 한 번만
+  aiRefreshKey = key;
+  const groups = {};
+  S.places.filter(p => p.selected && sentenceCategory(p)).forEach(p => {
+    const cat = sentenceCategory(p);
+    (groups[aiKey(p.city, cat)] ??= { name: p.city, categoryId: cat, places: [] }).places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind });
+  });
+  const cities = Object.values(groups);
+  let out;
+  try {
+    out = await AI.generateByCity({ fetchImpl: (u, o) => fetch(u, o), base: API.base, cities, weakIds: AI.weakIdsFor(weakList(), cities.map(c => c.categoryId)), signal: null, timeoutMs: AI.GEN_TIMEOUT_MS });
+  } catch (e) { return; }
+  if (S.trip !== trip || !S.plan) return;                            // 응답 사이에 여행이 바뀌면 버린다
+  const got = out.filter(o => o.pools);
+  if (!got.length) return;                                           // 폴백뿐이면 틀 문장을 그대로 둔다
+  got.forEach(o => { S.aiPools[aiKey(o.city, o.categoryId)] = { kind: o.kind, pools: o.pools }; });
+  // 뒤집은 카드·보던 카드를 잃지 않도록 학습 화면에서는 다시 그리지 않는다(다음 계획 재계산 때 반영).
+  if (['u-home', 'u-sched', 'u-coll', 'u-route'].includes(S.screen)) { buildPlan(); render(); }
 }
 function failStage(stage) {
   const t = S.trip; cancelGen();
