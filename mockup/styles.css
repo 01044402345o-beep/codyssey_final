@@ -574,6 +574,9 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .account-card .acc-who { display: flex; flex-direction: column; min-width: 0; }
 .account-card .acc-who b { overflow-wrap: anywhere; }
 .account-card .acc-note { margin: 0; line-height: 1.6; }
+/* 계정 카드 '패딩 밖' 아래에 두는 탈퇴하기 — 작고 연한 글씨 */
+.withdraw { display: block; margin: 10px auto 0; padding: 6px 12px; font-size: var(--fs-caption); color: var(--text-3); background: none; border: 0; text-decoration: underline; }
+.withdraw:hover { color: var(--text-soft); }
 
 /* schedule */
 .srow { display: grid; grid-template-columns: 54px 1fr auto; gap: 10px; align-items: center; padding: 11px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 6px; cursor: pointer; text-align: left; width: 100%; }
@@ -1031,7 +1034,7 @@ html:not([data-mode=legacy]) :is(.app, .admin-main, .modal) :is(input, select, t
 /* 터치 우선 기기: 44px 이상 (WCAG 2.5.5 AAA · Apple HIG). 마우스(pointer:fine)는 기존 크기 유지 */
 @media (pointer: coarse) {
   html:not([data-mode=legacy]) :is(.btn.sm, .btn.ghost, .chips button, .city-tabs button, .seg button, .filters button, .cand-toggle, .add-city,
-    .speak-btn, .sec-title button, .appbar .back, .round, .tts-btn, .tts-rate, .admin-nav button, .drill-btn) { min-height: 44px; }
+    .speak-btn, .sec-title button, .appbar .back, .round, .tts-btn, .tts-rate, .admin-nav button, .drill-btn, .withdraw) { min-height: 44px; }
   html:not([data-mode=legacy]) :is(.appbar .back, .round, .play) { min-width: 44px; }
   html:not([data-mode=legacy]) .appbar .back { width: 44px; height: 44px; }
   html:not([data-mode=legacy]) .play, html:not([data-mode=legacy]) .cs-row .play { width: 44px; height: 44px; }

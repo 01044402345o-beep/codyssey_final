@@ -1978,7 +1978,8 @@ function privacyCard() {
       ${n ? '<button class="btn soft" style="flex:1" data-act="weak-delete">복습 목록 삭제</button>' : ''}</div>` : ''}
   </div>`;
 }
-/* 홈 맨 아래 계정 블록. 로그아웃 버튼과 안내를 하나의 카드(.card = 패딩 한 곳)에 담는다. */
+/* 홈 맨 아래 계정 블록. 로그아웃 버튼과 안내를 하나의 카드(.card = 패딩 한 곳)에 담는다.
+   탈퇴하기는 카드 '패딩 밖'(카드 아래)에 작고 연한 글씨로 둔다. */
 function accountCard() {
   const signed = !!S.user;
   const initial = esc(userName().slice(0, 1) || '김');
@@ -1991,7 +1992,8 @@ function accountCard() {
     ${signed
       ? '<button class="btn soft block" data-act="logout-home">로그아웃</button>'
       : '<button class="btn primary block" data-act="tab" data-id="u-login">로그인</button>'}
-  </div>`;
+  </div>
+  ${signed ? '<button type="button" class="withdraw" data-act="withdraw">탈퇴하기</button>' : ''}`;
 }
 const weakItem = s => ({ category_id: s.categoryId, id: s.situationId, situation: s.situation, en: s.en, ko: s.ko });
 function updateSpeakUi() {
@@ -2057,6 +2059,55 @@ async function uploadSpeech(tok, blob, s) {
   if (save) saveWeakList(AI.upsertWeak(weakList(), weakItem(s)));
   SPK.result = { ...res, saved: save, savedBy: save ? 'auto' : null, offer: decision === 'ask', coverage: typeof res.heard === 'string' ? AI.heardCoverage(s.en, res.heard) : null };
   updateSpeakUi(); renderDemo();
+}
+
+/* 이 칸(계정 uid 또는 uid 없는 칸)에 저장된 브라우저 기록을 모두 지운다. */
+function clearAccountStorage() {
+  const box = personalStore(); if (!box) return;
+  [SESSION_KEY, AI.WEAK_KEY, AI.CONSENT_KEY, AI.TRIP_KEY].forEach(k => { try { box.removeItem(k); } catch (e) { /* 저장소 막힘 */ } });
+}
+/* 탈퇴: 서버 기록 삭제(토큰이 살아 있을 때) → 브라우저 기록 삭제 → Firebase 계정 삭제. 되돌릴 수 없다.
+   서버 삭제가 실패하면 계정을 지우지 않고 멈춘다 — 기록이 남은 채 계정만 사라지는 것을 막기 위해서다. */
+async function doWithdraw() {
+  const uid = accountUid();
+  const fb = !!(window.FirebaseAuth && FirebaseAuth.enabled);
+  const accountUser = fb && !!uid;
+  if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; }   // 예약된 업로드가 지운 기록을 되살리지 않게
+  skipStateWrite = true;
+
+  if (accountUser && API.base !== null) {
+    let token = '';
+    try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
+    if (token) {
+      try {
+        const res = await fetch((API.base || '') + '/user/state', { method: 'DELETE', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+      } catch (e) { skipStateWrite = false; toast('저장된 계정 기록을 지우지 못했어요. 잠시 뒤 다시 시도해 주세요.'); return; }
+    }
+  }
+
+  clearAccountStorage();                     // 브라우저 기록 폐기
+
+  let msg = accountUser ? '탈퇴했어요. 계정과 저장된 기록을 모두 지웠어요.' : '이 브라우저에 저장된 기록을 모두 지웠어요.';
+  if (accountUser) {                         // Firebase 계정 삭제(최근 로그인 필요)
+    const r = await FirebaseAuth.deleteAccount();
+    if (!r.ok) {
+      msg = r.code === 'auth/requires-recent-login'
+        ? '저장된 기록은 지웠어요. 보안을 위해 다시 로그인한 뒤 탈퇴를 다시 눌러 주세요.'
+        : (FirebaseAuth.koreanError({ code: r.code }) || '계정 삭제에 실패했어요. 잠시 뒤 다시 시도해 주세요.');
+    }
+  }
+
+  SESS_READY = false;
+  S.user = null;
+  S.trip = null; resetDerived();
+  PROG.done = {};
+  RESTORE.screen = null; RESTORE.studyDate = null; RESTORE.card = null; RESTORE.trip = null;
+  aiRefreshKey = null;                       // 다음 여행에서 복원 시 AI 문장 채우기가 다시 돌게
+  SESS_READY = true;
+  skipStateWrite = false;
+  toast(msg);
+  go('u-login');
 }
 
 const ACT = {
@@ -2188,6 +2239,10 @@ const ACT = {
   'logout-home': () => confirmBox('로그아웃할까요?',
     '학습 진도와 여행 설정은 계정에 저장돼 있어요. 다시 로그인하면 이어서 할 수 있어요.',
     '로그아웃', () => { S.modal = null; ACT.logout(); }, { danger: true }),
+  // 탈퇴: 계정과 저장된 기록을 모두 지운다(되돌릴 수 없음).
+  'withdraw': () => confirmBox('탈퇴하면 계정과 기록이 모두 지워져요',
+    `학습 진도·복습 목록·말하기 동의·여행 설정이 계정에서 지워지고, 이 브라우저에 저장된 같은 기록도 함께 지워져요. <b>되돌릴 수 없어요.</b>`,
+    '탈퇴하기', () => { S.modal = null; doWithdraw(); }, { danger: true }),
 
   // 홈 D-Day 카드·사이드바에서 여행 설정 수정 화면을 연다.
   'edit-trip': () => openTripEdit(),
