@@ -2,7 +2,8 @@
 
 이 모듈은 **관리자 CLI 쪽 구현**이다. 앱(`backend/app/evidence.py`)은 같은 형식을
 독립적으로 복제 구현한다(런타임 결합을 만들지 않기 위해). 형식이 어긋나면
-`backend/tests/test_evidence.py` 의 호환 검사가 이 모듈의 `unseal` 로 실제로 열어보며 잡는다.
+**앱 훅을 넣을 때** 함께 추가하는 호환 검사(`backend/tests/test_evidence.py`)가 이 모듈의
+`unseal` 로 실제로 열어보며 잡는다 — 그 테스트는 아직 없다(앱 훅이 아직 없다).
 
 암호 설계
 - 본문: AES-256-GCM (데이터키 32바이트, CSPRNG)
@@ -22,6 +23,8 @@ import gzip
 import hashlib
 import os
 import struct
+import subprocess
+import zlib
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
@@ -46,6 +49,11 @@ HEADER_FIXED = 4 + 1 + 1 + KEY_ID_LEN + 2      # magic|alg|ver|key_id|wrapped_le
 HKDF_SALT = b"mfa1"
 HKDF_INFO = b"mfa1-kek"
 SCRYPT_N, SCRYPT_R, SCRYPT_P = 2 ** 15, 8, 1
+SCRYPT_MIN_N = 2 ** 14        # 파일에서 읽은 파라미터를 그대로 믿지 않는다(약한 KDF·KDF DoS 방지)
+SCRYPT_MAX_N = 2 ** 20
+SCRYPT_MAX_R = 16
+SCRYPT_MAX_P = 4
+MAX_PLAIN = 32 * 1024 * 1024  # 압축 폭탄 방어: 평문 상한(102KB → 100MB 팽창 실측)
 
 
 class ContainerError(Exception):
@@ -141,8 +149,12 @@ def seal(data: bytes, public_key: bytes) -> bytes:
     return header + body
 
 
-def unseal(blob: bytes, private_key: bytes) -> bytes:
-    """봉인 해제. 실패는 ContainerError 로만 알린다(부분 결과를 돌려주지 않는다)."""
+def unseal(blob: bytes, private_key: bytes, max_plain: int = MAX_PLAIN) -> bytes:
+    """봉인 해제. 실패는 ContainerError 로만 알린다(부분 결과를 돌려주지 않는다).
+
+    `max_plain` 은 **압축 폭탄 방어**다 — gzip 은 100KB 를 100MB 로 부풀릴 수 있으므로
+    상한을 넘으면 `too_large` 로 끊는다.
+    """
     if len(blob) < HEADER_FIXED + NONCE_LEN + 16:
         raise ContainerError("too_short")
     if blob[:4] != MAGIC:
@@ -168,40 +180,103 @@ def unseal(blob: bytes, private_key: bytes) -> bytes:
     except Exception as exc:    # noqa: BLE001 — 암호 오류는 값으로만 구분한다
         raise ContainerError("key_mismatch") from exc
     try:
-        return gzip.decompress(
-            AESGCM(bytes(data_key)).decrypt(header[-NONCE_LEN:], blob[end + NONCE_LEN:], header))
-    except Exception as exc:    # noqa: BLE001 — 인증 실패·변조·압축 오류를 구분해 알린다
+        plain = AESGCM(bytes(data_key)).decrypt(header[-NONCE_LEN:], blob[end + NONCE_LEN:], header)
+    except Exception as exc:    # noqa: BLE001 — 인증 실패·변조를 구분해 알린다
         raise ContainerError("corrupt") from exc
     finally:
         data_key[:] = b"\x00" * len(data_key)
+    return _inflate(plain, max_plain)
+
+
+def _inflate(data: bytes, limit: int) -> bytes:
+    """gzip 을 **상한을 두고** 푼다(폭탄 방어). 상한을 넘으면 too_large."""
+    obj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    try:
+        out = obj.decompress(data, limit)
+    except zlib.error as exc:
+        raise ContainerError("corrupt") from exc
+    if obj.unconsumed_tail or not obj.eof:
+        raise ContainerError("too_large")
+    return out
 
 
 # ------------------------------------------------------------------ 개인키 파일
 
-def save_private_key(path: str, private_key: bytes, passphrase: str, *,
-                     n: int = SCRYPT_N, r: int = SCRYPT_R, p: int = SCRYPT_P) -> None:
-    """개인키를 패스프레이즈로 잠가 저장한다(0600). 지문은 파일 이름·로그에 남기지 않는다."""
+def _check_scrypt(n: int, r: int, p: int) -> None:
+    """파일에서 읽은 KDF 파라미터를 검사한다.
+
+    그대로 믿으면 공격자가 만든 키 파일이 (a) n=2 로 사실상 무잠금이 되거나
+    (b) n=2³²-1 로 KDF 비용을 폭발시켜 열람을 막을 수 있다(실측 3초/회).
+    """
+    if n < SCRYPT_MIN_N or n > SCRYPT_MAX_N or (n & (n - 1)):
+        raise ContainerError("weak_kdf")
+    if not 1 <= r <= SCRYPT_MAX_R or not 1 <= p <= SCRYPT_MAX_P:
+        raise ContainerError("weak_kdf")
+
+
+def _restrict_to_owner(path: str) -> bool:
+    """파일을 소유자만 읽을 수 있게 좁힌다(가능하면 True).
+
+    POSIX 는 `os.open(..., 0o600)` 으로 끝나지만 **Windows 에서 mode 는 ACL 을 바꾸지 않는다**
+    (실측 0o666 — 상속된 Users/Everyone 이 그대로 남는다). 그래서 Windows 에서는 icacls 로
+    상속을 끊고 현재 사용자만 남긴다. 실패해도 저장은 끝난 것으로 보고 결과만 알린다.
+    """
+    if os.name != "nt":
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            return False
+        return True
+    user = os.environ.get("USERNAME", "")
+    if not user:
+        return False
+    try:
+        done = subprocess.run(["icacls", path, "/inheritance:r", "/grant:r", user + ":F"],
+                              capture_output=True, timeout=20, shell=False)  # noqa: S603
+        return done.returncode == 0
+    except Exception:               # noqa: BLE001 — 권한 강화 실패가 저장 자체를 막지는 않는다
+        return False
+
+
+def save_private_key(path: str, private_key: bytes, passphrase: str, *, overwrite: bool = False,
+                     n: int = SCRYPT_N, r: int = SCRYPT_R, p: int = SCRYPT_P) -> bool:
+    """개인키를 패스프레이즈로 잠가 저장한다(소유자 전용 권한).
+
+    돌려주는 값은 '권한을 소유자 전용으로 좁혔는가'다 — Windows 에서 icacls 가 실패하면 False.
+    """
+    _check_scrypt(n, r, p)
+    if os.path.exists(path) and not overwrite:
+        raise ContainerError("exists")
     salt = os.urandom(KEY_SALT_LEN)
     nonce = os.urandom(NONCE_LEN)
     key = Scrypt(salt=salt, length=32, n=n, r=r, p=p).derive(passphrase.encode())
     header = KEY_MAGIC + bytes([KEY_VERSION]) + salt + struct.pack(">III", n, r, p) + nonce
     blob = header + AESGCM(key).encrypt(nonce, private_key, header)
     tmp = path + ".tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_BINARY if os.name == "nt"
-                 else os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "wb") as fh:
-        fh.write(blob)
-    os.replace(tmp, path)
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | (getattr(os, "O_BINARY", 0))
+        fd = os.open(tmp, flags, 0o600)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(blob)
+        os.replace(tmp, path)          # 같은 디렉터리 → 원자적 교체
+    except Exception:
+        try:
+            os.remove(tmp)             # 실패하면 잠긴 키의 임시 사본을 남기지 않는다
+        except OSError:
+            pass
+        raise
+    return _restrict_to_owner(path)
 
 
 def load_private_key(path: str, passphrase: str) -> bytes:
-    """잠긴 개인키를 연다. 패스프레이즈가 틀리면 key_mismatch."""
+    """잠긴 개인키를 연다. 패스프레이즈가 틀리면 key_mismatch, KDF 파라미터가 이상하면 weak_kdf."""
     with open(path, "rb") as fh:
         blob = fh.read()
     if len(blob) < KEY_HEAD + 16 or blob[:len(KEY_MAGIC) + 1] != KEY_MAGIC + bytes([KEY_VERSION]):
         raise ContainerError("bad_key_file")
     salt = blob[KEY_SALT_AT:KEY_PARAMS_AT]
     n, r, p = struct.unpack(">III", blob[KEY_PARAMS_AT:KEY_NONCE_AT])
+    _check_scrypt(n, r, p)
     nonce = blob[KEY_NONCE_AT:KEY_HEAD]
     header = blob[:KEY_HEAD]
     try:

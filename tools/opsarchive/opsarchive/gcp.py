@@ -121,6 +121,8 @@ class Firestore:
                 raw = res.read()
         except urllib.error.HTTPError as exc:
             self._token = ""            # 만료·권한 문제는 다음 호출에서 다시 시도한다
+            if exc.code == 404:
+                raise GcpError("not_found") from exc    # '없음' 과 '실패' 를 구분한다
             raise GcpError("http_error") from exc
         except Exception as exc:        # noqa: BLE001
             raise GcpError("http_error") from exc
@@ -133,11 +135,11 @@ class Firestore:
         return parsed if isinstance(parsed, dict) else {}
 
     def get(self, path: str) -> dict | None:
-        """문서 하나. 없으면 None(404 를 값으로 구분한다)."""
+        """문서 하나. **없으면 None, 조회에 실패하면 예외** — 둘을 섞으면 일시 장애가 '없음'으로 보인다."""
         try:
             doc = self._call("GET", self._root() + path)
         except GcpError as exc:
-            if exc.code == "http_error":
+            if exc.code == "not_found":
                 return None
             raise
         return decode_fields(doc.get("fields", {})) if doc else None
@@ -150,12 +152,21 @@ class Firestore:
         self._call("DELETE", self._root() + path)
 
     def list(self, collection: str, page_size: int = 300) -> list[dict]:
-        """컬렉션 문서 목록(정렬·색인 없이 최대 page_size). id 는 경로 마지막 조각."""
-        url = self._root() + collection + "?pageSize=" + str(page_size)
-        out = []
-        for doc in self._call("GET", url).get("documents", []) or []:
-            name = str(doc.get("name", ""))
-            item = decode_fields(doc.get("fields", {}))
-            item["_id"] = name.rsplit("/", 1)[-1] if name else ""
-            out.append(item)
-        return out
+        """컬렉션 문서 목록. **페이지를 끝까지 따라간다**(안 그러면 청크가 잘려 조용히 깨진다)."""
+        out: list[dict] = []
+        token = ""
+        pages = 0
+        while True:
+            url = self._root() + collection + "?pageSize=" + str(page_size)
+            if token:
+                url += "&pageToken=" + urllib.parse.quote(token, safe="")
+            data = self._call("GET", url)
+            for doc in data.get("documents", []) or []:
+                name = str(doc.get("name", ""))
+                item = decode_fields(doc.get("fields", {}))
+                item["_id"] = name.rsplit("/", 1)[-1] if name else ""
+                out.append(item)
+            token = str(data.get("nextPageToken", "") or "")
+            pages += 1
+            if not token or pages >= 50:      # 서버가 같은 토큰을 반복해도 멈춘다
+                return out
