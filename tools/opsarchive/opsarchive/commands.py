@@ -18,7 +18,7 @@ import urllib.request
 import uuid
 
 from . import container as C
-from . import chain, firebase, gcp, pins, render, witness
+from . import chain, config, firebase, gcp, pins, render, witness
 
 DEFAULT_ENV_KEY = "EVIDENCE_PUBKEY"
 DEFAULT_DIR = os.path.join(os.path.expanduser("~"), ".opsarchive")
@@ -233,6 +233,7 @@ def anchor(project_id: str, sa_path: str, sign_key_file: str, passphrase: str, *
     entries = store.list("evidence_chain/entries", page_size=300)   # 시도·결과 항목(사전 커밋먼트)
     chain_state = chain.check_chain(metas + entries)               # 한 체인으로 이어진다
     seed = C.load_private_key(sign_key_file, passphrase)
+    out_dir = config.resolve(out_dir)
     os.makedirs(out_dir, exist_ok=True)
     seq = 1
     for name in os.listdir(out_dir):
@@ -268,11 +269,15 @@ def verify_chain(project_id: str, sa_path: str, pin_file: str, *, out_dir: str =
                  challenge: str = "") -> dict:
     """체크포인트 서명·연속성·롤백을 검증하고, 앵커한 뒤 **사라진 아카이브**와
     **제시된 챌린지(사전 커밋먼트)** 가 앵커 범위 안에 있는지 본다."""
-    pin = pins.read(pin_file)
+    try:
+        pin = pins.read(config.resolve(pin_file))
+    except FileNotFoundError as exc:
+        raise CommandError("no_pin_file") from exc
     packed = pin.get("signing_public_key", "")
     if not packed:
         raise CommandError("no_signing_key")          # 핀에 서명 키가 없으면 검증할 수 없다
     signing_public = C.unpack_public_key(packed)
+    out_dir = config.resolve(out_dir)
     checkpoints = []
     for name in sorted(os.listdir(out_dir)) if os.path.isdir(out_dir) else []:
         if name.endswith(".json") and name[:-5].isdigit():
@@ -357,18 +362,21 @@ def make_pin(key_file: str, passphrase: str, *, health_url: str, out: str,
     public = C.public_from_private(private)
     if generation is None:
         try:
-            generation = int(pins.read(out).get("generation", 0)) + 1
+            generation = int(pins.read(config.resolve(out)).get("generation", 0)) + 1
         except (FileNotFoundError, pins.PinError):
             generation = 1
     document = pins.make(public, C.fingerprint(public), C.key_id(public).hex(),
                          generation=generation, health_url=health_url, commit=commit,
                          armed=True, note=note, signing_public=signing_public)
-    return pins.write(out, document)
+    return pins.write(config.resolve(out), document)
 
 
 def check_pin(pin_file: str, *, health_url: str = "") -> dict:
     """핀 파일과 배포된 앱의 /health 보고를 대조한다(CI 가 cron 으로 도는 것과 같은 검사)."""
-    pin = pins.read(pin_file)
+    try:
+        pin = pins.read(config.resolve(pin_file))
+    except FileNotFoundError as exc:
+        raise CommandError("no_pin_file") from exc          # 경로를 뭉뚱그리지 않고 코드로 알린다
     url = (health_url or pin.get("health_url", "")).strip()
     if not pin.get("armed"):
         return {"armed": False, "ok": None, "reasons": ["unarmed"], "pin_fingerprint": pin.get("fingerprint_sha256", "")}
