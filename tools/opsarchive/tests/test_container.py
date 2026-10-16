@@ -44,11 +44,23 @@ class ContainerTest(unittest.TestCase):
     def test_tampering_is_detected(self):
         private, public = C.keypair()
         blob = bytearray(C.seal(b"important", public))
-        for index in (len(blob) - 1, 20, 6):                    # 본문·헤더(key_id)·알고리즘
+        wrapped_len = struct.unpack(">H", bytes(blob[14:16]))[0]
+        split = C.HEADER_FIXED + wrapped_len + C.NONCE_LEN
+        for index in (len(blob) - 1, 20, 6, 14, 15, split - 1, split):   # 본문·wrapped·key_id·wrapped_len·iv
             broken = bytearray(blob)
             broken[index] ^= 0x01
             with self.assertRaises(C.ContainerError):
                 C.unseal(bytes(broken), private)
+
+    def test_decompression_bomb_is_capped(self):
+        """gzip 은 100KB 를 100MB 로 부풀린다(실측 ×1027) — 평문 상한이 있어야 한다."""
+        private, public = C.keypair()
+        bomb = C.seal(b"\x00" * (8 * 1024 * 1024), public)
+        self.assertLess(len(bomb), 200 * 1024)
+        with self.assertRaises(C.ContainerError) as caught:
+            C.unseal(bomb, private, max_plain=1024)
+        self.assertEqual(caught.exception.code, "too_large")
+        self.assertEqual(len(C.unseal(bomb, private)), 8 * 1024 * 1024)   # 상한 안에서는 정상
 
     def test_header_is_bound_as_aad(self):
         """헤더와 본문을 서로 다른 메시지에서 짝지으면 인증이 깨진다(AAD 에 헤더가 묶여 있다)."""
@@ -115,6 +127,40 @@ class KeyFileTest(unittest.TestCase):
         with self.assertRaises(C.ContainerError) as caught:
             C.load_private_key(self.path(), "x")
         self.assertEqual(caught.exception.code, "bad_key_file")
+
+    def test_weak_kdf_parameters_are_refused(self):
+        """파일이 (n,r,p)를 정한다 — 그대로 믿으면 n=2(사실상 무잠금)·n=2³²(열람 방해)가 통과한다."""
+        import struct as _struct
+        private, _ = C.keypair()
+        C.save_private_key(self.path(), private, "phrase")
+        with open(self.path(), "rb") as fh:
+            blob = bytearray(fh.read())
+        for weak in ((2, 1, 1), (C.SCRYPT_MAX_N * 2, 8, 1), (C.SCRYPT_N, 99, 1)):
+            broken = bytearray(blob)
+            broken[C.KEY_PARAMS_AT:C.KEY_NONCE_AT] = _struct.pack(">III", *weak)
+            with open(self.path(), "wb") as fh:
+                fh.write(broken)
+            with self.assertRaises(C.ContainerError) as caught:
+                C.load_private_key(self.path(), "phrase")
+            self.assertEqual(caught.exception.code, "weak_kdf")
+        C.save_private_key(self.path(), private, "phrase", overwrite=True)   # 원래 파일 복구
+        self.assertEqual(C.load_private_key(self.path(), "phrase"), private)
+
+    def test_overwrite_is_refused_without_opt_in(self):
+        private, _ = C.keypair()
+        C.save_private_key(self.path(), private, "phrase")
+        with self.assertRaises(C.ContainerError) as caught:
+            C.save_private_key(self.path(), private, "phrase")
+        self.assertEqual(caught.exception.code, "exists")
+        self.assertTrue(C.save_private_key(self.path(), private, "phrase", overwrite=True))
+
+    def test_temp_file_is_removed_on_failure(self):
+        """저장 도중 실패하면 잠긴 키의 임시 사본이 남지 않아야 한다."""
+        private, _ = C.keypair()
+        target = self.path("nested/absent/admin.key")     # 디렉터리가 없어 os.replace 가 실패한다
+        with self.assertRaises(OSError):
+            C.save_private_key(target, private, "phrase")
+        self.assertFalse(os.path.exists(target + ".tmp"))
 
     def test_gzip_header_is_used(self):
         """컨테이너는 gzip 본문을 쓴다(다른 구현이 읽을 때 이 형식을 가정한다)."""

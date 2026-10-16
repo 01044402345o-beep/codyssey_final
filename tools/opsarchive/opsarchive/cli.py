@@ -87,6 +87,9 @@ def main(argv: list[str] | None = None) -> int:
                                        redeploy=not args.no_redeploy))
             return 0
         if args.cmd == "list":
+            pre = commands.firebase_preflight(args.project)
+            if not pre["firebase_cli"]:
+                print("참고: firebase CLI 가 없어 사전 점검을 건너뜁니다(읽기는 서비스 계정으로 계속).", file=sys.stderr)
             rows = commands.list_archives(args.project, args.sa, limit=args.limit)
             if args.json:
                 _print(rows)
