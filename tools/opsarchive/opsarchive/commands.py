@@ -13,6 +13,7 @@ import base64
 import getpass
 import json
 import os
+import subprocess
 import tempfile
 import time
 import urllib.request
@@ -548,6 +549,75 @@ def make_pin(key_file: str, passphrase: str, *, health_url: str, out: str,
                          generation=generation, health_url=health_url, commit=commit,
                          armed=True, note=note, signing_public=signing_public)
     return pins.write(config.resolve(out), document)
+
+
+def pin_variables(pin_path: str) -> dict:
+    """핀 파일에서 GitHub Actions 변수로 올릴 이름/값을 만든다(공개키·지문만 — 비밀 없음)."""
+    pin = pins.read(config.resolve(pin_path))
+    import hashlib
+    with open(config.resolve(pin_path), "rb") as fh:
+        digest = hashlib.sha256(fh.read()).hexdigest()
+    return {
+        "EVIDENCE_PIN_FINGERPRINT": str(pin.get("fingerprint_sha256", "")),
+        "EVIDENCE_PIN_GENERATION": str(pin.get("generation", 0)),
+        "EVIDENCE_PIN_KEY_ID": str(pin.get("key_id", "")),
+        "EVIDENCE_PIN_SIGNING_FINGERPRINT": str(pin.get("signing_fingerprint_sha256", "")),
+        "EVIDENCE_PIN_SHA256": digest,
+        "EVIDENCE_PIN_HEALTH_URL": str(pin.get("health_url", "")),
+    }
+
+
+def _run_gh(args: list, timeout: int = 60) -> str:
+    """`gh` CLI 실행(셸 없이). 실패는 값으로 알린다."""
+    try:
+        done = subprocess.run(["gh"] + args, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=timeout, shell=False)  # noqa: S603
+    except (FileNotFoundError, OSError) as exc:
+        raise CommandError("no_gh_cli") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise CommandError("gh_timeout") from exc
+    if done.returncode != 0:
+        raise CommandError("gh_failed: " + (done.stderr or "").strip()[:160])
+    return done.stdout
+
+
+def pin_publish(pin_path: str, *, repo: str, dry_run: bool = False) -> dict:
+    """핀의 공개값을 **GitHub Actions 변수**로 올린다(저장소 파일로는 올리지 않는다).
+
+    공개키·지문이라도 공개 저장소 파일에는 두지 않는다는 결정에 따른 경로다.
+    값은 `gh variable set` 으로 저장소 변수에 들어가고, 변경은 admin 권한이 필요하다.
+    """
+    if not repo:
+        raise CommandError("bad_input:repo")
+    values = pin_variables(pin_path)
+    empty = [name for name, value in values.items() if not str(value).strip()]
+    result = {"repo": repo, "variables": values, "uploaded": [], "dry_run": bool(dry_run),
+              "empty": empty}
+    if dry_run:
+        return result
+    for name, value in values.items():
+        if not str(value).strip():
+            continue                       # 빈 값은 올리지 않는다(변수 미설정 = fail-closed 로 드러나게)
+        _run_gh(["variable", "set", name, "--body", str(value), "--repo", repo])
+        result["uploaded"].append(name)
+    return result
+
+
+def pin_remote_check(pin_path: str, *, repo: str) -> dict:
+    """원격 Actions 변수와 로컬 핀이 일치하는지 본다(불일치면 사람이 올려야 한다)."""
+    if not repo:
+        raise CommandError("bad_input:repo")
+    local = pin_variables(pin_path)
+    raw = _run_gh(["variable", "list", "--repo", repo, "--json", "name,value"])
+    try:
+        remote = {item["name"]: str(item.get("value", "")) for item in json.loads(raw or "[]")}
+    except (ValueError, TypeError) as exc:
+        raise CommandError("gh_bad_json") from exc
+    mismatched = {name: {"local": value, "remote": remote.get(name, "")}
+                  for name, value in local.items() if str(value).strip() and remote.get(name, "") != str(value)}
+    missing = [name for name, value in local.items() if str(value).strip() and not remote.get(name)]
+    return {"repo": repo, "ok": not mismatched and not missing, "mismatched": mismatched,
+            "missing": missing, "checked": sorted(local)}
 
 
 def check_pin(pin_file: str, *, health_url: str = "") -> dict:

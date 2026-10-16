@@ -133,7 +133,9 @@ def read_settings(path: str | None = None) -> dict[str, Any]:
     if not data.get("key_dir"):
         data["key_dir"] = config_dir()
     if not data.get("pin_path"):
-        data["pin_path"] = os.path.join(repo_root(), "security", "evidence-key-pin.json")
+        # 핀은 **저장소 밖**에 둔다. 공개키·공개 지문이라도 공개 저장소에는 올리지 않는다.
+        # CI 는 GitHub Actions 변수(`vars.EVIDENCE_PIN_*`)를 읽는다 — `opsarchive pin-publish` 로 올린다.
+        data["pin_path"] = os.path.join(config_dir(), "evidence-key-pin.json")
     if not data.get("checkpoints_dir"):
         # 체크포인트는 관리자 자산이라 저장소 밖에 둔다(저장소 사본은 편의·감사용).
         data["checkpoints_dir"] = os.path.join(config_dir(), "checkpoints")
