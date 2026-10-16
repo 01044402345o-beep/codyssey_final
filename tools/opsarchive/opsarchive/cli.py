@@ -19,7 +19,7 @@ import json
 import sys
 
 from . import VERSION, commands
-from . import chain, config, container as C, firebase, gcp, pins, render, witness
+from . import chain, config, container as C, entropy, firebase, gcp, pins, render, witness
 
 
 def _print(data: object) -> None:
@@ -104,6 +104,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("tui", help="rich 기반 화면(없으면 안내만)")
     sub.add_parser("gui", help="관리자 창(tkinter — 설치 필요 없음). 키·발행·검증을 버튼으로")
+
+    q = sub.add_parser("rand", help="OS 를 감지해 CSPRNG 명령으로 무작위 값을 만든다")
+    q.add_argument("--length", type=int, default=32)
+    q.add_argument("--encoding", choices=["hex", "base64", "chars"], default="hex")
+    q.add_argument("--command", default=None, help="직접 지정할 명령(비우면 OS 기본값, 빈 문자열이면 파이썬 secrets)")
+    q.add_argument("--show-command", action="store_true", help="실행한 명령도 출력")
     return parser
 
 
@@ -192,6 +198,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "tui":
             from . import tui
             return tui.run()
+        if args.cmd == "rand":
+            made = entropy.generate(length=args.length, encoding=args.encoding,
+                                    command=args.command)
+            if args.show_command or args.command is None:
+                print("# OS=%s 출처=%s 명령=%s" % (made["os"], made["source"], made["command"]),
+                      file=sys.stderr)
+            if made["note"]:
+                print("# %s" % made["note"], file=sys.stderr)
+            print(made["value"])
+            return 0
         if args.cmd == "gui":
             from . import gui
             return gui.run()
