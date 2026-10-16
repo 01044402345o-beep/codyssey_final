@@ -18,7 +18,7 @@ import urllib.request
 import uuid
 
 from . import container as C
-from . import firebase, gcp, render
+from . import firebase, gcp, pins, render
 
 DEFAULT_ENV_KEY = "EVIDENCE_PUBKEY"
 DEFAULT_DIR = os.path.join(os.path.expanduser("~"), ".opsarchive")
@@ -149,7 +149,7 @@ def publish(service: str, key_file: str, passphrase: str, *, env_key: str = DEFA
 
 def doctor(service: str, key_file: str, passphrase: str, *, base_url: str = "",
            api_key_value: str | None = None, env_key: str = DEFAULT_ENV_KEY,
-           project_id: str = "") -> dict:
+           project_id: str = "", pin_file: str = "") -> dict:
     """로컬 개인키의 공개 절반과 (a) Render 환경변수 (b) 런타임 /health 지문을 대조한다.
 
     회전 뒤 "이 개인키로는 아카이브를 열 수 없다" 상태를 배포 전에 잡는 것이 목적이다.
@@ -174,6 +174,8 @@ def doctor(service: str, key_file: str, passphrase: str, *, base_url: str = "",
     if base_url:
         out["health_has_evidence"], out["health_fingerprint"] = _health_block(base_url)
         out["health_match"] = out["health_fingerprint"] == want
+    if pin_file:
+        out["pin"] = check_pin(pin_file, health_url=base_url)
     return out
 
 
@@ -209,6 +211,85 @@ def firebase_preflight(project_id: str) -> dict:
     has_cli = firebase.available()
     return {"firebase_cli": has_cli,
             "firebase_project_ok": firebase.has_project(project_id) if has_cli else False}
+
+
+# ------------------------------------------------------------------ 핀 고정(예상 밖 키 탐지)
+
+def make_pin(key_file: str, passphrase: str, *, health_url: str, out: str,
+             generation: int | None = None, commit: str = "", note: str = "") -> dict:
+    """개인키에서 **역산한** 공개키로 핀 파일을 만든다.
+
+    generation 을 주지 않으면 기존 핀의 다음 세대로 올린다. 앱이 알려준 값을 핀에 넣지 않는다
+    (그러면 대조가 무의미해진다 — 핀은 관리자가 오프라인에서 정하는 신뢰 뿌리다).
+    """
+    private = C.load_private_key(key_file, passphrase)
+    public = C.public_from_private(private)
+    if generation is None:
+        try:
+            generation = int(pins.read(out).get("generation", 0)) + 1
+        except (FileNotFoundError, pins.PinError):
+            generation = 1
+    document = pins.make(public, C.fingerprint(public), C.key_id(public).hex(),
+                         generation=generation, health_url=health_url, commit=commit,
+                         armed=True, note=note)
+    return pins.write(out, document)
+
+
+def check_pin(pin_file: str, *, health_url: str = "") -> dict:
+    """핀 파일과 배포된 앱의 /health 보고를 대조한다(CI 가 cron 으로 도는 것과 같은 검사)."""
+    pin = pins.read(pin_file)
+    url = (health_url or pin.get("health_url", "")).strip()
+    if not pin.get("armed"):
+        return {"armed": False, "ok": None, "reasons": ["unarmed"], "pin_fingerprint": pin.get("fingerprint_sha256", "")}
+    if not url:
+        return {"armed": True, "ok": False, "reasons": ["health_url_missing"]}
+    try:
+        health = pins.fetch_health(url)
+    except Exception as exc:        # noqa: BLE001 — 값으로만 알린다
+        return {"armed": True, "ok": False, "reasons": ["health_unreachable:" + type(exc).__name__]}
+    return pins.compare(pin, health)
+
+
+# ------------------------------------------------------------------ IAM 점검(삭제 예방)
+
+def iam_check(project_id: str, sa_path: str, *, canary_id: str = "") -> dict:
+    """앱 서비스 계정이 증거 아카이브를 **지울 수 있는지** 실제로 시험한다.
+
+    목표 상태: 앱은 만들 수 있고(create) 읽을 수 있지만 **지우거나 덮어쓸 수 없다**.
+    그래서 카나리아 문서를 하나 만들어 (a) 생성 성공 (b) 삭제 거부 (c) 덮어쓰기 거부를 확인한다.
+    카나리아는 `iam-canary-` 로 시작해 실제 아카이브와 섞이지 않고, `expire_at` 을 넣어 TTL 로 스스로 사라진다.
+    """
+    store = gcp.Firestore(project_id, sa_path)
+    cid = canary_id or ("iam-canary-" + uuid.uuid4().hex[:12])
+    path = "evidence_archives/" + cid
+    now = int(time.time())
+    out = {"canary": cid, "created": False, "delete_blocked": None, "update_blocked": None,
+           "verdict": "", "note": "카나리아는 expire_at 으로 TTL 삭제된다(정책이 걸려 있으면)"}
+    try:
+        store.set(path, {"canary": True, "created_at": now, "expire_at": now + 3600,
+                         "trigger": "iam_check"})
+        out["created"] = True
+    except gcp.GcpError as exc:
+        out["verdict"] = "create_failed:" + exc.code
+        return out
+    try:
+        store.delete(path)
+        out["delete_blocked"] = False     # 앱이 증거를 지울 수 있다 = 목표 미달
+    except gcp.GcpError:
+        out["delete_blocked"] = True
+    try:
+        store.set(path, {"canary": True, "tampered": True, "expire_at": now + 3600})
+        out["update_blocked"] = False
+    except gcp.GcpError:
+        out["update_blocked"] = True
+    if out["delete_blocked"] and out["update_blocked"]:
+        out["verdict"] = "ok"
+    elif not out["delete_blocked"]:
+        out["verdict"] = "app_can_delete"
+    else:
+        out["verdict"] = "app_can_overwrite"
+    return out
+
 
 
 def list_archives(project_id: str, sa_path: str, *, limit: int = 200) -> list[dict]:
