@@ -1,11 +1,14 @@
 {
-  "armed": false,
-  "fingerprint_sha256": "",
-  "generation": 0,
+  "armed": true,
+  "fingerprint_sha256": "8400b0f5ca08f5b136185a330b493beb112f75a4e4bf2dec8c8fd83e8dd27820",
+  "generation": 1,
   "health_url": "https://codyssey-final.onrender.com",
-  "key_id": "",
-  "note": "미활성. `python -m opsarchive keygen` → `python -m opsarchive pin --key <file> --health-url <url>` 로 채운다. armed=true 가 되면 .github/workflows/verify-key-pin.yml 이 /health 의 지문·세대를 강제한다.",
-  "public_key": "",
+  "key_id": "8400b0f5ca08f5b1",
+  "note": "",
+  "public_key": "x25519:XKYrqcBsZI7nVftteK7bP6BFVnzxnP1Y_Bk8r9dqswI",
   "rotated_by_commit": "",
-  "schema": 1
+  "schema": 1,
+  "signing_fingerprint_sha256": "fb3022faadaa14788e85b9cf46193b35c1f2f2b590ac569de781aa9c8e1875ef",
+  "signing_key_id": "fb3022faadaa1478",
+  "signing_public_key": "x25519:SiPuJv1AhRZEKhd4VZGBjO2pw2Qf_DmrnVGo-8HktJQ"
 }

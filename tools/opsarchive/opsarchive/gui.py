@@ -17,6 +17,7 @@ CLI 와 같은 원칙을 지킨다
 
 from __future__ import annotations
 
+import json
 import os
 import queue
 import threading
@@ -50,6 +51,19 @@ class App:
         self.root.minsize(960, 620)
         self.log_queue: queue.Queue[tuple[str, str]] = queue.Queue()
         self.busy = False
+        # 자동 실행·수동 실행이 같은 체크포인트 파일을 동시에 건드리지 않게 하는 상호배제 락.
+        # _lock_owner 로 "누가 잡았는지"를 구분해, 중지와 워커 finally 가 겹쳐도 남의 락을 풀지 않는다.
+        self.run_lock = threading.Lock()
+        self._lock_guard = threading.Lock()
+        self._lock_owner = ""
+        self._lock_seq = 0
+        # 서비스 목록은 워커 스레드가 불러온다 — 결과를 담을 창 참조와 토큰(다른 창의 결과 배제).
+        self.service_window = None
+        self.service_combo = None
+        self.service_hint = None
+        self.service_names_var = None
+        self.service_names_loaded: list[str] = []
+        self._service_seq = 0
         self.settings = config.bootstrap()
         self.env_values = config.parse_env(self._read(config.env_path()))
         self.setting_vars: dict[str, tk.StringVar] = {}
@@ -88,6 +102,10 @@ class App:
                 continue
             if tag == "status":
                 self.status_var.set(text)          # 메인 창 아래 상태 줄(로그 창이 닫혀 있어도 보인다)
+                continue
+            if tag == "services":
+                # 워커 스레드가 불러온 서비스 목록을 메인 스레드에서 창에 반영한다(Tk 규칙).
+                self._apply_service_names(text)
                 continue
             if self.output is None or not self.output.winfo_exists():
                 self.log_lines.append((tag, text))    # 창이 닫혀 있어도 기록은 남긴다
@@ -134,10 +152,43 @@ class App:
                                           "(아직 아카이브 서명이 없으면 잃는 것이 없습니다).")
         return ""
 
+    def _acquire_run_lock(self, owner: str) -> bool:
+        """동시 실행 상호배제 — 락을 **비차단**으로 잡는다(못 잡으면 로그만 남기고 False).
+
+        자동 실행이 도는 동안 [이 노드 실행] 이 켜지면 둘 다 같은 체크포인트 파일에 쓰려다
+        경합한다. 그래서 워커를 띄우기 **전에** 메인 스레드에서 락을 잡는다.
+        """
+        if not self.run_lock.acquire(blocking=False):
+            self.log("다른 작업이 실행 중입니다 — 락을 잡지 못했습니다(owner=%s, locked=%s)"
+                     % (owner, self.run_lock.locked()), "err")
+            return False
+        with self._lock_guard:
+            self._lock_owner = owner
+        self.log("실행 락 획득(owner=%s, locked=%s)." % (owner, self.run_lock.locked()))
+        return True
+
+    def _release_run_lock(self, owner: str) -> None:
+        """**자기가 잡은 락만** 놓는다(자동 실행 중지와 워커 finally 가 겹쳐도 안전)."""
+        with self._lock_guard:
+            if self._lock_owner != owner:
+                return
+            self._lock_owner = ""
+        try:
+            self.run_lock.release()
+        except RuntimeError:
+            pass
+        self.log("실행 락 반환(owner=%s, locked=%s)." % (owner, self.run_lock.locked()))
+
     def run(self, label: str, fn) -> None:
         """작업을 워커 스레드로 돌린다(패스프레이즈 입력은 메인 스레드에서 먼저 받는다)."""
         if self.busy:
             messagebox.showinfo("opsarchive", "다른 작업이 아직 돌고 있어요.")
+            return
+        self._lock_seq += 1
+        owner = "run#%d:%s" % (self._lock_seq, label)
+        if not self._acquire_run_lock(owner):
+            # 자동 실행이 락을 쥐고 있거나 다른 워커가 돌고 있다 — 동시 실행을 막는다.
+            self.log_queue.put(("status", "다른 작업이 실행 중입니다"))
             return
         self.busy = True
         self.log("▶ " + label, "head")
@@ -170,6 +221,7 @@ class App:
                     self.log("   " + str(exc)[:400], "err")
             finally:
                 self.busy = False
+                self._release_run_lock(owner)      # 성공·실패 어느 쪽이든 락을 놓는다
                 # Tk 위젯은 메인 스레드에서만 만진다 — 큐를 통해 갱신을 요청한다.
                 self.log_queue.put(("refresh", ""))
 
@@ -255,6 +307,7 @@ class App:
             ("핀 파일 있음" if pin_exists else "핀 파일 없음") + " · " + self.state("pin"))
         self.step_status.get("pin-check", tk.StringVar()).set(self.state("pin-check"))
         self.step_status.get("iam", tk.StringVar()).set(self.state("iam-check"))
+        self.step_status.get("redeploy", tk.StringVar()).set(self.state("재배포"))
         self._refresh_store_and_verify()
         self._update_hint()
 
@@ -572,6 +625,10 @@ class App:
         if getattr(self, "automation_thread", None) and self.automation_thread.is_alive():
             messagebox.showinfo("opsarchive", "이미 자동 실행이 돌고 있습니다.")
             return
+        # 자동 실행이 도는 동안에는 수동 [이 노드 실행] 이 같은 체크포인트를 건드리지 못하게 락을 쥔다.
+        if not self._acquire_run_lock("automation"):
+            messagebox.showinfo("opsarchive", "다른 작업이 실행 중입니다 — 자동 실행을 시작할 수 없습니다.")
+            return
         self.automation_stop = threading.Event()
         secrets = {}
         sign_files = config.key_files()["sign"]
@@ -590,6 +647,7 @@ class App:
             except Exception as exc:      # noqa: BLE001
                 self.log("자동 실행 실패: %s" % type(exc).__name__, "err")
             finally:
+                self._release_run_lock("automation")   # 스스로 끝난 경우에도 락을 놓는다
                 self.log_queue.put(("refresh", ""))
 
         self.automation_thread = threading.Thread(target=worker, name="opsarchive-auto", daemon=True)
@@ -600,6 +658,8 @@ class App:
         if getattr(self, "automation_stop", None):
             self.automation_stop.set()
             self.log("자동 실행 중지를 요청했습니다(현재 주기가 끝나면 멈춥니다).")
+        # 락은 owner 문자열로 구분한다 — 여기서 놓아도 워커 finally 의 중복 반환은 무해하다.
+        self._release_run_lock("automation")
 
     def reload_settings(self) -> None:
         self.settings = config.read_settings()
@@ -809,6 +869,10 @@ class App:
         self._step(steps, 6, "⑦", "IAM 검사",
                    "앱 서비스 계정이 증거를 지울 수 있는지 시험합니다(목표: 만들 수는 있고 지울 수는 없다).",
                    "iam", "IAM 검사 실행", self.do_iam)
+        self._step(steps, 7, "⑧", "재배포",
+                   "워크플로우 env 노드를 [Render에 반영] 한 뒤 이 버튼으로 재배포합니다(환경변수는 재배포해야 실제로 적용됩니다). "
+                   "환경변수 반영 뒤 이 버튼으로 재배포한다 — 재배포가 끝나면 ② doctor 로 지문을 다시 대조하세요.",
+                   "redeploy", "재배포 실행", self.do_redeploy)
         self.render_hint = self._hint(frame)
 
     def check_remote_status(self) -> None:
@@ -842,28 +906,33 @@ class App:
         return value
 
     def pick_service(self) -> None:
-        """Render 서비스 이름 선택 — 워크스페이스 목록에서 골라 settings.json 에 넣는다.
+        """Render 서비스 이름 선택 — 목록은 **워커 스레드**에서 불러와 UI 를 멈추지 않는다.
 
-        이름을 손으로 적으면 밑줄/하이픈 차이로 `not_found` 가 나기 쉽다(실제로 그렇게 막혔다).
-        목록에서 고르면 그 실수가 사라지고, 직접 입력도 허용한다.
+        `render.service_names()` 는 최대 600초(render.CLI_TIMEOUT) 걸릴 수 있다. 예전에는 메인
+        스레드에서 그대로 불러 창이 최대 10분 멈췄다. 이제 창을 **먼저** 띄우고 목록은 워커가
+        불러와 큐로 넘긴다. 목록이 오기 전이라도 이름을 직접 입력해 [확인] 할 수 있고(기존 동작
+        보존), 조회가 실패하면 창 안에 오류를 남기되 창은 계속 쓸 수 있다.
         """
-        names: list[str] = []
-        error = ""
-        try:
-            names = render.service_names()
-        except Exception as exc:      # noqa: BLE001 — CLI 없음·미로그인 등을 화면에 보여준다
-            error = "%s%s" % (getattr(exc, "code", ""), type(exc).__name__)
-
+        names_so_far = list(self.service_names_loaded or [])
         window = tk.Toplevel(self.root)
         window.title("Render 서비스 선택")
-        window.geometry("640x200")
+        window.geometry("640x220")
         window.transient(self.root)
-        ttk.Label(window, text="워크스페이스의 서비스 %d개%s" % (len(names), (" — 조회 실패(%s)" % error) if error else "")).pack(
-            anchor="w", padx=12, pady=(10, 2))
+        self._service_seq += 1
+        token = self._service_seq
+        self.service_token = token
+        self.service_window = window
+
+        hint = ttk.Label(window, text="서비스 목록 불러오는 중…", foreground="#666", justify="left")
+        hint.pack(anchor="w", padx=12, pady=(10, 2))
+        self.service_hint = hint
         ttk.Label(window, text="앱 주소(호스트)와 서비스 이름은 다를 수 있습니다 — 이름은 여기서 고르세요.",
                   foreground="#666").pack(anchor="w", padx=12)
-        var = tk.StringVar(value=str(self.settings.get("service") or (names[0] if names else "")))
-        ttk.Combobox(window, textvariable=var, values=names, width=60, state="normal").pack(fill="x", padx=12, pady=8)
+        var = tk.StringVar(value=str(self.settings.get("service") or ""))
+        self.service_names_var = var
+        combo = ttk.Combobox(window, textvariable=var, values=names_so_far, width=60, state="normal")
+        combo.pack(fill="x", padx=12, pady=8)
+        self.service_combo = combo
         status = ttk.Label(window, text="", foreground="#060")
         status.pack(anchor="w", padx=12)
 
@@ -871,7 +940,8 @@ class App:
             chosen = (var.get() or "").strip()
             if not chosen:
                 return
-            if names and chosen not in names:
+            known = list(self.service_names_loaded or [])
+            if known and chosen not in known:
                 status.configure(text="⚠ 목록에 없는 이름입니다(그래도 저장할 수 있습니다).", foreground="#c00")
             self.settings["service"] = chosen
             if "service" in self.setting_vars:
@@ -890,7 +960,72 @@ class App:
         ttk.Button(bar, text="취소", command=window.destroy).pack(side="right", padx=6)
         window.bind("<Return>", lambda _e: confirm())
         window.bind("<Escape>", lambda _e: window.destroy())
+
+        def forget() -> None:
+            # 창을 닫으면 참조를 비워, 뒤늦게 온 워커 결과가 죽은 위젯을 건드리지 않게 한다.
+            if getattr(self, "service_window", None) is window:
+                self.service_window = None
+                self.service_combo = None
+                self.service_hint = None
+                self.service_names_var = None
+            window.destroy()
+
+        window.protocol("WM_DELETE_WINDOW", forget)
+
+        self._load_service_names(token)
         self.root.wait_window(window)
+
+    def _load_service_names(self, token: int) -> None:
+        """서비스 목록 조회를 워커 스레드에 맡긴다(최대 600초 — 메인 스레드에서 부르면 창이 멈춘다)."""
+        self.log_queue.put(("status", "서비스 목록 불러오는 중…"))
+
+        def worker() -> None:
+            names: list[str] = []
+            error = ""
+            try:
+                names = [str(n) for n in render.service_names()]
+            except Exception as exc:      # noqa: BLE001 — CLI 없음·미로그인 등을 화면에 보여준다
+                error = "%s%s" % (getattr(exc, "code", ""), type(exc).__name__)
+            payload = json.dumps({"token": token, "names": names, "error": error})
+            # Tk 위젯은 만지지 않는다 — 큐에 결과만 넣으면 _drain 이 메인 스레드에서 반영한다.
+            self.log_queue.put(("services", payload))
+
+        threading.Thread(target=worker, name="opsarchive-services", daemon=True).start()
+
+    def _apply_service_names(self, payload: str) -> None:
+        """워커가 불러온 서비스 목록을 **메인 스레드에서만** 창 위젯에 반영한다(_drain 이 호출)."""
+        try:
+            data = json.loads(payload)
+        except ValueError:
+            data = {"names": [], "error": "parse_error"}
+        if data.get("token") != getattr(self, "service_token", None):
+            return                                    # 다른(닫힌) 창의 결과는 버린다
+        names = [str(n) for n in data.get("names", [])]
+        error = str(data.get("error", ""))
+        self.service_names_loaded = names
+        if error:
+            self.log("서비스 목록 조회 실패: %s" % error, "err")
+            self.log_queue.put(("status", "서비스 목록 조회 실패: %s" % error))
+        else:
+            self.log("서비스 목록 %d개를 불러왔습니다." % len(names))
+            self.log_queue.put(("status", "서비스 목록 %d개를 불러왔습니다." % len(names)))
+        window = getattr(self, "service_window", None)
+        if window is None or not window.winfo_exists():
+            return
+        combo = getattr(self, "service_combo", None)
+        if combo is not None and combo.winfo_exists():
+            combo.configure(values=names)
+        var = getattr(self, "service_names_var", None)
+        if var is not None and not (var.get() or "").strip() and names:
+            var.set(names[0])                         # 기존 동작: 기본 선택을 첫 항목으로
+        hint = getattr(self, "service_hint", None)
+        if hint is not None and hint.winfo_exists():
+            if error:
+                hint.configure(text="서비스 목록을 불러오지 못했습니다(%s) — 이름을 직접 입력해도 됩니다."
+                                    % error, foreground="#c00")
+            else:
+                hint.configure(text="워크스페이스의 서비스 %d개 — 목록에서 고르세요(직접 입력도 됩니다)."
+                                    % len(names), foreground="#666")
 
     def pick_key(self, kind: str = "admin") -> str:
         """키 파일 선택 창 — ① 드롭다운(자동 발견) ② 파일 열기 ③ 경로 직접 입력.
@@ -1050,6 +1185,28 @@ class App:
     def do_iam(self) -> None:
         self.run("iam-check", lambda: commands.iam_check(self.require("project_id"),
                                                          self.require("sa_path")))
+
+    def do_redeploy(self) -> None:
+        """[Render에 반영] 으로 바꾼 환경변수를 실제로 적용하려면 재배포가 필요하다.
+
+        `commands.deploy` 는 다른 에이전트가 붙이는 인터페이스라 아직 없을 수 있다 —
+        존재를 확인하고, 없으면 로그만 남긴다(AttributeError 로 창이 닫히지 않게).
+        """
+        deploy = getattr(commands, "deploy", None)
+        if not callable(deploy):
+            self.log("재배포 명령이 아직 없습니다(commands.deploy 미구현).", "err")
+            self.log_queue.put(("status", "재배포 명령이 아직 없습니다"))
+            return
+
+        def work() -> dict:
+            result = deploy(self.require("service")) or {}
+            note = str(result.get("note", ""))
+            ok = bool(result.get("ok"))
+            self.log("재배포 결과: %s" % (note or ("성공" if ok else "실패")))
+            self.log_queue.put(("status", "재배포: " + (note or ("완료" if ok else "실패"))))
+            return result
+
+        self.run("재배포", work)
 
     # ------------------------------------------------------------ 탭 5: 보관소
     def _tab_store(self, notebook) -> None:
