@@ -41,15 +41,20 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# e2e 스크린샷
+# e2e ?ㅽ겕由곗꺑
 /e2e-shots
-# e2e:reset이 고른 검사 날짜 (기계마다 다름)
+# e2e:reset??怨좊Ⅸ 寃???좎쭨 (湲곌퀎留덈떎 ?ㅻ쫫)
 /.e2e-date
 
-# 참고 자료 (다른 저장소·개인 자료 포함 — 커밋하지 않음)
+# 李멸퀬 ?먮즺 (?ㅻⅨ ??μ냼쨌媛쒖씤 ?먮즺 ?ы븿 ??而ㅻ컠?섏? ?딆쓬)
 /reference/
 /other/
 /sub_agent_output/
 
-# 이 레포에 적용한 패치 파일은 코드가 아니다 (루트에만 해당 — .yarn/patches는 남긴다)
+# ???덊룷???곸슜???⑥튂 ?뚯씪? 肄붾뱶媛 ?꾨땲??(猷⑦듃?먮쭔 ?대떦 ??.yarn/patches???④릿??
 /*.patch
+
+# Firebase Admin SDK 키 JSON — 절대 커밋하지 않는다(탈퇴 관리자 경로의 시크릿)
+*-firebase-adminsdk-*.json
+serviceAccount*.json
+serviceAccountKey*.json

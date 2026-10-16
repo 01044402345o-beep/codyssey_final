@@ -2076,42 +2076,73 @@ function clearAccountStorage() {
   if (box) keys.forEach(k => { try { box.removeItem(k); } catch (e) { /* 저장소 막힘 */ } });
   if (STORE && box !== STORE) keys.forEach(k => { try { STORE.removeItem(k); } catch (e) { /* 저장소 막힘 */ } });
 }
-/* 탈퇴: 브라우저 기록 폐기 → 서버 기록 삭제(토큰이 살아 있을 때) → Firebase 계정 삭제. 되돌릴 수 없다.
-   브라우저 기록을 먼저 지운다: 서버 삭제 도중 앱이 끊겨도 살아 있는 계정이 그 기록을 다시 올려 되살리지 못하게.
-   서버 삭제(토큰 없음·실패)면 계정을 지우지 않고 멈춘다 — 계정만 사라지고 기록이 남는 것을 막기 위해서다. */
+/* 관리자 경로: 서버가 서비스 계정으로 토큰 취소 + 기록 삭제 + 계정 삭제를 한 번에 한다.
+   'ok'(끝) · 'unavailable'(경로/키 없음 → 기존 경로로) · 'failed'(그 밖의 오류 → 계정 유지, 중단).
+   200 이어도 본문 계약(erased:true)을 확인한다 — 프록시·CDN 의 200 을 성공으로 오인하지 않게. */
+async function eraseOnServer(token) {
+  try {
+    const res = await fetch((API.base || '') + '/account/erase', { method: 'POST', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } });
+    if (res.status === 404 || res.status === 405) return 'unavailable';        // 아직 이 경로가 없는 서버
+    if (res.status !== 200) {
+      let code = ''; try { code = (await res.json()).detail; } catch (e) { code = ''; }
+      return (res.status === 503 && code === 'admin_unavailable') ? 'unavailable' : 'failed';
+    }
+    const body = await res.json().catch(() => null);
+    return (body && body.erased === true) ? 'ok' : 'failed';
+  } catch (e) { return 'failed'; }
+}
+/* 기존 경로: 규칙 삭제(DELETE /user/state)로 서버 기록만 지운다. 계정은 화면이 deleteUser 로 지운다.
+   200 이고 본문이 deleted:true 일 때만 성공으로 본다. */
+async function deleteStateOnServer(token) {
+  try {
+    const res = await fetch((API.base || '') + '/user/state', { method: 'DELETE', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } });
+    if (res.status !== 200) return false;
+    const body = await res.json().catch(() => null);
+    return !!(body && body.deleted === true);
+  } catch (e) { return false; }
+}
+/* 탈퇴: 서버(관리자 또는 규칙) → 브라우저 → (폴백이면) 클라이언트 deleteUser. 되돌릴 수 없다.
+   서버 단계가 확정된 뒤에 브라우저 기록을 지운다 — 중간에 멈추면 계정·기록을 그대로 두고,
+   나중에 화면을 다시 그려도 빈 기록이 서버로 올라가 지워지지 않게 한다. */
 async function doWithdraw() {
   const uid = accountUid();
   const fb = !!(window.FirebaseAuth && FirebaseAuth.enabled);
   const accountUser = fb && !!uid;
+  const stop = m => { skipStateWrite = false; toast(m); };
   if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; }   // 예약된 업로드가 지운 기록을 되살리지 않게
   cancelGen();                                                       // 진행 중인 생성 응답도 상태를 덮지 않게
   skipStateWrite = true;
 
-  clearAccountStorage();                     // (1) 브라우저 기록 폐기
-
-  if (accountUser && API.base !== null) {    // (2) 서버 기록 삭제
+  let msg = accountUser ? '탈퇴했어요. 계정과 저장된 기록을 모두 지웠어요.' : '이 브라우저에 저장된 기록을 모두 지웠어요.';
+  if (accountUser && API.base !== null) {
     let token = '';
     try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
-    if (!token) { skipStateWrite = false; toast('로그인 정보를 확인하지 못해 탈퇴를 멈췄어요. 잠시 뒤 다시 시도해 주세요.'); return; }
-    try {
-      const res = await fetch((API.base || '') + '/user/state', { method: 'DELETE', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-    } catch (e) { skipStateWrite = false; toast('저장된 계정 기록을 지우지 못해 탈퇴를 멈췄어요. 잠시 뒤 다시 시도해 주세요.'); return; }
-  }
-
-  let msg = accountUser ? '탈퇴했어요. 계정과 저장된 기록을 모두 지웠어요.' : '이 브라우저에 저장된 기록을 모두 지웠어요.';
-  if (accountUser) {                         // (3) Firebase 계정 삭제(최근 로그인 필요)
-    const r = await FirebaseAuth.deleteAccount();
-    if (!r.ok) {
-      msg = r.code === 'auth/requires-recent-login'
-        ? '저장된 기록은 지웠어요. 보안을 위해 다시 로그인한 뒤 탈퇴를 다시 눌러 주세요.'
-        : (FirebaseAuth.koreanError({ code: r.code }) || '계정 삭제에 실패했어요. 잠시 뒤 다시 시도해 주세요.');
+    if (!token) return stop('로그인 정보를 확인하지 못해 탈퇴를 멈췄어요. 잠시 뒤 다시 시도해 주세요.');
+    const admin = await eraseOnServer(token);
+    if (admin === 'ok') {
+      clearAccountStorage();                   // 서버가 계정·토큰·기록을 지웠다 — 이제 로컬만 정리
+      try { await FirebaseAuth.signOut(); } catch (e) { /* 화면 상태는 비운다 */ }
+    } else if (admin === 'unavailable') {
+      // 서비스 계정 키가 없는 환경: 규칙 삭제 + 클라이언트 deleteUser 로 되돌아간다.
+      if (!await deleteStateOnServer(token)) return stop('저장된 계정 기록을 지우지 못해 탈퇴를 멈췄어요. 잠시 뒤 다시 시도해 주세요.');
+      clearAccountStorage();                   // 서버 기록이 지워진 뒤에 로컬도 지운다
+      const r = await FirebaseAuth.deleteAccount();
+      if (!r.ok) {
+        msg = r.code === 'auth/requires-recent-login'
+          ? '저장된 기록은 지웠어요. 보안을 위해 다시 로그인한 뒤 탈퇴를 다시 눌러 주세요.'
+          : (FirebaseAuth.koreanError({ code: r.code }) || '계정 삭제에 실패했어요. 잠시 뒤 다시 시도해 주세요.');
+      }
+    } else {
+      return stop('탈퇴를 완료하지 못했어요. 잠시 뒤 다시 시도해 주세요.');   // 계정·기록을 그대로 둔다
     }
+  } else {
+    clearAccountStorage();                     // 서버를 쓰지 않는(데모) 경우: 로컬만
   }
 
   SESS_READY = false;
   S.user = null;
   S.trip = null; resetDerived();
+  S.archived = [];                           // 보관한 여행 제목도 메모리에서 지운다(관리자 화면에 남지 않게)
   PROG.done = {};
   RESTORE.screen = null; RESTORE.studyDate = null; RESTORE.card = null; RESTORE.trip = null;
   aiRefreshKey = null;                       // 다음 여행에서 복원 시 AI 문장 채우기가 다시 돌게

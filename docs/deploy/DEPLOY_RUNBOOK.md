@@ -31,7 +31,7 @@
 | 프론트 주소 | **기본: 위 배포 URL 과 동일** (`mockup/` 을 같은 서비스의 `/` 에서 서빙) | 별도 프론트를 쓸 때만 CORS `ALLOW_ORIGINS` 에 추가 |
 | Gemini API 키 발급처 | Google AI Studio (`aistudio.google.com/apikey`) | |
 | 키 보관 위치 | Render → Environment → `GEMINI_API_KEY`, `GROQ_API_KEY`(전사), 보충 `OPENAI_API_KEY`·`ASSEMBLYAI_API_KEY` | **코드·깃에 절대 넣지 않음** |
-| 로그인·계정 기록 | `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_APP_ID` | 웹 앱 공개 설정. 비어 있으면 데모 로그인. 서비스 계정 JSON 은 넣지 않음. Firebase 콘솔에서 이메일/비밀번호와 Google 제공자를 켠다. 로그인한 계정의 진도·복습·동의는 `GET/PUT /user/state` 가 같은 프로젝트의 Firestore `(default)` (asia-northeast3) `users/{uid}` 에 둔다. 규칙은 그 데이터베이스에만 있다. `firestore-native-mode` 는 쓰지 않는다. 저장소 호출이 실패하면 그 경로는 503 이고 브라우저 기록은 남는다. 녹음 파일과 여행 본문은 저장하지 않는다 |
+| 로그인·계정 기록 | `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_APP_ID` | 웹 앱 공개 설정. 비어 있으면 데모 로그인. **탈퇴용 서비스 계정 JSON 은 공개 설정이 아니라** `FIREBASE_SERVICE_ACCOUNT_JSON` 하나로 따로 넣는다(없어도 된다 — 아래 E). Firebase 콘솔에서 이메일/비밀번호와 Google 제공자를 켠다. 로그인한 계정의 진도·복습·동의는 `GET/PUT /user/state` 가 같은 프로젝트의 Firestore `(default)` (asia-northeast3) `users/{uid}` 에 둔다. 규칙은 그 데이터베이스에만 있다. `firestore-native-mode` 는 쓰지 않는다. 저장소 호출이 실패하면 그 경로는 503 이고 브라우저 기록은 남는다. 녹음 파일과 여행 본문은 저장하지 않는다 |
 | 담당(배포) | 최성빈 | |
 | 담당(대리) | ____________ | 한 사람이 막히면 여기서 멈춥니다 — 반드시 지정 |
 | 비상 연락 채널 | Discord `#일반` | |
@@ -364,7 +364,7 @@ git push origin main
 구현자가 1명일 때 **가장 빠른 복구**입니다. Render → Environment → 값 변경 → 자동 재시작.
 
 > **기본값 주의 (코드 기준)**: `RATE_LIMIT=20`, `RATE_WINDOW=60`, `TRUSTED_PROXY_HOPS=0`, `CONFIG_STRICT=0`, `ALLOW_ORIGINS=*`, `AI_MIN_ATTEMPTS=30`(하한, 낮출 수 없음).
-> 현재 `render.yaml` 에는 `PYTHON_VERSION`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `ASSEMBLYAI_API_KEY` 가 정의돼 있습니다. 모델은 실행 중 목록에서 고릅니다. `STT_SELFTEST=1` 은 검증할 때만 넣고 끝나면 지웁니다.
+> 현재 `render.yaml` 에는 `PYTHON_VERSION`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `ASSEMBLYAI_API_KEY`, `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_APP_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON` 가 정의돼 있습니다(뒤 둘은 `sync: false` 로 값은 대시보드에서). 모델은 실행 중 목록에서 고릅니다. `STT_SELFTEST=1` 은 검증할 때만 넣고 끝나면 지웁니다.
 > 아래 표의 "평상시" 값은 **Render Environment 에 직접 추가해야** 적용됩니다.
 > 교육장처럼 한 공용 IP 에서 여러 명이 테스트하면 `RATE_LIMIT=20/60s` 에 걸릴 수 있으니 테스트 전에 올려 두세요.
 
@@ -399,6 +399,22 @@ firebase deploy --only firestore:rules     # 프로젝트: .firebaserc 의 com-e
 - `firestore-native-mode` 데이터베이스는 이 명령에 포함되지 않는다. 건드리지 않는다.
 - `encode_document` 가 쓰는 필드와 규칙의 `hasOnly` 목록이 어긋나면 배포에서 조용히 거부된다.
   `backend/tests/test_user_state.py` 의 규칙 대조 테스트가 이를 막는다(규칙 수정 시 함께 확인).
+
+### E. 탈퇴 관리자 키 (선택 — 없어도 동작한다)
+
+탈퇴(`POST /account/erase`)는 서비스 계정으로 **토큰 취소 + Firestore 문서 삭제 + Auth 계정 삭제**를 한다.
+관리자 삭제는 `requires-recent-login` 을 요구하지 않아, 화면의 `deleteUser` 가 자주 실패하던 문제를 없앤다.
+키가 없으면 서버는 `503 admin_unavailable` 을 돌려주고 화면은 기존 경로(규칙 삭제 + 클라이언트 `deleteUser`)로 되돌아간다.
+
+1. Firebase Console → 프로젝트 설정 → **서비스 계정** → "새 비공개 키 생성" → JSON 다운로드.
+   - 같은 프로젝트여야 한다(`project_id` 가 `FIREBASE_PROJECT_ID` 와 같아야 하고, 다르면 서버 로그에 경고가 남는다).
+   - **최소 권한**으로 쓰려면 전용 서비스 계정을 만들고 두 역할만 준다: `roles/firebaseauth.admin`(계정 취소·삭제) + `roles/datastore.user`(문서 삭제). 콘솔 기본 키는 Editor 라 더 넓다.
+   - Identity Toolkit API 와 Firestore API 가 켜져 있어야 한다.
+2. Render → Environment → `FIREBASE_SERVICE_ACCOUNT_JSON` 에 그 **JSON 문자열 전체**를 붙여 넣는다(줄바꿈 포함, `sync: false`).
+3. 확인: `/health` 의 `admin_erase` 가 `true` 인지 본다(키 값은 노출하지 않는다). 배포 후 로그인 계정에서 탈퇴를 한 번 실행해 Auth 계정이 사라지는지 본다.
+   - 순서 주의: 관리자 경로는 **토큰 취소가 먼저** 실행된다. 문서·계정 삭제가 도중 실패하면 다른 기기의 갱신 토큰은 이미 무효이고 계정은 남는다(다시 시도하면 된다).
+4. 되돌리기: 변수를 지우면 관리자 경로가 꺼지고 폴백 경로로 돌아간다.
+5. **절대 커밋하지 않는다.** 이 키는 관리자 권한을 가진 고가치 시크릿이다.
 
 ---
 

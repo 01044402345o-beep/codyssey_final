@@ -99,6 +99,69 @@ with sync_playwright() as p:
           twin["scoped_weak"] is None and twin["scoped_trip"] is None and twin["shared_weak"] is None and twin["shared_trip"] is None,
           str(twin))
 
+    # --- 관리자 경로 / 폴백 분기 (fetch·FirebaseAuth 를 대체해 실제 로그인 없이 검증) ---
+    def case(status, detail, body=None):
+        page.evaluate("""(cfg) => {
+          window.__calls = [];
+          window.fetch = async (url, opt = {}) => {
+            const path = String(url).replace(/^https?:\\/\\/[^/]+/, '');
+            const auth = (opt.headers && (opt.headers.Authorization || opt.headers.authorization)) || '';
+            window.__calls.push((opt.method || 'GET') + ' ' + path + ' ' + auth);
+            if (path === '/account/erase') return { ok: cfg.status === 200, status: cfg.status, json: async () => (cfg.body || { detail: cfg.detail }) };
+            if (path === '/user/state') return { ok: true, status: 200, json: async () => ({ deleted: true }) };
+            return { ok: true, status: 200, json: async () => ({}) };
+          };
+          const fa = window.FirebaseAuth;
+          fa.enabled = true;
+          fa.account = { uid: 'uidZ', provider: 'google.com' };
+          fa.idToken = async () => 'tok';
+          fa.signOut = async () => { window.__calls.push('signOut'); fa.account = null; };
+          fa.deleteAccount = async () => { window.__calls.push('deleteAccount'); fa.account = null; return { ok: true }; };
+          S.user = { uid: 'uidZ', provider: 'google.com', name: 'Z', email: 'z@example.com' };
+          ensure('plan'); go('u-home');
+        }""", {"status": status, "detail": detail, "body": body})
+        page.wait_for_timeout(150)
+        page.evaluate("doWithdraw()")
+        page.wait_for_timeout(300)
+        return page.evaluate("({ calls: window.__calls, user: S.user, scr: S.screen, local_trip: localStorage.getItem('cd_trip:uidZ') })")
+
+    def has(calls, prefix):
+        return any(c.startswith(prefix) for c in calls)
+
+    def idx(calls, prefix):
+        return next((i for i, c in enumerate(calls) if c.startswith(prefix)), -1)
+
+    def no_delete(calls):
+        return not any(c.startswith("DELETE ") for c in calls)
+
+    ok_case = case(200, "", {"erased": True})
+    check("관리자 경로 성공: 토큰을 실어 보내고 규칙 삭제·deleteUser 없이 끝난다",
+          has(ok_case["calls"], "POST /account/erase Bearer tok") and no_delete(ok_case["calls"])
+          and "deleteAccount" not in ok_case["calls"] and "signOut" in ok_case["calls"], str(ok_case["calls"]))
+    check("서버 탈퇴가 signOut 보다 먼저 일어난다",
+          0 <= idx(ok_case["calls"], "POST /account/erase") < idx(ok_case["calls"], "signOut"), str(ok_case["calls"]))
+    check("관리자 경로 성공 뒤 로그인 화면·로컬 폐기", ok_case["user"] is None and ok_case["scr"] == "u-login" and ok_case["local_trip"] is None, str(ok_case))
+
+    nf_case = case(404, "not_found")   # 아직 이 경로가 없는(옛) 서버
+    check("404(경로 없음): 폴백으로 되돌아간다",
+          has(nf_case["calls"], "POST /account/erase") and has(nf_case["calls"], "DELETE /user/state") and "deleteAccount" in nf_case["calls"], str(nf_case["calls"]))
+    check("404 폴백도 로그인 화면으로 끝난다", nf_case["user"] is None and nf_case["scr"] == "u-login", str(nf_case))
+
+    fb_case = case(503, "admin_unavailable")
+    check("키 없음(503 admin_unavailable): 규칙 삭제(토큰 포함) + deleteUser 로 되돌아간다",
+          has(fb_case["calls"], "POST /account/erase") and has(fb_case["calls"], "DELETE /user/state Bearer tok") and "deleteAccount" in fb_case["calls"], str(fb_case["calls"]))
+    check("폴백 경로도 로그인 화면으로 끝난다", fb_case["user"] is None and fb_case["scr"] == "u-login", str(fb_case))
+
+    fail_case = case(500, "admin_failed")
+    check("관리자 경로 실패(500): 계정을 지우지 않고 멈춘다",
+          has(fail_case["calls"], "POST /account/erase") and no_delete(fail_case["calls"]) and "deleteAccount" not in fail_case["calls"], str(fail_case["calls"]))
+    check("실패 시 화면·사용자·로컬 기록 유지", fail_case["user"] is not None and fail_case["scr"] == "u-home" and fail_case["local_trip"] is not None, str(fail_case))
+
+    blank_case = case(200, "", {})    # 본문 계약(erased:true) 없는 200 — 프록시/CDN 오인 방지
+    check("2xx 라도 본문 계약이 없으면 성공으로 보지 않는다",
+          has(blank_case["calls"], "POST /account/erase") and no_delete(blank_case["calls"]) and blank_case["user"] is not None and blank_case["local_trip"] is not None,
+          str(blank_case))
+
     check("자바스크립트 오류 없음", not errors, str(errors[:3]))
     b.close()
 

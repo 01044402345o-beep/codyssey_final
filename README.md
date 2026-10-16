@@ -67,6 +67,7 @@
 FastAPI (backend/app/main.py) ─ Render
    ├─ GET  /health        배포 커밋·키 상태·모델 상태
    ├─ GET·PUT /user/state 로그인한 계정의 진도·복습·동의·여행 입력 (여행 입력에서 장소·문장은 다시 계산)
+   ├─ DELETE /user/state 그 계정 기록 삭제 · POST /account/erase 탈퇴(관리자: 토큰 취소+계정 삭제, 서비스 계정 키가 있을 때)
    ├─ POST /itinerary     도시 하나의 장소 수집. 기본 플래그 꺼짐. 문장 팩은 만들지 않음
    ├─ POST /generate      카테고리 계약 → Gemini 생성 → 스키마·규칙 검증 → block 이면 재생성
    └─ POST /speak-check   PyAV → Silero VAD ─┐
