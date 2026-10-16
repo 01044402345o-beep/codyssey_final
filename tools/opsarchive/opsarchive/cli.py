@@ -65,6 +65,14 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--sign-key", required=True, help="서명 키 파일 경로")
     q.add_argument("--out", default="checkpoints")
 
+    q = sub.add_parser("observe", help="플랫폼 접근 로그(앱 밖 증인)와 체인 시도 항목을 비교한다")
+    q.add_argument("--project", required=True)
+    q.add_argument("--sa", required=True)
+    q.add_argument("--service", required=True, help="Render 서비스 이름")
+    q.add_argument("--path", default="/account/erase")
+    q.add_argument("--minutes", type=int, default=60, help="관측 창(분)")
+    q.add_argument("--tolerance", type=int, default=0, help="한 요청이 여러 줄로 찍히는 플랫폼 보정")
+
     q = sub.add_parser("verify-chain", help="체크포인트 서명·연속성·사라진 아카이브·챌린지를 검증한다")
     q.add_argument("--project", required=True)
     q.add_argument("--sa", required=True)
@@ -141,6 +149,12 @@ def main(argv: list[str] | None = None) -> int:
             phrase = commands.ask_passphrase(prompt="서명키 패스프레이즈: ")
             _print(commands.anchor(args.project, args.sa, args.sign_key, phrase, out_dir=args.out))
             return 0
+        if args.cmd == "observe":
+            result = commands.observe_requests(args.project, args.sa, args.service,
+                                               path=args.path, since_minutes=args.minutes,
+                                               tolerance=args.tolerance)
+            _print(result)
+            return 0 if result.get("ok") else 1
         if args.cmd == "verify-chain":
             result = commands.verify_chain(args.project, args.sa, args.pin, out_dir=args.out,
                                            challenge=args.challenge)
