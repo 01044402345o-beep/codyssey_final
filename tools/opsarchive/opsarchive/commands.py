@@ -388,6 +388,9 @@ def env_set(service: str, key: str, value: str, *, api_key_value: str | None = N
     """
     if not key.strip():
         raise CommandError("bad_input:key")
+    if not value.strip():
+        # 빈 값을 올리면 Render 가 400 을 돌려주고 원인을 알기 어렵다(실제로 겪었다).
+        raise CommandError("empty_value — 값이 비었습니다(.env 에 넣었는지, 셸 변수가 실제로 있는지 확인하세요)")
     sid = render.service_id(service)
     render.put_env(sid, key.strip(), value, api_key_value=api_key_value)
     return {"service_id": sid, "key": key.strip(), "value_length": len(value),
