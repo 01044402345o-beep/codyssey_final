@@ -72,7 +72,7 @@ class NodeSchemaTest(unittest.TestCase):
         self.assertTrue(REQUIRED_IDS.issubset({node["id"] for node in workflow.NODES}))
 
     def test_defaults_derived_from_nodes(self):
-        self.assertEqual(workflow.DEFAULTS["ttl_days"], 30)
+        self.assertEqual(workflow.DEFAULTS["ttl_days"], 90)   # 앱(evidence.py)의 기본 TTL 과 맞춘다
         self.assertEqual(workflow.DEFAULTS["include_secrets"], False)
         self.assertEqual(workflow.DEFAULTS["observe"], "60")
 

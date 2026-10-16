@@ -549,6 +549,9 @@ def seal_and_report(trigger: str, *, uid: str = "", ledger: list[dict[str, Any]]
     key = public_key()
     if key is None:
         return {"enabled": False, "reason": "no_key"}
+    if os.getenv("EVIDENCE_SEAL_FAILURES") == "0":
+        # 관리자 워크플로우(GUI 마인드맵의 seal_failures 노드)가 이 변수를 민다 — 끄면 봉인하지 않는다.
+        return {"enabled": False, "reason": "disabled_by_env"}
     if not throttle_ok(uid):
         return {"enabled": True, "reason": "throttled"}
     try:

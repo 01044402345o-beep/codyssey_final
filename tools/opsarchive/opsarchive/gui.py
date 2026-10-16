@@ -344,9 +344,22 @@ class App:
         ttk.Label(frame, text="자동화 워크플로우 — 노드를 클릭해 값을 바꾸고 [정책에 저장] 하면 다음 실행부터 반영됩니다.\n"
                              "서버 정책(환경변수)을 바꾸는 노드는 [Render에 반영] 뒤 재배포가 필요합니다.",
                   justify="left").pack(anchor="w", padx=10, pady=(8, 2))
-        self.canvas = tk.Canvas(frame, height=360, background="#fbfbfd", highlightthickness=1,
+        canvas_box = ttk.Frame(frame)
+        canvas_box.pack(fill="both", expand=True, padx=10, pady=4)
+        canvas_box.columnconfigure(0, weight=1)
+        canvas_box.rowconfigure(0, weight=1)
+        self.canvas = tk.Canvas(canvas_box, height=340, background="#fbfbfd", highlightthickness=1,
                                 highlightbackground="#dde")
-        self.canvas.pack(fill="both", expand=True, padx=10, pady=4)
+        xbar = ttk.Scrollbar(canvas_box, orient="horizontal", command=self.canvas.xview)
+        ybar = ttk.Scrollbar(canvas_box, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(xscrollcommand=xbar.set, yscrollcommand=ybar.set)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        ybar.grid(row=0, column=1, sticky="ns")
+        xbar.grid(row=1, column=0, sticky="we")
+        # 창이 좁으면 4번째 열이 잘렸다 — 스크롤바와 휠로 항상 닿을 수 있게 한다.
+        self.canvas.bind("<MouseWheel>", lambda e: self.canvas.yview_scroll(int(-e.delta / 120), "units"))
+        self.canvas.bind("<Shift-MouseWheel>",
+                         lambda e: self.canvas.xview_scroll(int(-e.delta / 120), "units"))
         self.canvas.bind("<Button-1>", self._on_canvas_click)
 
         editor = ttk.LabelFrame(frame, text="선택한 노드")
@@ -441,7 +454,7 @@ class App:
         self.canvas.configure(scrollregion=self.canvas.bbox("all") or (0, 0, 800, 400))
 
     def _on_canvas_click(self, event) -> None:
-        items = self.canvas.find_overlapping(event.x - 1, event.y - 1, event.x + 1, event.y + 1)
+        items = self.canvas.find_overlapping(event.x - 3, event.y - 3, event.x + 3, event.y + 3)
         for item in items:
             for tag in self.canvas.gettags(item):
                 if tag.startswith("n:"):
@@ -449,6 +462,10 @@ class App:
                     self._redraw_mindmap()
                     self._show_node_editor()
                     return
+        # 노드 밖을 클릭하면 선택을 푼다(이전 선택이 남아 있으면 편집 대상이 헷갈린다).
+        if self.selected_node:
+            self.selected_node = ""
+            self._redraw_mindmap()
 
     def _node_def(self, node_id: str) -> dict:
         for node in workflow.NODES:
@@ -492,19 +509,25 @@ class App:
         node = self._node_def(self.selected_node)
         if not node:
             return
-        if node.get("kind") in ("toggle", "choice", "number"):
-            value = self.node_value.get()
-            if node["kind"] == "toggle":
-                value = value in ("1", "True", "true")
-            elif node["kind"] == "number":
-                try:
-                    value = int(value)
-                except ValueError:
-                    messagebox.showerror("opsarchive", "숫자를 입력하세요.")
-                    return
-            self.policy[self.selected_node] = value
+        if node.get("kind") not in ("toggle", "choice", "number"):
+            # 값이 없는 실행 노드에서 파일을 다시 쓰고 '저장했습니다'라고 하면 사실과 다르다.
+            messagebox.showinfo("opsarchive", "값이 없는 실행 노드입니다 — [이 노드 실행] 을 쓰세요.")
+            return
+        value = self.node_value.get()
+        if node["kind"] == "toggle":
+            value = value in ("1", "True", "true")
+        elif node["kind"] == "number":
+            try:
+                value = int(value)
+            except ValueError:
+                messagebox.showerror("opsarchive", "숫자를 입력하세요.")
+                return
+        self.policy[self.selected_node] = value
         path = workflow.save(self.policy)
-        self.log("노드 '%s' 값을 저장했습니다 (%s)" % (self.selected_node, path))
+        # 저장은 클램프·정규화를 거친다 — 메모리를 파일과 맞추지 않으면 화면과 실제가 어긋난다.
+        self.policy = workflow.load()
+        self.log("노드 '%s' = %s 로 저장했습니다 (%s)"
+                 % (self.selected_node, self.policy.get(self.selected_node), path))
         self._redraw_mindmap()
         self._show_node_editor()
 

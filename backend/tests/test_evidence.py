@@ -309,6 +309,24 @@ class VerifyErasedTest(unittest.TestCase):
         self.firebase_admin.set_admin(self._admin(user={"localId": "uid-1"}))
         self.assertFalse(self.firebase_admin.verify_erased("uid-1")["ok"])
 
+    def test_seal_failures_env_can_turn_it_off(self):
+        """GUI 마인드맵의 seal_failures 노드가 미는 변수가 실제로 동작해야 한다(죽은 변수 금지)."""
+        private, public = C.keypair()
+        with mock.patch.dict(os.environ, {"EVIDENCE_PUBKEY": C.pack_public_key(public),
+                                          "EVIDENCE_SEAL_FAILURES": "0"}, clear=False):
+            result = evidence.seal_and_report("erase_failed", uid="uid-off")
+        self.assertEqual(result, {"enabled": False, "reason": "disabled_by_env"})
+
+    def test_seal_failures_env_absent_still_seals(self):
+        private, public = C.keypair()
+        with mock.patch.dict(os.environ, {"EVIDENCE_PUBKEY": C.pack_public_key(public),
+                                          "EVIDENCE_SEAL_FAILURES": "1"}, clear=False), \
+                mock.patch.object(evidence, "store", return_value={"archive_id": "a", "size": 1,
+                                                                   "chunks": 1}), \
+                mock.patch.object(evidence, "notify", return_value=True):
+            result = evidence.seal_and_report("erase_failed", uid="uid-on")
+        self.assertTrue(result.get("enabled"))
+
     def test_verification_failure_does_not_raise(self):
         class Broken:
             def read_tombstone(self, uid):
