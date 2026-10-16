@@ -278,3 +278,14 @@ CLI 오류는 `실패: <코드>` 형태로 화면에 찍힌다. 코드를 보고
 
 (확인 필요) macOS/Linux에서 GUI가 실제로 열리는지, Windows 11 PowerShell 7의 `&&` 동작,
 `publish`·`anchor`의 실제 소요 시간은 이 PC에서 검증하지 않았다.
+
+## 부록: 핀은 어디에 있나 (2026-10-17 변경)
+
+| 무엇 | 위치 | 비고 |
+|---|---|---|
+| 기대 지문·세대 | **GitHub Actions 변수** EVIDENCE_PIN_* | 저장소 파일이 아니다(admin 만 변경 가능) |
+| 로컬 핀 파일 | ~/.opsarchive/evidence-key-pin.json | 기본 경로. 옛 security/ 경로는 자동 이전된다 |
+| 올리는 명령 | pin-publish --repo <owner/name> | --dry-run 으로 먼저 확인 |
+| 대조 명령 | pin-remote-check --repo <owner/name> | 불일치면 exit 1 |
+
+CI(erify-key-pin)는 변수를 읽어 /health 와 대조하며, **변수 미설정이면 실패**한다(fail-closed).

@@ -231,3 +231,23 @@ scrypt(n=2^15, r=8, p=1) 로 패스프레이즈 유도. 파일 권한 0600.
 - **Windows 파일 권한**: `os.open(0o600)` 은 Windows 에서 ACL 을 바꾸지 않는다(실측 0o666) → `icacls` 로 상속을 끊고 소유자만 남긴다. 실패하면 결과에 `permissions: inherited_warning` 이 찍힌다(조용히 넘어가지 않는다).
 - **플랫폼 제약 3가지의 출처**: Render CLI 의 env 변경 불가·GitHub 이슈 첨부 API 부재·Firebase Storage 의 Blaze 요구는 **공식 문서로 확인**했으나 **저장소 안에는 근거 문서가 없다**(이 문서가 유일한 기록이다).
 - **압축 폭탄·KDF 파라미터**: 컨테이너 수준 상한(평문 32MB)과 scrypt 파라미터 검사(2¹⁴≤n≤2²⁰)를 넣었지만, 이는 CLI 가 여는 **신뢰할 수 없는 파일**을 전제로 한 방어다. 서비스 계정이 탈취되면 그 전에 다른 경로로 피해가 난다.
+
+## 13. 핀(기대 지문)의 저장 위치 — Actions 변수 (2026-10-17 결정)
+
+공개키·지문이라도 **공개 저장소 파일로는 두지 않는다.** 핀은 검증자(CI) 쪽 자산이므로 저장소 밖에 두고,
+CI 는 **GitHub Actions 변수**를 읽는다.
+
+| 무엇 | 어디 | 누가 바꿀 수 있나 |
+|---|---|---|
+| 기대 지문·세대·키 id·서명 지문·핀 sha256 | GitHub **Actions 변수** EVIDENCE_PIN_* (저장소 Settings → Variables) | 저장소 **admin** |
+| 로컬 핀 파일(원본) | ~/.opsarchive/evidence-key-pin.json (저장소 밖) | 관리자 본인 |
+| 앱이 쓰는 봉인 공개키 | Render 환경변수 EVIDENCE_PUBKEY | Render 계정 |
+
+- 올리기: python -m opsarchive pin-publish --repo <owner/name> (값을 보고만 하려면 --dry-run)
+- 대조: python -m opsarchive pin-remote-check --repo <owner/name> — 불일치면 exit 1
+- CI: .github/workflows/verify-key-pin.yml 이 ars.EVIDENCE_PIN_FINGERPRINT·EVIDENCE_PIN_GENERATION·
+  EVIDENCE_PIN_HEALTH_URL 을 읽어 /health 와 대조한다. **변수가 비어 있으면 실패(fail-closed)** 한다 —
+  "설정을 안 했다"가 조용히 통과하지 않는다.
+- 회전할 때: pin(로컬) → pin-publish(Actions 변수) → publish(Render 재배포) → pin-check/doctor.
+- 한계: 저장소 파일이 사라졌으므로 **공개 약속(누구나 핀을 확인)** 성질은 없어졌다. 대신 관리자가
+  오프라인에 지문을 적어 두고 주기적으로 pin-remote-check 로 대조하는 것을 권한다.
