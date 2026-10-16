@@ -87,7 +87,11 @@ class T(unittest.TestCase):
         firebase_admin.set_admin(fake)
         res = self.post()
         self.assertEqual(res.status_code, 200, res.text)
-        self.assertEqual(res.json(), {"erased": True})
+        body = res.json()
+        self.assertTrue(body["erased"])
+        # 영수증: 클라이언트가 보관해 나중에 "체인에 이 챌린지가 있는가"를 대조한다
+        self.assertEqual(sorted(body["receipt"]), ["challenge", "created_at", "digest", "outcome",
+                                                   "schema", "seq"])
         self.assertEqual(fake.erased, ["uid-1"])   # uid 는 토큰에서만 온다
 
     def test_admin_failure_is_surfaced(self):
@@ -115,6 +119,36 @@ class T(unittest.TestCase):
             res = self.client.post("/account/erase", headers={"Authorization": "Bearer signed-token"}, json={"uid": "uid-2"})
         self.assertEqual(res.status_code, 200, res.text)
         self.assertEqual(fake.erased, ["uid-1"])   # uid 는 토큰에서만 온다
+
+    def test_challenge_is_echoed_in_the_receipt(self):
+        """클라이언트가 **요청 전에** 만든 챌린지를 그대로 돌려준다 — 사전 커밋먼트의 대조 기준이다."""
+        firebase_admin.set_admin(FakeAdmin())
+        with mock.patch.dict(os.environ, {**ENV, "FIREBASE_SERVICE_ACCOUNT_JSON": SA}, clear=True), \
+                mock.patch.object(firebase_auth.id_token, "verify_firebase_token", return_value=CLAIMS):
+            res = self.client.post("/account/erase",
+                                   headers={"Authorization": "Bearer signed-token",
+                                            "X-Withdraw-Challenge": "ab" * 16})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["receipt"]["challenge"], "ab" * 16)
+
+    def test_chain_attempt_is_recorded_before_erasing(self):
+        """삭제를 시도하기 **전에** 체인에 커밋되어야 한다(순서가 사전 커밋먼트의 핵심)."""
+        fake = FakeAdmin()
+        firebase_admin.set_admin(fake)
+        calls = []
+        with mock.patch.dict(os.environ, {**ENV, "FIREBASE_SERVICE_ACCOUNT_JSON": SA}, clear=True), \
+                mock.patch.object(firebase_auth.id_token, "verify_firebase_token", return_value=CLAIMS), \
+                mock.patch.object(main.evidence, "configured", return_value=True), \
+                mock.patch.object(main.evidence, "record_attempt",
+                                  side_effect=lambda *a, **k: calls.append(("attempt", a[0])) or {"seq": 1, "digest": "d"}), \
+                mock.patch.object(main.evidence, "record_outcome",
+                                  side_effect=lambda *a, **k: calls.append(("outcome", a[0], a[1])) or {}):
+            res = self.client.post("/account/erase",
+                                   headers={"Authorization": "Bearer signed-token",
+                                            "X-Withdraw-Challenge": "cd" * 16})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(calls[0], ("attempt", "cd" * 16))                     # 먼저 시도 커밋
+        self.assertEqual(calls[1], ("outcome", "cd" * 16, "ok"))               # 그 뒤 결과 커밋
 
     def test_rate_limited(self):
         firebase_admin.set_admin(FakeAdmin())
