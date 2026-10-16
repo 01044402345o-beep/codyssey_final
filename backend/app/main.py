@@ -880,8 +880,14 @@ async def user_state_get(request: Request) -> dict[str, Any]:
 
 @app.put("/user/state")
 async def user_state_put(request: Request) -> dict[str, Any]:
-    """진도·복습·동의·여행 입력만 갈아 끼운다. uid 는 토큰에서 나오고 본문에서는 받지 않는다."""
+    """진도·복습·동의·여행 입력만 갈아 끼운다. uid 는 토큰에서 나오고 본문에서는 받지 않는다.
+
+    탈퇴한 uid 는 거부한다(403 account_deleted). 관리자 삭제 뒤에도 남은 미만료 ID 토큰이
+    문서를 다시 만드는 것을 막는다.
+    """
     account, token = await _account_token(request)
+    if firebase_admin.is_erased(account["uid"]):
+        raise HTTPException(status_code=403, detail="account_deleted")
     raw = await request.body()
     if len(raw) > user_state.MAX_STATE_BYTES:
         raise HTTPException(status_code=413, detail="state_too_large")

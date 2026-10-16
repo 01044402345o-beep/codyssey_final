@@ -217,6 +217,7 @@ let SESS_READY = false;                             /* 복원이 끝나기 전�
 let skipStateWrite = false;                         /* 계정을 갈아 끼우는 동안 이전 기록을 새 칸에 쓰지 않는다 */
 let stateTimer = null;
 let accountEpoch = 0;
+let accountClosed = false;   /* 서버가 '탈퇴한 계정'이라 답한 뒤 반복 처리하지 않게 */
 
 function accountUid() {
   const u = S && S.user;
@@ -332,13 +333,36 @@ async function pushPayload(uid, payload) {
   const live = FirebaseAuth.account && FirebaseAuth.account.uid;
   if (live && live !== uid) return;
   try {
-    await fetch((API.base || '') + '/user/state', {
+    const res = await fetch((API.base || '') + '/user/state', {
       method: 'PUT',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(payload),
       keepalive: true,
     });
+    if (!res.ok) {
+      let code = '';
+      try { code = (await res.json()).detail; } catch (e) { code = ''; }
+      // 다른 기기에서 탈퇴한 계정: 이 기기의 토큰이 아직 살아 있어도 서버가 거부한다.
+      if (res.status === 403 && code === 'account_deleted') handleAccountDeleted();
+    }
   } catch (e) { /* 서버가 막혀도 이 브라우저 기록은 남는다 */ }
+}
+/* 서버가 '탈퇴한 계정'이라 답했을 때(다른 기기에서 탈퇴) — 로컬을 비우고 로그인 화면으로 보낸다. */
+function handleAccountDeleted() {
+  if (accountClosed) return;
+  accountClosed = true;
+  try { clearAccountStorage(); } catch (e) { /* 저장소 막힘 */ }
+  if (window.FirebaseAuth && FirebaseAuth.enabled) { try { FirebaseAuth.signOut(); } catch (e) { /* 화면 상태는 비운다 */ } }
+  SESS_READY = false;
+  S.user = null;
+  S.trip = null; resetDerived();
+  S.archived = [];
+  PROG.done = {};
+  RESTORE.screen = null; RESTORE.studyDate = null; RESTORE.card = null; RESTORE.trip = null;
+  SESS_READY = true;
+  skipStateWrite = false;
+  toast('이 계정은 탈퇴되어 이 기기에서도 로그아웃했어요.');
+  go('u-login');
 }
 function scheduleStatePush() {
   const uid = accountUid();
@@ -405,6 +429,7 @@ function resumeScreen() {
 }
 async function adoptAccount(account, opts) {
   const epoch = ++accountEpoch;
+  accountClosed = false;   // 새 로그인/계정 전환 — 탈퇴 감지 상태를 초기화
   const navigate = !opts || opts.navigate !== false;
   skipStateWrite = true;
   SESS_READY = false;
