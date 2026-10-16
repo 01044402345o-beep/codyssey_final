@@ -105,6 +105,32 @@ with sync_playwright() as p:
     check("브라우저에 여행 입력이 남아 있다(장소·문장 본문은 없음)",
           reloaded["stored"] and reloaded["stored"]["studyStart"] == new_start and "places" not in reloaded["stored"] and "sents" not in reloaded["stored"], str(reloaded["stored"]))
 
+    # --- 날짜만 바꿔 완료한 날이 사라질 때는 저장 전에 확인한다 ---
+    before_prog = page.evaluate("""() => {
+      const rows = S.sched.filter(r => r.kind !== 'free');
+      rows.slice(0, 2).forEach(r => { r.completed = true; r.completedAt = Date.now(); PROG.done[r.date] = r.completedAt; });
+      return progress().done;
+    }""")
+    page.locator('.hero[data-act="edit-trip"]').click()
+    page.wait_for_timeout(250)
+    page.fill('[data-bind="studyStart"]', page.evaluate("Dt.add(S.trip.tripStart, -5)"))
+    page.wait_for_timeout(150)
+    page.click('[data-act="save-trip"]')
+    page.wait_for_timeout(250)
+    warn = page.evaluate("({ modal: !!S.modal, title: S.modal && S.modal.title, scr: S.screen, done: progress().done })")
+    check("완료한 날이 빠지면 저장 전에 확인 창", warn["modal"] and "학습 시작일" in (warn["title"] or ""), str(warn))
+    check("확인 전에는 저장·진도 변화 없음", warn["scr"] == "u-edit" and warn["done"] == before_prog, str(warn))
+    page.click('[data-act="modal-cancel"]')
+    page.wait_for_timeout(200)
+    check("취소하면 수정 화면 유지·진도 그대로",
+          page.evaluate("S.screen") == "u-edit" and page.evaluate("progress().done") == before_prog)
+    page.click('[data-act="save-trip"]')
+    page.wait_for_timeout(200)
+    page.click('[data-act="modal-ok"]')
+    page.wait_for_timeout(400)
+    after_prog = page.evaluate("({ scr: S.screen, done: progress().done })")
+    check("확정하면 저장되고 빠진 완료는 사라진다", after_prog["scr"] == "u-home" and after_prog["done"] < before_prog, str(after_prog))
+
     # --- 도시 변경 → 저장: 보고서부터 다시 만들지 묻는다 ---
     page.locator('.hero[data-act="edit-trip"]').click()
     page.wait_for_timeout(250)
