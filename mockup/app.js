@@ -2154,20 +2154,41 @@ function clearAccountStorage() {
   if (box) keys.forEach(k => { try { box.removeItem(k); } catch (e) { /* 저장소 막힘 */ } });
   if (STORE && box !== STORE) keys.forEach(k => { try { STORE.removeItem(k); } catch (e) { /* 저장소 막힘 */ } });
 }
-/* 관리자 경로: 서버가 서비스 계정으로 토큰 취소 + 기록 삭제 + 계정 삭제를 한 번에 한다.
-   'ok'(끝) · 'unavailable'(경로/키 없음 → 기존 경로로) · 'failed'(그 밖의 오류 → 계정 유지, 중단).
+/* 탈퇴 증명 — **사전 커밋먼트**. 요청을 보내기 **전에** 챌린지를 만들어 이 기기에 저장한다.
+   서버가 기록을 생략하면(앱 침해·부분 실패) 이 챌린지가 관리자의 앵커된 체인에 없으므로,
+   관리자가 `verify-chain --challenge` 로 대조하면 누락이 드러난다. 계정이 지워진 뒤에도 남아야 하므로
+   계정 칸이 아니라 기기 공용 칸(STORE)에 둔다. CSPRNG 가 없으면 만들지 않는다(추측 가능한 값은 증거가 못 된다). */
+const WITHDRAW_PROOF_KEY = 'cd_withdraw_proof';
+function newChallenge() {
+  const box = window.crypto;
+  if (!box || !box.getRandomValues) return '';
+  const bytes = new Uint8Array(16);
+  box.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+function saveWithdrawProof(proof) {
+  try { if (STORE) STORE.setItem(WITHDRAW_PROOF_KEY, JSON.stringify(proof)); } catch (e) { /* 저장소 막힘 */ }
+}
+function withdrawProof() {
+  try { const raw = STORE && STORE.getItem(WITHDRAW_PROOF_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+/* 관리자 경로: 서버가 서비스 계정으로 탈퇴 흔적·토큰 취소·기록 삭제·계정 삭제를 한 번에 한다.
+   반환: { status: 'ok'|'unavailable'|'failed', receipt: {...}|null }
    200 이어도 본문 계약(erased:true)을 확인한다 — 프록시·CDN 의 200 을 성공으로 오인하지 않게. */
-async function eraseOnServer(token) {
+async function eraseOnServer(token, challenge) {
   try {
-    const res = await fetch((API.base || '') + '/account/erase', { method: 'POST', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } });
-    if (res.status === 404 || res.status === 405) return 'unavailable';        // 아직 이 경로가 없는 서버
+    const headers = { Authorization: 'Bearer ' + token, Accept: 'application/json' };
+    if (challenge) headers['X-Withdraw-Challenge'] = challenge;
+    const res = await fetch((API.base || '') + '/account/erase', { method: 'POST', headers });
+    if (res.status === 404 || res.status === 405) return { status: 'unavailable', receipt: null };
     if (res.status !== 200) {
       let code = ''; try { code = (await res.json()).detail; } catch (e) { code = ''; }
-      return (res.status === 503 && code === 'admin_unavailable') ? 'unavailable' : 'failed';
+      return { status: (res.status === 503 && code === 'admin_unavailable') ? 'unavailable' : 'failed', receipt: null };
     }
     const body = await res.json().catch(() => null);
-    return (body && body.erased === true) ? 'ok' : 'failed';
-  } catch (e) { return 'failed'; }
+    return { status: (body && body.erased === true) ? 'ok' : 'failed',
+             receipt: (body && body.receipt) || null };
+  } catch (e) { return { status: 'failed', receipt: null }; }
 }
 /* 기존 경로: 규칙 삭제(DELETE /user/state)로 서버 기록만 지운다. 계정은 화면이 deleteUser 로 지운다.
    200 이고 본문이 deleted:true 일 때만 성공으로 본다. */
@@ -2196,12 +2217,15 @@ async function doWithdraw() {
     let token = '';
     try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
     if (!token) return stop('로그인 정보를 확인하지 못해 탈퇴를 멈췄어요. 잠시 뒤 다시 시도해 주세요.');
-    const admin = await eraseOnServer(token);
+    const challenge = newChallenge();
+    if (challenge) saveWithdrawProof({ challenge: challenge, at: Date.now(), receipt: null });
+    const admin = await eraseOnServer(token, challenge);
     if (accountClosed) return;    // 기다리는 사이 다른 경로가 '탈퇴한 계정'을 감지해 이미 정리했다(이중 처리 금지)
-    if (admin === 'ok') {
+    if (admin.status === 'ok') {
+      saveWithdrawProof({ challenge: challenge, at: Date.now(), receipt: admin.receipt });
       clearAccountStorage();                   // 서버가 계정·토큰·기록을 지웠다 — 이제 로컬만 정리
       try { await FirebaseAuth.signOut(); } catch (e) { /* 화면 상태는 비운다 */ }
-    } else if (admin === 'unavailable') {
+    } else if (admin.status === 'unavailable') {
       // 서비스 계정 키가 없는 환경: 규칙 삭제 + 클라이언트 deleteUser 로 되돌아간다.
       if (!await deleteStateOnServer(token)) return stop('저장된 계정 기록을 지우지 못해 탈퇴를 멈췄어요. 잠시 뒤 다시 시도해 주세요.');
       if (accountClosed) return;
