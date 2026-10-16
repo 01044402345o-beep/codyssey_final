@@ -137,7 +137,10 @@ def read_settings(path: str | None = None) -> dict[str, Any]:
         # CI 는 GitHub Actions 변수(`vars.EVIDENCE_PIN_*`)를 읽는다 — `opsarchive pin-publish` 로 올린다.
         data["pin_path"] = os.path.join(config_dir(), "evidence-key-pin.json")
     # 이전 판은 핀을 저장소 안(security/)에 두었다. 그 경로가 settings.json 에 남아 있으면 밖으로 옮긴다.
-    if os.path.abspath(str(data["pin_path"])).startswith(os.path.abspath(repo_root()) + os.sep):
+    # 비교는 normcase(Windows 대소문자 무시)로 한다 — 소문자 경로로 다시 저장소 안을 가리키는 우회를 막는다.
+    pin_abs = os.path.normcase(os.path.abspath(str(data["pin_path"])))
+    repo_abs = os.path.normcase(os.path.abspath(repo_root())) + os.sep
+    if pin_abs.startswith(repo_abs):
         data["pin_path"] = os.path.join(config_dir(), "evidence-key-pin.json")
     if not data.get("checkpoints_dir"):
         # 체크포인트는 관리자 자산이라 저장소 밖에 둔다(저장소 사본은 편의·감사용).
