@@ -162,6 +162,28 @@ with sync_playwright() as p:
           has(blank_case["calls"], "POST /account/erase") and no_delete(blank_case["calls"]) and blank_case["user"] is not None and blank_case["local_trip"] is not None,
           str(blank_case))
 
+    # --- 다른 기기에서 탈퇴된 계정: 서버가 403 account_deleted 로 거부하면 이 기기도 정리한다 ---
+    page.evaluate("""() => {
+      window.__calls = [];
+      window.fetch = async (url, opt = {}) => {
+        window.__calls.push((opt.method || 'GET') + ' ' + String(url).replace(/^https?:\\/\\/[^/]+/, ''));
+        return { ok: false, status: 403, json: async () => ({ detail: 'account_deleted' }) };
+      };
+      const fa = window.FirebaseAuth;
+      fa.enabled = true; fa.account = { uid: 'uidZ', provider: 'google.com' };
+      fa.idToken = async () => 'tok';
+      fa.signOut = async () => { fa.account = null; };
+      S.user = { uid: 'uidZ', provider: 'google.com', name: 'Z', email: 'z@example.com' };
+      ensure('plan'); go('u-home');
+      accountClosed = false;
+    }""")
+    page.wait_for_timeout(150)
+    page.evaluate("pushPayload('uidZ', { session: null, weak: [], consent: null, trip: null })")
+    page.wait_for_timeout(300)
+    gone = page.evaluate("({ scr: S.screen, user: S.user, local_trip: localStorage.getItem('cd_trip:uidZ'), calls: window.__calls })")
+    check("다른 기기 탈퇴 감지(403 account_deleted): 로컬 정리 후 로그인 화면",
+          gone["scr"] == "u-login" and gone["user"] is None and gone["local_trip"] is None, str(gone))
+
     check("자바스크립트 오류 없음", not errors, str(errors[:3]))
     b.close()
 

@@ -10,7 +10,7 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from app import firebase_auth, main, user_state
+from app import firebase_admin, firebase_auth, main, user_state
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -111,6 +111,30 @@ class T(unittest.TestCase):
 
     def tearDown(self):
         user_state.set_store(None)
+        firebase_admin.set_admin(None)
+        firebase_admin.reset_cache()
+
+    def test_put_is_rejected_for_an_erased_account(self):
+        """다른 기기의 미만료 토큰이 탈퇴한 계정의 문서를 다시 만들지 못하게 한다(403 account_deleted)."""
+        class Erased:
+            def read_tombstone(self, uid):
+                return True
+
+        firebase_admin.set_admin(Erased())
+        res = self.put(claims_for("uid-1"))
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.json()["detail"], "account_deleted")
+        self.assertEqual(self.mem.docs, {})   # 문서가 만들어지지 않았다
+
+    def test_put_is_allowed_when_no_tombstone(self):
+        class Clean:
+            def read_tombstone(self, uid):
+                return False
+
+        firebase_admin.set_admin(Clean())
+        res = self.put(claims_for("uid-1"))
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertIn("uid-1", self.mem.docs)
 
     def put(self, claims, body=None, token="signed-token"):
         with mock.patch.dict(os.environ, ENV), mock.patch.object(

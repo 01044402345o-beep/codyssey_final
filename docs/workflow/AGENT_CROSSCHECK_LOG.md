@@ -64,22 +64,41 @@
 
 **수정** — 결함 7건: (a) 스코프를 `firebase`+`identitytoolkit`+`datastore` 로(서비스/메서드 문서 두 출처 모두 커버) (b) `_missing` 가드 배선 테스트 추가(없음이 아닌 400 은 실패) (c) HTTP 가 아닌 오류도 `AdminError` 로 래핑 + 엔드포인트의 예상 못 한 예외도 503 (d) **FR-17 순서를 서버 우선으로 정정** (e) e2e 강화(404/405 폴백, `Authorization: Bearer` 확인, 순서 확인) (f) `.gitignore` 에 `*-firebase-adminsdk-*.json`·`serviceAccount*.json` 추가 (g) `configured()` 가 `client_email` 도 요구, 메모리 `S.archived` 정리, 경고 주석 정정.
 
-### 검증 수치 (라운드 3 수정 뒤, 이 작업 트리)
+### 라운드 4 — 다중 기기 재생성 차단(tombstone) · 사람 세션(구현+측정)
+
+목적: 라운드 2·3 이 일관되게 지목한 **가장 큰 잔여 위험**(다른 기기의 미만료 ID 토큰이 `users/{uid}` 를 되살림)을 없앤다.
+
+설계 선택: **요청마다 cancellation 조회** 대신 **탈퇴 흔적(tombstone)** — `POST /account/erase` 가 Firestore `deleted/{uid}`(uid·시각만)를 **가장 먼저** 쓰고, `PUT /user/state` 는 흔적이 있으면 **403 `account_deleted`** 로 거부한다. 화면은 그 응답을 탈퇴 완료로 보고 로컬을 비우고 로그아웃한다.
+
+| # | 각도 | 판단 |
+|---|---|---|
+| ① | 새 결함면 | 요청당 조회는 왕복 비용이 크고 `verify_bearer` 마다 부르면 모든 쓰기가 관리자 읽기에 묶인다 → **tombstone + 인프로세스 캐시**(양성 1h·음성 60s) 채택 |
+| ② | 순서 | 흔적을 **먼저** 쓴다. 토큰 취소·문서 삭제·계정 삭제가 도중 실패해도 재생성은 이미 막혀 있고 다시 시도할 수 있다 |
+| ③ | 규칙·비용 | 흔적은 **서비스 계정**만 읽고 쓴다 → `firestore.rules` 변경 없음(관리자 접근은 규칙을 거치지 않는다), 배포도 규칙 단독 배포 그대로 |
+| ④ | 실패 모드 | 흔적 조회 실패는 **통과(fail-open)** — 일시적 저장소 장애가 앱 전체 쓰기를 막지 않게. 다중 인스턴스에서 탈퇴 전파가 최대 60초 늦을 수 있다(단일 인스턴스 Render 에서는 즉시) |
+| ⑤ | 개인정보 | 흔적은 uid·시각뿐 — 개인정보를 담지 않는다. 규칙이 막아 클라이언트는 읽을 수 없다 |
+
+**구현**: `firebase_admin` — `write_tombstone`/`read_tombstone`/`is_erased`/`mark_erased`/`reset_cache`, `erase` 순서 변경(흔적→취소→문서→계정), `_call` 이 409(이미 있음)를 성공으로 처리. `main.py` — `PUT /user/state` 403 가드. `mockup/app.js` — `handleAccountDeleted`(403 `account_deleted` 시 정리·로그아웃), `accountClosed` 가드, `adoptAccount` 에서 초기화.
+
+**검증(이 작업 트리, 사람 세션 실측)**: 백엔드 **218 통과**(+5: 흔적 순서·조회·캐시·fail-open·409), 탈퇴 e2e **21 통과**(+1: 403 을 받은 화면이 로컬 정리 후 로그인 화면).
+
+### 검증 수치 (라운드 4 수정 뒤, 이 작업 트리)
+
 
 | 대상 | 결과 |
 |---|---|
-| 백엔드 `unittest discover` | **213 통과** (규칙 대조·삭제·자격증명 래핑·`_missing` 배선·스코프·레이트리밋 포함) |
+| 백엔드 `unittest discover` | **218 통과** (규칙 대조·삭제·자격증명 래핑·`_missing` 배선·스코프·레이트리밋·탈퇴 흔적 포함) |
 | 프론트 `node --test ai.test.js` / `tokens.test.js` | 34 / 7 통과 |
-| Playwright e2e **12종** (CI 와 같은 목록, `git ls-files e2e`) | **320 통과** (`test_account_withdrawal` **20** — 관리자/폴백/404/실패/본문계약/토큰·순서 포함) |
+| Playwright e2e **12종** (CI 와 같은 목록, `git ls-files e2e`) | **321 통과** (`test_account_withdrawal` **21** — 관리자/폴백/404/실패/본문계약/토큰·순서/탈퇴 감지 포함) |
 
 > 위 수치는 **사람 세션/CI**가 측정한 값이다. §1 규칙상 에이전트는 Playwright·서버를 돌리지 않으므로,
 > 에이전트 보고에는 백엔드 단위 테스트 수만 나온다(그래서 e2e 수치는 이 표에서만 관리한다).
 
 ### 현재 작업 상태
 
-- 브랜치 `fix/withdraw-hardening-and-admin-erase` = 팀 `main`(`ebd65e5`, PR #82 머지본) 위에 **라운드 1 수정 커밋 `25cd951`**.
-- 라운드 2(관리자 경로 + 위 수정 6건)는 **아직 커밋하지 않았다.** 한 PR로 함께 올리는 것이 계획이다.
-- 배포: 라이브 규칙은 선택형 `trip` + 소유자 `allow delete`(sha256 `702fa3f0…`). 관리자 경로는 Render 에 `FIREBASE_SERVICE_ACCOUNT_JSON` 을 넣어야 켜지고, 없으면 폴백으로 동작한다.
+- 브랜치 `fix/withdraw-hardening-and-admin-erase` = 팀 `main`(`ebd65e5`, PR #82 머지본) 위에 **라운드 1~4 수정 커밋**. PR **#83**(base `main`)으로 올렸다.
+- 라운드 4(tombstone)까지 같은 PR 에 넣는다 — 팀이 rebase 머지를 쓰기 때문에 스택 PR 은 커밋 중복 위험이 있다.
+- 배포: 라이브 규칙은 선택형 `trip` + 소유자 `allow delete`(sha256 `702fa3f0…`). 관리자 경로는 Render 에 `FIREBASE_SERVICE_ACCOUNT_JSON` 을 넣어야 켜지고, 없으면 폴백으로 동작한다. 탈퇴 흔적은 규칙을 쓰지 않아 **추가 규칙 배포가 필요 없다**.
 
 ## 3. 잡은 결함 요약
 
@@ -109,7 +128,8 @@
 
 ## 5. 남은 위험 / 미검증 (정직하게)
 
-- **다중 기기 + 미만료 토큰 재생성 창(가장 큼)**: 다른 기기의 ID 토큰이 취소 후에도 만료(≤1h)까지 유효해 `users/{uid}` 를 다시 만들 수 있다. `verify_bearer` 가 revocation 을 확인하지 않는 구조 때문이며, 막으려면 요청마다 취소 확인(비용)이나 uid 별 tombstone(규칙·스키마 변경)이 필요하다 — **아직 하지 않았다.**
+- **다중 기기 + 미만료 토큰 재생성 창 — 라운드 4 에서 닫음(남은 구멍 있음)**: 탈퇴 흔적(`deleted/{uid}`)으로 `PUT /user/state` 를 403 `account_deleted` 로 거부한다(구현·검증 완료). 남은 구멍은 (a) 흔적 조회 실패 시 통과(fail-open), (b) 음성 캐시 60초 때문에 다중 인스턴스에서 탈퇴 전파가 최대 60초 늦을 수 있음, (c) 흔적 자체는 삭제되지 않고 남는다(정리는 관리자 몫). 실계정 왕복은 여전히 미관측.
+- **폴백 경로는 흔적을 남기지 않는다**: 키가 없어 규칙 삭제 + 클라이언트 `deleteUser` 로 되돌아간 경로에는 흔적이 없으므로, 그 경우 다른 기기의 미만료 ID 토큰이 문서를 다시 만들 수 있다(종전과 같은 창). 흔적은 관리자 경로에서만 쓰인다.
 - **실계정 왕복 미관측**: 로그인한 실제 계정의 `/user/state` 쓰기·삭제, `deleteUser`, 관리자 삭제 왕복은 이 환경에서 확인하지 못했다(FR-16·FR-17 "부분").
 - **스코프·IAM 온라인 검증 불가**: 좁힌 스코프와 런북의 역할이 실제 API 를 통과하는지는 실제 자격증명이 필요하다. 틀리면 403 → `admin_failed` → 탈퇴가 막힌다(데이터 손실은 없음).
 - **Firestore 규칙 실행 검증 불가**: Java 가 없어 에뮬레이터를 못 돌린다. CLI 컴파일 통과 + 정적 검사로 대체했다.

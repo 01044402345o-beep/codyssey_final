@@ -402,17 +402,23 @@ firebase deploy --only firestore:rules     # 프로젝트: .firebaserc 의 com-e
 
 ### E. 탈퇴 관리자 키 (선택 — 없어도 동작한다)
 
-탈퇴(`POST /account/erase`)는 서비스 계정으로 **토큰 취소 + Firestore 문서 삭제 + Auth 계정 삭제**를 한다.
+탈퇴(`POST /account/erase`)는 서비스 계정으로 **탈퇴 흔적 남김 + 토큰 취소 + Firestore 문서 삭제 + Auth 계정 삭제**를 한다.
 관리자 삭제는 `requires-recent-login` 을 요구하지 않아, 화면의 `deleteUser` 가 자주 실패하던 문제를 없앤다.
 키가 없으면 서버는 `503 admin_unavailable` 을 돌려주고 화면은 기존 경로(규칙 삭제 + 클라이언트 `deleteUser`)로 되돌아간다.
+
+**탈퇴 흔적(tombstone)**: 관리자 삭제가 갱신 토큰을 즉시 무효화해도, 이미 발급된 ID 토큰은 만료(≤1h)까지 살아 있다.
+그 창에 다른 기기가 `PUT /user/state` 를 보내면 `users/{uid}` 가 다시 만들어진다. 그래서 탈퇴 시 Firestore `deleted/{uid}`(uid·시각만)를 **가장 먼저** 남기고,
+`PUT /user/state` 는 흔적이 있는 uid 를 **403 `account_deleted`** 로 거부한다(화면은 그 응답을 탈퇴 완료로 보고 로컬을 비우고 로그아웃한다).
+- 흔적은 **서비스 계정으로만** 읽고 쓰므로 `firestore.rules` 변경이 필요 없다(관리자 접근은 규칙을 거치지 않는다). 개인정보를 담지 않는다.
+- 조회는 인프로세스 캐시(양성 1h·음성 60s)로 줄인다. 여러 인스턴스에서는 탈퇴가 최대 60초 늦게 전파될 수 있고, 조회가 실패하면 그 요청은 통과시킨다(앱 전체를 막지 않기 위해).
 
 1. Firebase Console → 프로젝트 설정 → **서비스 계정** → "새 비공개 키 생성" → JSON 다운로드.
    - 같은 프로젝트여야 한다(`project_id` 가 `FIREBASE_PROJECT_ID` 와 같아야 하고, 다르면 서버 로그에 경고가 남는다).
    - **최소 권한**으로 쓰려면 전용 서비스 계정을 만들고 두 역할만 준다: `roles/firebaseauth.admin`(계정 취소·삭제) + `roles/datastore.user`(문서 삭제). 콘솔 기본 키는 Editor 라 더 넓다.
    - Identity Toolkit API 와 Firestore API 가 켜져 있어야 한다.
 2. Render → Environment → `FIREBASE_SERVICE_ACCOUNT_JSON` 에 그 **JSON 문자열 전체**를 붙여 넣는다(줄바꿈 포함, `sync: false`).
-3. 확인: `/health` 의 `admin_erase` 가 `true` 인지 본다(키 값은 노출하지 않는다). 배포 후 로그인 계정에서 탈퇴를 한 번 실행해 Auth 계정이 사라지는지 본다.
-   - 순서 주의: 관리자 경로는 **토큰 취소가 먼저** 실행된다. 문서·계정 삭제가 도중 실패하면 다른 기기의 갱신 토큰은 이미 무효이고 계정은 남는다(다시 시도하면 된다).
+3. 확인: `/health` 의 `admin_erase` 가 `true` 인지 본다(키 값은 노출하지 않는다). 배포 후 로그인 계정에서 탈퇴를 한 번 실행해 Auth 계정이 사라지는지, Firestore 에 `deleted/{uid}` 가 남는지 본다.
+   - 순서 주의: 관리자 경로는 **흔적 → 토큰 취소 → 문서 삭제 → 계정 삭제** 순서다. 도중 실패하면 다른 기기의 갱신 토큰은 이미 무효이고 계정은 남으며, 문서 재생성은 흔적으로 막혀 있다(다시 시도하면 된다).
 4. 되돌리기: 변수를 지우면 관리자 경로가 꺼지고 폴백 경로로 돌아간다.
 5. **절대 커밋하지 않는다.** 이 키는 관리자 권한을 가진 고가치 시크릿이다.
 
