@@ -65,7 +65,17 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--sign-key", required=True, help="서명 키 파일 경로")
     q.add_argument("--out", default="checkpoints")
 
-    q = sub.add_parser("observe", help="플랫폼 접근 로그(앱 밖 증인)와 체인 시도 항목을 비교한다")
+    q = sub.add_parser("env-set", help="Render 환경변수 하나를 올린다(값은 파일/표준입력으로만 받는다)")
+    q.add_argument("--service", required=True)
+    q.add_argument("--key", required=True, help="변수 이름(예: FIREBASE_SERVICE_ACCOUNT_JSON)")
+    q.add_argument("--from-file", default="", help="값이 담긴 파일 경로(권장)")
+    q.add_argument("--stdin", action="store_true", help="표준입력에서 값을 읽는다")
+
+    q = sub.add_parser("env-read", help="환경변수가 설정돼 있는지 확인한다(값은 길이만)")
+    q.add_argument("--service", required=True)
+    q.add_argument("--key", required=True)
+
+    sub.add_parser("observe", help="플랫폼 접근 로그(앱 밖 증인)와 체인 시도 항목을 비교한다")
     q.add_argument("--project", required=True)
     q.add_argument("--sa", required=True)
     q.add_argument("--service", required=True, help="Render 서비스 이름")
@@ -156,6 +166,22 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "anchor":
             phrase = commands.ask_passphrase(prompt="서명키 패스프레이즈: ")
             _print(commands.anchor(args.project, args.sa, args.sign_key, phrase, out_dir=args.out))
+            return 0
+        if args.cmd == "env-set":
+            # 값은 **절대 명령줄 인자로 받지 않는다**(셸 히스토리·프로세스 목록에 남는다).
+            if args.from_file:
+                with open(args.from_file, "r", encoding="utf-8-sig") as fh:
+                    value = fh.read()
+            elif args.stdin:
+                value = sys.stdin.read()
+            else:
+                print("실패: --from-file <파일> 또는 --stdin 을 쓰세요(값을 인자로 받지 않습니다)",
+                      file=sys.stderr)
+                return 2
+            _print(commands.env_set(args.service, args.key, value.strip()))
+            return 0
+        if args.cmd == "env-read":
+            _print(commands.env_read(args.service, args.key))
             return 0
         if args.cmd == "observe":
             result = commands.observe_requests(args.project, args.sa, args.service,
