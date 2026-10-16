@@ -119,6 +119,52 @@ class CheckpointTest(unittest.TestCase):
         self.assertTrue(result["set_matches"])
 
 
+class ChallengeReportTest(unittest.TestCase):
+    """사전 커밋먼트 대조 — 챌린지가 체인에 있고 **앵커 범위 안**인가."""
+
+    def setUp(self):
+        self.seed, self.public = C.sign_keypair()
+        self.entries = [
+            {"kind": "attempt", "challenge": "aa" * 16, "seq": 1, "digest": "d1", "outcome": "pending",
+             "created_at": 100},
+            {"kind": "outcome", "challenge": "aa" * 16, "seq": 2, "digest": "d2", "outcome": "failed",
+             "created_at": 101},
+            {"kind": "attempt", "challenge": "bb" * 16, "seq": 9, "digest": "d9", "outcome": "pending",
+             "created_at": 900},
+        ]
+        self.checkpoint = chain.sign_checkpoint(self.seed, chain.checkpoint_body(
+            seq=1, count=2, head_digest="d2", archive_ids=[], created_at=200,
+            entry_ids=["1", "2"], head_seq=2))
+
+    def test_found_and_anchored(self):
+        report = chain.challenge_report(self.entries, "aa" * 16, self.checkpoint)
+        self.assertTrue(report["found"])
+        self.assertTrue(report["anchored"])
+        self.assertEqual(report["verdict"], "anchored")
+        self.assertEqual([e["seq"] for e in report["entries"]], [1, 2])   # 시도 + 결과
+
+    def test_found_but_after_the_anchor(self):
+        report = chain.challenge_report(self.entries, "bb" * 16, self.checkpoint)
+        self.assertTrue(report["found"])
+        self.assertFalse(report["anchored"])
+        self.assertEqual(report["verdict"], "after_anchor")
+
+    def test_missing_from_chain_is_flagged(self):
+        report = chain.challenge_report(self.entries, "cc" * 16, self.checkpoint)
+        self.assertFalse(report["found"])
+        self.assertEqual(report["verdict"], "missing_from_chain")
+        self.assertIn("누락 의심", report["note"])
+
+    def test_old_checkpoint_without_head_seq(self):
+        old = chain.sign_checkpoint(self.seed, chain.checkpoint_body(
+            seq=1, count=2, head_digest="d2", archive_ids=[], created_at=200))
+        report = chain.challenge_report(self.entries, "aa" * 16, old)
+        self.assertEqual(report["verdict"], "anchor_has_no_head_seq")
+
+    def test_empty_challenge_is_not_a_match(self):
+        self.assertEqual(chain.find_challenge(self.entries, ""), [])
+
+
 class AnchorRoundTripTest(unittest.TestCase):
     """anchor 가 만든 파일을 verify 가 읽는 왕복(네트워크 없이 로컬 파일만)."""
 
