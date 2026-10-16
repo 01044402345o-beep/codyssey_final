@@ -24,7 +24,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from . import commands, config, container as C, entropy, gcp, pins, render
+from . import commands, config, container as C, entropy, gcp, pins, render, workflow
 
 ENV_FIELDS = ["RENDER_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS", "EVIDENCE_GH_TOKEN",
               "EVIDENCE_GH_REPO"]
@@ -341,14 +341,233 @@ class App:
     # ------------------------------------------------------------ 탭 1: 개요
     def _tab_overview(self, notebook) -> None:
         frame = self._frame(notebook, "개요")
-        ttk.Label(frame, text="무엇부터 할까요? 처음이면 ① selftest → ② keygen → ③ publish → ④ doctor 순서입니다.",
-                  wraplength=820, justify="left").pack(anchor="w", padx=8, pady=6)
-        self.overview = tk.Text(frame, height=22, wrap="word")
-        self.overview.pack(fill="both", expand=True, padx=8, pady=4)
-        bar = ttk.Frame(frame)
-        bar.pack(fill="x", padx=8, pady=4)
-        self._button(bar, "새로 고침", self.refresh_overview)
-        self._button(bar, "설정 다시 읽기", self.reload_settings)
+        ttk.Label(frame, text="자동화 워크플로우 — 노드를 클릭해 값을 바꾸고 [정책에 저장] 하면 다음 실행부터 반영됩니다.\n"
+                             "서버 정책(환경변수)을 바꾸는 노드는 [Render에 반영] 뒤 재배포가 필요합니다.",
+                  justify="left").pack(anchor="w", padx=10, pady=(8, 2))
+        self.canvas = tk.Canvas(frame, height=360, background="#fbfbfd", highlightthickness=1,
+                                highlightbackground="#dde")
+        self.canvas.pack(fill="both", expand=True, padx=10, pady=4)
+        self.canvas.bind("<Button-1>", self._on_canvas_click)
+
+        editor = ttk.LabelFrame(frame, text="선택한 노드")
+        editor.pack(fill="x", padx=10, pady=4)
+        self.node_title = ttk.Label(editor, text="노드를 클릭하세요", font=("", 10, "bold"))
+        self.node_title.pack(anchor="w", padx=8, pady=(4, 0))
+        self.node_desc = ttk.Label(editor, text="", justify="left")
+        self.node_desc.pack(anchor="w", padx=8)
+        self._wrap(self.node_desc, editor)
+        self.value_box = ttk.Frame(editor)
+        self.value_box.pack(anchor="w", padx=8, pady=4)
+        bar = ttk.Frame(editor)
+        bar.pack(fill="x", padx=8, pady=(0, 6))
+        self._button(bar, "정책에 저장", self.save_node)
+        self._button(bar, "Render에 반영", self.push_node_env)
+        self._button(bar, "이 노드 실행", self.run_node)
+
+        bar2 = ttk.Frame(frame)
+        bar2.pack(fill="x", padx=10, pady=(0, 4))
+        self._button(bar2, "plan 미리보기", self.show_plan)
+        self._button(bar2, "자동 실행 시작", self.start_automation)
+        self._button(bar2, "중지", self.stop_automation)
+        self._button(bar2, "정책 파일 위치",
+                     lambda: self.log(os.path.join(config.config_dir(), "workflow.json")))
+        self.automation_stop = threading.Event()
+        self.automation_thread = None
+        self.policy = workflow.load()
+        self.selected_node = ""
+        self.node_boxes: dict = {}
+
+        self.overview = tk.Text(frame, height=5, wrap="word")
+        self.overview.pack(fill="x", padx=10, pady=(0, 6))
+        bar3 = ttk.Frame(frame)
+        bar3.pack(fill="x", padx=10, pady=(0, 8))
+        self._button(bar3, "새로 고침", self.refresh_overview)
+        self._button(bar3, "설정 다시 읽기", self.reload_settings)
+        self._button(bar3, "정책 다시 읽기", self.reload_policy)
+
+    # ------------------------------------------------------------ 마인드맵(캔버스)
+    def reload_policy(self) -> None:
+        self.policy = workflow.load()
+        self.log("정책을 다시 읽었습니다: %s" % workflow.policy_path())
+        self._redraw_mindmap()
+
+    def _redraw_mindmap(self) -> None:
+        """노드를 그룹별 열로 배치하고 기본 흐름을 화살표로 잇는다(클릭하면 아래에서 편집)."""
+        if not hasattr(self, "canvas"):
+            return
+        self.canvas.delete("all")
+        data = workflow.graph(self.policy)
+        x = 16
+        y = 14
+        self.node_boxes = {}
+        for group in data.get("groups", []):
+            self.canvas.create_text(x + 4, y, text=group.get("name", ""), anchor="nw",
+                                    fill="#557", font=("", 9, "bold"))
+            ty = y + 22
+            for node in group.get("nodes", []):
+                nid = node["id"]
+                enabled = node.get("enabled", True)
+                missing = node.get("missing") or []
+                fill = "#e8f6ec" if enabled and not missing else ("#fdeaea" if missing else "#f1f1f5")
+                outline = "#0a7" if nid == self.selected_node else ("#c66" if missing else "#bbc")
+                width = 2 if nid == self.selected_node else 1
+                self.canvas.create_rectangle(x, ty, x + 236, ty + 46, fill=fill, outline=outline,
+                                             width=width, tags=("node", "n:" + nid))
+                self.canvas.create_text(x + 8, ty + 10, text=node.get("label", nid), anchor="nw",
+                                        width=220, font=("", 9, "bold"), tags=("node", "n:" + nid))
+                state = node.get("state", "")
+                if node.get("env"):
+                    state = "%s · env %s" % (state, node["env"])
+                self.canvas.create_text(x + 8, ty + 30, text=state[:40], anchor="nw",
+                                        fill="#566", font=("", 8), tags=("node", "n:" + nid))
+                self.node_boxes[nid] = (x, ty, x + 236, ty + 46)
+                ty += 58
+            x += 264
+        for start, end in data.get("edges", []):
+            a, b = self.node_boxes.get(start), self.node_boxes.get(end)
+            if not a or not b:
+                continue
+            self.canvas.create_line(a[2], (a[1] + a[3]) // 2, b[0], (b[1] + b[3]) // 2,
+                                    arrow="last", fill="#9ab", smooth=True)
+        self.canvas.configure(scrollregion=self.canvas.bbox("all") or (0, 0, 800, 400))
+
+    def _on_canvas_click(self, event) -> None:
+        items = self.canvas.find_overlapping(event.x - 1, event.y - 1, event.x + 1, event.y + 1)
+        for item in items:
+            for tag in self.canvas.gettags(item):
+                if tag.startswith("n:"):
+                    self.selected_node = tag[2:]
+                    self._redraw_mindmap()
+                    self._show_node_editor()
+                    return
+
+    def _node_def(self, node_id: str) -> dict:
+        for node in workflow.NODES:
+            if node["id"] == node_id:
+                return node
+        return {}
+
+    def _show_node_editor(self) -> None:
+        node = self._node_def(self.selected_node)
+        if not node:
+            return
+        self.node_title.configure(text="%s  (%s)" % (node.get("label", ""), self.selected_node))
+        extra = ""
+        if node.get("env"):
+            extra = "\n서버 환경변수: %s%s" % (node["env"], " · 반영 후 재배포 필요" if node.get("redeploy") else "")
+        if node.get("missing"):
+            extra += "\n필수 설정 없음: %s" % ", ".join(node["missing"])
+        self.node_desc.configure(text=(node.get("desc", "") or "") + extra)
+        for child in self.value_box.winfo_children():
+            child.destroy()
+        kind = node.get("kind")
+        current = self.policy.get(self.selected_node, node.get("default"))
+        if kind == "toggle":
+            self.node_value.set("1" if current in (True, 1, "1") else "0")
+            ttk.Checkbutton(self.value_box, text="켜기", variable=self.node_value,
+                            onvalue="1", offvalue="0").pack(side="left")
+        elif kind == "choice":
+            options = [value for value, _label in node.get("options", [])]
+            self.node_value.set(str(current))
+            ttk.Combobox(self.value_box, textvariable=self.node_value, values=options,
+                         width=16, state="readonly").pack(side="left")
+        elif kind == "number":
+            self.node_value.set(str(current))
+            ttk.Entry(self.value_box, textvariable=self.node_value, width=12).pack(side="left")
+            ttk.Label(self.value_box, text="(%s ~ %s)" % (node.get("min"), node.get("max"))).pack(side="left", padx=6)
+        else:
+            self.node_value.set("")
+            ttk.Label(self.value_box, text="값이 없는 실행 노드입니다 — [이 노드 실행] 을 누르세요.").pack(side="left")
+
+    def save_node(self) -> None:
+        node = self._node_def(self.selected_node)
+        if not node:
+            return
+        if node.get("kind") in ("toggle", "choice", "number"):
+            value = self.node_value.get()
+            if node["kind"] == "toggle":
+                value = value in ("1", "True", "true")
+            elif node["kind"] == "number":
+                try:
+                    value = int(value)
+                except ValueError:
+                    messagebox.showerror("opsarchive", "숫자를 입력하세요.")
+                    return
+            self.policy[self.selected_node] = value
+        path = workflow.save(self.policy)
+        self.log("노드 '%s' 값을 저장했습니다 (%s)" % (self.selected_node, path))
+        self._redraw_mindmap()
+        self._show_node_editor()
+
+    def push_node_env(self) -> None:
+        node = self._node_def(self.selected_node)
+        if not node or not node.get("env"):
+            messagebox.showinfo("opsarchive", "이 노드는 서버 환경변수와 연결돼 있지 않습니다.")
+            return
+        self.run("Render 반영(%s)" % node["env"], lambda: workflow.push_env(
+            self.selected_node, self.policy, service=self.require("service")))
+
+    def run_node(self) -> None:
+        node = self._node_def(self.selected_node)
+        if not node:
+            return
+        secrets = {}
+        if self.selected_node == "anchor":
+            sign_file = self.pick_key("sign")
+            if not sign_file:
+                return
+            phrase = self.ask_key_pass(sign_file, "서명 키 패스프레이즈")
+            if not phrase:
+                return
+            secrets = {"sign_key_file": sign_file, "passphrase": phrase}
+        self.run("노드 실행: %s" % node.get("label", self.selected_node),
+                 lambda: workflow.run_step(self.selected_node, self.policy, secrets=secrets,
+                                           on_log=self.log))
+
+    def show_plan(self) -> None:
+        lines = ["이번 실행 계획:"]
+        for step in workflow.plan(self.policy):
+            lines.append("  %s %s%s" % ("✔" if step.get("ok") else "·", step.get("label"),
+                                        ("" if step.get("ok") else "  — " + step.get("reason", ""))))
+        text = "\n".join(lines)
+        self.overview.configure(state="normal")
+        self.overview.delete("1.0", "end")
+        self.overview.insert("1.0", text)
+        self.overview.configure(state="disabled")
+        self.log(text)
+
+    def start_automation(self) -> None:
+        if getattr(self, "automation_thread", None) and self.automation_thread.is_alive():
+            messagebox.showinfo("opsarchive", "이미 자동 실행이 돌고 있습니다.")
+            return
+        self.automation_stop = threading.Event()
+        secrets = {}
+        sign_files = config.key_files()["sign"]
+        if sign_files:
+            sign_file = self.pick_key("sign")
+            phrase = self.ask_key_pass(sign_file, "서명 키 패스프레이즈") if sign_file else ""
+            if sign_file and phrase:
+                secrets = {"sign_key_file": sign_file, "passphrase": phrase}
+        policy = dict(self.policy)
+
+        def worker() -> None:
+            try:
+                result = workflow.automation_loop(policy, on_log=self.log,
+                                                  stop_event=self.automation_stop, secrets=secrets)
+                self.log("자동 실행 종료: %s" % result)
+            except Exception as exc:      # noqa: BLE001
+                self.log("자동 실행 실패: %s" % type(exc).__name__, "err")
+            finally:
+                self.log_queue.put(("refresh", ""))
+
+        self.automation_thread = threading.Thread(target=worker, name="opsarchive-auto", daemon=True)
+        self.automation_thread.start()
+        self.log("자동 실행을 시작했습니다(관리자 PC가 켜져 있는 동안만 돕니다).")
+
+    def stop_automation(self) -> None:
+        if getattr(self, "automation_stop", None):
+            self.automation_stop.set()
+            self.log("자동 실행 중지를 요청했습니다(현재 주기가 끝나면 멈춥니다).")
 
     def reload_settings(self) -> None:
         self.settings = config.read_settings()
@@ -386,6 +605,7 @@ class App:
         self.overview.delete("1.0", "end")
         self.overview.insert("1.0", "\n".join(lines))
         self.overview.configure(state="disabled")
+        self._redraw_mindmap()
         self.refresh_steps()
 
     # ------------------------------------------------------------ 탭 2: 설정
