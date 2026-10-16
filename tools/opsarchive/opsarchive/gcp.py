@@ -231,7 +231,14 @@ class Firestore:
             url = self._root() + collection + "?pageSize=" + str(page_size)
             if token:
                 url += "&pageToken=" + urllib.parse.quote(token, safe="")
-            data = self._call("GET", url)
+            try:
+                data = self._call("GET", url)
+            except GcpError as exc:
+                # Firestore 는 **문서가 하나도 없는 컬렉션**을 404 로 돌려준다(오류가 아니다).
+                # 첫 페이지에서만 빈 목록으로 해석하고, 페이지 도중 404 는 진짜 오류로 올린다.
+                if exc.code == "not_found" and not out:
+                    return []
+                raise
             for doc in data.get("documents", []) or []:
                 name = str(doc.get("name", ""))
                 item = decode_fields(doc.get("fields", {}))
