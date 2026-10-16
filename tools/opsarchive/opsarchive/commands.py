@@ -229,7 +229,8 @@ def anchor(project_id: str, sa_path: str, sign_key_file: str, passphrase: str, *
     """
     store = gcp.Firestore(project_id, sa_path)
     metas = store.list("evidence_archives", page_size=300)
-    chain_state = chain.check_chain(metas)
+    entries = store.list("evidence_chain/entries", page_size=300)   # 시도·결과 항목(사전 커밋먼트)
+    chain_state = chain.check_chain(metas + entries)               # 한 체인으로 이어진다
     seed = C.load_private_key(sign_key_file, passphrase)
     os.makedirs(out_dir, exist_ok=True)
     seq = 1
@@ -239,25 +240,33 @@ def anchor(project_id: str, sa_path: str, sign_key_file: str, passphrase: str, *
     ids = sorted(str(m.get("archive_id", "")) for m in metas)
     body = chain.checkpoint_body(seq=seq, count=chain_state["count"],
                                  head_digest=chain_state["head"], archive_ids=ids,
-                                 created_at=int(time.time()))
+                                 created_at=int(time.time()),
+                                 entry_ids=[str(e.get("seq", "")) for e in entries],
+                                 head_seq=chain_state.get("max_seq"))
     signed = chain.sign_checkpoint(seed, body)
     path = os.path.join(out_dir, "%d.json" % seq)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(signed, fh, ensure_ascii=False, indent=2, sort_keys=True)
         fh.write("\n")
-    # 개별 대조용 목록(아이디만 — 개인정보 없음). 나중에 "앵커한 뒤 사라진 아카이브"를 찾는다.
+    # 개별 대조용 목록(아이디만 — 개인정보 없음). 나중에 "앵커한 뒤 사라진 아카이브"와
+    # "이 챌린지가 앵커 범위 안이었는가"를 찾는다.
     anchor_dir = os.path.join(out_dir, "anchors")
     os.makedirs(anchor_dir, exist_ok=True)
     with open(os.path.join(anchor_dir, "%d.json" % seq), "w", encoding="utf-8") as fh:
-        json.dump({"seq": seq, "archive_ids": ids}, fh, ensure_ascii=False, indent=2)
+        json.dump({"seq": seq, "archive_ids": ids,
+                   "challenges": sorted({str(e.get("challenge", "")) for e in entries
+                                         if e.get("challenge")})}, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
-    return {"seq": seq, "path": path, "count": chain_state["count"], "head": chain_state["head"],
+    return {"seq": seq, "path": path, "count": chain_state["count"], "archives": len(metas),
+            "entries": len(entries), "head": chain_state["head"], "head_seq": chain_state.get("max_seq"),
             "chain_ok": chain_state["ok"], "problems": chain_state["problems"],
             "forks": chain_state["forks"], "signing_key_id": signed["signing_key_id"]}
 
 
-def verify_chain(project_id: str, sa_path: str, pin_file: str, *, out_dir: str = "checkpoints") -> dict:
-    """체크포인트 서명·연속성·롤백을 검증하고, 앵커한 뒤 **사라진 아카이브**가 있는지 본다."""
+def verify_chain(project_id: str, sa_path: str, pin_file: str, *, out_dir: str = "checkpoints",
+                 challenge: str = "") -> dict:
+    """체크포인트 서명·연속성·롤백을 검증하고, 앵커한 뒤 **사라진 아카이브**와
+    **제시된 챌린지(사전 커밋먼트)** 가 앵커 범위 안에 있는지 본다."""
     pin = pins.read(pin_file)
     packed = pin.get("signing_public_key", "")
     if not packed:
@@ -272,7 +281,10 @@ def verify_chain(project_id: str, sa_path: str, pin_file: str, *, out_dir: str =
         raise CommandError("not_found")
     store = gcp.Firestore(project_id, sa_path)
     metas = store.list("evidence_archives", page_size=300)
-    result = chain.verify_chain(checkpoints, signing_public, metas)
+    entries = store.list("evidence_chain/entries", page_size=300)
+    result = chain.verify_chain(checkpoints, signing_public, metas + entries)
+    result["archives"] = len(metas)
+    result["entries"] = len(entries)
 
     latest = max(checkpoints, key=lambda c: int(c.get("seq", 0)))
     anchor_path = os.path.join(out_dir, "anchors", "%s.json" % latest.get("seq"))
@@ -285,6 +297,12 @@ def verify_chain(project_id: str, sa_path: str, pin_file: str, *, out_dir: str =
     else:
         result["missing_now"] = None
         result["note"] = "anchors/<seq>.json 이 없어 개별 누락 대조를 건너뛰었다"
+
+    if challenge:
+        check = chain.challenge_report(entries, challenge, latest)
+        result["challenge_check"] = check
+        if check["verdict"] in ("missing_from_chain",):
+            result["ok"] = False                                # 누락 의심은 실패로 올린다
     return result
 
 

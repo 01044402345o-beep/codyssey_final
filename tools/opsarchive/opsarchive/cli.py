@@ -65,11 +65,13 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--sign-key", required=True, help="서명 키 파일 경로")
     q.add_argument("--out", default="checkpoints")
 
-    q = sub.add_parser("verify-chain", help="체크포인트 서명·연속성·사라진 아카이브를 검증한다")
+    q = sub.add_parser("verify-chain", help="체크포인트 서명·연속성·사라진 아카이브·챌린지를 검증한다")
     q.add_argument("--project", required=True)
     q.add_argument("--sa", required=True)
     q.add_argument("--pin", default="security/evidence-key-pin.json")
     q.add_argument("--out", default="checkpoints")
+    q.add_argument("--challenge", default="",
+                   help="사용자가 제시한 챌린지(영수증). 앵커 범위 안에 있는지 본다")
 
     q = sub.add_parser("pin-check", help="핀 파일과 배포된 /health 를 대조한다(CI 와 같은 검사)")
     q.add_argument("--pin", default="security/evidence-key-pin.json")
@@ -140,7 +142,8 @@ def main(argv: list[str] | None = None) -> int:
             _print(commands.anchor(args.project, args.sa, args.sign_key, phrase, out_dir=args.out))
             return 0
         if args.cmd == "verify-chain":
-            result = commands.verify_chain(args.project, args.sa, args.pin, out_dir=args.out)
+            result = commands.verify_chain(args.project, args.sa, args.pin, out_dir=args.out,
+                                           challenge=args.challenge)
             _print(result)
             return 0 if result.get("ok") else 1
         if args.cmd == "pin-check":

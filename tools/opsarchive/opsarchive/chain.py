@@ -98,16 +98,21 @@ def check_chain(metas: list[dict[str, Any]]) -> dict[str, Any]:
 
     head = str(ordered[-1].get("digest", "")) if ordered else ""
     return {"ok": not problems, "head": head, "count": len(ordered), "problems": problems,
-            "forks": forks}
+            "forks": forks, "max_seq": int(ordered[-1].get("seq", 0) or 0) if ordered else 0}
 
 
 # ------------------------------------------------------------------ 체크포인트(관리자가 서명한다)
 
 def checkpoint_body(*, seq: int, count: int, head_digest: str, archive_ids: list[str],
-                    created_at: int) -> dict[str, Any]:
-    """서명 대상 본문. `archive_ids_sha256` 로 **어떤 아카이브를 봤는지**를 압축해 담는다."""
+                    created_at: int, entry_ids: list[str] | None = None,
+                    head_seq: int | None = None) -> dict[str, Any]:
+    """서명 대상 본문. `archive_ids_sha256` 로 **어떤 아카이브를 봤는지**를 압축해 담는다.
+
+    `entry_ids`(시도·결과 체인 항목)를 주면 그 집합 해시도 담고, `head_seq` 로 **앵커 범위**를 남긴다 —
+    나중에 "이 챌린지가 앵커 범위 안에 있었는가"를 판정하는 근거가 된다.
+    """
     ids = sorted(archive_ids)
-    return {
+    body = {
         "schema": CHECKPOINT_SCHEMA,
         "seq": int(seq),
         "count": int(count),
@@ -115,6 +120,60 @@ def checkpoint_body(*, seq: int, count: int, head_digest: str, archive_ids: list
         "archive_ids_sha256": hashlib.sha256(C.canonical_json(ids)).hexdigest(),
         "created_at": int(created_at),
     }
+    if entry_ids is not None:
+        body["entry_ids_sha256"] = hashlib.sha256(
+            C.canonical_json(sorted(str(x) for x in entry_ids))).hexdigest()
+    if head_seq is not None:
+        body["head_seq"] = int(head_seq)
+    return body
+
+
+def find_challenge(entries: list[dict[str, Any]], challenge: str) -> list[dict[str, Any]]:
+    """이 챌린지를 가진 체인 항목들(보통 시도 1개 + 결과 1개)."""
+    want = (challenge or "").strip().lower()
+    if not want:
+        return []
+    return [e for e in entries if str(e.get("challenge", "")).lower() == want]
+
+
+def challenge_report(entries: list[dict[str, Any]], challenge: str,
+                     checkpoint: dict[str, Any]) -> dict[str, Any]:
+    """영수증 대조: 이 챌린지가 체인에 있는가, 그리고 그 항목이 **앵커 범위 안**인가.
+
+    verdict
+    - `anchored`: 앵커 범위 안에 있다 → 시도가 있었다는 주장이 뒷받침된다.
+    - `after_anchor`: 앵커 이후 구간이다 → 아직 증명되지 않은 구간(다음 앵커에서 확정된다).
+    - `missing_from_chain`: 체인에 없다 → **누락 의심**. 단 "그 요청이 앵커 이전이었다"는 것은
+      사용자 기기의 기록(`at`)으로 확인해야 한다(우리는 요청 시각을 모른다).
+    - `anchor_has_no_head_seq`: 옛 체크포인트라 앵커 범위를 알 수 없다.
+    """
+    hits = find_challenge(entries, challenge)
+    anchored_seq = checkpoint.get("head_seq") if isinstance(checkpoint, dict) else None
+    report = {
+        "challenge": challenge,
+        "found": bool(hits),
+        "entries": [{"seq": e.get("seq"), "kind": e.get("kind"), "outcome": e.get("outcome"),
+                     "digest": e.get("digest"), "created_at": e.get("created_at")} for e in hits],
+        "anchored_seq": anchored_seq,
+        "anchored": None,
+        "verdict": "",
+        "note": "",
+    }
+    if anchored_seq is None:
+        report["verdict"] = "anchor_has_no_head_seq"
+        report["note"] = "체크포인트에 head_seq 가 없다(구버전) — 관리자가 다시 anchor 해야 범위를 알 수 있다"
+        return report
+    if not hits:
+        report["anchored"] = False
+        report["verdict"] = "missing_from_chain"
+        report["note"] = "사용자 기기의 요청 시각이 앵커 이전이라면 누락 의심이다"
+        return report
+    top = max(int(e.get("seq", 0) or 0) for e in hits)
+    report["anchored"] = top <= int(anchored_seq)
+    report["verdict"] = "anchored" if report["anchored"] else "after_anchor"
+    if not report["anchored"]:
+        report["note"] = "앵커 이후 구간 — 다음 anchor 에서 확정된다"
+    return report
 
 
 def checkpoint_message(body: dict[str, Any]) -> bytes:
