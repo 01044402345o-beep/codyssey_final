@@ -1,8 +1,9 @@
-"""탈퇴 E2E — 브라우저 기록 폐기 경로.
+"""탈퇴 E2E — 브라우저 기록 폐기 경로와 '탈퇴한 계정' 감지.
 
-Firebase 계정 삭제(deleteUser)와 서버 기록 삭제(DELETE /user/state)는 실제 로그인이 필요해
-여기서는 다루지 않는다(서버는 tests/test_user_state.py, 계정 삭제는 실제 로그인 환경에서 확인).
-이 검사는 버튼 위치·확인 창·브라우저 기록 폐기·로그인 화면 복귀를 본다.
+실제 로그인·실제 `deleteUser`·실제 서비스 계정 호출은 여기서 다루지 않는다 — `fetch` 와
+`FirebaseAuth` 를 대체해 **호출 순서·계약(본문 erased/deleted)·분기**를 본다(서버 쪽은
+tests/test_user_state.py·tests/test_firebase_admin.py 가 지킨다).
+이 검사는 버튼 위치·확인 창·브라우저 기록 폐기·로그인 화면 복귀·403 계정 감지를 본다.
 
     cd backend && uvicorn app.main:app --port 8768
     python ../e2e/test_account_withdrawal.py http://localhost:8768
@@ -173,16 +174,62 @@ with sync_playwright() as p:
       fa.enabled = true; fa.account = { uid: 'uidZ', provider: 'google.com' };
       fa.idToken = async () => 'tok';
       fa.signOut = async () => { fa.account = null; };
+      delete fa.stillAlive;                       // 확인 수단이 없으면 그대로 탈퇴로 본다
       S.user = { uid: 'uidZ', provider: 'google.com', name: 'Z', email: 'z@example.com' };
       ensure('plan'); go('u-home');
       accountClosed = false;
     }""")
     page.wait_for_timeout(150)
-    page.evaluate("pushPayload('uidZ', { session: null, weak: [], consent: null, trip: null })")
-    page.wait_for_timeout(300)
+    page.evaluate("scheduleStatePush()")            # 실제 배선: 예약 업로드 → pushPayload → 감지
+    page.wait_for_timeout(1200)
     gone = page.evaluate("({ scr: S.screen, user: S.user, local_trip: localStorage.getItem('cd_trip:uidZ'), calls: window.__calls })")
-    check("다른 기기 탈퇴 감지(403 account_deleted): 로컬 정리 후 로그인 화면",
-          gone["scr"] == "u-login" and gone["user"] is None and gone["local_trip"] is None, str(gone))
+    check("다른 기기 탈퇴 감지(403 account_deleted): 예약 업로드 경로에서도 로컬 정리 후 로그인 화면",
+          gone["scr"] == "u-login" and gone["user"] is None and gone["local_trip"] is None and has(gone["calls"], "PUT /user/state"),
+          str(gone))
+
+    # --- 흔적만 남고 계정이 살아 있는 드문 경우(관리자 경로가 도중 실패): 지우지 않고 알린다 ---
+    page.evaluate("""() => {
+      window.__calls = [];
+      window.fetch = async (url, opt = {}) => {
+        window.__calls.push((opt.method || 'GET') + ' ' + String(url).replace(/^https?:\\/\\/[^/]+/, ''));
+        return { ok: false, status: 403, json: async () => ({ detail: 'account_deleted' }) };
+      };
+      const fa = window.FirebaseAuth;
+      fa.enabled = true; fa.account = { uid: 'uidY', provider: 'google.com' };
+      fa.idToken = async () => 'tok';
+      fa.signOut = async () => { fa.account = null; };
+      fa.stillAlive = async () => true;            // 계정은 살아 있다(강제 갱신이 성공)
+      S.user = { uid: 'uidY', provider: 'google.com', name: 'Y', email: 'y@example.com' };
+      ensure('plan'); go('u-home');
+      accountClosed = false;
+    }""")
+    page.wait_for_timeout(150)
+    page.evaluate("pushPayload('uidY', { session: null, weak: [], consent: null, trip: null })")
+    page.wait_for_timeout(500)
+    alive = page.evaluate("({ scr: S.screen, user: S.user, local_trip: localStorage.getItem('cd_trip:uidY') })")
+    check("계정이 살아 있으면(흔적만 남은 경우) 지우지 않는다: 화면·기록 유지",
+          alive["scr"] == "u-home" and alive["user"] is not None and alive["local_trip"] is not None, str(alive))
+
+    # --- 늦게 도착한 403 이 다른 계정을 지우지 않는다(계정을 갈아 끼운 뒤 도착) ---
+    page.evaluate("""() => {
+      window.__calls = [];
+      window.fetch = async () => ({ ok: false, status: 403, json: async () => ({ detail: 'account_deleted' }) });
+      const fa = window.FirebaseAuth;
+      fa.enabled = true; fa.account = { uid: 'uidB', provider: 'google.com' };
+      fa.idToken = async () => 'tok';
+      fa.signOut = async () => { fa.account = null; };
+      delete fa.stillAlive;
+      S.user = { uid: 'uidB', provider: 'google.com', name: 'B', email: 'b@example.com' };
+      S.trip = null; resetDerived();              // 앞 사건의 여행을 들고 가지 않게(ensure 가 실제로 기록을 만들도록)
+      ensure('plan'); go('u-home');
+      accountClosed = false;
+    }""")
+    page.wait_for_timeout(150)
+    page.evaluate("handleAccountDeleted('uidA', 0)")   # 지난 계정(uidA)에 대한 늦은 응답
+    page.wait_for_timeout(300)
+    other = page.evaluate("({ scr: S.screen, user: S.user, local_trip: localStorage.getItem('cd_trip:uidB') })")
+    check("늦게 도착한 다른 계정의 탈퇴 응답은 무시한다",
+          other["scr"] == "u-home" and other["user"] is not None and other["local_trip"] is not None, str(other))
 
     check("자바스크립트 오류 없음", not errors, str(errors[:3]))
     b.close()

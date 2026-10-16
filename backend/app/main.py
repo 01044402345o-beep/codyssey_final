@@ -869,8 +869,12 @@ async def _account_token(request: Request) -> tuple[dict[str, str], str]:
 
 @app.get("/user/state")
 async def user_state_get(request: Request) -> dict[str, Any]:
-    """이 계정의 진도·복습·동의·여행 입력. 문서가 없으면 빈 기록. 생성·말하기는 이 경로를 타지 않는다."""
+    """이 계정의 진도·복습·동의·여행 입력. 문서가 없으면 빈 기록. 생성·말하기는 이 경로를 타지 않는다.
+
+    탈퇴한 uid 는 403 account_deleted 다 — 화면이 '기록이 비어 있다'로 오인해 다시 올리지 않게.
+    """
     account, token = await _account_token(request)
+    await _reject_if_erased(account["uid"])
     try:
         found = await run_in_threadpool(user_state.read_for, account["uid"], token)
     except user_state.StoreError as exc:
@@ -878,16 +882,25 @@ async def user_state_get(request: Request) -> dict[str, Any]:
     return found if found is not None else user_state.EMPTY_STATE
 
 
+async def _reject_if_erased(uid: str) -> None:
+    """탈퇴 흔적이 있는 uid 의 읽기·쓰기를 거부한다.
+
+    관리자 삭제 뒤에도 남은 미만료 ID 토큰(≤1h)이 `users/{uid}` 를 다시 만드는 것을 막는다.
+    흔적 조회는 저장소로 나가는 **동기** HTTP 이므로 스레드풀에서 돌린다 —
+    이벤트 루프를 막으면 다른 요청(생성·음성)까지 멈춘다.
+    """
+    if await run_in_threadpool(firebase_admin.is_erased, uid):
+        raise HTTPException(status_code=403, detail="account_deleted")
+
+
 @app.put("/user/state")
 async def user_state_put(request: Request) -> dict[str, Any]:
     """진도·복습·동의·여행 입력만 갈아 끼운다. uid 는 토큰에서 나오고 본문에서는 받지 않는다.
 
-    탈퇴한 uid 는 거부한다(403 account_deleted). 관리자 삭제 뒤에도 남은 미만료 ID 토큰이
-    문서를 다시 만드는 것을 막는다.
+    탈퇴한 uid 는 거부한다(403 account_deleted).
     """
     account, token = await _account_token(request)
-    if firebase_admin.is_erased(account["uid"]):
-        raise HTTPException(status_code=403, detail="account_deleted")
+    await _reject_if_erased(account["uid"])
     raw = await request.body()
     if len(raw) > user_state.MAX_STATE_BYTES:
         raise HTTPException(status_code=413, detail="state_too_large")

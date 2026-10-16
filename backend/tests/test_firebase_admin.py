@@ -97,7 +97,42 @@ class T(unittest.TestCase):
         missing = Script([http_error(404, 'Document "projects/p/databases/(default)/documents/deleted/uid-1" not found.')])
         self.assertFalse(self._admin(missing).read_tombstone("uid-1"))
 
-    def test_is_erased_caches_positive_and_negative(self):
+    def test_tombstone_body_carries_the_time(self):
+        script = Script([Resp(b"{}")])
+        self._admin(script).write_tombstone("uid-1")
+        method, url, _, body = script.calls[0]
+        self.assertEqual(method, "POST")
+        self.assertIn("/documents/deleted?documentId=uid-1", url)
+        sent = json.loads(body.decode())
+        self.assertIn("at", sent["fields"])
+        self.assertTrue(sent["fields"]["at"]["stringValue"].endswith("Z"))
+
+    def test_erase_rolls_the_tombstone_back_when_a_later_step_fails(self):
+        """계정이 살아 있는데 흔적만 남으면 그 사용자는 로그인한 채로 저장을 못 하게 된다."""
+        script = Script([Resp(b"{}"), http_error(500, "INTERNAL"), Resp(b"{}")])
+        with self.assertRaises(firebase_admin.AdminError):
+            self._admin(script).erase("uid-1")
+        methods = [c[0] for c in script.calls]
+        urls = [c[1] for c in script.calls]
+        self.assertEqual(methods, ["POST", "POST", "DELETE"])
+        self.assertIn("/documents/deleted/uid-1", urls[2])     # 흔적을 되돌린다
+
+    def test_erase_survives_a_failed_rollback(self):
+        """되돌리기도 실패하면 원래 오류를 그대로 올린다(조용히 성공하지 않는다)."""
+        script = Script([Resp(b"{}"), http_error(500, "INTERNAL"), http_error(503, "UNAVAILABLE")])
+        with self.assertRaises(firebase_admin.AdminError) as caught:
+            self._admin(script).erase("uid-1")
+        self.assertEqual(caught.exception.code, "admin_failed")
+
+    def test_conflict_is_only_swallowed_for_the_tombstone(self):
+        """토큰 취소·삭제의 409 를 성공으로 삼키면 살아 있는 토큰을 지웠다고 보고하게 된다."""
+        script = Script([Resp(b"{}"), http_error(409, "ALREADY_EXISTS"), Resp(b"{}")])
+        with self.assertRaises(firebase_admin.AdminError):
+            self._admin(script).erase("uid-1")
+        self.assertEqual([c[0] for c in script.calls], ["POST", "POST", "DELETE"])   # 취소에서 멈추고 되돌린다
+
+    def test_is_erased_caches_positive_only(self):
+        """'흔적 없음'은 캐시하지 않는다 — 캐시하면 다른 인스턴스가 막 쓴 흔적을 못 보고 통과시킨다."""
         firebase_admin.reset_cache()
         reads = {"n": 0}
 
@@ -112,8 +147,73 @@ class T(unittest.TestCase):
             self.assertTrue(firebase_admin.is_erased("uid-1"))     # 양성 캐시 — 다시 읽지 않는다
             self.assertEqual(reads["n"], 1)
             self.assertFalse(firebase_admin.is_erased("uid-2"))
-            self.assertFalse(firebase_admin.is_erased("uid-2"))    # 음성 캐시
             self.assertEqual(reads["n"], 2)
+            self.assertFalse(firebase_admin.is_erased("uid-2"))    # 음성은 캐시하지 않는다(즉시 재확인)
+            self.assertEqual(reads["n"], 3)
+        finally:
+            firebase_admin.reset_cache()
+            firebase_admin.set_admin(None)
+
+    def test_is_erased_sees_a_tombstone_written_by_another_instance(self):
+        """다른 인스턴스가 흔적을 쓴 직후 이 인스턴스도 즉시 막는다(음성 캐시 없음)."""
+        firebase_admin.reset_cache()
+        store = {"erased": False}
+
+        class Admin:
+            def read_tombstone(self, uid):
+                return store["erased"]
+
+        firebase_admin.set_admin(Admin())
+        try:
+            self.assertFalse(firebase_admin.is_erased("uid-1"))    # 아직 흔적 없음
+            store["erased"] = True                                 # 다른 인스턴스가 탈퇴 처리
+            self.assertTrue(firebase_admin.is_erased("uid-1"))     # 같은 프로세스가 즉시 차단
+        finally:
+            firebase_admin.reset_cache()
+            firebase_admin.set_admin(None)
+
+    def test_mark_erased_skips_the_store_read(self):
+        firebase_admin.reset_cache()
+
+        class Boom:
+            def read_tombstone(self, uid):
+                raise AssertionError("흔적을 읽으면 안 된다")
+
+        firebase_admin.mark_erased("uid-1")
+        firebase_admin.set_admin(Boom())
+        try:
+            self.assertTrue(firebase_admin.is_erased("uid-1"))
+        finally:
+            firebase_admin.reset_cache()
+            firebase_admin.set_admin(None)
+
+    def test_cache_does_not_grow_without_bound(self):
+        firebase_admin.reset_cache()
+        old = firebase_admin.CACHE_MAX
+        firebase_admin.CACHE_MAX = 4
+        try:
+            for i in range(9):
+                firebase_admin.mark_erased("uid-%d" % i)
+            self.assertLess(len(firebase_admin._erased), 9)
+        finally:
+            firebase_admin.CACHE_MAX = old
+            firebase_admin.reset_cache()
+
+    def test_read_failure_is_remembered_briefly(self):
+        """저장소 장애 때 요청마다 재시도로 몰리지 않게 짧게 기억한다(그래도 통과시킨다)."""
+        firebase_admin.reset_cache()
+        reads = {"n": 0}
+
+        class Down:
+            def read_tombstone(self, uid):
+                reads["n"] += 1
+                raise firebase_admin.AdminError(503, "admin_failed")
+
+        firebase_admin.set_admin(Down())
+        try:
+            self.assertFalse(firebase_admin.is_erased("uid-1"))
+            self.assertFalse(firebase_admin.is_erased("uid-1"))
+            self.assertEqual(reads["n"], 1)
         finally:
             firebase_admin.reset_cache()
             firebase_admin.set_admin(None)
@@ -196,7 +296,10 @@ class T(unittest.TestCase):
         with self.assertRaises(firebase_admin.AdminError) as caught:
             self._admin(script).erase("uid-1")
         self.assertEqual(caught.exception.code, "admin_failed")
-        self.assertEqual([c[0] for c in script.calls], ["POST", "POST", "DELETE"])   # accounts:delete 까지 가지 않는다
+        calls = [c[0] + " " + c[1] for c in script.calls]
+        self.assertEqual([c[0] for c in script.calls], ["POST", "POST", "DELETE", "DELETE"])
+        self.assertTrue(all("accounts:delete" not in c for c in calls))     # 계정 삭제까지 가지 않는다
+        self.assertIn("/documents/deleted/uid-1", calls[-1])                # 대신 흔적을 되돌린다
 
     def test_scopes_are_least_privilege(self):
         self.assertCountEqual(firebase_admin.SCOPES, [
