@@ -316,9 +316,6 @@ class MemoryUserStore:
     def write(self, uid: str, token: str, state: dict[str, Any]) -> None:
         self.docs[uid] = json.loads(json.dumps(state))
 
-    def delete(self, uid: str, token: str) -> None:
-        self.docs.pop(uid, None)
-
 
 class FirestoreUserStore:
     def __init__(self, project_id: str, opener: Opener | None = None) -> None:
@@ -357,8 +354,6 @@ class FirestoreUserStore:
                     return None
                 if method == "PATCH":
                     raise MissingDoc from exc
-                if method == "DELETE":
-                    return None   # 이미 없는 문서를 지우는 것은 성공으로 본다(탈퇴 재시도)
             raise StoreError(503, "store_unavailable") from exc
         except StoreError:
             raise
@@ -390,10 +385,6 @@ class FirestoreUserStore:
         except MissingDoc:
             self._call("POST", self._create_url(uid), token, body)
 
-    def delete(self, uid: str, token: str) -> None:
-        self._check_uid(uid)
-        self._call("DELETE", self._doc_url(uid), token)
-
 
 def read_for(uid: str, token: str) -> dict[str, Any] | None:
     return get_store().read(uid, token)
@@ -401,8 +392,3 @@ def read_for(uid: str, token: str) -> dict[str, Any] | None:
 
 def write_for(uid: str, token: str, state: dict[str, Any]) -> None:
     get_store().write(uid, token, state)
-
-
-def delete_for(uid: str, token: str) -> None:
-    """탈퇴: 이 계정의 기록 문서를 지운다. 없는 문서를 지우는 것은 성공으로 본다."""
-    get_store().delete(uid, token)
