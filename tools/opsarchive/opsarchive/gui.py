@@ -356,6 +356,7 @@ class App:
         self.node_desc = ttk.Label(editor, text="", justify="left")
         self.node_desc.pack(anchor="w", padx=8)
         self._wrap(self.node_desc, editor)
+        self.node_value = tk.StringVar()
         self.value_box = ttk.Frame(editor)
         self.value_box.pack(anchor="w", padx=8, pady=4)
         bar = ttk.Frame(editor)
@@ -397,6 +398,11 @@ class App:
             return
         self.canvas.delete("all")
         data = workflow.graph(self.policy)
+        # graph() 의 groups[].nodes 는 **노드 id 목록**이다(id 문자열 또는 dict 둘 다 받아 준다).
+        by_id = {}
+        for item in data.get("nodes", []):
+            if isinstance(item, dict) and item.get("id"):
+                by_id[item["id"]] = item
         x = 16
         y = 14
         self.node_boxes = {}
@@ -404,8 +410,11 @@ class App:
             self.canvas.create_text(x + 4, y, text=group.get("name", ""), anchor="nw",
                                     fill="#557", font=("", 9, "bold"))
             ty = y + 22
-            for node in group.get("nodes", []):
-                nid = node["id"]
+            for entry in group.get("nodes", []):
+                nid = entry if isinstance(entry, str) else str((entry or {}).get("id", ""))
+                node = by_id.get(nid, {"id": nid, "label": nid})
+                if not nid:
+                    continue
                 enabled = node.get("enabled", True)
                 missing = node.get("missing") or []
                 fill = "#e8f6ec" if enabled and not missing else ("#fdeaea" if missing else "#f1f1f5")
