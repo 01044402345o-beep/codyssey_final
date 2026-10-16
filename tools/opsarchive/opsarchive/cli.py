@@ -76,6 +76,10 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--service", required=True)
     q.add_argument("--key", required=True)
 
+    q = sub.add_parser("deploy", help="Render 서비스를 이름으로 찾아 재배포한다")
+    q.add_argument("--service", required=True, help="Render 서비스 이름(또는 ID)")
+    q.add_argument("--timeout", type=int, default=300, help="배포 대기 시간(초)")
+
     q = sub.add_parser("observe", help="플랫폼 접근 로그(앱 밖 증인)와 체인 시도 항목을 비교한다")
     q.add_argument("--project", required=True)
     q.add_argument("--sa", required=True)
@@ -212,6 +216,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "env-read":
             _print(commands.env_read(args.service, args.key))
             return 0
+        if args.cmd == "deploy":
+            result = commands.deploy(args.service, timeout=args.timeout)
+            _print(result)
+            return 0 if result.get("ok") else 1
         if args.cmd == "observe":
             result = commands.observe_requests(args.project, args.sa, args.service,
                                                path=args.path, since_minutes=args.minutes,
