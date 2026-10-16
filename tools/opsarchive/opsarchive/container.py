@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import json
 import os
 import struct
 import subprocess
@@ -85,6 +86,50 @@ def public_from_private(private_key: bytes) -> bytes:
     """개인키에서 공개키를 유도한다(doctor 가 로컬 키로 지문을 대조할 때 쓴다)."""
     private = X25519PrivateKey.from_private_bytes(private_key)
     return private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+
+
+# ------------------------------------------------------------------ 서명(Ed25519)
+# 봉투(X25519)와 서명은 **다른 키**를 쓴다: 봉투 키는 관리자만 열 수 있게 하는 것이고,
+# 서명 키는 "이 체크포인트를 관리자가 확인했다"를 나중에 증명하는 것이다(용도 분리).
+
+def sign_keypair() -> tuple[bytes, bytes]:
+    """(Ed25519 개인키 시드 32B, 공개키 32B). CSPRNG 는 라이브러리가 OS 엔트로피에서 가져온다."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    private = Ed25519PrivateKey.generate()
+    return (private.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw,
+                                  serialization.NoEncryption()),
+            private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw))
+
+
+def sign_public(seed: bytes) -> bytes:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    return Ed25519PrivateKey.from_private_bytes(seed).public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+
+
+def sign_message(seed: bytes, message: bytes) -> bytes:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    return Ed25519PrivateKey.from_private_bytes(seed).sign(message)
+
+
+def verify_signature(public: bytes, message: bytes, signature: bytes) -> bool:
+    """서명 검증. 라이브러리가 거부하는 형식(비정규 S·작은 차수 점 등)은 False 로만 알린다."""
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    try:
+        Ed25519PublicKey.from_public_bytes(public).verify(signature, message)
+        return True
+    except (InvalidSignature, ValueError):
+        return False
+
+
+def canonical_json(data: dict) -> bytes:
+    """서명·해시 대상의 **고정 직렬화**. 키 순서·공백·비ASCII 를 고정해 구현 간 불일치를 없앤다.
+
+    RFC 8785(JCS)와 달리 부동소수를 다루지 않는다 — 우리 매니페스트는 정수·문자열·리스트뿐이다
+    (큰 정수·부동소수가 들어오면 JCS 규칙과 어긋날 수 있어 애초에 넣지 않는다).
+    """
+    return json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 
 
 def pack_public_key(public_key: bytes) -> str:

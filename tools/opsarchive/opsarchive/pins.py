@@ -58,10 +58,14 @@ def write(path: str, pin: dict) -> dict:
 
 
 def make(public_key: bytes, fingerprint: str, key_id: str, *, generation: int,
-         health_url: str, commit: str = "", armed: bool = True, note: str = "") -> dict:
-    """핀 문서를 만든다(개인키에서 역산한 값만 넣는다 — 앱이 알려준 값을 그대로 믿지 않는다)."""
+         health_url: str, commit: str = "", armed: bool = True, note: str = "",
+         signing_public: bytes | None = None) -> dict:
+    """핀 문서를 만든다(개인키에서 역산한 값만 넣는다 — 앱이 알려준 값을 그대로 믿지 않는다).
+
+    `signing_public` 은 관리자 **서명 키**의 공개 절반이다(체크포인트 검증용). 봉투 키와 별개다.
+    """
     from . import container as C      # 순환 import 를 피하려고 함수 안에서 가져온다
-    return {
+    document = {
         "schema": SCHEMA,
         "armed": bool(armed),
         "generation": int(generation),
@@ -72,6 +76,11 @@ def make(public_key: bytes, fingerprint: str, key_id: str, *, generation: int,
         "rotated_by_commit": commit,
         "note": note,
     }
+    if signing_public is not None:
+        document["signing_public_key"] = C.pack_public_key(signing_public)
+        document["signing_key_id"] = C.key_id(signing_public).hex()
+        document["signing_fingerprint_sha256"] = C.fingerprint(signing_public)
+    return document
 
 
 def fetch_health(health_url: str, timeout: int = 20) -> dict:
