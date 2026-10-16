@@ -297,7 +297,8 @@ def verify_chain(project_id: str, sa_path: str, pin_file: str, *, out_dir: str =
         raise CommandError("no_pin_file") from exc
     packed = pin.get("signing_public_key", "")
     if not packed:
-        raise CommandError("no_signing_key")          # 핀에 서명 키가 없으면 검증할 수 없다
+        # 신뢰 뿌리(핀의 서명 공개키)가 없으면 체크포인트 서명을 검증할 수 없다.
+        raise CommandError("no_signing_key — Render 탭 ⑤ '핀 만들기'에서 **서명 키를 포함해** 핀을 다시 만드세요")
     signing_public = C.unpack_public_key(packed)
     out_dir = config.resolve(out_dir)
     checkpoints = []
