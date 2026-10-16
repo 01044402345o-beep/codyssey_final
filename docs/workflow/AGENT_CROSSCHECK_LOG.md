@@ -96,8 +96,8 @@
 
 ### 현재 작업 상태
 
-- 브랜치 `fix/withdraw-hardening-and-admin-erase` = 팀 `main`(`ebd65e5`, PR #82 머지본) 위에 **라운드 1~4 수정 커밋**. PR **#83**(base `main`)으로 올렸다.
-- 라운드 4(tombstone)까지 같은 PR 에 넣는다 — 팀이 rebase 머지를 쓰기 때문에 스택 PR 은 커밋 중복 위험이 있다.
+- 브랜치 `feat/withdraw-tombstone` = 팀 `main`(`96261bb`, **PR #83 머지본**) 위에 **라운드 4 커밋 `31f7694`**. 라운드 1~3 은 PR **#83** 으로 머지됐다.
+- 팀이 rebase 머지를 써서(#83 머지 뒤 sha 가 `ebd65e5`→`96261bb` 로 바뀌었다) **스택 PR 대신 별도 PR #84**(base `main`)로 올렸다.
 - 배포: 라이브 규칙은 선택형 `trip` + 소유자 `allow delete`(sha256 `702fa3f0…`). 관리자 경로는 Render 에 `FIREBASE_SERVICE_ACCOUNT_JSON` 을 넣어야 켜지고, 없으면 폴백으로 동작한다. 탈퇴 흔적은 규칙을 쓰지 않아 **추가 규칙 배포가 필요 없다**.
 
 ## 3. 잡은 결함 요약
