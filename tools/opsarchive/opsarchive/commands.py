@@ -417,10 +417,12 @@ def iam_check(project_id: str, sa_path: str, *, canary_id: str = "") -> dict:
     """
     store = gcp.Firestore(project_id, sa_path)
     cid = canary_id or ("iam-canary-" + uuid.uuid4().hex[:12])
-    path = "evidence_archives/" + cid
+    # 카나리아는 **별도 컬렉션**에 둔다: 증거 아카이브 목록·체인 앵커를 오염시키지 않으려고.
+    # (삭제가 막혀 있는 것이 정상이므로 다 쓴 뒤 스스로 지울 수 없다 — 그래서 섞이면 안 된다.)
+    path = "evidence_iam_canary/" + cid
     now = int(time.time())
     out = {"canary": cid, "created": False, "delete_blocked": None, "update_blocked": None,
-           "verdict": "", "note": "카나리아는 expire_at 으로 TTL 삭제된다(정책이 걸려 있으면)"}
+           "verdict": "", "note": "카나리아는 별도 컬렉션이라 증거 목록·체인에 섞이지 않는다"}
     try:
         store.set(path, {"canary": True, "created_at": now, "expire_at": now + 3600,
                          "trigger": "iam_check"})
@@ -452,6 +454,8 @@ def list_archives(project_id: str, sa_path: str, *, limit: int = 200) -> list[di
     """Firestore 의 봉인 아카이브 목록(최신 먼저). 본문은 받지 않는다(메타만)."""
     store = gcp.Firestore(project_id, sa_path)
     items = store.list("evidence_archives", page_size=limit)
+    # 예전 버전이 만든 카나리아가 증거 목록에 섞여 있을 수 있다(지금은 별도 컬렉션을 쓴다).
+    items = [item for item in items if not str(item.get("_id", "")).startswith("iam-canary-")]
     for item in items:
         item["age_seconds"] = int(time.time() - float(item.get("created_at", 0) or 0))
     items.sort(key=lambda d: float(d.get("created_at", 0) or 0), reverse=True)
