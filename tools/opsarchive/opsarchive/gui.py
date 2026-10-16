@@ -503,21 +503,30 @@ class App:
             if not a or not b:
                 continue
             self.canvas.create_line(a[2], (a[1] + a[3]) // 2, b[0], (b[1] + b[3]) // 2,
-                                    arrow="last", fill="#9ab", smooth=True)
+                                    arrow="last", fill="#9ab", smooth=True, tags=("edge",))
+        # 화살표를 **맨 뒤로** 내린다 — 노드 위에 겹쳐 그려지면 마우스 클릭을 가로채 보인다.
+        self.canvas.tag_lower("edge")
         self.canvas.configure(scrollregion=self.canvas.bbox("all") or (0, 0, 800, 400))
 
     def _on_canvas_click(self, event) -> None:
-        items = self.canvas.find_overlapping(event.x - 3, event.y - 3, event.x + 3, event.y + 3)
-        for item in items:
-            for tag in self.canvas.gettags(item):
-                if tag.startswith("n:"):
-                    self.selected_node = tag[2:]
-                    self._redraw_mindmap()
-                    self._show_node_editor()
-                    return
-        # 노드 밖을 클릭하면 선택을 푼다(이전 선택이 남아 있으면 편집 대상이 헷갈린다).
-        if self.selected_node:
-            self.selected_node = ""
+        """클릭 판정은 **좌표로 직접** 한다(캔버스 항목 순서·화살표 겹침에 기대지 않는다)."""
+        x = self.canvas.canvasx(event.x)
+        y = self.canvas.canvasy(event.y)
+        hit = ""
+        for nid, (x1, y1, x2, y2) in self.node_boxes.items():
+            if x1 <= x <= x2 and y1 <= y <= y2:
+                hit = nid                      # 정확히 겹치면 나중에 그린 노드가 이긴다
+        if not hit:
+            pad = 4                            # 가장자리 클릭 배려(노드 사이 간격은 8px)
+            for nid, (x1, y1, x2, y2) in self.node_boxes.items():
+                if x1 - pad <= x <= x2 + pad and y1 - pad <= y <= y2 + pad:
+                    hit = nid
+        if hit:
+            self.selected_node = hit
+            self._redraw_mindmap()
+            self._show_node_editor()
+        elif self.selected_node:
+            self.selected_node = ""            # 노드 밖(화살표·빈 곳) 클릭 → 선택 해제
             self._redraw_mindmap()
 
     def _node_def(self, node_id: str) -> dict:
