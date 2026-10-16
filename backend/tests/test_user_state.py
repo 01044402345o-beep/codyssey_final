@@ -296,6 +296,50 @@ class T(unittest.TestCase):
         self.assertEqual(res.status_code, 403)
         self.assertEqual(res.json()["detail"], "anonymous_rejected")
 
+    def test_delete_store_failure_is_unavailable(self):
+        class Down:
+            def read(self, uid, token):
+                raise user_state.StoreError(503, "store_unavailable")
+
+            def write(self, uid, token, state):
+                raise user_state.StoreError(503, "store_unavailable")
+
+            def delete(self, uid, token):
+                raise user_state.StoreError(503, "store_unavailable")
+
+        user_state.set_store(Down())
+        res = self.delete(claims_for("uid-1"))
+        self.assertEqual(res.status_code, 503)
+        self.assertEqual(res.json()["detail"], "store_unavailable")
+
+    def test_firestore_delete_request_shape_and_missing_doc(self):
+        """DELETE 는 /users/{uid} 로, Bearer 토큰으로 나가고, 없는 문서는 성공으로 본다(탈퇴 재시도)."""
+        ok = Script([Resp(b"{}")])
+        user_state.FirestoreUserStore("demo-project", ok).delete("uid-1", "signed-token")
+        self.assertEqual(ok.calls[0][0], "DELETE")
+        self.assertTrue(ok.calls[0][1].endswith("/users/uid-1"), ok.calls[0][1])
+        self.assertEqual(ok.calls[0][2], "Bearer signed-token")
+
+        missing = Script([http_error(404, 'Document "projects/demo-project/databases/(default)/documents/users/uid-1" not found.')])
+        self.assertIsNone(user_state.FirestoreUserStore("demo-project", missing).delete("uid-1", "signed-token"))
+
+        denied = Script([http_error(403, "Missing or insufficient permissions.")])
+        with self.assertRaises(user_state.StoreError) as caught:
+            user_state.FirestoreUserStore("demo-project", denied).delete("uid-1", "signed-token")
+        self.assertEqual(caught.exception.status, 503)   # 규칙 거부는 성공으로 넘기지 않는다
+
+    def test_firestore_rules_bind_writes_and_deletes_to_the_owning_uid(self):
+        """규칙 '문자열 존재'가 아니라 조건을 확인한다 — signedIn() 을 약화시키거나 allow 를 주석에만 둔 변형을 잡는다."""
+        text = (REPO_ROOT / "firestore.rules").read_text(encoding="utf-8")
+        body = re.search(r"function signedIn\(\) \{(.*?)\}", text, re.S)
+        self.assertIsNotNone(body, "signedIn() 본문을 찾지 못했습니다")
+        cond = body.group(1)
+        self.assertRegex(cond, r"request\.auth\.uid\s*==\s*uid")            # 본인 문서만
+        self.assertRegex(cond, r"sign_in_provider\s*!=\s*'anonymous'")      # 익명 거부
+        code = re.sub(r"//[^\n]*", "", text)                               # 주석을 걷어낸 실제 규칙에서 찾는다
+        self.assertRegex(code, r"allow delete:\s*if signedIn\(\);")
+        self.assertRegex(code, r"allow create, update:\s*if signedIn\(\)")
+
     def test_firestore_get_missing_is_empty_and_database_missing_is_unavailable(self):
         missing = Script([http_error(404, 'Document "projects/demo-project/databases/(default)/documents/users/uid-1" not found.')])
         store = user_state.FirestoreUserStore("demo-project", missing)

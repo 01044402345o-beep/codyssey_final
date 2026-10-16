@@ -327,6 +327,8 @@ async function pushPayload(uid, payload) {
   let token = '';
   try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
   if (!token) return;
+  // 토큰을 받는 사이에 계정이 바뀌었거나 탈퇴·초기화가 시작됐으면 올리지 않는다(지운 기록을 되살리지 않게).
+  if (skipStateWrite || accountUid() !== uid) return;
   const live = FirebaseAuth.account && FirebaseAuth.account.uid;
   if (live && live !== uid) return;
   try {
@@ -2066,35 +2068,39 @@ async function uploadSpeech(tok, blob, s) {
   updateSpeakUi(); renderDemo();
 }
 
-/* 이 칸(계정 uid 또는 uid 없는 칸)에 저장된 브라우저 기록을 모두 지운다. */
+/* 이 계정의 브라우저 기록을 모두 지운다. 계정 칸(:uid)과, 로그인 전에 이 브라우저에 남은
+   같은 이름의 공용 칸(uid 없음)을 함께 지운다 — 안내 문구("이 브라우저에 저장된 같은 기록")와 맞춘다. */
 function clearAccountStorage() {
-  const box = personalStore(); if (!box) return;
-  [SESSION_KEY, AI.WEAK_KEY, AI.CONSENT_KEY, AI.TRIP_KEY].forEach(k => { try { box.removeItem(k); } catch (e) { /* 저장소 막힘 */ } });
+  const keys = [SESSION_KEY, AI.WEAK_KEY, AI.CONSENT_KEY, AI.TRIP_KEY];
+  const box = personalStore();
+  if (box) keys.forEach(k => { try { box.removeItem(k); } catch (e) { /* 저장소 막힘 */ } });
+  if (STORE && box !== STORE) keys.forEach(k => { try { STORE.removeItem(k); } catch (e) { /* 저장소 막힘 */ } });
 }
-/* 탈퇴: 서버 기록 삭제(토큰이 살아 있을 때) → 브라우저 기록 삭제 → Firebase 계정 삭제. 되돌릴 수 없다.
-   서버 삭제가 실패하면 계정을 지우지 않고 멈춘다 — 기록이 남은 채 계정만 사라지는 것을 막기 위해서다. */
+/* 탈퇴: 브라우저 기록 폐기 → 서버 기록 삭제(토큰이 살아 있을 때) → Firebase 계정 삭제. 되돌릴 수 없다.
+   브라우저 기록을 먼저 지운다: 서버 삭제 도중 앱이 끊겨도 살아 있는 계정이 그 기록을 다시 올려 되살리지 못하게.
+   서버 삭제(토큰 없음·실패)면 계정을 지우지 않고 멈춘다 — 계정만 사라지고 기록이 남는 것을 막기 위해서다. */
 async function doWithdraw() {
   const uid = accountUid();
   const fb = !!(window.FirebaseAuth && FirebaseAuth.enabled);
   const accountUser = fb && !!uid;
   if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; }   // 예약된 업로드가 지운 기록을 되살리지 않게
+  cancelGen();                                                       // 진행 중인 생성 응답도 상태를 덮지 않게
   skipStateWrite = true;
 
-  if (accountUser && API.base !== null) {
+  clearAccountStorage();                     // (1) 브라우저 기록 폐기
+
+  if (accountUser && API.base !== null) {    // (2) 서버 기록 삭제
     let token = '';
     try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
-    if (token) {
-      try {
-        const res = await fetch((API.base || '') + '/user/state', { method: 'DELETE', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-      } catch (e) { skipStateWrite = false; toast('저장된 계정 기록을 지우지 못했어요. 잠시 뒤 다시 시도해 주세요.'); return; }
-    }
+    if (!token) { skipStateWrite = false; toast('로그인 정보를 확인하지 못해 탈퇴를 멈췄어요. 잠시 뒤 다시 시도해 주세요.'); return; }
+    try {
+      const res = await fetch((API.base || '') + '/user/state', { method: 'DELETE', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+    } catch (e) { skipStateWrite = false; toast('저장된 계정 기록을 지우지 못해 탈퇴를 멈췄어요. 잠시 뒤 다시 시도해 주세요.'); return; }
   }
 
-  clearAccountStorage();                     // 브라우저 기록 폐기
-
   let msg = accountUser ? '탈퇴했어요. 계정과 저장된 기록을 모두 지웠어요.' : '이 브라우저에 저장된 기록을 모두 지웠어요.';
-  if (accountUser) {                         // Firebase 계정 삭제(최근 로그인 필요)
+  if (accountUser) {                         // (3) Firebase 계정 삭제(최근 로그인 필요)
     const r = await FirebaseAuth.deleteAccount();
     if (!r.ok) {
       msg = r.code === 'auth/requires-recent-login'
