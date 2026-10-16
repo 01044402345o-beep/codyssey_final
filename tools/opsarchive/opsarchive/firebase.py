@@ -40,6 +40,7 @@ def run_cli(args: list[str], timeout: int = TIMEOUT) -> str:
     """`firebase` CLI 실행(shell=False). 실패는 값으로만 알린다."""
     try:
         done = subprocess.run([_bin()] + args, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace",   # Windows 로케일(cp949) 디코딩 오류 방지
                               timeout=timeout, shell=False)   # noqa: S603
     except subprocess.TimeoutExpired as exc:
         raise FirebaseError("cli_failed") from exc
