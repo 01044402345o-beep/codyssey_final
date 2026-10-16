@@ -50,7 +50,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     q = sub.add_parser("pin", help="개인키에서 역산한 지문으로 핀 파일을 만든다(관리자 오프라인)")
     q.add_argument("--key", required=True, help="개인키 파일 경로")
-    q.add_argument("--out", default="security/evidence-key-pin.json")
+    q.add_argument("--out", default=config.read_settings().get("pin_path") or "",
+                   help="핀 파일 경로(기본: 저장소 밖 ~/.opsarchive/evidence-key-pin.json)")
     q.add_argument("--health-url", required=True, help="앱 주소(핀에 기록)")
     q.add_argument("--generation", type=int, default=None, help="세대(기본: 기존+1)")
     q.add_argument("--commit", default="", help="회전을 일으킨 커밋 sha")
@@ -80,6 +81,15 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--service", required=True, help="Render 서비스 이름(또는 ID)")
     q.add_argument("--timeout", type=int, default=300, help="배포 대기 시간(초)")
 
+    q = sub.add_parser("pin-publish", help="핀의 공개값을 GitHub Actions 변수로 올린다(저장소 파일로는 올리지 않는다)")
+    q.add_argument("--pin", default=config.read_settings().get("pin_path") or "")
+    q.add_argument("--repo", default=os.environ.get("EVIDENCE_GH_REPO", "01044402345o-beep/codyssey_final"))
+    q.add_argument("--dry-run", action="store_true", help="올리지 않고 어떤 변수가 등록될지 보기만 한다")
+
+    q = sub.add_parser("pin-remote-check", help="원격 Actions 변수와 로컬 핀을 대조한다")
+    q.add_argument("--pin", default=config.read_settings().get("pin_path") or "")
+    q.add_argument("--repo", default=os.environ.get("EVIDENCE_GH_REPO", "01044402345o-beep/codyssey_final"))
+
     q = sub.add_parser("observe", help="플랫폼 접근 로그(앱 밖 증인)와 체인 시도 항목을 비교한다")
     q.add_argument("--project", required=True)
     q.add_argument("--sa", required=True)
@@ -91,13 +101,15 @@ def build_parser() -> argparse.ArgumentParser:
     q = sub.add_parser("verify-chain", help="체크포인트 서명·연속성·사라진 아카이브·챌린지를 검증한다")
     q.add_argument("--project", required=True)
     q.add_argument("--sa", required=True)
-    q.add_argument("--pin", default="security/evidence-key-pin.json")
+    q.add_argument("--pin", default=config.read_settings().get("pin_path") or "",
+                   help="핀 파일 경로(기본: 저장소 밖 ~/.opsarchive/evidence-key-pin.json)")
     q.add_argument("--out", default="checkpoints")
     q.add_argument("--challenge", default="",
                    help="사용자가 제시한 챌린지(영수증). 앵커 범위 안에 있는지 본다")
 
     q = sub.add_parser("pin-check", help="핀 파일과 배포된 /health 를 대조한다(CI 와 같은 검사)")
-    q.add_argument("--pin", default="security/evidence-key-pin.json")
+    q.add_argument("--pin", default=config.read_settings().get("pin_path") or "",
+                   help="핀 파일 경로(기본: 저장소 밖 ~/.opsarchive/evidence-key-pin.json)")
     q.add_argument("--health-url", default="", help="핀에 기록된 주소를 덮어쓴다")
 
     q = sub.add_parser("iam-check", help="앱 서비스 계정이 증거를 지울 수 있는지 시험한다(카나리아)")
@@ -218,6 +230,13 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.cmd == "deploy":
             result = commands.deploy(args.service, timeout=args.timeout)
+            _print(result)
+            return 0 if result.get("ok") else 1
+        if args.cmd == "pin-publish":
+            _print(commands.pin_publish(args.pin, repo=args.repo, dry_run=args.dry_run))
+            return 0
+        if args.cmd == "pin-remote-check":
+            result = commands.pin_remote_check(args.pin, repo=args.repo)
             _print(result)
             return 0 if result.get("ok") else 1
         if args.cmd == "observe":
