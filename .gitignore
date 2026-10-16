@@ -58,3 +58,8 @@ next-env.d.ts
 *-firebase-adminsdk-*.json
 serviceAccount*.json
 serviceAccountKey*.json
+
+# opsarchive 관리자 개인키 — 원칙은 저장소 밖(~/.opsarchive)에 두는 것이지만,
+# 실수로 --dir . 로 만들었을 때를 막는 안전망이다(잃으면 증거를 영영 못 연다).
+admin-*.key
+*.mfa
