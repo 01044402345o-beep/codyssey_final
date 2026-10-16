@@ -106,6 +106,34 @@ class App:
     def ask_pass(self, prompt: str = "패스프레이즈") -> str:
         return simpledialog.askstring("opsarchive", prompt, show="*", parent=self.root) or ""
 
+    def ask_key_pass(self, key_file: str, prompt: str = "개인키 패스프레이즈") -> str:
+        """패스프레이즈를 **그 자리에서 검증**하며 받는다(최대 3회).
+
+        틀린 값을 그대로 넘기면 작업 전체가 key_mismatch 로 실패하고 처음부터 다시 해야 한다
+        (실제로 사용자가 두 번 겪었다). 여기서 미리 열어 보고, 틀리면 이유를 보여주고 다시 묻는다.
+        """
+        for attempt in range(3):
+            phrase = self.ask_pass(prompt if attempt == 0 else
+                                   "%s — 이 키의 패스프레이즈가 아닙니다. 다시 입력하세요 (%d/3)"
+                                   % (prompt, attempt + 1))
+            if not phrase:
+                return ""
+            try:
+                C.load_private_key(key_file, phrase)
+                return phrase
+            except C.ContainerError as exc:
+                if exc.code == "key_mismatch":
+                    continue                      # 다시 묻는다
+                messagebox.showerror("opsarchive", "키 파일을 읽을 수 없습니다: %s" % exc.code)
+                return ""
+            except OSError as exc:
+                messagebox.showerror("opsarchive", "키 파일을 열 수 없습니다: %s" % exc)
+                return ""
+        messagebox.showerror("opsarchive", "패스프레이즈를 3번 틀렸습니다.\n"
+                                          "패스프레이즈를 잊었다면 키 탭 ③ 에서 **새 서명 키를 만드는** 편이 빠릅니다"
+                                          "(아직 아카이브 서명이 없으면 잃는 것이 없습니다).")
+        return ""
+
     def run(self, label: str, fn) -> None:
         """작업을 워커 스레드로 돌린다(패스프레이즈 입력은 메인 스레드에서 먼저 받는다)."""
         if self.busy:
@@ -491,7 +519,7 @@ class App:
         key_file = self.pick_key("admin")
         if not key_file:
             return
-        old = self.ask_pass("지금 개인키의 패스프레이즈")
+        old = self.ask_key_pass(key_file, "지금 개인키의 패스프레이즈")
         if not old:
             return
         new = self.ask_pass("새 개인키 패스프레이즈")
@@ -715,7 +743,7 @@ class App:
         key_file = self.pick_key("admin")
         if not key_file:
             return
-        phrase = self.ask_pass("개인키 패스프레이즈")
+        phrase = self.ask_key_pass(key_file, "개인키 패스프레이즈")
         if not key_file or not phrase:
             return
         self.run("publish", lambda: commands.publish(
@@ -724,7 +752,7 @@ class App:
 
     def do_doctor(self) -> None:
         key_file = self.pick_key("admin")
-        phrase = self.ask_pass("개인키 패스프레이즈")
+        phrase = self.ask_key_pass(key_file, "개인키 패스프레이즈")
         if not key_file or not phrase:
             return
         self.run("doctor", lambda: commands.doctor(
@@ -739,7 +767,7 @@ class App:
 
     def do_pin(self) -> None:
         key_file = self.pick_key("admin")
-        phrase = self.ask_pass("개인키 패스프레이즈")
+        phrase = self.ask_key_pass(key_file, "개인키 패스프레이즈")
         if not key_file or not phrase:
             return
         sign_file = self.pick_key("sign")
@@ -844,7 +872,7 @@ class App:
         key_file = self.pick_key("admin")
         if not key_file:
             return
-        phrase = self.ask_pass("개인키 패스프레이즈")
+        phrase = self.ask_key_pass(key_file, "개인키 패스프레이즈")
         if not phrase:
             return
         out_dir = self.settings.get("checkpoints_dir")
@@ -910,7 +938,7 @@ class App:
 
     def do_anchor(self) -> None:
         sign_file = self.pick_key("sign")
-        phrase = self.ask_pass("서명키 패스프레이즈")
+        phrase = self.ask_key_pass(sign_file, "서명 키 패스프레이즈")
         if not sign_file or not phrase:
             return
         self.run("anchor", lambda: commands.anchor(
