@@ -324,6 +324,7 @@ function writeLocalState(state) {
   } catch (e) { /* 저장소 막힘 */ }
 }
 async function pushPayload(uid, payload) {
+  const epoch = accountEpoch;   // 응답이 늦게 와도 다른 계정을 건드리지 않게 지금 시점을 기억한다
   if (!uid || !payload || API.base === null || !window.FirebaseAuth || !FirebaseAuth.idToken) return;
   let token = '';
   try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
@@ -343,13 +344,25 @@ async function pushPayload(uid, payload) {
       let code = '';
       try { code = (await res.json()).detail; } catch (e) { code = ''; }
       // 다른 기기에서 탈퇴한 계정: 이 기기의 토큰이 아직 살아 있어도 서버가 거부한다.
-      if (res.status === 403 && code === 'account_deleted') handleAccountDeleted();
+      if (res.status === 403 && code === 'account_deleted') handleAccountDeleted(uid, epoch).catch(() => {});
     }
   } catch (e) { /* 서버가 막혀도 이 브라우저 기록은 남는다 */ }
 }
-/* 서버가 '탈퇴한 계정'이라 답했을 때(다른 기기에서 탈퇴) — 로컬을 비우고 로그인 화면으로 보낸다. */
-function handleAccountDeleted() {
+/* 서버가 '탈퇴한 계정'이라 답했을 때(다른 기기에서 탈퇴) — 로컬을 비우고 로그인 화면으로 보낸다.
+   uid·epoch 를 함께 받아 **늦게 도착한 응답이 다른 계정을 지우지 않게** 한다(계정을 갈아 끼운 뒤 도착).
+   계정이 아직 살아 있으면(관리자 경로가 도중 실패해 흔적만 남은 경우) 지우지 않고 알린다 — 로컬 기록 손실을 막는다. */
+async function handleAccountDeleted(uid, epoch) {
   if (accountClosed) return;
+  if (uid && accountUid() !== uid) return;                                  // 이미 다른 계정이다
+  if (epoch !== undefined && epoch !== accountEpoch) return;                // 계정을 갈아 끼운 뒤 도착한 응답
+  if (window.FirebaseAuth && FirebaseAuth.enabled && FirebaseAuth.stillAlive && FirebaseAuth.account) {
+    let alive = false;
+    try { alive = await FirebaseAuth.stillAlive(); } catch (e) { alive = false; }
+    if (accountClosed) return;
+    if (uid && accountUid() !== uid) return;
+    if (epoch !== undefined && epoch !== accountEpoch) return;
+    if (alive) { toast('계정 저장이 잠시 막혔어요. 잠시 뒤 다시 시도해 주세요.'); return; }
+  }
   accountClosed = true;
   try { clearAccountStorage(); } catch (e) { /* 저장소 막힘 */ }
   if (window.FirebaseAuth && FirebaseAuth.enabled) { try { FirebaseAuth.signOut(); } catch (e) { /* 화면 상태는 비운다 */ } }
@@ -359,8 +372,10 @@ function handleAccountDeleted() {
   S.archived = [];
   PROG.done = {};
   RESTORE.screen = null; RESTORE.studyDate = null; RESTORE.card = null; RESTORE.trip = null;
+  aiRefreshKey = null;
   SESS_READY = true;
-  skipStateWrite = false;
+  // skipStateWrite 는 건드리지 않는다 — 탈퇴가 진행 중이었다면 그 불변식을 깨고 업로드를 되살린다.
+  // (S.user 가 비었으므로 이후 업로드는 uid 가 없어 스스로 멈춘다. 다음 로그인에서 adoptAccount 가 되돌린다.)
   toast('이 계정은 탈퇴되어 이 기기에서도 로그아웃했어요.');
   go('u-login');
 }
@@ -390,6 +405,11 @@ async function pullAccount(epoch) {
       cache: 'no-store',
     });
     if (epoch !== accountEpoch) return { dropped: true };
+    if (res.status === 403) {
+      let code = '';
+      try { code = (await res.json()).detail; } catch (e) { code = ''; }
+      if (code === 'account_deleted') return { gone: true };   // 탈퇴한 계정 — 기록이 없는 것으로 오인해 다시 올리지 않게
+    }
     if (!res.ok) return { failed: true };
     return { failed: false, remote: await res.json() };
   } catch (e) { return { failed: true }; }
@@ -445,6 +465,13 @@ async function adoptAccount(account, opts) {
   const hadLocal = stateHas(localState());
   const pulled = await pullAccount(epoch);
   if (pulled.dropped || epoch !== accountEpoch) return;
+  if (pulled.gone) {
+    // 서버가 '탈퇴한 계정'이라 답했다: 여는 김에 정리하고 로그인 화면으로 보낸다(계정이 살아 있으면 알림만).
+    SESS_READY = true;
+    skipStateWrite = false;
+    await handleAccountDeleted(account && account.uid, epoch);
+    return;
+  }
   if (!pulled.failed && stateHas(pulled.remote)) {
     const remote = pulled.remote;
     const remoteTrip = AI.cleanTrip(remote.trip);
@@ -2144,14 +2171,17 @@ async function doWithdraw() {
     try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
     if (!token) return stop('로그인 정보를 확인하지 못해 탈퇴를 멈췄어요. 잠시 뒤 다시 시도해 주세요.');
     const admin = await eraseOnServer(token);
+    if (accountClosed) return;    // 기다리는 사이 다른 경로가 '탈퇴한 계정'을 감지해 이미 정리했다(이중 처리 금지)
     if (admin === 'ok') {
       clearAccountStorage();                   // 서버가 계정·토큰·기록을 지웠다 — 이제 로컬만 정리
       try { await FirebaseAuth.signOut(); } catch (e) { /* 화면 상태는 비운다 */ }
     } else if (admin === 'unavailable') {
       // 서비스 계정 키가 없는 환경: 규칙 삭제 + 클라이언트 deleteUser 로 되돌아간다.
       if (!await deleteStateOnServer(token)) return stop('저장된 계정 기록을 지우지 못해 탈퇴를 멈췄어요. 잠시 뒤 다시 시도해 주세요.');
+      if (accountClosed) return;
       clearAccountStorage();                   // 서버 기록이 지워진 뒤에 로컬도 지운다
       const r = await FirebaseAuth.deleteAccount();
+      if (accountClosed) return;
       if (!r.ok) {
         msg = r.code === 'auth/requires-recent-login'
           ? '저장된 기록은 지웠어요. 보안을 위해 다시 로그인한 뒤 탈퇴를 다시 눌러 주세요.'
@@ -2591,7 +2621,8 @@ if (window.FirebaseAuth && API.base !== null) {
   FirebaseAuth.ready.then(account => {
     if (account && account.provider !== 'anonymous' && account.uid) {
       adoptAccount(account, { navigate: !SCR[startId] }).then(() => {
-        if (SCR[startId]) navFromMenu(startId);
+        // 탈퇴 감지로 로그아웃한 뒤에는 화면을 옮기지 않는다 — 그러면 데모 사용자로 홈이 열려 로그아웃이 되돌아간다.
+        if (SCR[startId] && S.user) navFromMenu(startId);
       });
     } else bootScreen();
   });

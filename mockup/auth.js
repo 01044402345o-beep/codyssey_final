@@ -133,6 +133,15 @@ FirebaseAuth.signOut = async function () {
   FirebaseAuth.account = null;
 };
 
+/* 계정이 아직 살아 있는지 **강제 갱신**으로 확인한다. 지워진 계정은 갱신이 실패한다.
+   서버가 '탈퇴한 계정'이라 답했는데 계정이 살아 있는 드문 경우(관리자 경로가 도중 실패해
+   흔적만 남은 경우)를 가려내는 데 쓴다 — 그때 로컬 기록을 지우고 로그아웃하면 손실이 크다. */
+FirebaseAuth.stillAlive = async function () {
+  const user = FirebaseAuth._auth && FirebaseAuth._auth.currentUser;
+  if (!user) return false;
+  try { await user.getIdToken(true); return true; } catch (e) { return false; }
+};
+
 /* 탈퇴: 현재 Firebase 계정을 지운다. 최근 로그인이 아니면 auth/requires-recent-login 이 온다.
    서버 기록(Firestore)은 이 호출 전에 DELETE /user/state 로 지운다(토큰이 살아 있을 때). */
 FirebaseAuth.deleteAccount = async function () {

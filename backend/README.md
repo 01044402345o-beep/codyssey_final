@@ -10,7 +10,7 @@
 | POST | `/speak-check` | 녹음 → **Silero VAD**(말소리 없으면 끝) → **전용 STT**(Groq Whisper 등, 목표 문장 모름) → 환각 필터·단어 비교(코드) → 피드백(Gemini, 오디오 없음). 근거: `docs/research/speak-hallucination.md`. 토큰 불필요 |
 | GET | `/auth/config` | Firebase 웹 공개 설정. 없으면 `enabled: false` (데모 로그인) |
 | GET | `/auth/me` | Firebase ID 토큰의 계정 |
-| GET·PUT·DELETE | `/user/state` | 그 토큰 uid 의 진도·복습 목록·말하기 동의·여행 입력(나라·도시·날짜·학습 시작일). 홈에서 고친 여행 입력도 같은 문서다. 학습 카드를 열기 전의 빈 카드는 카드 없음으로 저장한다. 장소·문장 본문은 없음(화면이 규칙으로 다시 만든다). DELETE 는 그 기록만 지운다(탈퇴의 폴백). 익명 로그인은 거절. 탈퇴한 uid(흔적 `deleted/{uid}` 있음)는 **403 `account_deleted`** 로 거부한다 |
+| GET·PUT·DELETE | `/user/state` | 그 토큰 uid 의 진도·복습 목록·말하기 동의·여행 입력(나라·도시·날짜·학습 시작일). 홈에서 고친 여행 입력도 같은 문서다. 학습 카드를 열기 전의 빈 카드는 카드 없음으로 저장한다. 장소·문장 본문은 없음(화면이 규칙으로 다시 만든다). DELETE 는 그 기록만 지운다(탈퇴의 폴백). 익명 로그인은 거절. 탈퇴한 uid(흔적 `deleted/{uid}` 있음)는 GET·PUT 모두 **403 `account_deleted`** 로 거부한다 |
 | POST | `/account/erase` | 탈퇴(관리자). 서비스 계정으로 탈퇴 흔적 `deleted/{uid}` 기록 → 토큰 취소(`validSince`) → Firestore 문서 삭제 → Auth 계정 삭제(최근 로그인 불필요). 흔적은 관리자만 접근하므로 규칙 변경이 필요 없다. 키(`FIREBASE_SERVICE_ACCOUNT_JSON`)가 없으면 503 `admin_unavailable`. 토큰 필요 |
 
 `GEMINI_API_KEY` 가 없으면 **목업으로 응답**합니다. 그래서 키 없이도 배포·시연이 됩니다.

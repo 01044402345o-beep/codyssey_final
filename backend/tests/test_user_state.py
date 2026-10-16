@@ -126,6 +126,17 @@ class T(unittest.TestCase):
         self.assertEqual(res.json()["detail"], "account_deleted")
         self.assertEqual(self.mem.docs, {})   # 문서가 만들어지지 않았다
 
+    def test_get_is_rejected_for_an_erased_account(self):
+        """읽기도 거부한다 — 아니면 화면이 '기록 없음'으로 보고 로컬 기록을 다시 올린다."""
+        class Erased:
+            def read_tombstone(self, uid):
+                return True
+
+        firebase_admin.set_admin(Erased())
+        res = self.get(claims_for("uid-1"))
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.json()["detail"], "account_deleted")
+
     def test_put_is_allowed_when_no_tombstone(self):
         class Clean:
             def read_tombstone(self, uid):
