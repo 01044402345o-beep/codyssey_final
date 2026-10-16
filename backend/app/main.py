@@ -16,6 +16,7 @@ ITINERARY_ENABLED 의 기본값은 꺼짐이고, 공개 배포에서 켜지 않�
   GET  /user/state   그 토큰 uid 의 진도·복습·동의·여행 입력. 없으면 빈 기록
   PUT  /user/state   같은 기록을 갈아 끼운다. 본문의 uid 는 받지 않는다
   DELETE /user/state 그 기록을 지운다(탈퇴). 계정 삭제는 화면이 deleteUser 로 한다
+  POST /account/erase 탈퇴(관리자). 토큰 취소 + 기록 삭제 + 계정 삭제. 서비스 계정 키가 있어야 함
   POST /generate     카테고리 문장 생성 (+ 스키마·규칙 검증 후 재생성). 토큰 불필요
   POST /itinerary    도시 하나의 장소 수집. category_id 없음. 토큰 불필요
   POST /speak-check  발음 오디오 → 피드백 (멀티모달). 토큰 불필요
@@ -47,6 +48,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
 from starlette.concurrency import run_in_threadpool
 
+from . import firebase_admin
 from . import firebase_auth
 from . import user_state
 from . import gemini as ai
@@ -399,6 +401,8 @@ def health() -> dict[str, Any]:
         "stt_selftest": selftest.status(),
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
         "firebase_auth": firebase_auth.configured(),
+        # 탈퇴 관리자 경로(서비스 계정)를 쓸 수 있는지만 알린다. 키 값은 노출하지 않는다.
+        "admin_erase": firebase_admin.configured(),
         # 사실 경로의 구글 장소 검색은 붙이지 않았다. google_places 는 그 의미로 남긴다.
         # 일정 플래그와 키는 호출 때마다 읽는다. 임포트 때 고정하지 않는다.
         "itinerary_enabled": itinerary_enabled(),
@@ -904,6 +908,26 @@ async def user_state_delete(request: Request) -> dict[str, Any]:
     except user_state.StoreError as exc:
         raise HTTPException(status_code=exc.status, detail=exc.code) from exc
     return {"deleted": True}
+
+
+@app.post("/account/erase")
+async def account_erase(request: Request) -> dict[str, Any]:
+    """탈퇴(관리자): 토큰 취소 → 기록 삭제 → 계정 삭제. uid 는 검증된 토큰에서 온다.
+
+    서비스 계정 키(FIREBASE_SERVICE_ACCOUNT_JSON)가 없으면 503 admin_unavailable 을 돌려주고,
+    화면은 규칙 삭제 + 클라이언트 deleteUser 경로로 되돌아간다.
+    """
+    account, _token = await _account_token(request)
+    if not firebase_admin.configured():
+        raise HTTPException(status_code=503, detail="admin_unavailable")
+    rate_limit(request)
+    try:
+        await run_in_threadpool(firebase_admin.erase_account, account["uid"])
+    except firebase_admin.AdminError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+    except Exception:  # noqa: BLE001 — 예상 못 한 오류도 500 대신 503 으로(추적 로그에 자격증명이 남지 않게)
+        raise HTTPException(status_code=503, detail="admin_failed")
+    return {"erased": True}
 
 
 # 화면(목업)을 같은 서비스에서 서빙한다. 반드시 모든 API 라우트 등록 뒤에 마운트한다.

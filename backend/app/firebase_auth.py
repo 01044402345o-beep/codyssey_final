@@ -7,7 +7,8 @@
 hasOnly 목록과 같아야 한다 — backend/tests/test_user_state.py 가 교차검증한다.)
 
 웹 설정(apiKey, authDomain, projectId)은 공개 값이다. 서비스 계정 키는
-읽지 않는다. 토큰 서명은 Google 공개 인증서로 확인한다.
+읽지 않는다 — 예외는 `app/firebase_admin.py` 의 탈퇴 경로(`POST /account/erase`)뿐이고,
+그 키는 환경변수 `FIREBASE_SERVICE_ACCOUNT_JSON` 으로만 받는다. 토큰 서명은 Google 공개 인증서로 확인한다.
 """
 from __future__ import annotations
 
