@@ -522,6 +522,7 @@ function tripFromInput(d, id) {
 function resetDerived() {
   S.places = []; S.reportMeta = {}; S.reportMode = 'example'; S.routeView = 'code'; S.itineraryBlocks = null;
   S.days = []; S.sents = []; S.smap = {}; S.sched = []; S.plan = null;
+  S.aiPools = {}; S.aiBy = {};   // 지난 여행의 AI 문장을 물려받지 않는다(전체 재생성 때 이전 문장이 섞이지 않게)
   S.cityTab = S.trip ? S.trip.cities[0].name : null; S.showCand = {}; S.studyDate = null; S.justCompleted = null; resetCard();
 }
 /* 여행 설정 수정: id 와 진행 기록은 두고 입력만 바꾼 뒤 보고서·방문 순서·문장을 다시 만든다. */
@@ -1256,10 +1257,14 @@ function scrEdit() {
   const inner = `<div class="app-pad">
     <div class="eyebrow">Trip settings</div>
     <div class="title-lg">여행 설정 수정</div>
-    <p class="sub" style="margin-bottom:18px">처음 입력한 여행 정보를 고칠 수 있어요. 날짜만 바꾸면 문장은 그대로 두고 학습 일정표만 다시 계산해요.</p>
+    <p class="sub" style="margin-bottom:18px">처음 입력한 여행 정보를 고칠 수 있어요. 날짜만 바꾸면 문장은 그대로 두고 학습 일정표만 다시 계산해요. 보고서·문장까지 새로 만들고 싶으면 아래 버튼을 쓰세요.</p>
     ${tripFields(d, E, v)}
   </div>`;
-  return frame(inner, { appbar: appbar('여행 설정 수정', { back: 'u-home' }), bottom: `<button class="btn primary block" data-act="save-trip">저장</button>` });
+  return frame(inner, {
+    appbar: appbar('여행 설정 수정', { back: 'u-home' }),
+    bottom: `<button class="btn primary block" data-act="save-trip">저장</button>
+      <button class="btn ghost block" data-act="save-trip-regen">보고서·문장까지 새로 만들기</button>`,
+  });
 }
 function inputSummary(d) {
   const first = d.cities[0]?.start, last = d.cities[d.cities.length - 1]?.end;
@@ -2223,6 +2228,26 @@ const ACT = {
     confirmBox('여행을 다시 만들까요?',
       '도시나 나라가 바뀌면 장소와 문장을 처음부터 다시 만들어요. 학습 진도는 날짜가 같으면 이어지고, 다르면 다시 학습해야 해요.',
       '다시 만들기', () => {
+        S.modal = null;
+        editTrip(d);
+        S.draft = defaultDraft(S.today); S.showErrors = false;
+        request('report');
+      }, { danger: true });
+  },
+  // 여행지·일정을 바꾸고 보고서와 문장을 통째로 다시 만든다(도시가 같아도 강제 재생성).
+  'save-trip-regen': () => {
+    S.showErrors = true;
+    const v = R.validate(S.draft, S.today);
+    if (!v.ok) { render(); toast('입력 내용을 확인해 주세요.'); return; }
+    const t = S.trip;
+    if (!t) { go('u-input'); return; }
+    const d = S.draft;
+    const keep = tripSchedDates(d);
+    const lost = (S.sched || []).filter(r => r.kind !== 'free' && r.completed && !keep.has(r.date)).length;
+    confirmBox('보고서와 문장을 새로 만들까요?',
+      '장소 보고서와 영어 문장을 처음부터 다시 만들어요. 지금 보고서·문장은 사라져요.' +
+      (lost > 0 ? ` 완료한 날 <b>${lost}일</b>이 일정에서 빠져 완료 표시가 사라져요.` : ' 학습 진도는 날짜가 같으면 이어져요.'),
+      '새로 만들기', () => {
         S.modal = null;
         editTrip(d);
         S.draft = defaultDraft(S.today); S.showErrors = false;
