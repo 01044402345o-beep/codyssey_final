@@ -22,6 +22,7 @@ FirebaseAuth.koreanError = function (err) {
   if (code === 'auth/weak-password') return '비밀번호는 6자 이상으로 해 주세요.';
   if (code === 'auth/popup-blocked') return '로그인 창이 차단됐어요. 주소창 오른쪽에서 팝업을 허용해 주세요.';
   if (code === 'auth/operation-not-allowed') return '이 로그인 방식은 Firebase 콘솔에서 아직 꺼져 있어요.';
+  if (code === 'auth/requires-recent-login') return '보안을 위해 다시 로그인한 뒤 다시 시도해 주세요.';
   return '로그인에 실패했어요. 잠시 뒤 다시 시도해 주세요.';
 };
 
@@ -130,6 +131,22 @@ FirebaseAuth.signOut = async function () {
     try { await FirebaseAuth._mod.signOut(FirebaseAuth._auth); } catch (e) { /* 화면 상태는 비운다 */ }
   }
   FirebaseAuth.account = null;
+};
+
+/* 탈퇴: 현재 Firebase 계정을 지운다. 최근 로그인이 아니면 auth/requires-recent-login 이 온다.
+   서버 기록(Firestore)은 이 호출 전에 DELETE /user/state 로 지운다(토큰이 살아 있을 때). */
+FirebaseAuth.deleteAccount = async function () {
+  await FirebaseAuth.ready;
+  if (!FirebaseAuth.enabled || !FirebaseAuth._auth || !FirebaseAuth._mod) return { ok: false, code: 'unavailable' };
+  const user = FirebaseAuth._auth.currentUser;
+  if (!user) return { ok: false, code: 'no-user' };
+  try {
+    await FirebaseAuth._mod.deleteUser(user);
+    FirebaseAuth.account = null;
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, code: (err && err.code) ? err.code : 'unknown' };
+  }
 };
 
 // 클래식 스크립트의 const 는 window 속성이 되지 않는다. app.js 는 window.FirebaseAuth 로 시작한다.

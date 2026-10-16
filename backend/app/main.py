@@ -15,6 +15,7 @@ ITINERARY_ENABLED 의 기본값은 꺼짐이고, 공개 배포에서 켜지 않�
   GET  /auth/me      Authorization: Bearer <Firebase ID 토큰>
   GET  /user/state   그 토큰 uid 의 진도·복습·동의·여행 입력. 없으면 빈 기록
   PUT  /user/state   같은 기록을 갈아 끼운다. 본문의 uid 는 받지 않는다
+  DELETE /user/state 그 기록을 지운다(탈퇴). 계정 삭제는 화면이 deleteUser 로 한다
   POST /generate     카테고리 문장 생성 (+ 스키마·규칙 검증 후 재생성). 토큰 불필요
   POST /itinerary    도시 하나의 장소 수집. category_id 없음. 토큰 불필요
   POST /speak-check  발음 오디오 → 피드백 (멀티모달). 토큰 불필요
@@ -888,6 +889,21 @@ async def user_state_put(request: Request) -> dict[str, Any]:
     except user_state.StoreError as exc:
         raise HTTPException(status_code=exc.status, detail=exc.code) from exc
     return state
+
+
+@app.delete("/user/state")
+async def user_state_delete(request: Request) -> dict[str, Any]:
+    """탈퇴: 이 계정의 기록 문서를 지운다. uid 는 토큰에서 나온다. 없는 문서도 성공이다.
+
+    Firebase 계정 자체(로그인)는 여기서 지우지 않는다 — 서비스 계정 키 없이 ID 토큰만 쓰는
+    구조라서다. 화면이 이 호출 뒤에 deleteUser 로 계정을 지운다.
+    """
+    account, token = await _account_token(request)
+    try:
+        await run_in_threadpool(user_state.delete_for, account["uid"], token)
+    except user_state.StoreError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+    return {"deleted": True}
 
 
 # 화면(목업)을 같은 서비스에서 서빙한다. 반드시 모든 API 라우트 등록 뒤에 마운트한다.
