@@ -205,3 +205,29 @@ root.destroy()
 - 설계·위협 모델·런북: [`docs/ops/EVIDENCE_SEAL.md`](EVIDENCE_SEAL.md) (§9 발신자 인증, §10 (b)매니페스트 서명+(d)해시체인·앱 밖 앵커, §11 남은 위험/미검증)
 - 배포: [`docs/deploy/DEPLOY_RUNBOOK.md`](../deploy/DEPLOY_RUNBOOK.md)
 - 도구 개요·설치: [`tools/opsarchive/README.md`](../../tools/opsarchive/README.md)
+## 노드 표 보강 (2026-10-17 추가분)
+
+아래는 위 표에 이어 붙는 노드들이다. **정본은 코드**(	ools/opsarchive/opsarchive/workflow.py 의 NODES)이며,
+새 노드가 추가되면 이 표를 갱신해야 한다(문서-코드 드리프트 주의).
+
+| id | 그룹 | 종류 | 기본값 | 연결 env | 재배포 필요 | 실행 가능 |
+|---|---|---|---|---|---|---|
+| max_bytes | 안전 | number | 1000000 | EVIDENCE_MAX_BYTES | 예 | 아니오(정책 반영) |
+| key_generation | 검증·앵커 | number | 1 | EVIDENCE_KEY_GENERATION | 예 | 아니오(정책 반영) — **핀의 세대와 같아야 한다** |
+| gh_repo | 탈퇴 대응 | toggle | 꺼짐 | 없음(안내) | 아니오 | 아니오 — opsarchive env-set 또는 .env 로 EVIDENCE_GH_REPO 를 올린다 |
+| max_source_logs | 안전 | toggle | 켜짐 | 없음(안내) | 아니오 | 아니오 — 소스·로그 캡은 앱 기본값(EVIDENCE_MAX_SOURCE_BYTES·EVIDENCE_MAX_LOGS_BYTES) 유지 |
+| iam_check_enabled | 감시·증인 | toggle | 켜짐 | 없음 | 아니오 | 아니오 — 끄면 자동 실행이 iam_check 를 건너뛴다(수동 [이 노드 실행] 은 그대로 가능) |
+
+### plan 의 ction 구분(2026-10-17)
+
+plan() 은 각 항목에 ction 을 함께 준다: un(실제 실행) · env(환경변수 반영 대상) · info(안내 노드).
+ok=True 인 항목이 전부 실행되는 것은 아니라는 점을 GUI 계획 미리보기에서 확인하세요.
+
+### 자동 실행의 경보 구분(2026-10-17)
+
+utomation_loop 은 결과를 두 갈래로 나눈다.
+- iolations — 명확한 실패(예: ok=False, erdict != "ok")
+- 
+otices — **확인 못 함**(예: 핀 미활성으로 ok=None, 관측 결과가 빈 dict)
+
+자동 실행 중 'IAM 점검이 정책에서 꺼져 있어…'·'앵커 주기가 수동이라…' 같은 로그가 나오면 정책에 따른 정상 동작이다.

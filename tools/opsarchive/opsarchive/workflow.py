@@ -70,6 +70,10 @@ NODES: list[dict] = [
     {"id": "iam_check", "label": "삭제 권한 점검", "group": "감시·증인", "kind": "action",
      "default": True, "desc": "앱 서비스 계정이 증거를 지우거나 덮어쓸 수 있는지 카나리아로 시험한다.",
      "env": None, "requires": ["project_id", "sa_path"], "redeploy": False},
+    {"id": "iam_check_enabled", "label": "삭제 권한 점검 사용", "group": "감시·증인", "kind": "toggle",
+     "default": True, "desc": "자동 실행에 IAM 점검을 포함할지. 끄면 관리자가 [이 노드 실행] 으로만 확인한다"
+     "(점검은 별도 컬렉션에 카나리아를 쓰므로 서버에 흔적이 남는다).",
+     "env": None, "requires": [], "redeploy": False},
     {"id": "pin_check", "label": "핀 대조", "group": "감시·증인", "kind": "action",
      "default": True, "desc": "핀 파일과 배포된 앱 /health 지문을 대조해 예상 밖 키를 잡는다.",
      "env": None, "requires": ["pin_path", "base_url"], "redeploy": False},
@@ -114,14 +118,15 @@ _BY_ID: dict[str, dict] = {node["id"]: node for node in NODES}
 _PLAN_ORDER: list[str] = [
     "seal_failures", "daily_cap", "per_uid_seconds", "ttl_days",
     "max_bytes", "key_generation", "include_secrets",
-    "observe", "pin_check", "iam_check", "anchor", "verify_chain",
+    "observe", "pin_check", "iam_check_enabled", "iam_check", "anchor", "verify_chain",
     "anchor_interval", "issue_notify", "gh_repo", "client_report", "max_source_logs",
 ]
 
 # 로컬에서 실제로 실행 가능한 노드(run_step 이 처리한다).
 _RUNNABLE: set[str] = {"observe", "pin_check", "iam_check", "anchor", "verify_chain"}
 # 값도 실행도 없이 안내만 하는 노드(env 없음).
-_INFO: set[str] = {"anchor_interval", "issue_notify", "gh_repo", "client_report", "max_source_logs"}
+_INFO: set[str] = {"anchor_interval", "issue_notify", "gh_repo", "client_report", "max_source_logs",
+                   "iam_check_enabled"}
 
 # number 노드의 사람이 읽는 단위(선택).
 _UNITS: dict[str, str] = {"daily_cap": "회", "per_uid_seconds": "초", "ttl_days": "일",
@@ -493,6 +498,7 @@ def automation_loop(policy: dict, *, on_log: Optional[Callable[[str], None]] = N
     policy = _normalize(policy)
     # 앵커 주기가 '수동'이면 자동 앵커를 하지 않는다(설명과 실제가 어긋나면 안 된다).
     manual_anchor = str(policy.get("anchor_interval") or "0").strip() in ("0", "", "None")
+    iam_enabled = bool(policy.get("iam_check_enabled", True))
     cycles = 0
     violations: list[str] = []
     notices: list[str] = []
@@ -513,6 +519,9 @@ def automation_loop(policy: dict, *, on_log: Optional[Callable[[str], None]] = N
         for item in steps:
             if manual_anchor and item.get("id") == "anchor":
                 log("앵커 주기가 '수동'이라 이번 주기에는 앵커하지 않는다")
+                continue
+            if not iam_enabled and item.get("id") == "iam_check":
+                log("IAM 점검이 정책에서 꺼져 있어 이번 주기에는 실행하지 않는다")
                 continue
             if not item.get("ok"):
                 if item.get("reason"):
