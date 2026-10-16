@@ -361,7 +361,12 @@ async function handleAccountDeleted(uid, epoch) {
     if (accountClosed) return;
     if (uid && accountUid() !== uid) return;
     if (epoch !== undefined && epoch !== accountEpoch) return;
-    if (alive) { toast('계정 저장이 잠시 막혔어요. 잠시 뒤 다시 시도해 주세요.'); return; }
+    if (alive) {
+      // 서버는 '탈퇴한 계정'이라 했는데 계정이 살아 있다 = 부분 실패. 증거를 남기도록 보고한다.
+      reportWithdrawIssue('still_alive', true).catch(() => {});
+      toast('계정 저장이 잠시 막혔어요. 잠시 뒤 다시 시도해 주세요.');
+      return;
+    }
   }
   accountClosed = true;
   try { clearAccountStorage(); } catch (e) { /* 저장소 막힘 */ }
@@ -379,8 +384,29 @@ async function handleAccountDeleted(uid, epoch) {
   toast('이 계정은 탈퇴되어 이 기기에서도 로그아웃했어요.');
   go('u-login');
 }
-function scheduleStatePush() {
+/* 탈퇴가 예상 밖 상태로 끝났음을 서버에 보고한다(증거 봉인 트리거).
+   개인정보·토큰은 보내지 않는다 — 상태 코드와 화면 이름뿐이다. 실패해도 조용히 넘어간다. */
+async function reportWithdrawIssue(reason, serverSaidErased) {
   const uid = accountUid();
+  if (!uid || API.base === null || !window.FirebaseAuth || !FirebaseAuth.idToken) return;
+  let token = '';
+  try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
+  if (!token) return;
+  try {
+    await fetch((API.base || '') + '/diagnostics/withdraw', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        reason: String(reason || '').slice(0, 200),
+        screen: String(S.screen || '').slice(0, 40),
+        has_account: !!accountUid(),
+        server_said_erased: !!serverSaidErased,
+      }),
+      keepalive: true,
+    });
+  } catch (e) { /* 보고 실패는 사용자 흐름을 막지 않는다 */ }
+}
+function scheduleStatePush() {  const uid = accountUid();
   if (!uid || !personalStore() || API.base === null || !SESS_READY || skipStateWrite) return;
   const payload = localState();
   if (stateTimer) clearTimeout(stateTimer);

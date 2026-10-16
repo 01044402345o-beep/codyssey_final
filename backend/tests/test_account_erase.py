@@ -28,13 +28,28 @@ CLAIMS = {
 class FakeAdmin:
     def __init__(self):
         self.erased = []
+        self.ledgers = []
+        self.tombstone = True
 
-    def erase(self, uid):
+    def erase(self, uid, ledger=None):
         self.erased.append(uid)
+        self.ledgers.append(ledger if ledger is not None else [])
+        if ledger is not None:
+            ledger.extend([{"step": "tombstone", "ok": True, "code": "", "ms": 1},
+                           {"step": "revoke", "ok": True, "code": "", "ms": 1}])
+
+    def read_tombstone(self, uid):
+        return self.tombstone
+
+    def firestore(self, method, subpath, body=None):
+        return {}
+
+    def lookup_user(self, uid):
+        return {}
 
 
 class Boom:
-    def erase(self, uid):
+    def erase(self, uid, ledger=None):
         raise firebase_admin.AdminError(503, "admin_failed")
 
 
@@ -84,7 +99,7 @@ class T(unittest.TestCase):
     def test_unexpected_error_is_503_not_500(self):
         """AdminError 가 아닌 예외도 500(추적 로그) 대신 503 admin_failed 로 답한다."""
         class Weird:
-            def erase(self, uid):
+            def erase(self, uid, ledger=None):
                 raise RuntimeError("unexpected")
 
         firebase_admin.set_admin(Weird())
@@ -111,6 +126,87 @@ class T(unittest.TestCase):
             main._hits.clear()
         self.assertEqual(codes[:2], [200, 200])
         self.assertEqual(codes[2], 429)
+
+    def test_ledger_is_recorded(self):
+        """실패 증거 봉인이 "어디까지 갔는지"를 남길 수 있게 단계 원장을 넘긴다."""
+        fake = FakeAdmin()
+        firebase_admin.set_admin(fake)
+        self.post()
+        self.assertEqual(fake.erased, ["uid-1"])
+        self.assertTrue(fake.ledgers[0], fake.ledgers)
+        self.assertEqual(fake.ledgers[0][0]["step"], "tombstone")
+
+    def test_failure_seals_evidence_with_the_ledger(self):
+        firebase_admin.set_admin(Boom())
+        sealed = []
+        with mock.patch.object(main, "_seal_in_background",
+                               side_effect=lambda *a, **k: sealed.append((a, k))):
+            res = self.post()
+        self.assertEqual(res.status_code, 503)
+        self.assertEqual(sealed[0][0][0], "erase_failed")      # trigger
+        self.assertEqual(sealed[0][0][1], "uid-1")             # uid
+
+    def test_success_but_mismatch_seals_evidence_and_still_reports_success(self):
+        """응답이 성공이어도 실제로 남아 있으면 증거를 남긴다(단계 생략 탐지)."""
+        fake = FakeAdmin()
+        fake.tombstone = False                                 # 흔적이 사라졌다 = 검증 불일치
+        firebase_admin.set_admin(fake)
+        sealed = []
+        with mock.patch.object(main, "_seal_in_background",
+                               side_effect=lambda *a, **k: sealed.append((a, k))):
+            res = self.post()
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(sealed[0][0][0], "verify_mismatch")
+        self.assertEqual(sealed[0][0][3]["ok"], False)          # verification 인자
+
+    def test_no_seal_when_verification_passes(self):
+        firebase_admin.set_admin(FakeAdmin())
+        with mock.patch.object(main, "_seal_in_background") as seal:
+            res = self.post()
+        self.assertEqual(res.status_code, 200)
+        seal.assert_not_called()
+
+
+class DiagnosticsTest(unittest.TestCase):
+    """POST /diagnostics/withdraw — 화면이 보고하는 탈퇴 불일치."""
+
+    def setUp(self):
+        firebase_admin.set_admin(FakeAdmin())
+        self.client = TestClient(main.app, raise_server_exceptions=False)
+        main._hits.clear()
+
+    def tearDown(self):
+        main._hits.clear()
+        firebase_admin.set_admin(None)
+
+    def _token_patch(self):
+        # verify_bearer 가 돌려주는 모양(uid/provider/…)으로 패치한다 — sub 를 그대로 주면 uid 가 없다.
+        return mock.patch.object(firebase_auth, "verify_bearer",
+                                 return_value={"uid": "uid-1", "provider": "google.com",
+                                               "name": "김여행", "email": "traveler@example.com"})
+
+    def test_requires_a_token(self):
+        with mock.patch.object(firebase_auth, "verify_bearer",
+                               side_effect=firebase_auth.AuthError(401, "missing_token")):
+            res = self.client.post("/diagnostics/withdraw", json={"reason": "no_receipt"})
+        self.assertEqual(res.status_code, 401)
+
+    def test_report_is_sealed_as_background_evidence(self):
+        sealed = []
+        with self._token_patch(), mock.patch.object(
+                main, "_seal_in_background", side_effect=lambda *a, **k: sealed.append((a, k))):
+            res = self.client.post("/diagnostics/withdraw", headers={"Authorization": "Bearer signed-token"},
+                                   json={"reason": "still_alive", "has_account": True,
+                                         "server_said_erased": True})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(sealed[0][0][0], "client_report")
+        self.assertEqual(sealed[0][0][3]["client"]["reason"], "still_alive")
+
+    def test_extra_fields_are_ignored(self):
+        with self._token_patch():
+            res = self.client.post("/diagnostics/withdraw", headers={"Authorization": "Bearer signed-token"},
+                                   json={"reason": "x", "uid": "uid-2", "token": "leak"})
+        self.assertEqual(res.status_code, 200)     # uid·token 은 받지 않는다(모델에 없다)
 
 
 if __name__ == "__main__":

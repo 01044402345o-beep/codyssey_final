@@ -95,9 +95,30 @@ def get_admin() -> Any:
     return ServiceAccountAdmin(project, info)
 
 
-def erase_account(uid: str) -> None:
-    """탈퇴: 토큰 취소 → 기록 삭제 → 계정 삭제. uid 는 호출부가 검증한 토큰에서 온다."""
-    get_admin().erase(uid)
+def erase_account(uid: str, ledger: list[dict[str, Any]] | None = None) -> None:
+    """탈퇴: 흔적 → 토큰 취소 → 기록 삭제 → 계정 삭제. uid 는 호출부가 검증한 토큰에서 온다."""
+    get_admin().erase(uid, ledger)
+
+
+def verify_erased(uid: str) -> dict[str, Any]:
+    """탈퇴가 실제로 끝났는지 사후 검증한다.
+
+    "성공했다고 응답했는데 남아 있는" 경우를 잡기 위한 것이다(단계 생략·부분 실패).
+    관리자 권한이 없으면 검증할 수 없으므로 `configured: false` 로 돌려준다.
+    """
+    if _admin is None and not configured():
+        return {"configured": False, "tombstone": None, "document_gone": None,
+                "account_gone": None, "ok": None}
+    admin = get_admin()
+    try:
+        tombstone = bool(admin.read_tombstone(uid))
+        document_gone = not bool(admin.firestore("GET", "users/" + urllib.request.quote(uid, safe="")))
+        account_gone = not bool(admin.lookup_user(uid))
+    except Exception:  # noqa: BLE001 — 검증 실패가 "성공한 탈퇴"를 500 으로 만들면 안 된다
+        return {"configured": True, "tombstone": None, "document_gone": None,
+                "account_gone": None, "ok": None, "error": "verify_failed"}
+    return {"configured": True, "tombstone": tombstone, "document_gone": document_gone,
+            "account_gone": account_gone, "ok": bool(tombstone and document_gone and account_gone)}
 
 
 # ---------------------------------------------------------------- 탈퇴 흔적(tombstone)
@@ -283,24 +304,58 @@ class ServiceAccountAdmin:
         """흔적이 있으면 True. 없는 문서(404)는 False 로 온다."""
         return bool(self._call("GET", self._tombstone_url(uid)))
 
-    def erase(self, uid: str) -> None:
+    def firestore(self, method: str, subpath: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        """관리자 권한으로 Firestore 문서를 다룬다(규칙을 거치지 않는다). `users/{uid}`·`evidence_archives/...`."""
+        url = (FIRESTORE + "/projects/" + urllib.request.quote(self.project_id, safe="")
+               + "/databases/(default)/documents/" + subpath.lstrip("/"))
+        return self._call(method, url, body)
+
+    def lookup_user(self, uid: str) -> dict[str, Any]:
+        """Auth 계정이 남아 있는지 본다(탈퇴 사후 검증). 없으면 빈 dict."""
+        base = IDENTITY + "/projects/" + urllib.request.quote(self.project_id, safe="")
+        got = self._call("POST", base + "/accounts:lookup", {"localId": [uid]})
+        users = got.get("users") if isinstance(got, dict) else None
+        return users[0] if isinstance(users, list) and users else {}
+
+    def erase(self, uid: str, ledger: list[dict[str, Any]] | None = None) -> None:
         """순서: 흔적 남김 → 토큰 취소 → 기록 삭제 → 계정 삭제.
 
         흔적을 가장 먼저 남긴다 — 뒤 단계가 실패해도 이미 발급된 ID 토큰이 문서를 되살리지 못하게.
         계정 삭제가 마지막이라 도중 실패해도 다시 시도할 수 있다.
         도중에 실패하면 흔적을 **되돌린다** — 계정이 아직 살아 있는데 흔적만 남으면 그 사용자는
         로그인한 채로 기록을 올릴 수 없고(403), 화면은 그것을 탈퇴로 오인해 로컬 기록까지 지운다.
+
+        `ledger` 를 주면 단계별 성공/실패를 기록한다(실패 증거 봉인이 "어디까지 갔는지"를 남기기 위해).
         """
         logger = logging.getLogger("app.firebase_admin")
-        self.write_tombstone(uid)
+
+        def step(name: str, action) -> None:
+            started = time.time()
+            try:
+                action()
+            except AdminError as exc:
+                if ledger is not None:
+                    ledger.append({"step": name, "ok": False, "code": exc.code,
+                                   "ms": int((time.time() - started) * 1000)})
+                raise
+            if ledger is not None:
+                ledger.append({"step": name, "ok": True, "code": "",
+                               "ms": int((time.time() - started) * 1000)})
+
+        step("tombstone", lambda: self.write_tombstone(uid))
         try:
-            self.revoke(uid)
-            self.delete_document(uid)
-            self.delete_user(uid)
+            step("revoke", lambda: self.revoke(uid))
+            step("document", lambda: self.delete_document(uid))
+            step("user", lambda: self.delete_user(uid))
         except AdminError:
+            rolled_back = True
             try:
                 self.remove_tombstone(uid)
             except AdminError:
+                rolled_back = False
                 logger.warning("탈퇴 흔적을 되돌리지 못했습니다 — 그 계정의 기록 저장이 막힐 수 있습니다")
+            if ledger is not None:
+                ledger.append({"step": "rollback", "ok": rolled_back,
+                               "code": "" if rolled_back else "rollback_failed", "ms": 0})
             raise
         mark_erased(uid)
