@@ -2,13 +2,17 @@
 import io
 import json
 import os
+import re
 import unittest
 import urllib.error
+from pathlib import Path
 from unittest import mock
 
 from fastapi.testclient import TestClient
 
 from app import firebase_auth, main, user_state
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 ENV = {
     "FIREBASE_API_KEY": "public-web-key",
@@ -43,6 +47,14 @@ BODY = {
         "demo": False,
     }],
     "consent": {"version": 6, "voice": True, "at": "2026-10-15T00:00:00.000Z"},
+}
+TRIP = {
+    "country": "미국",
+    "cities": [
+        {"name": "뉴욕", "start": "2026-11-10", "end": "2026-11-13"},
+        {"name": "보스턴", "start": "2026-11-13", "end": "2026-11-15"},
+    ],
+    "studyStart": "2026-10-01",
 }
 
 
@@ -181,6 +193,75 @@ class T(unittest.TestCase):
     def test_document_encoding_round_trip(self):
         state = user_state.parse_state(BODY)
         self.assertEqual(user_state.decode_document(user_state.encode_document(state)), state)
+
+    def test_trip_is_stored_with_the_progress(self):
+        saved = self.put(claims_for("uid-1"), {**BODY, "trip": TRIP})
+        self.assertEqual(saved.status_code, 200, saved.text)
+        mine = self.get(claims_for("uid-1"))
+        self.assertEqual(mine.json()["trip"], TRIP)
+
+    def test_home_card_without_a_date_does_not_reject_the_trip(self):
+        # 홈은 학습 카드를 열기 전에 date: null 을 보낸다. 이 객체 때문에 여행까지 400 이면 안 된다.
+        session = {**SESSION, "screen": "u-home", "studyDate": None,
+                   "card": {"date": None, "i": 0, "back": None, "flipped": []}}
+        saved = self.put(claims_for("uid-1"), {**BODY, "session": session, "trip": TRIP})
+        self.assertEqual(saved.status_code, 200, saved.text)
+        self.assertIsNone(saved.json()["session"]["card"])
+        self.assertEqual(saved.json()["trip"], TRIP)
+        bad = self.put(claims_for("uid-1"), {**BODY, "session": {**session, "card": {"date": None, "i": -1, "back": None, "flipped": []}}})
+        self.assertEqual(bad.status_code, 400)
+        self.assertEqual(bad.json()["detail"], "invalid_state")
+
+    def test_state_without_trip_reads_as_empty(self):
+        # trip 은 나중에 붙은 항목이라 예전 본문(키 없음)도 받아들인다.
+        self.assertEqual(user_state.parse_state(BODY)["trip"], None)
+
+    def test_malformed_trip_is_rejected(self):
+        for bad_trip in (
+            {"country": "미국", "cities": [], "studyStart": "2026-10-01"},          # 도시 0곳
+            {"country": "", "cities": TRIP["cities"], "studyStart": "2026-10-01"},  # 나라 없음
+            {"country": "미국", "cities": [{"name": "뉴욕", "start": "2026/11/10", "end": "2026-11-13"}],
+             "studyStart": "2026-10-01"},                                            # 날짜 형식 오류
+            {"country": "미국", "cities": [TRIP["cities"][0]] * 6, "studyStart": "2026-10-01"},  # 도시 6곳
+            {**TRIP, "uid": "uid-2"},                                                # 모르는 키
+        ):
+            res = self.put(claims_for("uid-1"), {**BODY, "trip": bad_trip})
+            self.assertEqual(res.status_code, 400, res.text)
+            self.assertEqual(res.json()["detail"], "invalid_state")
+        self.assertEqual(self.mem.docs, {})
+
+    def test_firestore_rules_allow_exactly_the_fields_we_write(self):
+        """보안 규칙과 쓰기 필드가 어긋나면 배포에서 조용히 거부된다(reload 뒤 여행이 사라진다).
+
+        encode_document 가 쓰는 필드 이름 == firestore.rules 의 hasOnly 목록 이어야 한다.
+        trip 을 붙일 때 규칙을 안 고치면 이 테스트가 잡는다.
+        """
+        text = (REPO_ROOT / "firestore.rules").read_text(encoding="utf-8")
+        found = re.search(r"hasOnly\(\[([^\]]*)\]\)", text)
+        self.assertIsNotNone(found, "firestore.rules 에서 hasOnly 목록을 찾지 못했습니다")
+        allowed = [k.strip().strip("'\"") for k in found.group(1).split(",") if k.strip()]
+        doc = user_state.encode_document(user_state.parse_state({**BODY, "trip": TRIP}))
+        self.assertEqual(set(doc["fields"]), set(allowed), "쓰는 필드와 보안 규칙 허용 목록이 다릅니다")
+        # 규칙은 각 필드가 문자열(JSON)이기를 요구한다 — 인코딩도 그렇게 해야 한다.
+        for name in allowed:
+            self.assertIsInstance(doc["fields"][name].get("stringValue"), str, name)
+
+    def test_firestore_rules_make_trip_optional(self):
+        """규칙을 백엔드보다 먼저 배포해도 옛 백엔드(trip 을 쓰지 않음)의 쓰기가 막히면 안 된다.
+
+        trip 을 무조건 `is string` 으로 요구하면, trip 필드가 없는 문서의 쓰기는 거부된다
+        (없는 필드를 읽으면 규칙 평가가 실패한다). 'trip' in data 로 존재를 먼저 확인해야 한다.
+        지금 배포된 백엔드(3필드)와 trip 을 넣는 백엔드(4필드)가 모두 통과하려면 이 형태여야 한다.
+        """
+        text = (REPO_ROOT / "firestore.rules").read_text(encoding="utf-8")
+        self.assertRegex(
+            text,
+            r"!\s*\(\s*'trip'\s+in\s+request\.resource\.data\s*\)\s*\|\|\s*request\.resource\.data\.trip\s+is\s+string",
+            "trip 은 '있으면 문자열'이어야 한다 — 무조건 요구하면 trip 없는 쓰기가 거부된다",
+        )
+        # session·weak·consent 는 옛 백엔드도 항상 쓰므로 필수로 남는다.
+        for name in ("session", "weak", "consent"):
+            self.assertRegex(text, rf"request\.resource\.data\.{name}\s+is\s+string")
 
     def test_firestore_get_missing_is_empty_and_database_missing_is_unavailable(self):
         missing = Script([http_error(404, 'Document "projects/demo-project/databases/(default)/documents/users/uid-1" not found.')])

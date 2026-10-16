@@ -383,6 +383,23 @@ git push origin main
 > ⚠️ **키 제거로 목업 전환은 "복구"가 아닙니다.** 서비스가 죽는 것보다는 낫지만,
 > 그 상태로 "AI가 동작한다"고 말하면 안 됩니다. **시연을 축소하세요.**
 
+### D. 계정 기록 보안 규칙 배포 — 순서 주의
+
+로그인 계정 기록은 Firestore `(default)` 의 `users/{uid}` 하나다. 규칙은 `firestore.rules`, 대상은 `firebase.json`(`(default)` 만) 이다.
+
+```bash
+firebase deploy --only firestore:rules     # 프로젝트: .firebaserc 의 com-example-myapplicatio-3bb36
+```
+
+- 규칙은 `session·weak·consent` 를 **필수**(문자열), `trip`(여행 입력)을 **선택**(있으면 문자열)으로 둔다.
+  그래서 규칙만 먼저 올려도 지금 서버(3필드)의 `PUT /user/state` 가 막히지 않는다.
+  `trip` 을 무조건 요구하면 `trip` 필드가 없는 문서의 쓰기가 `PERMISSION_DENIED` 가 된다.
+- 여행 입력이 **실제로 저장되려면** `backend/app/user_state.py` 의 `encode_document` 가 `trip` 을 쓰는 코드가
+  같이 Render 에 올라가 있어야 한다. 규칙 배포만으로는 켜지지 않는다.
+- `firestore-native-mode` 데이터베이스는 이 명령에 포함되지 않는다. 건드리지 않는다.
+- `encode_document` 가 쓰는 필드와 규칙의 `hasOnly` 목록이 어긋나면 배포에서 조용히 거부된다.
+  `backend/tests/test_user_state.py` 의 규칙 대조 테스트가 이를 막는다(규칙 수정 시 함께 확인).
+
 ---
 
 ## 6. 시연 당일 런북

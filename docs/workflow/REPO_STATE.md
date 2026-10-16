@@ -247,6 +247,8 @@
 
 Firestore `(default)`를 asia-northeast3에 만들었다. `firestore.rules`는 그 데이터베이스에만 배포했다. 배포본 sha256은 `6cac63da9ec2a8de9cafdcb33b541362e5b0e5e8b6fe72e2ba94583e1bc011a0`이고 로컬 `firestore.rules`와 같다. `cloud.firestore/firestore-native-mode` 릴리스는 2026-09-05 그대로다. 토큰 없는 `(default)` 문서 읽기는 403 PERMISSION_DENIED다. 로그인한 계정의 쓰기 왕복은 하지 않았다. FR-16은 부분이다. 공개 Render 환경 변수와 `ITINERARY_ENABLED`는 바꾸지 않았다.
 
+> ※ 위 sha 는 그 시점 기록이다. 이후 '홈 편의 기능' 절에서 작업 복사본이 `trip` 을 더해 달라졌다(배포본은 아직 `6cac63da…`).
+
 이 작업 트리에서 `unittest tests.test_user_state tests.test_firebase_auth`는 17개 통과, `node --test mockup/ai.test.js`는 27개 통과다. 데이터베이스를 만들기 전 같은 `mockup/app.js`에 대해 Playwright `e2e/test_account_storage.py` 14, `e2e/test_progress_persist.py` 16, `e2e/test_consent.py` 37이 통과했다. 그 화면 검사는 다시 돌리지 않았다.
 
 세션 디렉터리: `C:\Users\seong\.grok\sessions\C%3A%5CUsers%5Cseong%5CDesktop%5CProJect%5Ccodyssey_final\01a138a0-a233-7ca1-843c-3de2a5de06b6`
@@ -262,3 +264,20 @@ Firestore `(default)`를 asia-northeast3에 만들었다. `firestore.rules`는 �
 이 작업 트리에서 `unittest tests.test_itinerary`는 23개 통과, `node --test mockup/ai.test.js`는 33개 통과다. Playwright `e2e/test_itinerary_screen.py`는 14가 통과했다. 메뉴로 계획을 열어도 하루 블록이 유지되는 검사가 들어 있다. `e2e/test_progress_persist.py` 16과 `e2e/test_consent.py` 37은 그 메뉴 분기를 넣기 직전 트리에서 통과했고, 이번 재실행에는 넣지 않았다. Places 왕복은 다시 하지 않았다. FR-03과 FR-04는 부분이다.
 
 세션 디렉터리: `C:\Users\seong\.grok\sessions\C%3A%5CUsers%5Cseong%5CDesktop%5CProJect%5Ccodyssey_final\01a138a0-a233-7ca1-843c-3de2a5de06b6`
+
+## 이번 작업 — 홈 편의 기능 · 여행 입력 저장 (2026-10-16, 미커밋)
+
+브랜치 `feat/itinerary-screen` 작업 트리다. 커밋·푸시·배포는 하지 않았다. 공개 사이트는 아직 `5f94fb5` 이다.
+
+홈(메인화면)에 편의 기능을 더한다. 맨 아래 계정 카드에 로그아웃 버튼과 안내를 하나의 카드로 두고(누르면 확인 창), D-Day 카드는 `<button>` 이라 누르거나 Enter 로 여행 설정 수정 화면(`u-edit`, SCR-10)을 연다. 온보딩 입력(나라·도시별 체류 날짜·학습 시작일)을 계정 기록에 저장·복원한다. 날짜만 바뀌면 장소·문장은 그대로 두고 학습 일정표만 다시 계산하고, 도시·나라가 바뀌면 보고서부터 다시 만든다.
+
+`GET/PUT /user/state` 에 `trip` 이 붙는다. `user_state.py` 의 `_trip` 이 검증·인코딩하고(`encode_document` 4필드), 장소·문장 본문은 담지 않는다. 화면은 `ai.js` `cleanTrip`·`loadTrip`·`saveTrip`·`preferTrip` 과 `cd_trip`(계정 칸)을 쓴다. 서버 문서에 trip 이 없고 이 브라우저에만 있으면 `preferTrip` 이 그 입력을 지키고 서버로 다시 올린다(`adoptAccount`). 초기화와 새 여행은 여행 입력을 먼저 지운 뒤 진도를 비운다(그래야 `sessionClear` 가 예약한 푸시에 여행이 안 실린다). 로그아웃은 메모리의 여행만 비우고 저장된 입력은 남긴다.
+
+**규칙 배포 순서 (중요)**: `firestore.rules` 는 `session·weak·consent` 를 필수, `trip` 을 선택(있으면 문자열)으로 둔다. `trip` 을 무조건 요구하면 지금 배포된 백엔드(3필드)의 `PUT /user/state` 가 `PERMISSION_DENIED` 다. 규칙만 먼저 올려도 안전하다. 여행 입력 저장은 `encode_document` 가 `trip` 을 쓰는 백엔드가 Render 에 **같이** 올라가야 켜진다.
+
+- 커밋본(`HEAD`) `firestore.rules` sha256 = `6cac63da9ec2a8de9cafdcb33b541362e5b0e5e8b6fe72e2ba94583e1bc011a0` (= 배포본).
+- 작업 복사본 sha256 = `c89dc98330f5ff73c805cd43df98d62f052adf9b3b8c666d450f40f5bdcb6486` (trip 선택, 1708 바이트).
+- `firebase.json` 은 `(default)` 만 가리킨다. `firestore-native-mode` 는 바꾸지 않았다.
+- 규칙 파일에 `'trip' in request.resource.data` 가드와, `encode_document` 필드 ↔ 규칙 `hasOnly` 대조 테스트(`backend/tests/test_user_state.py`)가 들어 있다.
+
+이 작업 트리에서 백엔드 `unittest discover` 186 통과(규칙 대조 2 포함), 프론트 `node --test ai.test.js` 34·`tokens.test.js` 7 통과. Playwright e2e 9종 279 통과(`home_settings 29` 신규 포함: 새로고침 복원·D-Day 수정 저장·하단 로그아웃·계정 칸 분리). Firebase 를 켠 로컬 서버(`--env-file .env`)에서 `/auth/config` enabled=true, 로그인 화면 이메일 폼 노출, JS 오류 0 을 확인했다. `trip` 을 쓰는 화면·백엔드는 아직 커밋하지 않았다. 계정 쓰기 왕복(로그인 상태에서 서버 반영)은 아직 관찰하지 않아 FR-16 은 부분이다.

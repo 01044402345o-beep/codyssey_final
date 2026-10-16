@@ -7,13 +7,13 @@ ITINERARY_ENABLED 의 기본값은 꺼짐이고, 공개 배포에서 켜지 않�
 /generate 의 itinerary 형제는 그대로다.
 
 로그인은 Firebase Authentication 이다. 화면이 받은 ID 토큰만 확인한다.
-로그인한 계정의 진도·복습 목록·말하기 동의는 /user/state 에 둔다.
-여행·장소·문장 본문은 브라우저가 규칙으로 다시 만든다. Cloud Functions 로 생성 경로를 옮기지 않는다.
+로그인한 계정의 진도·복습 목록·말하기 동의와 여행 입력(나라·도시·날짜·학습 시작일)은 /user/state 에 둔다.
+장소·문장 본문은 브라우저가 그 입력으로 규칙을 다시 돌려 만든다. Cloud Functions 로 생성 경로를 옮기지 않는다.
 
   GET  /health       배포·콜드스타트 확인용
   GET  /auth/config  Firebase 웹 설정. 없으면 enabled=false
   GET  /auth/me      Authorization: Bearer <Firebase ID 토큰>
-  GET  /user/state   그 토큰 uid 의 진도·복습·동의. 없으면 빈 기록
+  GET  /user/state   그 토큰 uid 의 진도·복습·동의·여행 입력. 없으면 빈 기록
   PUT  /user/state   같은 기록을 갈아 끼운다. 본문의 uid 는 받지 않는다
   POST /generate     카테고리 문장 생성 (+ 스키마·규칙 검증 후 재생성). 토큰 불필요
   POST /itinerary    도시 하나의 장소 수집. category_id 없음. 토큰 불필요
@@ -864,7 +864,7 @@ async def _account_token(request: Request) -> tuple[dict[str, str], str]:
 
 @app.get("/user/state")
 async def user_state_get(request: Request) -> dict[str, Any]:
-    """이 계정의 진도·복습·동의. 문서가 없으면 빈 기록. 생성·말하기는 이 경로를 타지 않는다."""
+    """이 계정의 진도·복습·동의·여행 입력. 문서가 없으면 빈 기록. 생성·말하기는 이 경로를 타지 않는다."""
     account, token = await _account_token(request)
     try:
         found = await run_in_threadpool(user_state.read_for, account["uid"], token)
@@ -875,7 +875,7 @@ async def user_state_get(request: Request) -> dict[str, Any]:
 
 @app.put("/user/state")
 async def user_state_put(request: Request) -> dict[str, Any]:
-    """진도·복습·동의만 갈아 끼운다. uid 는 토큰에서 나오고 본문에서는 받지 않는다."""
+    """진도·복습·동의·여행 입력만 갈아 끼운다. uid 는 토큰에서 나오고 본문에서는 받지 않는다."""
     account, token = await _account_token(request)
     raw = await request.body()
     if len(raw) > user_state.MAX_STATE_BYTES:

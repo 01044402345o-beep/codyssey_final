@@ -159,6 +159,39 @@ test('scopedStorage: uid 가 없으면 기존 키, 있으면 계정마다 갈라
   assert.equal(AI.scopedStorage(null, 'uidA'), null);
 });
 
+test('여행 입력: 규칙 밖이면 null, 저장·읽기 왕복, 계정 칸마다 갈린다, null 이면 삭제', () => {
+  const good = { country: ' 미국 ', cities: [{ name: ' 뉴욕 ', start: '2026-11-10', end: '2026-11-13' }], studyStart: '2026-10-01' };
+  assert.deepEqual(AI.cleanTrip(good), { country: '미국', cities: [{ name: '뉴욕', start: '2026-11-10', end: '2026-11-13' }], studyStart: '2026-10-01' });
+  assert.equal(AI.cleanTrip(null), null);
+  assert.equal(AI.cleanTrip({ ...good, country: '   ' }), null);
+  assert.equal(AI.cleanTrip({ ...good, cities: [] }), null);                                   // 도시 0곳
+  assert.equal(AI.cleanTrip({ ...good, cities: [1, 2, 3, 4, 5, 6].map(() => good.cities[0]) }), null);   // 6곳
+  assert.equal(AI.cleanTrip({ ...good, cities: [{ name: '뉴욕', start: '2026/11/10', end: '2026-11-13' }] }), null);  // 날짜 형식
+  assert.equal(AI.cleanTrip({ ...good, studyStart: '' }), null);
+  assert.equal(AI.cleanTrip({ country: '미국', cities: good.cities }), null);                   // 학습 시작일 없음
+
+  const mem = new Map();
+  const storage = { getItem: k => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: k => mem.delete(k) };
+  assert.equal(AI.loadTrip(storage), null);                                                     // 아무것도 없을 때
+  assert.equal(AI.saveTrip(AI.scopedStorage(storage, ''), good), true);
+  assert.equal(AI.saveTrip(AI.scopedStorage(storage, 'uidA'), { ...good, country: '영국' }), true);
+  assert.equal(AI.loadTrip(AI.scopedStorage(storage, '')).country, '미국');
+  assert.equal(AI.loadTrip(AI.scopedStorage(storage, 'uidA')).country, '영국');
+  assert.equal(AI.saveTrip(AI.scopedStorage(storage, ''), null), true);
+  assert.equal(AI.loadTrip(AI.scopedStorage(storage, '')), null);                               // 저장 해제
+  assert.equal(AI.loadTrip(AI.scopedStorage(storage, 'uidA')).country, '영국');                  // 다른 칸은 그대로
+  const bad = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); } };
+  assert.equal(AI.loadTrip(bad), null); assert.equal(AI.saveTrip(bad, good), false);
+  assert.equal(AI.loadTrip({ getItem: () => '{oops' }), null);
+
+  const remote = { country: '영국', cities: [{ name: '런던', start: '2026-12-01', end: '2026-12-03' }], studyStart: '2026-11-01' };
+  const local = { country: '미국', cities: [{ name: '뉴욕', start: '2026-11-10', end: '2026-11-13' }], studyStart: '2026-10-01' };
+  assert.equal(AI.preferTrip(remote, local).country, '영국');          // 서버에 여행이 있으면 서버
+  assert.equal(AI.preferTrip(null, local).country, '미국');             // 서버 칸이 비면 이 브라우저
+  assert.equal(AI.preferTrip({ country: '  ' }, local).country, '미국'); // 규칙 밖 서버 값은 버린다
+  assert.equal(AI.preferTrip(null, null), null);
+});
+
 test('loadWeak/saveWeak: 저장소 예외·깨진 JSON에도 죽지 않는다', () => {
   const bad = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
   assert.deepEqual(AI.loadWeak(bad), []); assert.equal(AI.saveWeak(bad, []), false);
