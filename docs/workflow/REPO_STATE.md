@@ -267,9 +267,9 @@ Firestore `(default)`를 asia-northeast3에 만들었다. `firestore.rules`는 �
 
 ## 이번 작업 — 홈 편의 기능 · 여행 입력 저장 (2026-10-16)
 
-브랜치 `feat/home-trip-settings`(`team/main` = `5f94fb5` 에서 분기, 커밋 `6089399` 하나). 포크 `origin`(seongbin45)에 푸시했고 **PR #77**(`01044402345o-beep/codyssey_final`, base `main`)을 열었다. 규칙은 머지 전에 먼저 배포했다(아래). 백엔드는 아직 머지·배포 전이라 공개 사이트는 여전히 `5f94fb5` 다.
+브랜치 `feat/home-trip-settings`(`team/main` = `5f94fb5` 에서 분기). 포크 `origin`(seongbin45)에 푸시했고 **PR #77**(`01044402345o-beep/codyssey_final`, base `main`)을 열었다. 규칙은 머지 전에 먼저 배포했다(아래). 백엔드는 아직 머지·배포 전이라 공개 사이트는 여전히 `5f94fb5` 다.
 
-홈(메인화면)에 편의 기능을 더한다. 맨 아래 계정 카드에 로그아웃 버튼과 안내를 하나의 카드로 두고(누르면 확인 창), D-Day 카드는 `<button>` 이라 누르거나 Enter 로 여행 설정 수정 화면(`u-edit`, SCR-10)을 연다. 온보딩 입력(나라·도시별 체류 날짜·학습 시작일)을 계정 기록에 저장·복원한다. 날짜만 바뀌면 장소·문장은 그대로 두고 학습 일정표만 다시 계산하고, 도시·나라가 바뀌면 보고서부터 다시 만든다.
+홈(메인화면)에 편의 기능을 더한다. 맨 아래 계정 카드에 로그아웃 버튼과 안내를 하나의 카드로 두고(누르면 확인 창), D-Day 카드는 `<button>` 이라 누르거나 Enter 로 여행 설정 수정 화면(`u-edit`, SCR-10)을 연다. 온보딩 입력(나라·도시별 체류 날짜·학습 시작일)을 계정 기록에 저장·복원한다. 날짜만 바뀌면 장소·문장은 그대로 두고 학습 일정표만 다시 계산하고, 도시·나라가 바뀌면 보고서부터 다시 만든다. **날짜 변경으로 일정에서 빠지는 완료한 날이 있으면 저장 전에 확인 창으로 알린다**(조용한 진도 손실 방지, `tripSchedDates`).
 
 `GET/PUT /user/state` 에 `trip` 이 붙는다. `user_state.py` 의 `_trip` 이 검증·인코딩하고(`encode_document` 4필드), 장소·문장 본문은 담지 않는다. 화면은 `ai.js` `cleanTrip`·`loadTrip`·`saveTrip`·`preferTrip` 과 `cd_trip`(계정 칸)을 쓴다. 서버 문서에 trip 이 없고 이 브라우저에만 있으면 `preferTrip` 이 그 입력을 지키고 서버로 다시 올린다(`adoptAccount`). 초기화와 새 여행은 여행 입력을 먼저 지운 뒤 진도를 비운다(그래야 `sessionClear` 가 예약한 푸시에 여행이 안 실린다). 로그아웃은 메모리의 여행만 비우고 저장된 입력은 남긴다.
 
@@ -280,4 +280,4 @@ Firestore `(default)`를 asia-northeast3에 만들었다. `firestore.rules`는 �
 - `firebase.json` 은 `(default)` 만 가리킨다. `firestore-native-mode` 는 바꾸지 않았다.
 - 규칙 파일에 `'trip' in request.resource.data` 가드와, `encode_document` 필드 ↔ 규칙 `hasOnly` 대조 테스트(`backend/tests/test_user_state.py`)가 들어 있다.
 
-커밋 `6089399` 기준 백엔드 `unittest discover` 186 통과(규칙 대조 2 포함), 프론트 `node --test ai.test.js` 34·`tokens.test.js` 7 통과. Playwright e2e 9종 279 통과(`home_settings 29` 신규 포함: 새로고침 복원·D-Day 수정 저장·하단 로그아웃·계정 칸 분리). Firebase 를 켠 로컬 서버(`--env-file .env`)에서 `/auth/config` enabled=true, 로그인 화면 이메일 폼 노출, JS 오류 0 을 확인했다. PR CI 는 push 시점에 `test`·`e2e` 잡이 돌았다. 계정 쓰기 왕복(로그인 상태에서 서버 반영)은 아직 관찰하지 않아 FR-16 은 부분이다. **남은 순서: PR CI 통과 → 머지(Render 자동 배포). 규칙은 이미 올라가 있어 머지 시 계정 저장이 깨지지 않는다.**
+브랜치 HEAD 기준 백엔드 `unittest discover` 186 통과(규칙 대조 2 포함), 프론트 `node --test ai.test.js` 34·`tokens.test.js` 7 통과. Playwright e2e 9종 283 통과(`home_settings 33` 포함: 새로고침 복원·D-Day 수정 저장·완료 손실 경고·하단 로그아웃·계정 칸 분리). Firebase 를 켠 로컬 서버(`--env-file .env`)에서 `/auth/config` enabled=true, 로그인 화면 이메일 폼 노출, JS 오류 0 을 확인했다. PR CI 는 push 마다 `test`·`e2e` 잡이 돈다. 계정 쓰기 왕복(로그인 상태에서 서버 반영)은 아직 관찰하지 않아 FR-16 은 부분이다. **남은 순서: PR CI 통과 → 머지(Render 자동 배포). 규칙은 이미 올라가 있어 머지 시 계정 저장이 깨지지 않는다.**
