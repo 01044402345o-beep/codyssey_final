@@ -76,21 +76,67 @@ class T(unittest.TestCase):
         with mock.patch.dict(os.environ, {"FIREBASE_PROJECT_ID": "demo-project", "FIREBASE_SERVICE_ACCOUNT_JSON": bad}, clear=True):
             self.assertFalse(firebase_admin.configured())         # private_key 없음
 
-    def test_erase_calls_revoke_then_document_then_delete_user(self):
-        script = Script([Resp(b"{}"), Resp(b"{}"), Resp(b"{}")])
+    def test_erase_writes_tombstone_then_revokes_then_document_then_user(self):
+        script = Script([Resp(b"{}"), Resp(b"{}"), Resp(b"{}"), Resp(b"{}")])
         self._admin(script).erase("uid-1")
         methods = [c[0] for c in script.calls]
         urls = [c[1] for c in script.calls]
-        self.assertEqual(methods, ["POST", "DELETE", "POST"])
-        self.assertTrue(urls[0].endswith("/accounts:update"), urls[0])
-        self.assertIn("validSince", script.calls[0][3].decode())
-        self.assertIn("/databases/(default)/documents/users/uid-1", urls[1])
-        self.assertTrue(urls[2].endswith("/accounts:delete"), urls[2])
+        self.assertEqual(methods, ["POST", "POST", "DELETE", "POST"])
+        self.assertIn("/documents/deleted?documentId=uid-1", urls[0])          # 흔적을 가장 먼저
+        self.assertTrue(urls[1].endswith("/accounts:update"), urls[1])
+        self.assertIn("validSince", script.calls[1][3].decode())
+        self.assertIn("/documents/users/uid-1", urls[2])
+        self.assertTrue(urls[3].endswith("/accounts:delete"), urls[3])
         self.assertTrue(all(c[2] == "Bearer sa-token" for c in script.calls))
+
+    def test_tombstone_is_read_from_the_deleted_collection(self):
+        script = Script([Resp(b'{"fields":{"at":{"stringValue":"2026-10-16T00:00:00Z"}}}')])
+        self.assertTrue(self._admin(script).read_tombstone("uid-1"))
+        self.assertIn("/documents/deleted/uid-1", script.calls[0][1])
+
+        missing = Script([http_error(404, 'Document "projects/p/databases/(default)/documents/deleted/uid-1" not found.')])
+        self.assertFalse(self._admin(missing).read_tombstone("uid-1"))
+
+    def test_is_erased_caches_positive_and_negative(self):
+        firebase_admin.reset_cache()
+        reads = {"n": 0}
+
+        class Admin:
+            def read_tombstone(self, uid):
+                reads["n"] += 1
+                return uid == "uid-1"
+
+        firebase_admin.set_admin(Admin())
+        try:
+            self.assertTrue(firebase_admin.is_erased("uid-1"))
+            self.assertTrue(firebase_admin.is_erased("uid-1"))     # 양성 캐시 — 다시 읽지 않는다
+            self.assertEqual(reads["n"], 1)
+            self.assertFalse(firebase_admin.is_erased("uid-2"))
+            self.assertFalse(firebase_admin.is_erased("uid-2"))    # 음성 캐시
+            self.assertEqual(reads["n"], 2)
+        finally:
+            firebase_admin.reset_cache()
+            firebase_admin.set_admin(None)
+
+    def test_is_erased_lets_requests_through_when_the_store_fails(self):
+        """흔적 조회 실패가 앱 전체 쓰기를 막지 않는다(일시 장애에 fail-open)."""
+        firebase_admin.reset_cache()
+
+        class Down:
+            def read_tombstone(self, uid):
+                raise firebase_admin.AdminError(503, "admin_failed")
+
+        firebase_admin.set_admin(Down())
+        try:
+            self.assertFalse(firebase_admin.is_erased("uid-1"))
+        finally:
+            firebase_admin.reset_cache()
+            firebase_admin.set_admin(None)
 
     def test_missing_targets_are_treated_as_success(self):
         script = Script([
-            http_error(400, "USER_NOT_FOUND"),
+            http_error(409, "ALREADY_EXISTS"),                                   # 흔적이 이미 있음
+            http_error(400, "USER_NOT_FOUND"),                                   # 계정 없음
             http_error(404, 'Document "projects/demo-project/databases/(default)/documents/users/uid-1" not found.'),
             http_error(400, "USER_NOT_FOUND"),
         ])
@@ -146,11 +192,11 @@ class T(unittest.TestCase):
         self.assertEqual(script.calls, [])
 
     def test_server_error_mid_sequence_aborts_before_deleting_the_user(self):
-        script = Script([Resp(b"{}"), http_error(500, "INTERNAL"), Resp(b"{}")])
+        script = Script([Resp(b"{}"), Resp(b"{}"), http_error(500, "INTERNAL"), Resp(b"{}")])
         with self.assertRaises(firebase_admin.AdminError) as caught:
             self._admin(script).erase("uid-1")
         self.assertEqual(caught.exception.code, "admin_failed")
-        self.assertEqual([c[0] for c in script.calls], ["POST", "DELETE"])   # accounts:delete 까지 가지 않는다
+        self.assertEqual([c[0] for c in script.calls], ["POST", "POST", "DELETE"])   # accounts:delete 까지 가지 않는다
 
     def test_scopes_are_least_privilege(self):
         self.assertCountEqual(firebase_admin.SCOPES, [
