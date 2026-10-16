@@ -2,8 +2,9 @@
 
 Render 디스크는 재시작되면 지워지므로 쓰지 않는다. 서비스 계정 JSON 도 쓰지 않는다.
 확인된 Firebase ID 토큰을 Firestore 보안 규칙에 그대로 넘긴다.
-문서는 users/{uid} 하나다. 담는 것은 진도, 복습 목록, 말하기 동의뿐이다.
-여행·장소·문장 본문은 담지 않는다. 화면이 규칙으로 다시 만든다.
+문서는 users/{uid} 하나다. 담는 것은 진도, 복습 목록, 말하기 동의, 그리고
+여행 입력(나라·도시별 체류 날짜·학습 시작일)뿐이다.
+장소·문장 본문은 담지 않는다. 화면이 그 입력으로 규칙을 다시 돌려 만든다.
 
 저장소는 테스트가 set_store 로 갈아 끼운다. 기본 구현은 Firestore REST 다.
 """
@@ -17,14 +18,15 @@ import urllib.request
 from typing import Any, Callable
 
 MAX_STATE_BYTES = 100_000
-EMPTY_STATE: dict[str, Any] = {"session": None, "weak": [], "consent": None}
+EMPTY_STATE: dict[str, Any] = {"session": None, "weak": [], "consent": None, "trip": None}
 
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _SCREEN = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 _ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _AT = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$")
 _UID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
-_MASK = "updateMask.fieldPaths=session&updateMask.fieldPaths=weak&updateMask.fieldPaths=consent"
+_MASK = ("updateMask.fieldPaths=session&updateMask.fieldPaths=weak"
+         "&updateMask.fieldPaths=consent&updateMask.fieldPaths=trip")
 
 Opener = Callable[..., Any]
 _store: Any = None
@@ -81,6 +83,19 @@ def _card(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict) or set(value) - {"date", "i", "back", "flipped"}:
         _fail()
     date = value.get("date")
+    # 홈처럼 학습 카드를 열지 않으면 화면은 date: null 을 보낸다. 그때는 카드 없음이다.
+    # 날짜가 없는 카드의 다른 칸이 깨져 있으면 그대로 거절한다(여행을 같이 지우지 않되, 쓰레기는 받지 않는다).
+    if date is None:
+        if "i" in value:
+            _num(value.get("i"), 0, 500)
+        back = value.get("back")
+        if back is not None:
+            _num(back, 0, 500)
+        flipped_in = value.get("flipped", [])
+        if not isinstance(flipped_in, list) or len(flipped_in) > 500:
+            _fail()
+        [_num(n, 0, 500) for n in flipped_in]
+        return None
     if not isinstance(date, str) or not _DATE.fullmatch(date):
         _fail()
     back = value.get("back")
@@ -179,14 +194,55 @@ def _consent(value: Any) -> dict[str, Any] | None:
     return {"version": version, "voice": True, "at": at}
 
 
+def _trip(value: Any) -> dict[str, Any] | None:
+    """여행 입력(온보딩 1단계). 장소·문장은 담지 않는다 — 화면이 이 입력으로 규칙을 다시 돌린다.
+
+    화면(ai.js cleanTrip)과 같은 규칙: 나라 1~80자, 도시 1~5곳, 도시마다 이름 1~80자와
+    체류 시작·종료 날짜, 학습 시작일. 규칙 밖 값은 400 으로 거절한다(조용히 버리지 않는다).
+    """
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) != {"country", "cities", "studyStart"}:
+        _fail()
+    country = value.get("country")
+    if not isinstance(country, str) or not 1 <= len(country.strip()) <= 80:
+        _fail()
+    cities_in = value.get("cities")
+    if not isinstance(cities_in, list) or not 1 <= len(cities_in) <= 5:
+        _fail()
+    cities: list[dict[str, str]] = []
+    for city in cities_in:
+        if not isinstance(city, dict) or set(city) != {"name", "start", "end"}:
+            _fail()
+        name = city.get("name")
+        if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
+            _fail()
+        start, end = city.get("start"), city.get("end")
+        if not isinstance(start, str) or not _DATE.fullmatch(start):
+            _fail()
+        if not isinstance(end, str) or not _DATE.fullmatch(end):
+            _fail()
+        cities.append({"name": name.strip(), "start": start, "end": end})
+    study = value.get("studyStart")
+    if not isinstance(study, str) or not _DATE.fullmatch(study):
+        _fail()
+    return {"country": country.strip(), "cities": cities, "studyStart": study}
+
+
 def parse_state(body: Any) -> dict[str, Any]:
-    """본문에서 진도·복습·동의만 남긴다. uid 는 받지 않는다."""
-    if not isinstance(body, dict) or set(body) != {"session", "weak", "consent"}:
+    """본문에서 진도·복습·동의·여행 입력만 남긴다. uid 는 받지 않는다.
+
+    trip 은 나중에 붙은 항목이다. 예전 기록(문서)에는 없으므로 없으면 null 로 둔다.
+    """
+    if not isinstance(body, dict):
+        raise StoreError(400, "invalid_state")
+    if not {"session", "weak", "consent"} <= set(body) or (set(body) - {"session", "weak", "consent", "trip"}):
         raise StoreError(400, "invalid_state")
     state = {
         "session": _session(body.get("session")),
         "weak": _weak(body.get("weak")),
         "consent": _consent(body.get("consent")),
+        "trip": _trip(body.get("trip")),
     }
     raw = json.dumps(state, ensure_ascii=False, separators=(",", ":")).encode()
     if len(raw) > MAX_STATE_BYTES:
@@ -202,6 +258,7 @@ def encode_document(state: dict[str, Any]) -> dict[str, Any]:
         "session": as_string(state["session"]),
         "weak": as_string(state["weak"]),
         "consent": as_string(state["consent"]),
+        "trip": as_string(state["trip"]),
     }}
 
 
@@ -212,6 +269,9 @@ def decode_document(doc: dict[str, Any]) -> dict[str, Any]:
 
     def one(name: str) -> Any:
         raw = fields.get(name)
+        # trip 은 trip 지원 전에 쓰인 문서에는 없다. 그때는 None 으로 본다(나머지는 그대로 엄격하게).
+        if raw is None and name == "trip":
+            return None
         if not isinstance(raw, dict) or not isinstance(raw.get("stringValue"), str):
             raise StoreError(503, "store_unavailable")
         try:
@@ -219,7 +279,8 @@ def decode_document(doc: dict[str, Any]) -> dict[str, Any]:
         except json.JSONDecodeError as exc:
             raise StoreError(503, "store_unavailable") from exc
 
-    return parse_state({"session": one("session"), "weak": one("weak"), "consent": one("consent")})
+    return parse_state({"session": one("session"), "weak": one("weak"),
+                        "consent": one("consent"), "trip": one("trip")})
 
 
 def _http_message(exc: urllib.error.HTTPError) -> str:

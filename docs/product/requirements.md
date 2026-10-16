@@ -26,10 +26,10 @@
 | FR-10 | 무음·잡음 거부 | 말소리가 없으면 채점하지 않고 외부 AI 를 부르지 않음 | Must | 완료 | `tests/test_speech_vad.py`, 배포 실측 무음 10/10 |
 | FR-11 | **어려워한 상황 기억** | 낮은 점수의 상황을 저장 → 다음 생성 요청에 포함 → 그 상황 문장이 생성됐는지 서버가 검증 | Must | 완료 | `weakDecision`, `weak_expressions`, `weak_not_covered` |
 | FR-12 | 기억 관리 | 복습 목록 보기·삭제, 동의 철회 시 함께 삭제 | Must | 완료 | 홈 "AI · 개인정보" 카드, `e2e/test_consent.py` |
-| FR-13 | 녹음 동의 | 첫 녹음 전 동의(보내는 것·받는 곳·처리·보관), 거부해도 나머지 기능 사용 | Must | 완료 | `askVoiceConsent`, 동의 v6 |
+| FR-13 | 녹음 동의 | 첫 녹음 전 동의(보내는 것·받는 곳·처리·보관), 거부해도 나머지 기능 사용 | Must | 완료 | `askVoiceConsent`, 동의 v7 |
 | FR-14 | 여행 종료 요약 | 완료율·학습 문장 수·새 여행 | Should | 완료 | SCR-06 |
 | FR-15 | 교통·숙소 카테고리 생성 | 맛집 외 카테고리 문장 생성 | Should | **부분** | 계약 3종 모두 서버에 있음(`restaurant.json`·`transport.json`·`lodging.json`, 각 상황 10개). 화면 코드는 장소 종류로 카테고리를 정해 (도시, 카테고리)별로 요청함(`categoryOfKind`, `ai.test.js`). 남은 것: 예시 장소 데이터(`data.js`)에 교통·숙소 장소가 없어 실제로는 맛집만 요청됨 |
-| FR-16 | 로그인·사용자별 저장 | 구글 로그인, 서버 저장 | Could | **부분** | 구글·이메일 로그인은 붙었다. `GET/PUT /user/state` 가 검증된 토큰 uid 의 진도·복습 목록·말하기 동의만 읽고 쓴다(`backend/tests/test_user_state.py`, `e2e/test_account_storage.py`). uid 가 없으면 기존 브라우저 키. 여행·장소·문장 본문은 저장하지 않는다. 디스크는 Firestore `(default)` (asia-northeast3) 이고 규칙은 그 데이터베이스에만 배포했다. 같은 프로젝트의 `firestore-native-mode` 는 바꾸지 않았다. 저장소 호출이 실패하면 503 이고 브라우저 기록은 유지된다. 로그인한 계정의 실제 왕복은 아직 보지 못했다. 공개 사이트의 토큰 없는 `/user/state`는 401 `missing_token`이다 |
+| FR-16 | 로그인·사용자별 저장 | 구글 로그인, 서버 저장 | Could | **부분** | 구글·이메일 로그인은 붙었다. `GET/PUT /user/state` 가 검증된 토큰 uid 의 진도·복습 목록·말하기 동의와 **여행 입력(나라·도시·날짜·학습 시작일)**을 읽고 쓴다(`backend/tests/test_user_state.py`, `e2e/test_account_storage.py`, `e2e/test_home_settings.py`). 장소·문장 본문은 저장하지 않고 화면이 그 입력으로 규칙을 다시 돌려 만든다 — 새로고침·재로그인 뒤에도 홈이 사용자의 실제 여행으로 복원된다. 서버 문서에 여행 입력이 없고 이 브라우저에만 있으면 그 입력을 지우지 않고 서버로 올린다. 홈에서 학습 카드를 열기 전이면 그 카드는 없는 것으로 저장한다. 날짜가 없는 카드 객체 때문에 여행 입력까지 거절하지 않는다. 홈 D-Day 카드에서 그 입력을 고친다. 날짜만 바뀌면 학습 일정표만 다시 계산하고, 도시나 나라가 바뀌면 보고서부터 다시 만든다. 홈 맨 아래 계정 카드(안내와 로그아웃이 카드 패딩 하나 안)에서 로그아웃하며, 여행이 끝난 홈에도 같은 카드가 있다. uid 가 없으면 기존 브라우저 키. 저장소 호출이 실패하면 503 이고 브라우저 기록은 유지된다. 공개 사이트의 토큰 없는 `/user/state`는 401 `missing_token`이다. 로그인한 실기기 왕복은 아직 다시 확인하지 않아 상태는 부분이다 |
 
 ## 2. 비기능 요구사항
 
@@ -39,7 +39,7 @@
 | NFR-02 | 콜드스타트 | 재시작 뒤 첫 요청은 느릴 수 있음 — 시연 전 깨우기 | 한계 문서화 | `docs/deploy/DEPLOY_RUNBOOK.md` |
 | NFR-03 | 신뢰성 | AI API 호출당 **최소 30회** 시도, 모델 회전·실패 모델 쿨다운, 모델명 하드코딩 금지 | 완료 | `backend/app/gemini.py`, `tests/test_gemini_retry.py`(뮤테이션 검증) |
 | NFR-04 | 정확성(환각 방지) | 전사에 목표 문장을 주지 않음, 두 신경망 VAD AND, 이종 모델 전사 교차검증, 점수는 코드 | 완료 | `docs/research/speak-hallucination.md` |
-| NFR-05 | 개인정보 | 서버는 녹음을 저장하지 않음, 말소리 없으면 외부 전송 없음, 학습 기록은 브라우저에만 | 완료 | `/speak-check`, `e2e/test_silence.py` |
+| NFR-05 | 개인정보 | 서버는 녹음을 저장하지 않음, 말소리 없으면 외부 전송 없음. 로그인 계정의 진도·복습·동의·여행 입력은 `/user/state`, uid 가 없으면 브라우저 | 완료 | `/speak-check`, `e2e/test_silence.py`, `tests/test_user_state.py` |
 | NFR-06 | 남용·비용 방어 | IP당 20회/60초, 입력 길이(도시 80자·장소 20개·목표 200자), 오디오 8MB·`audio/*` | 완료 | `backend/app/main.py` |
 | NFR-07 | 보안 | API 키는 Render 환경변수에만, 코드·저장소에 없음 | 완료 | `render.yaml` `sync: false` |
 | NFR-08 | 화면 | 휴대폰·태블릿·PC 폭 대응(반응형), 화면 문구 한국어·학습 문장 영어 | **부분** | 제품 셸(탭바→레일→사이드, 문서 스크롤)로 320~1920px 12개 화면 가로 넘침 0 (`mockup/audit/responsive_audit.js`), e2e `test_shell.py` 29개. P2 반영(12px 하한·입력 16px·터치 44px·keep-all, e2e 45개). P3 반영(라이트·다크·시스템, 글자 대비 AA 계산·측정 통과, e2e 57개). P4 반영(≥900px 일정표·학습·문장 모음 2열, e2e 86개). **미완**: 실기기(iOS Safari·iPad 등) 미검증, 다크 팀 디자인 검수, 브라우저 뒤로가기와 날짜 선택 연동. 설계: `docs/design/RESPONSIVE_STRATEGY.md` |
@@ -61,6 +61,7 @@
 
 ```
 브라우저(mockup/) ──같은 주소──▶ FastAPI(backend/app) on Render
+                                   ├─ /user/state  → 로그인한 계정의 진도·복습·동의·여행 입력
                                    ├─ /generate    → Gemini
                                    ├─ /speak-check → Silero·pyannote(서버) → Groq/OpenAI Whisper + AssemblyAI → Gemini
                                    └─ /health
@@ -69,4 +70,4 @@ GitHub(main) ──머지──▶ Render 자동 배포 / GitHub Actions CI
 
 ## 5. 범위 밖 (현 단계)
 
-음소·운율 수준 발음 평가(GOP 등), 실제 웹 검색 기반 장소 보고서, 지도·경로 최적화, 알림, 서버 계정·다기기 동기화, 네이티브 앱.
+음소·운율 수준 발음 평가(GOP 등), 실제 웹 검색 기반 장소 보고서, 지도·경로 최적화, 알림, 네이티브 앱.

@@ -1,7 +1,8 @@
 // 색 리터럴 가드 (반응형 전략 P0): 색은 styles.css 의 :root 토큰에만 둔다.
 // 다크 모드(P3)는 :root 만 재정의하므로, 규칙·인라인 style 에 색 리터럴이 있으면 다크에서 그 자리만 라이트 색으로 남는다.
 const test = require('node:test'), assert = require('node:assert/strict'), fs = require('fs'), path = require('path');
-const read = f => fs.readFileSync(path.join(__dirname, f), 'utf8');
+// Windows 작업 복사본은 CRLF 다. 정규식은 LF 를 보므로, 읽은 뒤 줄바꿈만 맞춘다.
+const read = f => fs.readFileSync(path.join(__dirname, f), 'utf8').replace(/\r\n/g, '\n');
 // :root 토큰 블록(라이트·다크 둘 다)을 걷어낸다. 색 리터럴은 여기에만 있어야 한다.
 function tokenBlocks(css) {
   const light = css.match(/:root \{\n  color-scheme: light;[\s\S]*?\n\}\n/);
