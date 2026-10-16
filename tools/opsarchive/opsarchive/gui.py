@@ -23,7 +23,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from . import commands, config, container as C, gcp, pins, render
+from . import commands, config, container as C, entropy, gcp, pins, render
 
 ENV_FIELDS = ["RENDER_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS", "EVIDENCE_GH_TOKEN",
               "EVIDENCE_GH_REPO"]
@@ -236,6 +236,7 @@ class App:
         self._button(bar, "② keygen(봉투 키)", self.do_keygen)
         self._button(bar, "서명 키 만들기(anchor 용)", self.do_signkey)
         self._button(bar, "③ rotate(회전)", self.do_rotate)
+        self._button(bar, "무작위 값 생성(OS 감지)", self.do_random)
         ttk.Label(frame, text="키 파일은 설정의 '개인키 폴더'에 만들어집니다. 파일을 잃으면 열 수 없으니 백업하세요.",
                   wraplength=820).pack(anchor="w", padx=8, pady=10)
 
@@ -249,6 +250,51 @@ class App:
             return
         self.run("keygen", lambda: commands.keygen(out_dir=self.settings.get("key_dir") or None,
                                                    passphrase=phrase))
+
+    def do_random(self) -> None:
+        """OS 를 감지해 CSPRNG 명령을 채우고, **고칠 수 있는 창**에서 값을 만든다.
+
+        생성한 값은 화면·클립보드에만 둔다(파일·로그에 남기지 않는다). 패스프레이즈로 쓸 때는
+        복사해서 키 만들기 창에 붙여 넣고, 비밀번호 관리자에 따로 보관하라고 안내한다.
+        """
+        kind = entropy.os_kind()
+        window = tk.Toplevel(self.root)
+        window.title("무작위 값 생성 — %s" % kind)
+        window.geometry("760x340")
+        ttk.Label(window, text="감지된 OS: %s\n명령은 직접 고칠 수 있습니다(셸에서 실행됩니다 — 값을 만드는 명령만 넣으세요)."
+                  % kind, justify="left", wraplength=720).pack(anchor="w", padx=10, pady=6)
+        command_var = tk.StringVar(value=entropy.default_command(length=32, encoding="chars", kind=kind))
+        ttk.Label(window, text="명령").pack(anchor="w", padx=10)
+        ttk.Entry(window, textvariable=command_var).pack(fill="x", padx=10)
+        value_var = tk.StringVar(value="")
+        ttk.Label(window, text="값(편집 가능 — 직접 입력해도 됩니다)").pack(anchor="w", padx=10, pady=(8, 0))
+        ttk.Entry(window, textvariable=value_var).pack(fill="x", padx=10)
+        status = ttk.Label(window, text="", wraplength=720, justify="left")
+        status.pack(anchor="w", padx=10, pady=6)
+
+        def make() -> None:
+            try:
+                made = entropy.generate(length=32, encoding="chars", command=command_var.get())
+            except Exception as exc:      # noqa: BLE001
+                status.configure(text="생성 실패: %s" % getattr(exc, "code", type(exc).__name__))
+                return
+            value_var.set(made["value"])
+            status.configure(text="출처: %s%s" % (made["source"],
+                                                 (" · " + made["note"]) if made["note"] else ""))
+            self.log("무작위 값 생성(출처 %s, 길이 %d) — 값은 로그에 남기지 않습니다."
+                     % (made["source"], len(made["value"])))
+
+        def copy_value() -> None:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(value_var.get())
+            status.configure(text="클립보드에 복사했습니다. 비밀번호 관리자에 보관하세요(이 도구는 저장하지 않습니다).")
+
+        bar = ttk.Frame(window)
+        bar.pack(fill="x", padx=10, pady=8)
+        ttk.Button(bar, text="생성", command=make).pack(side="left", padx=4)
+        ttk.Button(bar, text="복사", command=copy_value).pack(side="left", padx=4)
+        ttk.Button(bar, text="닫기", command=window.destroy).pack(side="left", padx=4)
+        make()
 
     def do_signkey(self) -> None:
         phrase = self.ask_pass("새 서명 키 패스프레이즈")
