@@ -128,18 +128,35 @@ def _health_block(base_url: str) -> tuple[bool, str]:
 
 
 def publish(service: str, key_file: str, passphrase: str, *, env_key: str = DEFAULT_ENV_KEY,
-            api_key_value: str | None = None, redeploy: bool = True, base_url: str = "") -> dict:
-    """공개키를 Render 환경변수에 넣고 재배포한 뒤, 런타임 /health 의 지문과 대조한다."""
+            api_key_value: str | None = None, redeploy: bool = True, base_url: str = "",
+            on_step=None, deploy_timeout: int = 300) -> dict:
+    """공개키를 Render 환경변수에 넣고 재배포한 뒤, 런타임 /health 의 지문과 대조한다.
+
+    `on_step(문자열)` 을 주면 각 단계를 알려준다 — 재배포는 몇 분 걸리고 출력이 늦게 나오므로,
+    진행 상황이 보이지 않으면 "응답 없음" 처럼 보인다(GUI 에서 실제로 그렇게 보였다).
+    """
+    def step(message: str) -> None:
+        if on_step is not None:
+            on_step(message)
+
+    step("① 개인키 열기(패스프레이즈 확인)")
     private = C.load_private_key(key_file, passphrase)
     public = C.public_from_private(private)
     want = C.fingerprint(public)
+    step("② Render 서비스 확인")
     sid = render.service_id(service)
+    step("③ 환경변수 %s 설정(REST API)" % env_key)
     render.put_env(sid, env_key, C.pack_public_key(public), api_key_value=api_key_value)
+    deploy_note = ""
     if redeploy:
-        render.deploy(sid)
+        step("④ 재배포 시작 — 빌드·배포가 끝날 때까지 몇 분 걸릴 수 있습니다")
+        outcome = render.deploy(sid, timeout=deploy_timeout)
+        deploy_note = outcome["note"]
+        step("④ 재배포: " + deploy_note)
+    step("⑤ 환경변수·지문 확인")
     applied = render.get_env(sid, env_key, api_key_value=api_key_value)
     result = {"service_id": sid, "key_id": C.key_id(public).hex(), "fingerprint": want,
-              "env_set": bool(applied), "health_has_evidence": False,
+              "env_set": bool(applied), "deploy": deploy_note, "health_has_evidence": False,
               "health_fingerprint": "", "match": None}
     if base_url:
         result["health_has_evidence"], result["health_fingerprint"] = _health_block(base_url)
