@@ -51,6 +51,8 @@ class App:
         self.settings = config.bootstrap()
         self.env_values = config.parse_env(self._read(config.env_path()))
         self.setting_vars: dict[str, tk.StringVar] = {}
+        self.step_status: dict[str, tk.StringVar] = {}
+        self.last: dict[str, str] = {}
         self._build()
         self.root.after(120, self._drain)
         self.refresh_overview()
@@ -72,6 +74,9 @@ class App:
                 tag, text = self.log_queue.get_nowait()
             except queue.Empty:
                 break
+            if tag == "refresh":
+                self.refresh_steps()
+                continue
             self.output.configure(state="normal")
             self.output.insert("end", text + "\n", tag)
             self.output.see("end")
@@ -97,16 +102,89 @@ class App:
                         self.log("   %s: %s" % (key, value))
                 elif result:
                     self.log("   " + str(result))
+                self.last[label] = "✔ 완료"
                 self.log("✔ 끝", "ok")
             except Exception as exc:  # noqa: BLE001 — GUI 는 어떤 예외도 창을 닫지 않게
                 code = getattr(exc, "code", "")
+                self.last[label] = "✘ 실패: " + str(code or type(exc).__name__)
                 self.log("✘ %s%s" % (type(exc).__name__, (": " + str(code)) if code else ""), "err")
                 if str(exc):
                     self.log("   " + str(exc)[:400], "err")
             finally:
                 self.busy = False
+                # Tk 위젯은 메인 스레드에서만 만진다 — 큐를 통해 갱신을 요청한다.
+                self.log_queue.put(("refresh", ""))
 
         threading.Thread(target=worker, name="opsarchive-gui", daemon=True).start()
+
+    # ------------------------------------------------------------ 단계 카드(설명 + 상태 + 버튼)
+    def _step(self, parent, row: int, no: str, title: str, desc: str, key: str,
+              button: str, command) -> None:
+        """한 단계 = 번호/제목 · 하는 일 · 현재 상태 · 실행 버튼. 한 줄씩 읽으면 순서가 보이게 한다."""
+        ttk.Label(parent, text="%s %s" % (no, title), width=22, anchor="w",
+                  font=("", 10, "bold")).grid(row=row, column=0, sticky="nw", padx=(8, 4), pady=(8, 0))
+        ttk.Label(parent, text=desc, wraplength=430, justify="left").grid(
+            row=row, column=1, sticky="w", padx=4, pady=(8, 0))
+        var = tk.StringVar(value="—")
+        self.step_status[key] = var
+        ttk.Label(parent, textvariable=var, width=30, anchor="w", foreground="#06c").grid(
+            row=row, column=2, sticky="w", padx=4, pady=(8, 0))
+        ttk.Button(parent, text=button, command=command, width=22).grid(
+            row=row, column=3, sticky="e", padx=8, pady=(8, 0))
+
+    def _steps_frame(self, parent) -> ttk.Frame:
+        frame = ttk.Frame(parent)
+        frame.pack(fill="x", padx=4, pady=2)
+        frame.columnconfigure(1, weight=1)
+        return frame
+
+    def _hint(self, parent) -> tk.StringVar:
+        var = tk.StringVar(value="")
+        ttk.Label(parent, textvariable=var, wraplength=840, justify="left",
+                  foreground="#060").pack(anchor="w", padx=10, pady=(10, 4))
+        return var
+
+    def state(self, key: str) -> str:
+        return self.last.get(key, "아직 안 함")
+
+    def refresh_steps(self) -> None:
+        """각 단계의 **현재 상태**를 실제 파일·설정에서 다시 계산한다(눈으로 확인 가능하게)."""
+        keys = config.key_files()
+        self.step_status.get("keygen", tk.StringVar()).set(
+            "봉투 키 있음: " + os.path.basename(keys["admin"][0]) if keys["admin"] else "봉투 키 없음 — 먼저 만드세요")
+        self.step_status.get("signkey", tk.StringVar()).set(
+            "서명 키 있음: " + os.path.basename(keys["sign"][0]) if keys["sign"] else "서명 키 없음 — anchor 에 필요")
+        self.step_status.get("selftest", tk.StringVar()).set(self.state("selftest"))
+        self.step_status.get("random", tk.StringVar()).set("OS=%s · 명령 준비됨" % entropy.os_kind())
+        has_env = bool(os.environ.get("RENDER_API_KEY"))
+        self.step_status.get("publish", tk.StringVar()).set(
+            "RENDER_API_KEY " + ("설정됨" if has_env else "없음(.env)") + " · " + self.state("publish"))
+        self.step_status.get("doctor", tk.StringVar()).set(self.state("doctor"))
+        self.step_status.get("observe", tk.StringVar()).set(self.state("observe"))
+        pin_exists = os.path.exists(str(self.settings.get("pin_path") or ""))
+        self.step_status.get("pin", tk.StringVar()).set(
+            ("핀 파일 있음" if pin_exists else "핀 파일 없음") + " · " + self.state("pin"))
+        self.step_status.get("pin-check", tk.StringVar()).set(self.state("pin-check"))
+        self.step_status.get("iam", tk.StringVar()).set(self.state("iam-check"))
+        self._update_hint()
+
+    def _update_hint(self) -> None:
+        keys = config.key_files()
+        if not keys["admin"]:
+            text = "다음 할 일: ① selftest 로 확인한 뒤 ② 봉투 키 만들기"
+        elif not os.environ.get("RENDER_API_KEY"):
+            text = "다음 할 일: .env 에 RENDER_API_KEY 를 넣으세요(설정 탭) → ③ 공개키 발행"
+        elif self.last.get("publish", "").startswith("✘") or not self.last.get("publish"):
+            text = "다음 할 일: ③ 공개키 발행 → ④ 지문 확인(doctor)"
+        elif not keys["sign"]:
+            text = "다음 할 일: 서명 키 만들기(검증 탭의 anchor 에 필요)"
+        elif not os.path.exists(str(self.settings.get("pin_path") or "")):
+            text = "다음 할 일: 핀 만들기 → 핀 검사 (그 뒤 IAM 검사·anchor)"
+        else:
+            text = "기본 설정 완료 — 검증 탭에서 anchor/verify-chain 을 주기적으로 돌리세요."
+        for var in (getattr(self, "keys_hint", None), getattr(self, "render_hint", None)):
+            if var is not None:
+                var.set(text)
 
     def _build(self) -> None:
         notebook = ttk.Notebook(self.root)
@@ -187,6 +265,7 @@ class App:
         self.overview.delete("1.0", "end")
         self.overview.insert("1.0", "\n".join(lines))
         self.overview.configure(state="disabled")
+        self.refresh_steps()
 
     # ------------------------------------------------------------ 탭 2: 설정
     def _tab_settings(self, notebook) -> None:
@@ -228,17 +307,28 @@ class App:
     # ------------------------------------------------------------ 탭 3: 키
     def _tab_keys(self, notebook) -> None:
         frame = self._frame(notebook, "키")
-        ttk.Label(frame, text="① selftest 로 형식이 정상인지 먼저 확인하고, ② keygen 으로 봉투 키를 만듭니다.",
-                  wraplength=820).pack(anchor="w", padx=8, pady=6)
-        bar = ttk.Frame(frame)
-        bar.pack(fill="x", padx=8)
-        self._button(bar, "① selftest", lambda: self.run("selftest", commands.selftest))
-        self._button(bar, "② keygen(봉투 키)", self.do_keygen)
-        self._button(bar, "서명 키 만들기(anchor 용)", self.do_signkey)
-        self._button(bar, "③ rotate(회전)", self.do_rotate)
-        self._button(bar, "무작위 값 생성(OS 감지)", self.do_random)
-        ttk.Label(frame, text="키 파일은 설정의 '개인키 폴더'에 만들어집니다. 파일을 잃으면 열 수 없으니 백업하세요.",
-                  wraplength=820).pack(anchor="w", padx=8, pady=10)
+        ttk.Label(frame, text="위에서 아래로 한 줄씩 하시면 됩니다. 각 줄의 '상태' 칸이 지금 무엇이 준비됐는지 보여줍니다.",
+                  wraplength=840).pack(anchor="w", padx=10, pady=(8, 0))
+        steps = self._steps_frame(frame)
+        self._step(steps, 0, "①", "형식 자체 점검",
+                   "봉인·해제·변조 감지·키 잠금이 이 PC에서 정상인지 확인합니다. 키를 만들기 전에 한 번.",
+                   "selftest", "selftest 실행",
+                   lambda: self.run("selftest", commands.selftest))
+        self._step(steps, 1, "②", "봉투 키 만들기",
+                   "증거를 암호화할 때 쓰는 관리자 키쌍입니다. 개인키는 이 PC(설정의 개인키 폴더)에만 남습니다.",
+                   "keygen", "keygen 실행", self.do_keygen)
+        self._step(steps, 2, "③", "서명 키 만들기",
+                   "체크포인트(anchor)에 서명하는 키입니다. 봉투 키와 용도가 달라 따로 만듭니다.",
+                   "signkey", "signkey 실행", self.do_signkey)
+        self._step(steps, 3, "④", "무작위 값 생성",
+                   "OS를 감지해 CSPRNG 명령을 채웁니다(창에서 명령 수정 가능). 패스프레이즈로 쓰고 비밀번호 관리자에 보관하세요.",
+                   "random", "무작위 값 창 열기", self.do_random)
+        self._step(steps, 4, "⑤", "키 회전(선택)",
+                   "키가 노출됐다고 판단될 때만 씁니다. 새 키를 만들고 발행하며, 옛 키 파일은 지우지 마세요(옛 아카이브를 열어야 합니다).",
+                   "rotate", "rotate 실행", self.do_rotate)
+        self.keys_hint = self._hint(frame)
+        ttk.Label(frame, text="키 파일을 잃으면 그 키로 만든 아카이브는 영영 열 수 없습니다 — 오프라인 백업을 권합니다.",
+                  wraplength=840, foreground="#a60").pack(anchor="w", padx=10, pady=(4, 10))
 
     def do_keygen(self) -> None:
         phrase = self.ask_pass("새 개인키 패스프레이즈(잃어버리면 복구 불가)")
@@ -321,19 +411,55 @@ class App:
     # ------------------------------------------------------------ 탭 4: Render
     def _tab_render(self, notebook) -> None:
         frame = self._frame(notebook, "Render")
-        ttk.Label(frame, text="④ publish 로 공개키를 Render 환경변수에 올리고 재배포합니다(환경변수만 REST API).\n"
-                             "⑤ doctor 로 로컬 키와 배포된 지문이 맞는지 확인합니다.",
-                  wraplength=820, justify="left").pack(anchor="w", padx=8, pady=6)
-        bar = ttk.Frame(frame)
-        bar.pack(fill="x", padx=8)
-        self._button(bar, "④ publish", self.do_publish)
-        self._button(bar, "⑤ doctor", self.do_doctor)
-        self._button(bar, "로그 관찰(observe)", self.do_observe)
-        bar2 = ttk.Frame(frame)
-        bar2.pack(fill="x", padx=8)
-        self._button(bar2, "핀 만들기(개인키 역산)", self.do_pin)
-        self._button(bar2, "핀 검사", self.do_pin_check)
-        self._button(bar2, "IAM 검사(앱이 증거를 못 지우는지)", self.do_iam)
+        ttk.Label(frame, text="공개키를 Render 에 올려 앱이 증거를 봉인할 수 있게 만드는 단계입니다(위에서 아래로).",
+                  wraplength=840).pack(anchor="w", padx=10, pady=(8, 0))
+        steps = self._steps_frame(frame)
+        self._step(steps, 0, "①", "공개키 발행",
+                   "공개키만 Render 환경변수(EVIDENCE_PUBKEY)에 넣고 재배포합니다. 환경변수 변경만 REST API를 씁니다.",
+                   "publish", "publish 실행", self.do_publish)
+        self._step(steps, 1, "②", "지문 대조(doctor)",
+                   "이 PC의 개인키 지문과 배포된 지문이 같은지 확인합니다. 다르면 그 키로는 복호화할 수 없습니다.",
+                   "doctor", "doctor 실행", self.do_doctor)
+        self._step(steps, 2, "③", "앱·저장소 상태",
+                   "Render 환경변수, 앱 /health 의 지문·세대, 아카이브 개수를 한 번에 봅니다(네트워크를 쓰므로 버튼으로만).",
+                   "remote", "상태 확인", self.check_remote_status)
+        self._step(steps, 3, "④", "요청 로그 증인",
+                   "앱이 지울 수 없는 플랫폼 로그의 /account/erase 요청 수와 체인 기록을 비교합니다(누락 탐지).",
+                   "observe", "observe 실행", self.do_observe)
+        self._step(steps, 4, "⑤", "핀 파일",
+                   "개인키에서 역산한 지문을 저장소 파일에 기록합니다. 이후 핀 검사·CI 가 '예상 밖 키'를 잡습니다.",
+                   "pin", "핀 만들기", self.do_pin)
+        self._step(steps, 5, "⑥", "핀 검사",
+                   "핀 파일과 배포된 /health 의 지문·세대를 대조합니다(CI cron 과 같은 검사).",
+                   "pin-check", "핀 검사 실행", self.do_pin_check)
+        self._step(steps, 6, "⑦", "IAM 검사",
+                   "앱 서비스 계정이 증거를 지울 수 있는지 시험합니다(목표: 만들 수는 있고 지울 수는 없다).",
+                   "iam", "IAM 검사 실행", self.do_iam)
+        self.render_hint = self._hint(frame)
+
+    def check_remote_status(self) -> None:
+        """Render 환경변수·앱 /health·아카이브 개수를 한 번에 점검한다(자동 폴링하지 않는다)."""
+        def work() -> dict:
+            out: dict = {}
+            env_key = self.settings.get("env_key") or "EVIDENCE_PUBKEY"
+            sid = render.service_id(self.require("service"))
+            out["서비스"] = sid
+            out[env_key] = "발행됨" if render.get_env(sid, env_key) else "없음(발행 전)"
+            block = (commands.health(self.require("base_url")).get("evidence") or {})
+            out["/health evidence"] = (
+                "지문 %s… 세대 %s" % (str(block.get("fingerprint"))[:12], block.get("generation"))
+            ) if block else "없음(발행 전이거나 앱 미배포)"
+            sa = str(self.settings.get("sa_path") or "")
+            if sa and os.path.exists(sa):
+                try:
+                    out["아카이브"] = "%d개" % len(commands.list_archives(self.require("project_id"), sa))
+                except Exception as exc:      # noqa: BLE001
+                    out["아카이브"] = "확인 실패(%s)" % getattr(exc, "code", type(exc).__name__)
+            else:
+                out["아카이브"] = "서비스 계정 JSON 경로 미설정(설정 탭)"
+            return out
+
+        self.run("상태 확인", work)
 
     def require(self, key: str) -> str:
         value = str(self.settings.get(key) or "").strip()
