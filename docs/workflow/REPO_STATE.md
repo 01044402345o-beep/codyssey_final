@@ -267,7 +267,7 @@ Firestore `(default)`를 asia-northeast3에 만들었다. `firestore.rules`는 �
 
 ## 이번 작업 — 홈 편의 기능 · 여행 입력 저장 (2026-10-16)
 
-브랜치 `feat/home-trip-settings`(`team/main` = `5f94fb5` 에서 분기). 포크 `origin`(seongbin45)에 푸시했고 **PR #77**(`01044402345o-beep/codyssey_final`, base `main`)을 열었다. 규칙은 머지 전에 먼저 배포했다(아래). 백엔드는 아직 머지·배포 전이라 공개 사이트는 여전히 `5f94fb5` 다.
+브랜치 `feat/home-trip-settings`(`team/main` = `5f94fb5` 에서 분기)은 **PR #77 로 2026-10-16T10:50:58Z 에 rebase 머지**됐다(`team/main` = `902d5ac`, 커밋이 새 sha 로 재적용됨). 포크 `origin`(seongbin45)에 푸시했고 `team` 에는 직접 푸시하지 않았다. 규칙은 머지 전에 먼저 배포했다(아래). 머지로 Render 자동 배포가 시작된다 — 규칙은 이미 선택형이라 계정 저장은 깨지지 않는다. 날짜-경고 후속 수정은 `fix/trip-date-progress-warning` 브랜치로 따로 올린다.
 
 홈(메인화면)에 편의 기능을 더한다. 맨 아래 계정 카드에 로그아웃 버튼과 안내를 하나의 카드로 두고(누르면 확인 창), D-Day 카드는 `<button>` 이라 누르거나 Enter 로 여행 설정 수정 화면(`u-edit`, SCR-10)을 연다. 온보딩 입력(나라·도시별 체류 날짜·학습 시작일)을 계정 기록에 저장·복원한다. 날짜만 바뀌면 장소·문장은 그대로 두고 학습 일정표만 다시 계산하고, 도시·나라가 바뀌면 보고서부터 다시 만든다. **날짜 변경으로 일정에서 빠지는 완료한 날이 있으면 저장 전에 확인 창으로 알린다**(조용한 진도 손실 방지, `tripSchedDates`).
 
