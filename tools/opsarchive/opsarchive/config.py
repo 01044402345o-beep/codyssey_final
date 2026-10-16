@@ -18,7 +18,8 @@ ENV_NAME = ".env"
 SETTINGS_NAME = "settings.json"
 
 DEFAULTS: dict[str, Any] = {
-    "service": "codyssey-final",
+    # 실제 Render 서비스 이름은 밑줄이다(`codyssey_final`). 앱 호스트(하이픈)와 다르니 주의.
+    "service": "codyssey_final",
     "base_url": "https://codyssey-final.onrender.com",
     "project_id": "com-example-myapplicatio-3bb36",
     "sa_path": "",
