@@ -1,0 +1,11 @@
+{
+  "armed": false,
+  "fingerprint_sha256": "",
+  "generation": 0,
+  "health_url": "https://codyssey-final.onrender.com",
+  "key_id": "",
+  "note": "미활성. `python -m opsarchive keygen` → `python -m opsarchive pin --key <file> --health-url <url>` 로 채운다. armed=true 가 되면 .github/workflows/verify-key-pin.yml 이 /health 의 지문·세대를 강제한다.",
+  "public_key": "",
+  "rotated_by_commit": "",
+  "schema": 1
+}

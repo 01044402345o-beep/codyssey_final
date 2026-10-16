@@ -43,7 +43,24 @@ def build_parser() -> argparse.ArgumentParser:
         q.add_argument("--key", required=True, help="개인키 파일 경로")
         q.add_argument("--env-key", default=commands.DEFAULT_ENV_KEY)
         q.add_argument("--base-url", default="", help="앱 주소(/health 지문 대조)")
+        q.add_argument("--pin", default="", help="핀 파일 경로(doctor: /health 와 대조)")
         q.add_argument("--no-redeploy", action="store_true", help="재배포를 건너뛴다(publish/rotate)")
+
+    q = sub.add_parser("pin", help="개인키에서 역산한 지문으로 핀 파일을 만든다(관리자 오프라인)")
+    q.add_argument("--key", required=True, help="개인키 파일 경로")
+    q.add_argument("--out", default="security/evidence-key-pin.json")
+    q.add_argument("--health-url", required=True, help="앱 주소(핀에 기록)")
+    q.add_argument("--generation", type=int, default=None, help="세대(기본: 기존+1)")
+    q.add_argument("--commit", default="", help="회전을 일으킨 커밋 sha")
+    q.add_argument("--note", default="")
+
+    q = sub.add_parser("pin-check", help="핀 파일과 배포된 /health 를 대조한다(CI 와 같은 검사)")
+    q.add_argument("--pin", default="security/evidence-key-pin.json")
+    q.add_argument("--health-url", default="", help="핀에 기록된 주소를 덮어쓴다")
+
+    q = sub.add_parser("iam-check", help="앱 서비스 계정이 증거를 지울 수 있는지 시험한다(카나리아)")
+    q.add_argument("--project", required=True)
+    q.add_argument("--sa", required=True, help="앱 서비스 계정 JSON 경로")
 
     q = sub.add_parser("list", help="봉인 아카이브 목록(Firestore)")
     q.add_argument("--project", required=True)
@@ -80,12 +97,25 @@ def main(argv: list[str] | None = None) -> int:
                                         redeploy=not args.no_redeploy, base_url=args.base_url))
             elif args.cmd == "doctor":
                 _print(commands.doctor(args.service, args.key, phrase, base_url=args.base_url,
-                                       env_key=args.env_key))
+                                       env_key=args.env_key, pin_file=args.pin))
             else:
                 _print(commands.rotate(args.service, args.key, phrase, env_key=args.env_key,
                                        base_url=args.base_url,
                                        redeploy=not args.no_redeploy))
             return 0
+        if args.cmd == "pin":
+            phrase = commands.ask_passphrase(prompt="개인키 패스프레이즈: ")
+            _print(commands.make_pin(args.key, phrase, health_url=args.health_url, out=args.out,
+                                     generation=args.generation, commit=args.commit, note=args.note))
+            return 0
+        if args.cmd == "pin-check":
+            result = commands.check_pin(args.pin, health_url=args.health_url)
+            _print(result)
+            return 0 if result.get("ok") in (True, None) else 1
+        if args.cmd == "iam-check":
+            result = commands.iam_check(args.project, args.sa)
+            _print(result)
+            return 0 if result.get("verdict") == "ok" else 1
         if args.cmd == "list":
             pre = commands.firebase_preflight(args.project)
             if not pre["firebase_cli"]:
