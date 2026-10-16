@@ -3,5 +3,8 @@
 # Windows (cp949), so non-ASCII comments here break `pip install -r requirements.txt`.
 cryptography==50.0.2
 google-auth==2.61.0
+# google-auth's urllib3 transport needs urllib3 explicitly (it is NOT a hard dependency of
+# google-auth) -- without it the Firestore token call fails with no_credentials.
+urllib3>=2.0
 # TUI/GUI: rich is optional (the GUI uses tkinter from the standard library).
 rich>=13.7

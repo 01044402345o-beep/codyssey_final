@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -30,18 +31,88 @@ class GcpError(Exception):
 
 
 def token(sa_path: str) -> str:
-    """서비스 계정 JSON 으로 접근 토큰을 받는다. 필요할 때만 google-auth 를 import 한다."""
+    """서비스 계정 JSON 으로 접근 토큰을 받는다.
+
+    google-auth 의 두 트랜스포트(urllib3 → requests)를 차례로 시도하고, 둘 다 없으면 **직접 JWT 를
+    서명해 교환**한다(`cryptography` 는 이미 필수 의존성이다). 어느 단계에서 막혔는지 **코드로** 구분해
+    알린다 — `no_credentials` 하나로 뭉뚱그리면 운영자가 원인을 알 수 없다(실제로 그 때문에 막혔다).
+    """
+    if not sa_path:
+        raise GcpError("no_sa_file")
+    if not os.path.exists(sa_path):
+        raise GcpError("no_sa_file")
     try:
-        from google.auth.transport.urllib3 import Request
-        from google.oauth2 import service_account
-    except ImportError as exc:      # 의존성이 없으면 이유를 값으로 알린다
-        raise GcpError("no_credentials") from exc
+        with open(sa_path, "r", encoding="utf-8-sig") as fh:
+            info = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise GcpError("bad_sa_file") from exc
+    if not isinstance(info, dict) or not info.get("client_email"):
+        raise GcpError("bad_sa_file")
+
+    imports_failed = False
+    for module, attribute in (("google.auth.transport.urllib3", "Request"),
+                              ("google.auth.transport.requests", "Request")):
+        try:
+            transport = __import__(module, fromlist=[attribute])
+            from google.oauth2 import service_account
+        except ImportError:
+            imports_failed = True
+            continue
+        try:
+            creds = service_account.Credentials.from_service_account_file(sa_path, scopes=[SCOPE])
+            creds.refresh(getattr(transport, attribute)())
+            if creds.token:
+                return creds.token
+        except Exception as exc:        # noqa: BLE001 — 키 내용을 메시지에 넣지 않는다
+            raise GcpError("token_failed") from exc
+        imports_failed = True           # import 는 됐지만 토큰이 비었다 → 수동 경로로
+
+    manual = _manual_token(info)
+    if manual:
+        return manual
+    raise GcpError("no_google_auth" if imports_failed else "token_failed")
+
+
+def _manual_token(info: dict) -> str:
+    """OAuth2 JWT 베어러 플로우를 직접 구현한다(RS256). 추가 의존성 없이 동작한다."""
+    import base64
+    import time as _time
+    import urllib.parse as _parse
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+
+    client_email = str(info.get("client_email", ""))
+    private_key = str(info.get("private_key", ""))
+    if not client_email or not private_key:
+        raise GcpError("bad_sa_file")
+    now = int(_time.time())
+    header = {"alg": "RS256", "typ": "JWT"}
+    claims = {"iss": client_email, "scope": SCOPE,
+              "aud": "https://oauth2.googleapis.com/token", "iat": now, "exp": now + 3600}
+
+    def b64(raw: bytes) -> bytes:
+        return base64.urlsafe_b64encode(raw).rstrip(b"=")
+
+    signing_input = (b64(json.dumps(header, separators=(",", ":")).encode()) + b"."
+                     + b64(json.dumps(claims, separators=(",", ":")).encode()))
     try:
-        creds = service_account.Credentials.from_service_account_file(sa_path, scopes=[SCOPE])
-        creds.refresh(Request())
-        return creds.token
-    except Exception as exc:        # noqa: BLE001 — 경로·키 내용을 메시지에 넣지 않는다
+        key = serialization.load_pem_private_key(private_key.encode(), password=None)
+        signature = key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
+    except Exception as exc:            # noqa: BLE001
+        raise GcpError("bad_sa_file") from exc
+    body = _parse.urlencode({"grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                             "assertion": (signing_input + b"." + b64(signature)).decode()}).encode()
+    request = urllib.request.Request("https://oauth2.googleapis.com/token", data=body, method="POST")
+    request.add_header("Content-Type", "application/x-www-form-urlencoded")
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as res:
+            got = json.loads(res.read().decode() or "{}")
+    except Exception as exc:            # noqa: BLE001
         raise GcpError("token_failed") from exc
+    value = str(got.get("access_token", ""))
+    if not value:
+        raise GcpError("token_failed")
+    return value
 
 
 # ------------------------------------------------------------------ 값 코덱

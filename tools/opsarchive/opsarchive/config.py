@@ -25,8 +25,9 @@ DEFAULTS: dict[str, Any] = {
     "env_key": "EVIDENCE_PUBKEY",
     "generation": 1,
     "key_dir": "",
-    "checkpoints_dir": "checkpoints",
-    "pin_path": "security/evidence-key-pin.json",
+    # 핀 파일은 저장소 안(관리자가 커밋해 이력을 남긴다) — read_settings 가 절대 경로로 채운다.
+    "checkpoints_dir": "",
+    "pin_path": "",
     "tsa_url": "https://freetsa.org/tsr",
 }
 
@@ -34,6 +35,24 @@ DEFAULTS: dict[str, Any] = {
 def tool_dir() -> str:
     """이 패키지의 상위 폴더(= tools/opsarchive)."""
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def repo_root() -> str:
+    """저장소 루트(= tools/opsarchive 의 두 단계 위)."""
+    return os.path.dirname(os.path.dirname(tool_dir()))
+
+
+def resolve(path: str) -> str:
+    """상대 경로는 **저장소 루트** 기준으로 푼다.
+
+    GUI 의 작업 폴더가 `tools/opsarchive` 라서 `security/evidence-key-pin.json` 같은 상대 경로가
+    엉뚱한 곳을 가리켰다(FileNotFoundError). 경로 해석을 한 곳에 모아 그 실수를 없앤다.
+    """
+    if not path:
+        return path
+    if os.path.isabs(path):
+        return path
+    return os.path.normpath(os.path.join(repo_root(), path))
 
 
 def config_dir() -> str:
@@ -112,6 +131,11 @@ def read_settings(path: str | None = None) -> dict[str, Any]:
         data["sa_path"] = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
     if not data.get("key_dir"):
         data["key_dir"] = config_dir()
+    if not data.get("pin_path"):
+        data["pin_path"] = os.path.join(repo_root(), "security", "evidence-key-pin.json")
+    if not data.get("checkpoints_dir"):
+        # 체크포인트는 관리자 자산이라 저장소 밖에 둔다(저장소 사본은 편의·감사용).
+        data["checkpoints_dir"] = os.path.join(config_dir(), "checkpoints")
     return data
 
 
