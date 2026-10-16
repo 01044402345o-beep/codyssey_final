@@ -54,5 +54,5 @@ magic(4) alg(1) ver(1) key_id(8) wrapped_len(2) wrapped(32+48) iv(12) ciphertext
 wrapped = ephemeral_pub(32) + AES-GCM(kek, data_key)        kek = HKDF(공유비밀)
 본문    = gzip(payload) → AES-256-GCM(data_key, iv, aad=헤더 전체)
 ```
-앱(`backend/app/evidence.py`)이 같은 형식을 독립 구현하고, 백엔드 테스트가 이 패키지의 `unseal` 로
-실제로 열어보며 호환을 검증한다.
+앱(`backend/app/evidence.py`)이 같은 형식을 독립 구현하고, **앱 훅을 넣을 때** 백엔드 테스트가
+이 패키지의 `unseal` 로 실제로 열어보며 호환을 검증한다(그 앱 훅과 테스트는 아직 없다).

@@ -18,7 +18,7 @@ import urllib.request
 import uuid
 
 from . import container as C
-from . import gcp, render
+from . import firebase, gcp, render
 
 DEFAULT_ENV_KEY = "EVIDENCE_PUBKEY"
 DEFAULT_DIR = os.path.join(os.path.expanduser("~"), ".opsarchive")
@@ -61,9 +61,10 @@ def keygen(out_dir: str | None = None, passphrase: str | None = None) -> dict:
     path = key_path(kid, directory)
     if os.path.exists(path):
         raise CommandError("exists")
-    C.save_private_key(path, private, phrase)
+    narrowed = C.save_private_key(path, private, phrase)
     return {"key_id": kid, "public_key": C.pack_public_key(public),
-            "fingerprint": C.fingerprint(public), "path": path}
+            "fingerprint": C.fingerprint(public), "path": path,
+            "permissions": "owner_only" if narrowed else "inherited_warning"}
 
 
 def selftest() -> dict:
@@ -117,6 +118,15 @@ def health(base_url: str, timeout: int = 20) -> dict:
         raise CommandError("health_failed") from exc
 
 
+def _health_block(base_url: str) -> tuple[bool, str]:
+    """(앱이 지문을 노출하는가, 지문). **앱 훅이 아직 없으면 노출되지 않는다** — 그 사실을 숨기지 않는다."""
+    info = health(base_url)
+    block = info.get("evidence")
+    if isinstance(block, dict) and block.get("fingerprint"):
+        return True, str(block["fingerprint"])
+    return False, ""
+
+
 def publish(service: str, key_file: str, passphrase: str, *, env_key: str = DEFAULT_ENV_KEY,
             api_key_value: str | None = None, redeploy: bool = True, base_url: str = "") -> dict:
     """공개키를 Render 환경변수에 넣고 재배포한 뒤, 런타임 /health 의 지문과 대조한다."""
@@ -129,16 +139,17 @@ def publish(service: str, key_file: str, passphrase: str, *, env_key: str = DEFA
         render.deploy(sid)
     applied = render.get_env(sid, env_key, api_key_value=api_key_value)
     result = {"service_id": sid, "key_id": C.key_id(public).hex(), "fingerprint": want,
-              "env_set": bool(applied), "health_fingerprint": "", "match": None}
+              "env_set": bool(applied), "health_has_evidence": False,
+              "health_fingerprint": "", "match": None}
     if base_url:
-        got = health(base_url).get("evidence") or {}
-        result["health_fingerprint"] = str(got.get("fingerprint", ""))
+        result["health_has_evidence"], result["health_fingerprint"] = _health_block(base_url)
         result["match"] = (result["health_fingerprint"] == want)
     return result
 
 
 def doctor(service: str, key_file: str, passphrase: str, *, base_url: str = "",
-           api_key_value: str | None = None, env_key: str = DEFAULT_ENV_KEY) -> dict:
+           api_key_value: str | None = None, env_key: str = DEFAULT_ENV_KEY,
+           project_id: str = "") -> dict:
     """로컬 개인키의 공개 절반과 (a) Render 환경변수 (b) 런타임 /health 지문을 대조한다.
 
     회전 뒤 "이 개인키로는 아카이브를 열 수 없다" 상태를 배포 전에 잡는 것이 목적이다.
@@ -155,10 +166,13 @@ def doctor(service: str, key_file: str, passphrase: str, *, base_url: str = "",
         except C.ContainerError:
             env_fp = "bad"
     out = {"key_id": C.key_id(public).hex(), "fingerprint": want, "env_fingerprint": env_fp,
-           "env_match": env_fp == want, "health_fingerprint": "", "health_match": None}
+           "env_match": env_fp == want, "health_has_evidence": False,
+           "health_fingerprint": "", "health_match": None,
+           "firebase_cli": firebase.available()}
+    if project_id:
+        out["firebase_project_ok"] = firebase.has_project(project_id)
     if base_url:
-        got = health(base_url).get("evidence") or {}
-        out["health_fingerprint"] = str(got.get("fingerprint", ""))
+        out["health_has_evidence"], out["health_fingerprint"] = _health_block(base_url)
         out["health_match"] = out["health_fingerprint"] == want
     return out
 
@@ -166,16 +180,36 @@ def doctor(service: str, key_file: str, passphrase: str, *, base_url: str = "",
 def rotate(service: str, key_file: str, passphrase: str, *, out_dir: str | None = None,
            env_key: str = DEFAULT_ENV_KEY, api_key_value: str | None = None,
            base_url: str = "", redeploy: bool = True) -> dict:
-    """새 키를 만들고 발행한다. **이전 개인키 파일은 지우지 않는다** — 옛 아카이브를 열어야 한다."""
+    """새 키를 만들고 발행한다. **이전 개인키 파일은 지우지 않는다** — 옛 아카이브를 열어야 한다.
+
+    새 키 경로는 **발행 전에** 돌려주는 값에 넣는다 — 재배포가 실패해도 운영자가 새 키 파일을
+    찾을 수 있어야 한다(환경변수는 이미 새 키를 가리키고 있을 수 있다).
+    """
     old = C.load_private_key(key_file, passphrase)
-    made = keygen(out_dir=out_dir)
-    published = publish(service, made["path"], ask_passphrase(prompt="새 개인키 패스프레이즈: "),
-                        env_key=env_key, api_key_value=api_key_value, redeploy=redeploy,
-                        base_url=base_url)
-    return {"old_key_id": C.key_id(C.public_from_private(old)).hex(), "new": made, "publish": published}
+    new_phrase = ask_passphrase(confirm=True, prompt="새 개인키 패스프레이즈: ")
+    made = keygen(out_dir=out_dir, passphrase=new_phrase)     # 프롬프트는 여기서 한 번만
+    try:
+        published = publish(service, made["path"], new_phrase, env_key=env_key,
+                            api_key_value=api_key_value, redeploy=redeploy, base_url=base_url)
+        error = ""
+    except (CommandError, render.RenderError) as exc:
+        published = {}
+        error = getattr(exc, "code", str(exc))
+    return {"old_key_id": C.key_id(C.public_from_private(old)).hex(), "new": made,
+            "publish": published, "error": error}
 
 
 # ------------------------------------------------------------------ 아카이브 열람
+
+def firebase_preflight(project_id: str) -> dict:
+    """firebase CLI 가 있고 그 프로젝트에 접근 가능한지 본다(사전 점검).
+
+    없어도 아카이브 읽기는 계속한다 — CLI 는 점검·규칙 배포용이지 저장 경로가 아니다.
+    """
+    has_cli = firebase.available()
+    return {"firebase_cli": has_cli,
+            "firebase_project_ok": firebase.has_project(project_id) if has_cli else False}
+
 
 def list_archives(project_id: str, sa_path: str, *, limit: int = 200) -> list[dict]:
     """Firestore 의 봉인 아카이브 목록(최신 먼저). 본문은 받지 않는다(메타만)."""
