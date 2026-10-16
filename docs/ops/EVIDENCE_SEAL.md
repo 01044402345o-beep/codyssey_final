@@ -30,7 +30,7 @@
 | 아카이브 변조 감지 | 헤더 전체를 AAD 로 묶어 GCM 인증 | 헤더를 통째로 갈아끼운 다른 아카이브와의 혼동은 막지 못한다(key_id 로 완화) |
 
 **보장하지 않는 것(정직하게)**
-- **발신자 인증·부인방지**: 앱은 서명할 수 없다(서명키를 두면 같은 침해로 노출). 공개키 **지문을 저장소·CI에 핀 고정**하고 `/health`에 지문만 노출해 "예상 밖 키"를 조기에 발견한다.
+- **발신자 인증·부인방지**: §9 에 정리했다. **앱이 쥔 키**로 서명하면 같은 침해로 노출되므로 위조는 '탐지'까지다. 저장소+CI 를 장악한 공격자는 핀도 바꿀 수 있으므로 신뢰 뿌리는 저장소 밖(관리자 오프라인 키·서명 체크포인트)에 둔다. **누락**은 서명으로 막을 수 없고 앱 밖 증인으로만 가시화된다 — 둘 다 다음 단계다.
 - **관리자 PC 침해**: 그 순간 전부 노출된다. 개인키는 오프라인 매체에 백업한다.
 - **수집 내용의 PII**: "전부 포함"을 택했으므로 아카이브에는 사용자 데이터가 들어간다. 그래서 (a) 저장소는 비공개, (b) TTL 로 자동 소멸, (c) 자격증명(토큰·서비스 계정 JSON·환경변수 값)은 **기본 스크럽**한다 — 이건 디버깅 취향이 아니라 "한 번 복호화하면 살아 있는 자격증명이 되살아난다"는 별개 문제다. `ARCHIVE_INCLUDE_SECRETS=1` 로 끌 수 있지만 권장하지 않는다.
 
@@ -108,6 +108,9 @@ scrypt(n=2^15, r=8, p=1) 로 패스프레이즈 유도. 파일 권한 0600.
 | `list --project --sa [--limit]` | Firestore 아카이브 목록(경로·크기·key_id·트리거·만료) — firebase CLI 사전 점검 포함 |
 | `decrypt --project --sa --id --key [--out]` | 내려받아 개인키로 열고 요약 출력(임시 디렉터리, `--out` 를 주면 평문 파일도 남긴다) |
 | `selftest` | 로컬에서 봉인→해제 왕복 검증(키 없이도 가능) |
+| `pin --key --health-url [--out]` | 개인키에서 **역산한** 지문으로 `security/evidence-key-pin.json` 작성(세대는 올리기만 허용) |
+| `pin-check [--pin]` | 핀 파일과 배포된 `/health` 의 지문·세대 대조(CI cron 과 같은 검사, 불일치면 exit 1) |
+| `iam-check --project --sa` | 앱 자격증명으로 카나리아를 만들어 **삭제·덮어쓰기가 거부되는지** 시험(목표 미달이면 exit 1) |
 | `tui` | rich 기반 화면(위 명령을 메뉴로) |
 
 **필수 CLI 사용**: `render` CLI(서비스 조회 `services -o json`·재배포 `deploys create --wait`·로그 `logs`)와 `firebase` CLI(프로젝트 사전 점검 `projects:list`, 규칙 배포 `deploy --only firestore:rules`)를 쓴다.
@@ -137,10 +140,53 @@ scrypt(n=2^15, r=8, p=1) 로 패스프레이즈 유도. 파일 권한 0600.
 3. tools/opsarchive: python -m opsarchive publish --service codyssey-final --key ~/.opsarchive/admin-<id>.key --base-url https://codyssey-final.onrender.com
 4. tools/opsarchive: python -m opsarchive doctor --service codyssey-final --key ~/.opsarchive/admin-<id>.key --base-url https://codyssey-final.onrender.com
 5. 이슈 라벨 'evidence-seal' 생성 + 전역 상한(5/일)·uid 상한(1/시간) 값 확정.
-6. (앱 훅 배포 뒤) 실패 리허설: 탈퇴를 일부러 실패시켜 아카이브 생성 → decrypt 로 열어 확인
+6. **IAM(§9)**: 아카이브 전용 SA + 커스텀 롤(create/get/list) → 앱 훅이 그 자격증명으로 쓰게 한다.
+   검증: `python -m opsarchive iam-check --project <id> --sa <앱 SA.json>` 판정이 `ok`.
+7. **핀(§9)**: `python -m opsarchive pin --key <파일> --health-url <url>` → `security/evidence-key-pin.json` 커밋 → `pin-check` 통과 확인 → main 보호 규칙에 `verify-key-pin` 을 필수 검사로 등록.
+   검증: 핀을 일부러 틀리게 두면 크론이 실패; `armed: true` 로 바꾼 뒤 회전하면 `generation` 을 올려 커밋하지 않은 상태에서 실패해야 한다.
+8. (앱 훅 배포 뒤) 실패 리허설: 탈퇴를 일부러 실패시켜 아카이브 생성 → decrypt 로 열어 확인
 ```
 
-## 9. 남은 위험 / 미검증 (라운드 6 교차검증 뒤 갱신)
+## 9. 발신자 인증 — 위조 탐지와 삭제 예방 (연구 결과 반영)
+
+깊은 조사 결과(보고서: [`reports/증거 봉인 발신자 인증.md`](../../reports/증거%20봉인%20발신자%20인증.md), 조사 노트 5개)를 이 시스템에 맞춘 두 겹을 먼저 깐다.
+
+### 두 실패는 다르다
+| 실패 | 성질 | 이 스택에서 |
+|---|---|---|
+| **위조**(가짜 아카이브) | 저장소만 아는 공격자면 **탐지** 가능(서명·해시체인) | 앱을 완전히 장악하면 **불가**(TEE 없이는 원리적으로 구분 불가) |
+| **누락**(아카이브 없음) | 서명으로는 **불가**. 앱 밖 증인/사전 커밋먼트로만 **탐지** | 클라이언트 영수증·앵커 로그·heartbeat 로 가시화 |
+
+**정직한 천장**: 이 스택에서 말할 수 있는 상한은 *"핀 고정된 키가 서명한 이후 이 암호문은 변하지 않았고, 앵커된 로그가 아는 아카이브는 무결하며 그 밖의 것은 플래그된다"* 까지다. "이건 진짜 우리 코드가 만들었다"와 "누락이 없다"는 TEE/독립 증인 없이는 주장할 수 없다.
+
+### (e) IAM — 앱이 증거를 **지우지 못하게** 한다 (먼저, $0)
+목표 상태: 증거 아카이브를 쓰는 주체는 **생성·읽기만** 가능하고 **삭제·덮어쓰기는 불가**.
+- 권장 방법: **아카이브 전용 서비스 계정 + 커스텀 롤**(`datastore.entities.create/get/list` 만). 앱의 기존 SA(Auth+Firestore 공용)와 분리한다 → 앱 훅은 아카이브 쓰기에 이 별도 자격증명을 쓴다.
+- 대안: IAM **Deny 정책**으로 앱 SA 의 `datastore.entities.delete/update` 를 막는다. 조건 표현식이 컬렉션 경로까지 좁힐 수 있는지는 **UNKNOWN(확인 필요)** — 되면 더 정밀하다.
+- **검증은 선언이 아니라 행동으로**: `python -m opsarchive iam-check --project <id> --sa <앱 SA.json>` 가 카나리아 문서를 만들어 (a) 생성 성공 (b) 삭제 거부 (c) 덮어쓰기 거부를 실제로 시험한다. 판정이 `ok` 가 아니면 목표 미달이다.
+- 지금 이게 **가장 잘못된 모양**인 이유: 앱이 쥔 자격증명 하나로 증거를 지울 수 있으면, 침해 시 "증거만 골라 지우기"가 가능하다.
+
+### (a) 핀 고정 — 예상 밖 키를 조기에 잡는다 ($0)
+- `security/evidence-key-pin.json`: `armed`·`generation`·`key_id`·`fingerprint_sha256`·`public_key`·`health_url`·`rotated_by_commit`.
+  **앱이 알려준 값을 넣지 않는다** — 관리자가 개인키에서 역산해 `python -m opsarchive pin --key <파일> --health-url <url>` 로 만든다(오프라인).
+- 회전과 대입을 구분한다: 회전이면 `generation` 을 **올려서** 커밋한다. 파일이 세대를 **낮추는 것을 거부**한다(`PinError: generation_regression`).
+- CI `.github/workflows/verify-key-pin.yml`(cron 6시간): 핀 파일과 `/health` 의 `evidence.fingerprint`·`generation` 을 대조한다. 서드파티 액션을 쓰지 않고 `curl`+표준 라이브러리만 쓴다(액션 SHA 고정 대상 자체를 없앤다).
+  - `armed: false` 동안은 **경고만** 하고 통과(레드 크론 소음 방지), `armed: true` 부터는 불일치·미보고·연결 실패가 **실패**다.
+- 지금은 `armed: false` 다 — 앱 훅이 `/health` 에 `evidence.key_id/fingerprint/generation` 을 노출해야 활성화된다(§7 미구현 항목).
+
+### 아직 안 넣은 겹(다음 단계)
+- **(b) 매니페스트 서명 + (d) 해시체인·앱 밖 앵커**: 관리자 오프라인 Ed25519 키로 `{count, head, prev_head}` 체크포인트를 서명하고 저장소 밖(로컬·서명 태그·투명성 로그)에 앵커. 누락 대조는 `verify` 가 한다.
+- **(f) 클라이언트 서명 영수증**: 탈퇴 응답에 JWS 영수증을 주고 화면이 "영수증 없으면 상태 불명"을 보이게 한다(nonce 로 재사용 방지, uid 는 솔트 해시만).
+- **(g) 감시·canary**: heartbeat, 쿼터 알림, canary 계정 주기 삭제.
+- **(c) Cloud KMS**: 카드/Blaze 수용 시에만. **키 비유출**을 더하지만 **app-control 위조는 여전히 못 막는다**.
+
+### 이 두 겹의 한계 (같은 문서에 남긴다)
+- 핀 파일은 **저장소+CI를 함께 장악한 공격자가 바꿀 수 있다** → 신뢰 뿌리를 저장소 밖으로 옮기는 것이 (d)의 목적이다.
+- `iam-check` 는 **권한만** 본다. 앱이 다른 자격증명으로 우회하거나 Firestore 대신 다른 곳에 쓰면 탐지되지 않는다.
+- 두 겹 모두 **누락을 막지 못한다**(가시화도 아직 없다 — 영수증·앵커가 들어와야 한다).
+
+
+## 10. 남은 위험 / 미검증 (라운드 6 교차검증 + 발신자 인증 조사 뒤 갱신)
 
 - **앱 훅이 아직 없다**(§7). 그래서 지금은 "탈퇴 실패 → 봉인 → 이슈"가 실제로 돌지 않는다. 실계정 왕복도 미관측이다.
 - **발신자 인증 없음**(§1). 지문 핀 고정으로 "예상 밖 키"만 잡는다.

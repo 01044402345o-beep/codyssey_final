@@ -41,6 +41,20 @@ python -m opsarchive decrypt --project com-example-myapplicatio-3bb36 --sa ./sa.
 python -m opsarchive tui                            # rich 메뉴(선택)
 ```
 
+## 발신자 인증 두 겹 (IAM·핀)
+
+```bash
+# ① 앱이 증거를 지우지 못하게 한다(목표 확인). 판정이 ok 가 아니면 목표 미달이다.
+python -m opsarchive iam-check --project com-example-myapplicatio-3bb36 --sa ./sa.json
+
+# ② 예상 밖 키를 조기에 잡는다 — 개인키에서 역산한 지문을 핀 파일에 쓴다(오프라인).
+python -m opsarchive pin --key ~/.opsarchive/admin-<id>.key --health-url https://codyssey-final.onrender.com
+python -m opsarchive pin-check --pin ../../security/evidence-key-pin.json
+```
+
+`pin` 은 세대를 **올리기만** 허용한다(회전 되돌리기 차단). CI(`verify-key-pin` cron)가 같은 검사를 6시간마다 돌린다.
+두 겹의 한계(저장소+CI 장악 시 핀 무력, 누락은 여전히 못 봄)는 [`docs/ops/EVIDENCE_SEAL.md`](../../docs/ops/EVIDENCE_SEAL.md) §9 에 적혀 있다.
+
 ## 운영 메모
 
 - **회전(rotate)**: 새 키를 만들고 발행한다. **이전 개인키 파일을 지우지 마라** — 옛 아카이브의 `key_id` 가 그 키를 가리킨다.
