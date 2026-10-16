@@ -51,6 +51,7 @@ from starlette.concurrency import run_in_threadpool
 from . import firebase_admin
 from . import firebase_auth
 from . import user_state
+from . import evidence
 from . import gemini as ai
 from . import speech_compare as compare
 from . import speech_vad as vad
@@ -112,6 +113,7 @@ async def lifespan(_app: FastAPI):
             logging.getLogger("app.vad").exception("VAD warmup 실패")
     threading.Thread(target=warm, name="vad-warmup", daemon=True).start()
     selftest.start()
+    evidence.install_log_ring()      # 탈퇴 실패 증거에 최근 로그를 담기 위해(설정이 있을 때만)
     yield
 
 
@@ -227,6 +229,16 @@ class ItineraryRequest(BaseModel):
     days: int | None = None
     start_date: str | None = Field(default=None, max_length=10)
     itinerary_kinds: list[str] = Field(default_factory=list, max_length=4)
+
+
+class WithdrawReport(BaseModel):
+    """화면이 보내는 탈퇴 불일치 보고. 개인정보·토큰은 담지 않는다(상태 코드만)."""
+
+    reason: str = Field(default="", max_length=200)
+    screen: str = Field(default="", max_length=40)
+    has_account: bool = False
+    server_said_erased: bool = False
+    note: str = Field(default="", max_length=500)
 
 
 # ---------------------------------------------------------------- 설정 로드
@@ -403,6 +415,8 @@ def health() -> dict[str, Any]:
         "firebase_auth": firebase_auth.configured(),
         # 탈퇴 관리자 경로(서비스 계정)를 쓸 수 있는지만 알린다. 키 값은 노출하지 않는다.
         "admin_erase": firebase_admin.configured(),
+        # 증거 봉인 공개키의 지문·세대(공개 정보). 핀 검증(.github/workflows/verify-key-pin.yml)이 이 값을 본다.
+        "evidence": evidence.health_block(),
         # 사실 경로의 구글 장소 검색은 붙이지 않았다. google_places 는 그 의미로 남긴다.
         # 일정 플래그와 키는 호출 때마다 읽는다. 임포트 때 고정하지 않는다.
         "itinerary_enabled": itinerary_enabled(),
@@ -931,22 +945,58 @@ async def user_state_delete(request: Request) -> dict[str, Any]:
 
 @app.post("/account/erase")
 async def account_erase(request: Request) -> dict[str, Any]:
-    """탈퇴(관리자): 토큰 취소 → 기록 삭제 → 계정 삭제. uid 는 검증된 토큰에서 온다.
+    """탈퇴(관리자): 흔적 → 토큰 취소 → 기록 삭제 → 계정 삭제. uid 는 검증된 토큰에서 온다.
 
     서비스 계정 키(FIREBASE_SERVICE_ACCOUNT_JSON)가 없으면 503 admin_unavailable 을 돌려주고,
     화면은 규칙 삭제 + 클라이언트 deleteUser 경로로 되돌아간다.
+
+    실패하면 **단계 원장**과 함께 증거를 봉인해 둔다(누가 어디까지 갔는지 남긴다). 성공해도
+    사후 검증으로 "남아 있는" 경우를 잡는다 — 응답이 성공이어도 실제로 지워졌는지는 별개다.
     """
     account, _token = await _account_token(request)
     if not firebase_admin.configured():
         raise HTTPException(status_code=503, detail="admin_unavailable")
     rate_limit(request)
+    ledger: list[dict[str, Any]] = []
     try:
-        await run_in_threadpool(firebase_admin.erase_account, account["uid"])
+        await run_in_threadpool(firebase_admin.erase_account, account["uid"], ledger)
     except firebase_admin.AdminError as exc:
+        _seal_in_background("erase_failed", account["uid"], ledger, None, exc)
         raise HTTPException(status_code=exc.status, detail=exc.code) from exc
-    except Exception:  # noqa: BLE001 — 예상 못 한 오류도 500 대신 503 으로(추적 로그에 자격증명이 남지 않게)
-        raise HTTPException(status_code=503, detail="admin_failed")
+    except Exception as exc:  # noqa: BLE001 — 예상 못 한 오류도 500 대신 503 으로(추적 로그에 자격증명이 남지 않게)
+        _seal_in_background("erase_failed", account["uid"], ledger, None, exc)
+        raise HTTPException(status_code=503, detail="admin_failed") from exc
+
+    check = await run_in_threadpool(firebase_admin.verify_erased, account["uid"])
+    if check.get("ok") is False:
+        _seal_in_background("verify_mismatch", account["uid"], ledger, check, None)
     return {"erased": True}
+
+
+def _seal_in_background(trigger: str, uid: str, ledger: list[dict[str, Any]],
+                        verification: dict[str, Any] | None,
+                        error: BaseException | None) -> None:
+    """증거 봉인을 백그라운드 스레드로 넘긴다 — 응답을 늦추지 않고, 실패해도 조용히 로그만 남긴다."""
+    if not evidence.configured():
+        return
+    threading.Thread(
+        target=evidence.seal_and_report,
+        kwargs={"trigger": trigger, "uid": uid, "ledger": ledger, "verification": verification,
+                "error": error, "source_root": str(REPO_ROOT / "backend" / "app")},
+        name="evidence-seal", daemon=True).start()
+
+
+@app.post("/diagnostics/withdraw")
+async def diagnostics_withdraw(request: Request, payload: WithdrawReport) -> dict[str, Any]:
+    """화면이 "탈퇴가 예상 밖 상태로 끝났다"고 보고하는 경로(다른 기기 탈퇴·부분 실패 등).
+
+    서버가 성공으로 응답했는데 화면이 불일치를 봤다면 그것도 증거다. 인증된 사용자만 보낼 수 있고
+    스로틀이 걸려 있다(같은 uid 는 1시간에 한 번).
+    """
+    account, _token = await _account_token(request)
+    rate_limit(request)
+    _seal_in_background("client_report", account["uid"], [], {"client": payload.model_dump()}, None)
+    return {"received": True}
 
 
 # 화면(목업)을 같은 서비스에서 서빙한다. 반드시 모든 API 라우트 등록 뒤에 마운트한다.
