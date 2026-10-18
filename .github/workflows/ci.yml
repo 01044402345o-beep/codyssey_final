@@ -97,6 +97,7 @@ jobs:
           python ../e2e/test_ai_restore.py http://localhost:8768   # 복원 뒤 백그라운드 /generate 로 AI 문장 채우기
           python ../e2e/test_itinerary_screen.py http://localhost:8768   # 오늘 날짜·예시 보고서·하루 블록
           python ../e2e/test_full_regen.py http://localhost:8768   # 설정 화면에서 보고서·문장 완전 재생성
+          python ../e2e/test_guest_start.py http://localhost:8768   # Firebase 배포에서도 로그인 없이 시작·새로고침 유지
       - uses: actions/upload-artifact@v4
         if: always()
         with:
