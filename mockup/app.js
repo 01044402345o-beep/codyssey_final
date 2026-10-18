@@ -70,6 +70,11 @@ const STATUS_KO = {
 const STALE_MS = 15 * 60 * 1000;
 const BASE_TODAY = '2026-09-22';
 const DEMO_USER = { name: '김여행', email: 'demo.traveler@gmail.com' };
+/* 로그인 없이 시작한 사용자. uid 가 없으니 서버에 올리지 않고 이 브라우저(공용 칸)에만 남는다(accountUid → '').
+   Firebase 로그인을 붙인 뒤(a672c53) 가짜 로그인 문이 진짜 문이 되어 가입 없이는 앱을 볼 수 없었다 — 그 입구를 다시 연다. */
+const GUEST_USER = { name: '손님', email: '로그인하지 않음 · 이 브라우저에만 저장', guest: true };
+const isGuest = () => !!(S.user && S.user.guest);
+const fbOn = () => !!(window.FirebaseAuth && FirebaseAuth.enabled);
 function userName() { return (S.user && S.user.name) || DEMO_USER.name; }
 function userEmail() { return (S.user && S.user.email) || DEMO_USER.email; }
 
@@ -459,6 +464,8 @@ function resumeScreen() {
   let dest = RESTORE.screen && RESTORE.screen !== 'u-login' && SCR[RESTORE.screen] ? RESTORE.screen : null;
   /* 만들던 보고서·문장 생성은 메모리에서 진행돼 새로고침으로 이어지지 않는다 — 실제 여행이 있으면 홈으로 보낸다. */
   if (dest && S.trip && (dest === 'u-gen' || dest === 'u-report')) dest = 'u-home';
+  /* 계정 없이 저장된 화면이 있으면 손님으로 이어서 연다. 그대로 두면 화면 준비(ensure)가 데모 사용자 '김여행'으로 채운다. */
+  if (dest && !S.user && fbOn()) S.user = GUEST_USER;
   if (!dest) {
     /* 첫 렌더는 FirebaseAuth.ready 전이라 로그인 화면이 아직 이메일 폼을 모른다.
        준비가 끝난 지금 다시 그려야 Firebase 가 켜진 환경에서 이메일 로그인이 보인다. */
@@ -1282,16 +1289,20 @@ function scrLogin() {
         <button class="btn primary block" type="button" data-act="login-email">${signup ? '가입하기' : '이메일로 계속하기'}</button>
         <button class="btn soft block" type="button" data-act="login-switch">${signup ? '이미 계정이 있어요' : '계정이 없어요 · 가입하기'}</button>
       </form><p class="small" style="text-align:center;margin:8px 0">또는</p>`;
-  const body = (S.user
+  // 로그인 없이 시작: 첫 화면 맨 위에 둔다(사용자 테스트·심사에서 가입 없이 바로 써 볼 수 있어야 한다)
+  const guestBtn = `<button class="btn accent block" type="button" data-act="guest">로그인 없이 시작</button>
+      <p class="small" style="text-align:center;margin:8px 0">또는 계정으로 — 다른 기기에서도 이어져요</p>`;
+  const body = (S.user && !isGuest()
     ? signed
-    : `${window.FirebaseAuth && FirebaseAuth.enabled ? emailForm : ''}<button class="gbtn" data-act="login">${I.google}Google로 계속하기</button>`)
+    : `${fbOn() ? guestBtn + emailForm : ''}<button class="gbtn" data-act="login">${I.google}Google로 계속하기</button>`)
     + withdrawProofBlock();
+  const gate = fbOn() ? '로그인하지 않아도 쓸 수 있어요. 기록은 이 브라우저에만 남아요.' : '로그인하지 않으면 다른 화면에 들어갈 수 없어요.';
   return frame(`<div class="login">
     <div class="stamp" aria-hidden="true">TRIP · ENGLISH<br>PASSPORT<br>— 2026 —</div>
     <div class="eyebrow" style="margin-top:130px">Travel English, planned</div>
     <h1 style="margin-top:10px">Speak where<br>you'll <em>actually</em><br>be.</h1>
     <p class="sub">여행지와 일정을 입력하면, 실제로 갈 관광지와 맛집에서 쓸 영어 문장을 만들어 출발 전부터 매일 학습하게 해 드려요.</p>
-    <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">로그인하지 않으면 다른 화면에 들어갈 수 없어요.</p>
+    <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">${gate}</p>
       <p class="small" style="text-align:center;margin-top:8px">맛집 문장은 AI가 만들고 'AI 생성' 표시가 붙어요 · 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API로 전송돼요 · 장소 목록은 예시 데이터예요 · 로그인하면 학습 진도·복습 목록·여행 설정이 계정에 저장되고, 로그인하지 않으면 이 브라우저에만 남아요 · 말하기 연습은 동의한 뒤에만 녹음을 채점 서버로 보내요.</p></div>
   </div>`);
 }
@@ -2075,7 +2086,7 @@ function privacyCard() {
 /* 홈 맨 아래 계정 블록. 로그아웃 버튼과 안내를 하나의 카드(.card = 패딩 한 곳)에 담는다.
    탈퇴하기는 카드 '패딩 밖'(카드 아래)에 작고 연한 글씨로 둔다. */
 function accountCard() {
-  const signed = !!S.user;
+  const signed = !!S.user && !isGuest();
   const initial = esc(userName().slice(0, 1) || '김');
   return `<div class="sec-title"><h4>계정</h4></div><div class="card account-card">
     <div class="acc-row"><span class="acc-avatar">${initial}</span>
@@ -2418,6 +2429,7 @@ const ACT = {
       });
     }).catch(err => { const msg = FirebaseAuth.koreanError(err); if (msg) toast(msg); });
   },
+  guest: () => { S.user = GUEST_USER; toast('로그인 없이 시작해요. 기록은 이 브라우저에만 남아요.'); ACT['after-login'](); },
   'login-switch': () => { S.authMode = S.authMode === 'signup' ? 'login' : 'signup'; render(); },
   'after-login': () => {
     // 저장된 여행이 있으면 계획을 다시 만들어 곧바로 홈까지 보낸다(새로고침·재로그인 뒤 메인화면 도달).
