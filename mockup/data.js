@@ -1,49 +1,58 @@
 /* 목업용 고정 데이터 — 실제 서비스에서는 공통 문장은 shared/data, 장소는 AI + 웹 검색 결과 */
 'use strict';
 
-/* 공통 상황 문장 30개 (FR-SENT-01) */
+/* 공통 상황 문장 30개 (FR-SENT-01) — countsTowardPlan: true 인 묶음만 센다. 30개에서 벗어나면 일정 계산식이 틀어진다(commons.test.js) */
 const COMMON_SITUATIONS = [
-  { key: 'airport', label: '공항·기내', items: [
+  { key: 'airport', label: '공항·기내', countsTowardPlan: true, items: [
     { situation: '좌석 요청', en: 'Can I have a window seat, please?', ko: '창가 자리로 주시겠어요?' },
     { situation: '탑승구 찾기', en: 'Where is my boarding gate?', ko: '제 탑승구가 어디예요?' },
     { situation: '기내 요청', en: 'Could I get some water, please?', ko: '물 좀 주시겠어요?' },
     { situation: '기내식 선택', en: 'Chicken, please.', ko: '치킨으로 주세요.' },
     { situation: '수하물 찾기', en: 'Where can I pick up my baggage?', ko: '짐은 어디서 찾나요?' },
   ]},
-  { key: 'immigration', label: '입국심사', items: [
+  { key: 'immigration', label: '입국심사', countsTowardPlan: true, items: [
     { situation: '방문 목적', en: "I'm here for sightseeing.", ko: '관광하러 왔어요.' },
     { situation: '첫 방문', en: "It's my first visit.", ko: '처음 방문이에요.' },
     { situation: '숙소 설명', en: "I'm staying at a hotel in the city.", ko: '시내 호텔에 묵어요.' },
     { situation: '귀국 항공권', en: 'Here is my return ticket.', ko: '여기 귀국 항공권이에요.' },
     { situation: '동행 여부', en: "I'm traveling alone.", ko: '혼자 여행 중이에요.' },
   ]},
-  { key: 'hotel', label: '숙소', items: [
+  { key: 'hotel', label: '숙소', countsTowardPlan: true, items: [
     { situation: '체크인', en: 'I have a reservation under [name].', ko: '[name] 이름으로 예약했어요.' },
     { situation: '조식 시간', en: 'What time is breakfast?', ko: '조식은 몇 시예요?' },
     { situation: '와이파이', en: 'Could I get the Wi-Fi password?', ko: '와이파이 비밀번호 알려 주시겠어요?' },
     { situation: '짐 보관', en: 'Can you keep my luggage until 3 p.m.?', ko: '오후 3시까지 짐 좀 맡아 주실 수 있나요?' },
     { situation: '체크아웃', en: "I'd like to check out, please.", ko: '체크아웃할게요.' },
   ]},
-  { key: 'transit', label: '대중교통', items: [
+  { key: 'transit', label: '대중교통', countsTowardPlan: true, items: [
     { situation: '길 찾기', en: 'How do I get to [destination]?', ko: '[destination]에 어떻게 가요?' },
     { situation: '노선 묻기', en: 'Which line goes to [destination]?', ko: '[destination] 가는 노선이 뭐예요?' },
     { situation: '표 구매', en: 'One ticket, please.', ko: '표 한 장 주세요.' },
     { situation: '정차 확인', en: 'Does this train stop at [destination]?', ko: '이 열차 [destination]에 서나요?' },
     { situation: '하차 부탁', en: 'Please let me know when we get there.', ko: '도착하면 알려 주세요.' },
   ]},
-  { key: 'shopping', label: '길 묻기·쇼핑', items: [
+  { key: 'shopping', label: '길 묻기·쇼핑', countsTowardPlan: true, items: [
     { situation: '역 찾기', en: 'Excuse me, where is the nearest subway station?', ko: '실례지만, 가장 가까운 지하철역이 어디예요?' },
     { situation: '거리 묻기', en: 'Is it far from here?', ko: '여기서 멀어요?' },
     { situation: '가격 묻기', en: 'How much is this?', ko: '이거 얼마예요?' },
     { situation: '사이즈', en: 'Do you have this in a smaller size?', ko: '이거 더 작은 사이즈 있어요?' },
     { situation: '영수증', en: 'Can I get a receipt, please?', ko: '영수증 주시겠어요?' },
   ]},
-  { key: 'emergency', label: '긴급 상황', items: [
+  { key: 'emergency', label: '돌발 상황', countsTowardPlan: true, items: [
     { situation: '분실', en: 'I lost my passport. Can you help me?', ko: '여권을 잃어버렸어요. 도와주시겠어요?' },
     { situation: '신고', en: 'Please call the police.', ko: '경찰 좀 불러 주세요.' },
     { situation: '진료', en: 'I need to see a doctor.', ko: '의사한테 진료받아야 해요.' },
     { situation: '약국', en: 'Where is the nearest pharmacy?', ko: '가장 가까운 약국이 어디예요?' },
     { situation: '천천히', en: 'Can you speak more slowly, please?', ko: '좀 더 천천히 말해 주시겠어요?' },
+  ]},
+  /* 참고용 — 날짜별 학습량(위 30개, app.js R.counts 의 C)에 넣지 않는다. 문장 모음·카드로 연습에서만 보인다.
+     사용자 테스트 설문 자유응답(10/18): 같이 있는 사람이 응급일 때 영어로 전화 문의(당직병원·응급실)가 어렵다.
+     안전 문장이라 AI 생성이 아닌 검수된 고정 문장이다(agent_contract/README.md 1절). 도움 요청·장소 찾기만 — 응급처치·약 안내는 넣지 않는다. */
+  { key: 'emergency_call', label: '응급 전화', countsTowardPlan: false, items: [
+    { situation: '구급차 요청', en: 'Please call an ambulance.', ko: '구급차 좀 불러 주세요.' },
+    { situation: '동행이 아플 때', en: 'My friend is sick.', ko: '친구가 아파요.' },
+    { situation: '전화로 응급실 찾기', en: 'Where is the nearest emergency room?', ko: '가장 가까운 응급실이 어디예요?' },
+    { situation: '전화로 야간 진료 찾기', en: 'Is there a hospital open now?', ko: '지금 문 연 병원 있나요?' },
   ]},
 ];
 
