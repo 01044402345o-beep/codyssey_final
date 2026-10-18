@@ -53,7 +53,7 @@ jobs:
         run: python scripts/check_negatives.py
 
       - name: 프론트 테스트
-        run: node --test mockup/ai.test.js mockup/tokens.test.js   # 토큰 가드: 색 리터럴·다크 블록 동일·글자 대비(AA)
+        run: node --test mockup/ai.test.js mockup/tokens.test.js mockup/commons.test.js   # 토큰 가드: 색 리터럴·다크 블록 동일·글자 대비(AA)
 
       - name: 서버 기동 확인 (/health 에 restaurant, 화면 서빙)
         working-directory: backend

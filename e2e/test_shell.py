@@ -283,7 +283,7 @@ with sync_playwright() as p:
     page.locator(".flip").click(); page.wait_for_timeout(200)
     day = page.evaluate("({ date: S.card.date, i: S.card.i, n: S.card.flipped.size })")
     page.evaluate("navFromMenu('u-coll')"); page.wait_for_timeout(300)
-    check("문장 모음: 공통 상황 6묶음마다 '카드로 연습' 버튼", page.locator('[data-act="drill"]').count() == 6, str(page.locator('[data-act="drill"]').count()))
+    check("문장 모음: 공통 상황 6묶음 + 참고 '응급 전화'마다 '카드로 연습' 버튼", page.locator('[data-act="drill"]').count() == 7, str(page.locator('[data-act="drill"]').count()))
     check("문장 모음 360px: 버튼이 붙어도 가로 넘침 없음", hscroll(page) <= 0, str(hscroll(page)))
     page.locator('[data-act="drill"][data-v="airport"]').click(); page.wait_for_timeout(300)
     st = page.evaluate("({ scr: S.screen, ids: S.drill && S.drill.ids, cur: S.smap[pickRow().ids[S.card.i]].sit })")
@@ -315,6 +315,15 @@ with sync_playwright() as p:
     page.locator('[data-act="drill"]').first.click(); page.wait_for_timeout(300)
     st = page.evaluate("({ scr: S.screen, by: S.drill && S.drill.date, all: S.drill && S.drill.ids.every(id => S.smap[id].placeId === S.drill.ids.map(i => S.smap[i].placeId)[0]) })")
     check("장소별 탭: 장소마다 연습 버튼, 누르면 그 장소 문장만", n > 0 and st["scr"] == "u-study" and st["all"], f"{n} {st}")
+    # 응급 전화(참고용, 사용자 설문 10/18): 연습은 되지만 날짜별 학습량(공통 30)에는 들어가지 않는다
+    page.locator('.appbar .back').click(); page.wait_for_timeout(300)
+    page.locator('[data-act="coll-tab"][data-v="common"]').click(); page.wait_for_timeout(300)
+    page.locator('[data-act="drill"][data-v="emergency_call"]').click(); page.wait_for_timeout(300)
+    st = page.evaluate("({ scr: S.screen, ids: S.drill && S.drill.ids, head: document.querySelector('.study-head').innerText,"
+                       " common: S.sents.filter(s => s.source === 'common').length, inSents: S.sents.some(s => s.sit === 'emergency_call'),"
+                       " inSched: S.sched.some(r => r.ids.some(id => id.startsWith('r-'))) })")
+    check("응급 전화 연습: 4문장 카드가 열림", st["scr"] == "u-study" and len(st["ids"]) == 4 and "응급 전화" in st["head"], str(st))
+    check("응급 전화: 일정 계산 대상(공통 30)·날짜 일정에 들어가지 않음", st["common"] == 30 and not st["inSents"] and not st["inSched"], str(st))
     ctx.close()
     ctx = b.new_context(viewport={"width": 1280, "height": 800})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))

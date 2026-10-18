@@ -48,7 +48,9 @@ const DAYTYPE = {
   departure: { label: '귀국일', cls: 't-dep' },
 };
 const SIT_BY_TYPE = { arrival: ['airport', 'immigration', 'hotel'], transfer: ['transit', 'hotel'], departure: ['hotel', 'airport'], normal: [] };
-const SIT_ORDER = ['airport', 'immigration', 'hotel', 'transit', 'shopping', 'emergency'];
+/* 날짜별 학습량에 들어가는 묶음(6 × 5 = 30)과 참고용 묶음. data.js 의 countsTowardPlan 으로만 나눈다 */
+const SIT_ORDER = COMMON_SITUATIONS.filter(g => g.countsTowardPlan).map(g => g.key);
+const REF_ORDER = COMMON_SITUATIONS.filter(g => !g.countsTowardPlan).map(g => g.key);
 const KIND = {
   new: { label: '새 문장', cls: 'k-new' },
   review: { label: '복습', cls: 'k-review' },
@@ -601,7 +603,7 @@ function tripFromInput(d, id) {
 /* 입력이 바뀌면 여행에서 파생된 것(장소·방문 순서·문장·일정표)을 모두 버린다. 계획은 다시 만들어야 한다. */
 function resetDerived() {
   S.places = []; S.reportMeta = {}; S.reportMode = 'example'; S.routeView = 'code'; S.itineraryBlocks = null;
-  S.days = []; S.sents = []; S.smap = {}; S.sched = []; S.plan = null;
+  S.days = []; S.sents = []; S.refs = []; S.smap = {}; S.sched = []; S.plan = null;
   S.aiPools = {}; S.aiBy = {};   // 지난 여행의 AI 문장을 물려받지 않는다(전체 재생성 때 이전 문장이 섞이지 않게)
   S.cityTab = S.trip ? S.trip.cities[0].name : null; S.showCand = {}; S.studyDate = null; S.justCompleted = null; resetCard();
 }
@@ -722,7 +724,12 @@ function buildPlan() {
   });
   ordered.forEach(p => placeSentences(p, p.count).forEach((s, j) => sents.push({ id: `${p.id}-${j}`, source: 'place', placeId: p.id, ...s })));
   sents.forEach((s, i) => { s.order = i; s.learnPhase = 'none'; });
-  const smap = Object.fromEntries(sents.map(s => [s.id, s]));
+  // 참고용 묶음은 sents(일정 계산 대상)에 넣지 않는다. 카드·듣기가 id 로 찾도록 smap 에만 둔다.
+  const refs = REF_ORDER.flatMap(key => {
+    const g = S.commons.find(x => x.key === key);
+    return g.items.map((it, j) => ({ id: `r-${key}-${j}`, source: 'ref', sit: key, sitLabel: g.label, learnPhase: 'none', ...it }));
+  });
+  const smap = Object.fromEntries([...sents, ...refs].map(s => [s.id, s]));
 
   const sched = [];
   let preList = [];
@@ -767,7 +774,7 @@ function buildPlan() {
   });
 
   const kc = k => sched.filter(r => r.kind === k).length;
-  S.sents = sents; S.smap = smap; S.sched = sched;
+  S.sents = sents; S.refs = refs; S.smap = smap; S.sched = sched;
   S.plan = {
     N: pre.length, D, A, T, P, per,
     usedNew: kc('new'), review: kc('review'), final: kc('final'),
@@ -1014,7 +1021,7 @@ function describe(r) {
   const m = new Map();
   r.ids.forEach(id => {
     const s = S.smap[id];
-    const k = s.source === 'common' ? `공통 ${s.sitLabel}` : S.places.find(p => p.id === s.placeId)?.name;
+    const k = s.source !== 'place' ? `공통 ${s.sitLabel}` : S.places.find(p => p.id === s.placeId)?.name;
     m.set(k, (m.get(k) || 0) + 1);
   });
   const parts = [...m].map(([k, n]) => `${k} ${n}`);
@@ -1674,7 +1681,7 @@ function studyView(r) {
   const i = Math.min(S.card.i, r.ids.length - 1), s = S.smap[r.ids[i]];
   const isNew = r.kind === 'new' || (r.newIds || []).includes(s.id);
   const pl = s.placeId ? S.places.find(p => p.id === s.placeId) : null;
-  const tag = s.source === 'common' ? `<span class="badge t-norm">공통 · ${s.sitLabel}</span>` : `<span class="badge ${pl.kind === 'attraction' ? 't-dep' : 't-arr'}">${esc(pl.name)}</span>`;
+  const tag = s.source !== 'place' ? `<span class="badge t-norm">공통 · ${s.sitLabel}</span>` : `<span class="badge ${pl.kind === 'attraction' ? 't-dep' : 't-arr'}">${esc(pl.name)}</span>`;
   const ts = ttsState();
   const tts = ts === 'ok'
     ? `<div class="tts-row"><button class="tts-btn" data-act="speak-card">${I.speaker}듣기</button><button class="tts-rate" data-act="rate">${S.ttsRate < 0.9 ? '느리게' : '보통 속도'}</button></div>`
@@ -1734,10 +1741,11 @@ function scrColl() {
   const drillBtn = (by, v, n) => `<button class="drill-btn" data-act="drill" data-by="${by}" data-v="${esc(v)}">${I.cards}카드로 연습 ${n}</button>`;
   let chipsHtml, listHtml;
   if (tab === 'common') {
-    const chips = [['all', '전체'], ...SIT_ORDER.map(k => [k, S.commons.find(g => g.key === k).label])];
-    const list = S.sents.filter(s => s.source === 'common' && (f === 'all' || s.sit === f));
+    const order = [...SIT_ORDER, ...REF_ORDER];
+    const chips = [['all', '전체'], ...order.map(k => [k, S.commons.find(g => g.key === k).label])];
+    const list = [...S.sents.filter(s => s.source === 'common'), ...(S.refs || [])].filter(s => f === 'all' || s.sit === f);
     chipsHtml = `<div class="chips">${chips.map(([k, l]) => `<button class="${f === k ? 'on' : ''}" data-act="coll-filter" data-v="${k}">${l}</button>`).join('')}</div>`;
-    listHtml = `${SIT_ORDER.filter(k => f === 'all' || k === f).map(k => { const g = list.filter(s => s.sit === k); return g.length ? `<div class="phase-label">${g[0].sitLabel}${drillBtn('sit', k, g.length)}</div>${g.map(item).join('')}` : ''; }).join('')}`;
+    listHtml = `${order.filter(k => f === 'all' || k === f).map(k => { const g = list.filter(s => s.sit === k); return g.length ? `<div class="phase-label">${g[0].sitLabel}${drillBtn('sit', k, g.length)}</div>${g.map(item).join('')}` : ''; }).join('')}`;
   } else {
     const cities = S.trip.cities.map(c => c.name);
     const cf = cities.includes(f) ? f : 'all';
@@ -1746,7 +1754,7 @@ function scrColl() {
     listHtml = `${places.map(p => { const g = S.sents.filter(s => s.placeId === p.id); return `<div class="phase-label">${esc(p.name)} · ${Dt.md(p.visitDate)} 방문${g.length ? drillBtn('place', p.id, g.length) : ''}</div>${g.map(item).join('')}`; }).join('')}`;
   }
   const ts = ttsState();
-  const segHtml = `<div class="seg" style="margin-bottom:12px"><button class="${tab === 'common' ? 'on' : ''}" data-act="coll-tab" data-v="common">공통 상황 30</button><button class="${tab === 'place' ? 'on' : ''}" data-act="coll-tab" data-v="place">장소별 ${S.sents.length - 30}</button></div>`;
+  const segHtml = `<div class="seg" style="margin-bottom:12px"><button class="${tab === 'common' ? 'on' : ''}" data-act="coll-tab" data-v="common">공통 상황 ${30 + (S.refs || []).length}</button><button class="${tab === 'place' ? 'on' : ''}" data-act="coll-tab" data-v="place">장소별 ${S.sents.length - 30}</button></div>`;
   const ttsNote = ts !== 'ok' ? notice(ttsOffMsg(), 'warn') + '<div style="height:10px"></div>' : '';
   if (isWide()) {   // P4: 왼쪽 = 탭·상황/도시 필터, 오른쪽 = 문장
     return frame(`<div class="split coll"><div class="split-list">${segHtml}${chipsHtml}</div><div class="split-detail">${ttsNote}${listHtml}</div></div>`, { appbar: appbar('문장 모음'), tabbar: true, wide: true });
@@ -1838,7 +1846,7 @@ function admCommon() {
   S.commonsDraft ??= JSON.parse(JSON.stringify(S.commons));
   const dirty = JSON.stringify(S.commonsDraft) !== JSON.stringify(S.commons);
   return `<div class="adm-head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div><h2>공통 상황 문장 관리</h2>
-    <p class="desc">6개 상황 × 5문장 = 30개. 모든 여행에 똑같이 들어가요 (FR-SENT-01). 저장하면 <b>다음 문장 생성부터</b> 반영돼요.</p></div>
+    <p class="desc">6개 상황 × 5문장 = 30개. 모든 여행에 똑같이 들어가요 (FR-SENT-01). '응급 전화'는 참고용이라 날짜별 학습량에 들어가지 않아요. 저장하면 <b>다음 문장 생성부터</b> 반영돼요.</p></div>
     <div style="display:flex;gap:6px;flex:none"><button class="btn soft sm" data-act="cs-reset" ${dirty ? '' : 'disabled'}>되돌리기</button><button class="btn primary sm" data-act="cs-save" ${dirty ? '' : 'disabled'}>변경 사항 저장</button></div></div>
     ${notice('이름·목적지는 <b>[name]</b>·<b>[destination]</b> 빈칸으로 적어요. 학습 화면에서는 <b>[your name]</b>·<b>[your destination]</b>으로 보이고, 듣기도 그대로 읽어요.')}
     <div style="height:14px"></div>
@@ -2614,7 +2622,7 @@ const ACT = {
   'coll-filter': el => { S.coll.filter = el.dataset.v; render(); },
   drill: el => {
     const by = el.dataset.by, v = el.dataset.v;
-    const ids = S.sents.filter(s => by === 'sit' ? s.source === 'common' && s.sit === v : s.placeId === v).map(s => s.id);
+    const ids = [...S.sents, ...(S.refs || [])].filter(s => by === 'sit' ? s.source !== 'place' && s.sit === v : s.placeId === v).map(s => s.id);
     if (!ids.length) return;
     const label = by === 'sit' ? S.commons.find(g => g.key === v).label : S.places.find(p => p.id === v).name;
     endDrill();
@@ -2627,7 +2635,7 @@ const ACT = {
     // 저장해 둔 여행 입력을 먼저 지운 뒤 진도를 비운다. 반대로 하면 서버에 이전 여행이 다시 올라간다.
     AI.saveTrip(personalStore(), null);
     sessionClear();
-    S.trip = null; S.places = []; S.sched = []; S.plan = null; S.sents = []; S.days = [];
+    S.trip = null; S.places = []; S.sched = []; S.plan = null; S.sents = []; S.refs = []; S.days = [];
     S.draft = defaultDraft(S.today); S.showErrors = false; S.modal = null; go('u-input'); toast('이전 여행을 보관했어요.');
   }, { danger: true }),
 
