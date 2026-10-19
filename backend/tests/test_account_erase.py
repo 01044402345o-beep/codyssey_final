@@ -201,6 +201,106 @@ class T(unittest.TestCase):
         seal.assert_not_called()
 
 
+class FirestoreLikeAdmin(FakeAdmin):
+    """Firestore REST 처럼 문서 경로를 검사한다: '컬렉션/문서' 쌍이라 마디 수가 짝수여야 한다.
+
+    예전 체인 경로 'evidence_chain/entries/{seq}'(3마디)는 실제 Firestore 가 400 INVALID_ARGUMENT 로
+    거절했다(10/18 확인). 가짜 관리자가 무엇이든 받아 주면 이 버그를 못 잡는다.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.docs = {}
+        self.fail_writes = 0          # 앞에서부터 이만큼의 쓰기를 실패시킨다(일시 오류 흉내)
+        self.fail_prefix = ""         # 이 경로로 시작하는 쓰기는 늘 실패시킨다
+
+    def firestore(self, method, subpath, body=None):
+        if len([p for p in subpath.split("/") if p]) % 2:
+            raise firebase_admin.AdminError(503, "admin_failed")   # 400 INVALID_ARGUMENT 와 같은 처리
+        if method == "PATCH":
+            if self.fail_writes > 0:
+                self.fail_writes -= 1
+                raise firebase_admin.AdminError(503, "admin_failed")
+            if self.fail_prefix and subpath.startswith(self.fail_prefix):
+                raise firebase_admin.AdminError(503, "admin_failed")
+            self.docs[subpath] = body
+            return {}
+        return self.docs.get(subpath, {})
+
+
+EVIDENCE_ENV = {**ENV, "FIREBASE_SERVICE_ACCOUNT_JSON": SA,
+                "EVIDENCE_PUBKEY": "x25519:" + __import__("base64").urlsafe_b64encode(b"\x07" * 32).decode().rstrip("=")}
+
+
+class EvidenceChainTest(unittest.TestCase):
+    """증거 기능을 켠 채 **진짜** record_attempt/record_outcome 이 도는 경로(배포와 같은 설정)."""
+
+    def setUp(self):
+        self.admin = FirestoreLikeAdmin()
+        firebase_admin.set_admin(self.admin)
+        self.client = TestClient(main.app, raise_server_exceptions=False)
+        main._hits.clear()
+        self.sealed = []
+        self.patches = [mock.patch.object(main, "CHAIN_RETRY_DELAYS", (0, 0), create=True),
+                        mock.patch.object(main, "_seal_in_background",
+                                          side_effect=lambda *a, **k: self.sealed.append(a))]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        main._hits.clear()
+        firebase_admin.set_admin(None)
+
+    def post(self):
+        with mock.patch.dict(os.environ, EVIDENCE_ENV, clear=True), \
+                mock.patch.object(firebase_auth.id_token, "verify_firebase_token", return_value=CLAIMS):
+            return self.client.post("/account/erase", headers={"Authorization": "Bearer signed-token",
+                                                               "X-Withdraw-Challenge": "ef" * 16})
+
+    def test_erase_succeeds_and_chain_entries_use_valid_document_paths(self):
+        res = self.post()
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertTrue(res.json()["erased"])
+        self.assertEqual(self.admin.erased, ["uid-1"])
+        self.assertEqual(res.json()["receipt"]["seq"], 1)                     # 시도 기록의 체인 위치
+        self.assertIn("evidence_entries/1", self.admin.docs)                   # 시도
+        self.assertIn("evidence_entries/2", self.admin.docs)                   # 결과
+        self.assertEqual(self.admin.docs["evidence_entries/2"]["fields"]["outcome"]["stringValue"], "ok")
+        self.assertEqual(self.admin.docs["evidence_chain/head"]["fields"]["seq"]["integerValue"], "2")
+
+    def test_attempt_not_recorded_means_nothing_is_erased(self):
+        """시도 기록은 반드시 남아야 한다 — 끝내 못 남기면 계정을 지우지 않고 원인이 드러나는 503."""
+        self.admin.fail_prefix = "evidence_entries/"
+        res = self.post()
+        self.assertEqual(res.status_code, 503, res.text)
+        self.assertEqual(res.json()["detail"], "evidence_unavailable")        # 500 이 아니다
+        self.assertEqual(self.admin.erased, [])
+
+    def test_transient_chain_failure_is_retried(self):
+        self.admin.fail_writes = 1                                             # 첫 쓰기만 실패
+        res = self.post()
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(self.admin.erased, ["uid-1"])
+        self.assertIn("evidence_entries/1", self.admin.docs)
+
+    def test_outcome_failure_after_erase_still_reports_erased_and_seals(self):
+        """계정을 지운 뒤 결과 기록만 실패하면, 응답을 '실패'로 바꾸지 않고 증거로 봉인한다."""
+        real = main.evidence.record_outcome
+
+        def outcome_always_fails(*a, **k):
+            raise firebase_admin.AdminError(503, "admin_failed")
+
+        with mock.patch.object(main.evidence, "record_outcome", side_effect=outcome_always_fails):
+            res = self.post()
+        self.assertIs(main.evidence.record_outcome, real)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertTrue(res.json()["erased"])
+        self.assertIn("evidence_entries/1", self.admin.docs)                   # 시도 기록은 남았다
+        self.assertEqual(self.sealed[0][0], "outcome_unrecorded")
+
+
 class DiagnosticsTest(unittest.TestCase):
     """POST /diagnostics/withdraw — 화면이 보고하는 탈퇴 불일치."""
 

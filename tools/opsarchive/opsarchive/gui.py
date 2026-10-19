@@ -1397,7 +1397,7 @@ class App:
             out["앵커 목록 파일"] = "있음" if os.path.isdir(os.path.join(directory, "anchors")) else "없음"
             try:
                 entries = gcp.Firestore(self.require("project_id"), self.require("sa_path")).list(
-                    "evidence_chain/entries", page_size=300)
+                    "evidence_entries", page_size=300)
                 out["체인 시도·결과 항목"] = "%d개" % len(entries)
             except Exception as exc:      # noqa: BLE001
                 out["체인 항목"] = "확인 실패(%s)" % getattr(exc, "code", type(exc).__name__)

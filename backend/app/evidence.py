@@ -332,6 +332,10 @@ def collect(trigger: str, *, uid: str = "", ledger: list[dict[str, Any]] | None 
 
 MANIFEST_SCHEMA = "SEAL-SIG-v1"
 DOMAIN_MANIFEST = b"EVIDENCE-SEAL/v1/manifest"
+# 체인 항목 컬렉션. Firestore 문서 경로는 '컬렉션/문서' 쌍이라 마디 수가 짝수여야 한다.
+# 예전 'evidence_chain/entries/{seq}'(3마디)는 400 INVALID_ARGUMENT 로 거절되어 시도 기록이 늘 실패했고,
+# 탈퇴가 계정 삭제 전에 500 으로 멈췄다(10/18 사용자 신고). 읽는 쪽(tools/opsarchive)도 이 이름을 쓴다.
+ENTRIES_COLLECTION = "evidence_entries"
 
 
 def manifest_digest(manifest: dict[str, Any]) -> str:
@@ -393,7 +397,7 @@ def _commit_entry(extra: dict[str, Any]) -> dict[str, Any]:
         **extra,
     }
     entry["digest"] = manifest_digest(entry)
-    admin.firestore("PATCH", "evidence_chain/entries/%d" % entry["seq"], _encode_fields(entry))
+    admin.firestore("PATCH", "%s/%d" % (ENTRIES_COLLECTION, entry["seq"]), _encode_fields(entry))
     admin.firestore("PATCH", "evidence_chain/head", _encode_fields(
         {"seq": entry["seq"], "digest": entry["digest"], "created_at": entry["created_at"],
          "expire_at": entry["created_at"] + _int_env("EVIDENCE_TTL_DAYS", 90) * 86400}))

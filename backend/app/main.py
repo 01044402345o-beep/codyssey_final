@@ -29,6 +29,7 @@ GEMINI_API_KEY 가 없으면 목업으로 응답한다. 그래서 키 없이도 
 """
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import json
 import logging
@@ -961,14 +962,18 @@ async def account_erase(request: Request) -> dict[str, Any]:
     challenge = _challenge_from(request)                 # 클라이언트가 요청 **전에** 만든 값(없으면 서버가 만든다)
     attempt = {}
     if evidence.configured():
-        attempt = await run_in_threadpool(evidence.record_attempt, challenge, account["uid"])
+        # 시도 기록은 반드시 남아야 한다 — 남기지 못하면 아무것도 지우지 않고 멈춘다(재시도 후).
+        # 예전에는 이 예외가 그대로 새어 500 이 됐다. 이제 원인이 드러나는 503 으로 답한다.
+        try:
+            attempt = await _chain_write(evidence.record_attempt, challenge, account["uid"])
+        except Exception as exc:  # noqa: BLE001
+            logging.getLogger("app.evidence").exception("시도 기록 실패 — 탈퇴를 시작하지 않는다")
+            raise HTTPException(status_code=503, detail="evidence_unavailable") from exc
     ledger: list[dict[str, Any]] = []
     try:
         await run_in_threadpool(firebase_admin.erase_account, account["uid"], ledger)
     except (firebase_admin.AdminError, Exception) as exc:   # noqa: BLE001 — 아래에서 상태로 나눈다
-        if evidence.configured():
-            await run_in_threadpool(evidence.record_outcome, challenge, "failed",
-                                    uid=account["uid"], note=getattr(exc, "code", "") or "")
+        await _chain_outcome(challenge, "failed", account["uid"], note=getattr(exc, "code", "") or "")
         _seal_in_background("erase_failed", account["uid"], ledger, None, exc)
         if isinstance(exc, firebase_admin.AdminError):
             raise HTTPException(status_code=exc.status, detail=exc.code) from exc
@@ -976,11 +981,41 @@ async def account_erase(request: Request) -> dict[str, Any]:
 
     check = await run_in_threadpool(firebase_admin.verify_erased, account["uid"])
     outcome = "ok" if check.get("ok", True) else "verify_mismatch"
-    if evidence.configured():
-        await run_in_threadpool(evidence.record_outcome, challenge, outcome, uid=account["uid"])
+    await _chain_outcome(challenge, outcome, account["uid"])
     if check.get("ok") is False:
         _seal_in_background("verify_mismatch", account["uid"], ledger, check, None)
     return {"erased": True, "receipt": evidence.receipt_for(challenge, attempt, outcome)}
+
+
+CHAIN_RETRY_DELAYS = (0.5, 1.5)   # 증거 체인 쓰기: 첫 시도 + 재시도 2회(일시적 Firestore 오류 대비)
+
+
+async def _chain_write(fn: Any, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    """증거 체인에 한 항목을 쓴다. 실패하면 잠깐 쉬고 다시 쓴다 — 끝내 실패하면 마지막 예외를 그대로 던진다."""
+    for delay in (*CHAIN_RETRY_DELAYS, None):
+        try:
+            return await run_in_threadpool(fn, *args, **kwargs)
+        except Exception:  # noqa: BLE001 — 마지막 시도에서만 밖으로 던진다
+            if delay is None:
+                raise
+            logging.getLogger("app.evidence").warning("증거 체인 쓰기 실패 — %.1fs 뒤 다시 시도", delay)
+            await asyncio.sleep(delay)
+    return {}
+
+
+async def _chain_outcome(challenge: str, outcome: str, uid: str, note: str = "") -> None:
+    """결과 기록(성공·실패 모두). 재시도해도 남기지 못하면 증거로 봉인하고 오류 로그를 남긴다.
+
+    여기까지 왔으면 시도 기록은 이미 체인에 있다. 계정 삭제가 끝난 뒤라면 되돌릴 수 없으므로
+    응답을 '실패'로 바꾸지 않는다 — 지워졌는데 화면이 실패로 안내하는 것이 더 나쁘다.
+    """
+    if not evidence.configured():
+        return
+    try:
+        await _chain_write(evidence.record_outcome, challenge, outcome, uid=uid, note=note)
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger("app.evidence").error("결과 기록 실패(%s) — 시도 기록만 체인에 남았다", outcome)
+        _seal_in_background("outcome_unrecorded", uid, [], {"challenge": challenge, "outcome": outcome}, exc)
 
 
 def _challenge_from(request: Request) -> str:
