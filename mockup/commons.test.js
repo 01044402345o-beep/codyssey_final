@@ -23,3 +23,25 @@ test('공통 문장: 묶음 key 는 겹치지 않고, 문장은 영어·한국�
     assert.ok(!it.en.includes('/'), `${g.key}: 카드 하나에 목표 문장 하나 (말해 보기 채점) — ${it.en}`);
   }
 });
+
+// 회화 연습(팀 요청 10/17 Leechangjin 목업 #97 · 설문 7-2): 공통 30개에 상대의 예상 답변과 이어서 할 말.
+// ask = 상대가 먼저 하는 말(입국심사 질문 등, 선택), replies = 내 말 뒤 상대 답 1~2개, next = 내가 이어서 할 말.
+test('공통 문장: 학습량 30개 모두 회화 연습(예상 답변 1~2개 + 이어서 할 말)이 있다', () => {
+  const line = (x, where) => {
+    assert.ok(x && typeof x.en === 'string' && x.en.trim() && typeof x.ko === 'string' && x.ko.trim(), `${where}: 영어·한국어 필요`);
+    assert.ok(!x.en.includes('/'), `${where}: 한 줄에 문장 하나 — ${x.en}`);
+    assert.ok(x.en.split(/\s+/).length <= 15, `${where}: 짧게(15단어 이하) — ${x.en}`);
+  };
+  for (const g of groups.filter(g => g.countsTowardPlan)) for (const it of g.items) {
+    const w = `${g.key}/${it.situation}`;
+    assert.ok(it.talk, `${w}: talk 없음`);
+    assert.ok(Array.isArray(it.talk.replies) && it.talk.replies.length >= 1 && it.talk.replies.length <= 2, `${w}: 예상 답변 1~2개`);
+    it.talk.replies.forEach((r, i) => line(r, `${w} replies[${i}]`));
+    line(it.talk.next, `${w} next`);
+    if (it.talk.ask) line(it.talk.ask, `${w} ask`);
+  }
+});
+
+test('공통 문장: 참고 묶음(응급 전화)에는 회화 연습을 붙이지 않는다(범위: 학습량 30개)', () => {
+  for (const g of groups.filter(g => !g.countsTowardPlan)) for (const it of g.items) assert.equal(it.talk, undefined, `${g.key}/${it.situation}`);
+});
