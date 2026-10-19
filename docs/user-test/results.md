@@ -153,6 +153,7 @@
 ### 6.2 Android 에뮬레이터 확인 (10/18, 6-3·6-4)
 
 > 실기기가 아니다. 사람이 누른 게 아니라 adb 로 기기 키를 보내고, Chrome 원격 디버깅으로 화면 상태를 읽었다. 실사용자 기록(6.1)과 섞지 않는다.
+> 설치부터 실행까지 재현 절차: [`android-emulator.md`](android-emulator.md) · 스크립트: [`e2e/android_emulator_check.py`](../../e2e/android_emulator_check.py)
 
 | 항목 | 값 |
 |---|---|
