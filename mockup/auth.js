@@ -97,11 +97,14 @@ FirebaseAuth.start = function () {
   return FirebaseAuth.ready;
 };
 
-FirebaseAuth.signInGoogle = async function () {
+/* onPopupDone: 구글 창이 닫히고 인증이 끝난 순간 부른다. 그 뒤 서버 확인(/auth/me)까지 기다리는 동안
+   화면이 로그인 화면에 멈춰 보이지 않게, 앱이 바로 전환 화면을 띄우는 데 쓴다. */
+FirebaseAuth.signInGoogle = async function (onPopupDone) {
   await FirebaseAuth.ready;
   if (!FirebaseAuth.enabled) return null;
   const provider = new FirebaseAuth._mod.GoogleAuthProvider();
   const cred = await FirebaseAuth._mod.signInWithPopup(FirebaseAuth._auth, provider);
+  if (typeof onPopupDone === 'function') { try { onPopupDone(); } catch (e) { /* 화면 표시 실패가 로그인을 막지 않게 */ } }
   return accountFromUser(cred.user);
 };
 

@@ -74,6 +74,7 @@ const DEMO_USER = { name: '김여행', email: 'demo.traveler@gmail.com' };
    Firebase 로그인을 붙인 뒤(a672c53) 가짜 로그인 문이 진짜 문이 되어 가입 없이는 앱을 볼 수 없었다 — 그 입구를 다시 연다. */
 const GUEST_USER = { name: '손님', email: '로그인하지 않음 · 이 브라우저에만 저장', guest: true };
 const isGuest = () => !!(S.user && S.user.guest);
+const authDraft = { email: '', name: '' };   // 이메일 폼 입력 — 로그인 전환 화면이 폼을 다시 그려도 남긴다(비밀번호는 담지 않는다)
 const fbOn = () => !!(window.FirebaseAuth && FirebaseAuth.enabled);
 function userName() { return (S.user && S.user.name) || DEMO_USER.name; }
 function userEmail() { return (S.user && S.user.email) || DEMO_USER.email; }
@@ -1251,6 +1252,7 @@ function pframe(inner, o = {}) {
 const appbar = (title, o = {}) => `<div class="appbar">${o.back ? `<button class="back" data-act="tab" data-id="${o.back}">${I.back}</button>` : ''}<h2>${title}</h2>${o.step ? `<span class="step">${o.step}</span>` : ''}</div>`;
 const notice = (html, kind = '') => `<div class="notice ${kind}">${kind === 'warn' || kind === 'bad' ? I.alert : I.info}<div>${html}</div></div>`;
 function modalHtml(center = false) {
+  if (S.entering) return enteringHtml();           // 로그인 전환 화면(로그인 화면을 덮는다)
   if (S.withdrawing) return withdrawModalHtml();   // 탈퇴 진행 창이 다른 창보다 앞선다
   const m = S.modal; if (!m) return '';
   return `<div class="modal-wrap ${center ? 'center' : ''}" data-act="modal-bg"><div class="modal" data-act="noop"><h3>${m.title}</h3><p>${m.body}</p>
@@ -1284,8 +1286,8 @@ function scrLogin() {
        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn soft" style="flex:1" data-act="logout">로그아웃</button><button class="btn primary" style="flex:2" data-act="after-login">계속하기</button></div>`;
   const signup = S.authMode === 'signup';
   const emailForm = `<form data-act="noop" style="display:flex;flex-direction:column;gap:8px" autocomplete="on">
-        ${signup ? '<input class="input" data-auth="name" placeholder="이름" autocomplete="name" maxlength="40">' : ''}
-        <input class="input" type="email" data-auth="email" placeholder="이메일" autocomplete="username">
+        ${signup ? `<input class="input" data-auth="name" placeholder="이름" autocomplete="name" maxlength="40" value="${esc(authDraft.name)}">` : ''}
+        <input class="input" type="email" data-auth="email" placeholder="이메일" autocomplete="username" value="${esc(authDraft.email)}">
         <input class="input" type="password" data-auth="password" placeholder="비밀번호 (6자 이상)" autocomplete="${signup ? 'new-password' : 'current-password'}">
         <button class="btn primary block" type="button" data-act="login-email">${signup ? '가입하기' : '이메일로 계속하기'}</button>
         <button class="btn soft block" type="button" data-act="login-switch">${signup ? '이미 계정이 있어요' : '계정이 없어요 · 가입하기'}</button>
@@ -1935,7 +1937,7 @@ function closeSide() { const el = $('#side'); if (el) el.classList.remove('open'
 
 function onPop(state) {
   // 탈퇴가 진행 중이면 뒤로가기로 화면을 떠나지 않는다(서버가 지우는 도중에 화면만 바뀌면 상태가 엇갈린다).
-  if (wdRunning()) { try { history.pushState({ screen: S.screen, overlay: 'withdraw' }, ''); } catch (e) { /* 무시 */ } return; }
+  if (wdRunning() || S.entering) { try { history.pushState({ screen: S.screen, overlay: 'busy' }, ''); } catch (e) { /* 무시 */ } return; }   // 로그인 전환 중도 같다
   if (S.withdrawing) { wdEnd(); render(); return; }                  // 실패·완료 창은 뒤로가기로 닫는다
   // 열려 있는 것부터 닫는다. 사용자가 '취소'를 기대하는 순서다.
   if (S.modal) { S.modal = null; modalFn = null; render(); return; }
@@ -2337,6 +2339,46 @@ function withdrawModalHtml() {
 }
 window.addEventListener('beforeunload', e => { if (wdRunning()) { e.preventDefault(); e.returnValue = ''; } });
 
+/* 로그인 전환 화면. 구글 창이 닫힌 뒤(이메일은 누른 뒤) 서버 확인·계정 기록 불러오기를 기다리는 동안
+   로그인 화면에 멈춰 보였고, 완료 안내가 화면 이동보다 먼저 떴다(사용자 신고 10/19).
+   로그인 화면을 불투명하게 덮고 단계를 보여 준 뒤, **다음 화면으로 먼저 넘어가고 나서** 안내를 띄운다.
+   실패하면 덮개를 걷고 로그인 화면에서 이유를 알린다(입력한 이메일은 그대로). */
+const EN_STEPS = {
+  google: ['구글 로그인', '계정 확인', '저장된 기록 불러오기', '화면 준비'],
+  email: ['이메일·비밀번호 확인', '저장된 기록 불러오기', '화면 준비'],
+};
+function enStart(steps, step = 0) {
+  // 로그인 화면은 히스토리의 첫 항목이라, 항목을 하나 쌓지 않으면 뒤로가기가 앱이 막기 전에 사이트를 떠난다.
+  if (!S.entering) pushOverlay('entering');
+  S.entering = { steps: steps.slice(), step }; render();
+}
+function enStep(i) { if (S.entering) { S.entering.step = i; render(); } }
+function enEnd() { S.entering = null; }
+function enteringHtml() {
+  const e = S.entering;
+  const items = e.steps.map((label, i) => {
+    const st = i < e.step ? 'done' : i === e.step ? 'now' : '';
+    return `<li class="${st}"><span class="ic">${st === 'done' ? '✓' : ''}</span><span>${label}</span></li>`;
+  }).join('');
+  return `<div class="modal-wrap entering" data-act="noop"><div class="modal wd en" data-act="noop" role="status" aria-live="polite" aria-busy="true">
+    <div class="wd-head"><span class="wd-spin run" aria-hidden="true"></span><h3>로그인하는 중이에요</h3></div>
+    <ul class="steps wd-steps">${items}</ul></div></div>`;
+}
+/* 계정을 받은 뒤: 기록 불러오기(adoptAccount) → 화면 준비·이동(after-login) → 덮개 걷기 → 안내. */
+async function finishLogin(account, doneMsg, loadStep) {
+  enStep(loadStep);
+  try {
+    await adoptAccount(account, { navigate: false });
+  } catch (e) {
+    enEnd(); render(); toast('계정 기록을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.'); return;
+  }
+  if (!S.user) { enEnd(); render(); return; }   // 탈퇴한 계정 등: adoptAccount 가 이미 정리하고 안내했다
+  enStep(loadStep + 1);
+  ACT['after-login']();                         // 다음 화면으로 먼저 넘어간다(덮개는 아직 위에 있다)
+  enEnd(); render();
+  toast(doneMsg);
+}
+
 /* 탈퇴: 서버(관리자 또는 규칙) → 브라우저 → (폴백이면) 클라이언트 deleteUser. 되돌릴 수 없다.
    서버 단계가 확정된 뒤에 브라우저 기록을 지운다 — 중간에 멈추면 계정·기록을 그대로 두고,
    나중에 화면을 다시 그려도 빈 기록이 서버로 올라가 지워지지 않게 한다. */
@@ -2464,16 +2506,14 @@ const ACT = {
 
   login: () => {
     if (window.FirebaseAuth && FirebaseAuth.enabled) {
-      FirebaseAuth.signInGoogle().then(account => {
-        if (!account || account.provider === 'anonymous') return;
-        adoptAccount(account, { navigate: false }).then(() => {
-          toast('Google 계정으로 로그인했어요.');
-          ACT['after-login']();
-        });
-      }).catch(err => { const msg = FirebaseAuth.koreanError(err); if (msg) toast(msg); });
+      // 구글 창이 닫히는 순간 전환 화면을 띄운다(창을 닫아 취소하면 띄우지 않는다).
+      FirebaseAuth.signInGoogle(() => enStart(EN_STEPS.google, 1)).then(account => {
+        if (!account || account.provider === 'anonymous') { enEnd(); render(); return; }
+        return finishLogin(account, '구글 로그인을 완료했어요.', 2);
+      }).catch(err => { enEnd(); render(); const msg = FirebaseAuth.koreanError(err); if (msg) toast(msg); });
       return;
     }
-    S.user = DEMO_USER; toast('Google 계정으로 로그인했어요.'); ACT['after-login']();
+    S.user = DEMO_USER; ACT['after-login'](); toast('구글 로그인을 완료했어요.');   // 다음 화면으로 넘어간 뒤 안내
   },
   'login-email': () => {
     if (!window.FirebaseAuth || !FirebaseAuth.enabled) { toast('이 환경에서는 이메일 로그인을 쓸 수 없어요.'); return; }
@@ -2482,13 +2522,12 @@ const ACT = {
     const name = (document.querySelector('[data-auth="name"]') || {}).value || '';
     if (!email.trim() || !password) { toast('이메일과 비밀번호를 입력해 주세요.'); return; }
     const signup = S.authMode === 'signup';
+    authDraft.email = email; authDraft.name = name;   // 전환 화면이 폼을 다시 그려도(실패 시) 입력한 이메일·이름을 남긴다
+    enStart(EN_STEPS.email, 0);
     FirebaseAuth.signInEmail(email.trim(), password, name.trim(), signup).then(account => {
-      if (!account || account.provider === 'anonymous') return;
-      adoptAccount(account, { navigate: false }).then(() => {
-        toast(signup ? '가입했어요.' : '로그인했어요.');
-        ACT['after-login']();
-      });
-    }).catch(err => { const msg = FirebaseAuth.koreanError(err); if (msg) toast(msg); });
+      if (!account || account.provider === 'anonymous') { enEnd(); render(); return; }
+      return finishLogin(account, signup ? '가입했어요.' : '로그인했어요.', 1);
+    }).catch(err => { enEnd(); render(); const msg = FirebaseAuth.koreanError(err); if (msg) toast(msg); });
   },
   guest: () => { S.user = GUEST_USER; toast('로그인 없이 시작해요. 기록은 이 브라우저에만 남아요.'); ACT['after-login'](); },
   'login-switch': () => { S.authMode = S.authMode === 'signup' ? 'login' : 'signup'; render(); },

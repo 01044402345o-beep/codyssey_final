@@ -87,6 +87,7 @@ jobs:
           mkdir -p ../e2e-shots
           python ../e2e/test_account_withdrawal.py http://localhost:8768   # 탈퇴: 버튼 위치·확인·브라우저 기록 폐기
           python ../e2e/test_withdraw_progress.py http://localhost:8768 ../e2e-shots   # 탈퇴 진행 창: 스피너·경과 시간·단계
+          python ../e2e/test_login_transition.py http://localhost:8768 ../e2e-shots   # 로그인 전환 화면: 이동 뒤 완료 안내
           python ../e2e/test_consent.py http://localhost:8768 ../e2e-shots
           python ../e2e/test_silence.py http://localhost:8768 ../e2e-shots
           python ../e2e/test_shell.py http://localhost:8768 ../e2e-shots   # 반응형 셸·터치·테마
