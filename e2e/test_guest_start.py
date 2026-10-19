@@ -64,6 +64,8 @@ with sync_playwright() as p:
     check("새로고침해도 카드 위치·뒤집은 카드 유지", back["i"] == 1 and back["n"] == 1, str(back))
 
     page.evaluate("navFromMenu('u-home')"); page.wait_for_timeout(300)
+    home = page.inner_text("body")
+    check("홈 인사: '손님님'이 아니라 '손님'(Android 에뮬레이터에서 발견)", "손님님" not in home and "손님" in home, home[:40].replace("\n", " / "))
     acc = page.locator(".account-card").inner_text()
     check("홈 계정 카드: 손님 표시 + 로그인 버튼, 탈퇴 없음",
           "손님" in acc and page.locator('.account-card [data-id="u-login"]').count() == 1 and page.locator('[data-act="withdraw"]').count() == 0, acc.replace("\n", " / "))
