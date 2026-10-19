@@ -926,8 +926,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.78125rem; }
   --nav-side: 240px;
   --read-max: 40rem;
   --nav-h: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+  --nav-space: var(--nav-h);   /* 폰 고정 탭이 실제로 차지하는 높이 — app.js syncNavSpace 가 실측값으로 덮는다 */
 }
-html:not([data-mode=legacy]) { scroll-behavior: auto; }
+html:not([data-mode=legacy]) { scroll-behavior: auto; overscroll-behavior-y: none; }   /* 문서 끝 바운스로 빈 바탕이 드러나지 않게 */
 html:not([data-mode=legacy]) body { background: var(--bg); min-height: 100dvh; height: auto; overflow-x: hidden; }
 html:not([data-mode=legacy]) .shell { display: block; height: auto; }
 html:not([data-mode=legacy]) .main { display: block; }
@@ -954,6 +955,7 @@ html[data-mode=demo] .side .note-card { box-shadow: none; }
 /* 프레임: [nav][main] */
 .pframe { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "main" "nav"; background: var(--bg); position: relative; }
 .pframe:not(.has-nav) { grid-template-rows: minmax(0, 1fr); grid-template-areas: "main"; }
+.pframe.has-nav { padding-bottom: var(--nav-space); }   /* 고정 탭의 실제 높이(app.js syncNavSpace)만큼 비워 마지막 내용이 가려지지 않게 */
 .pmain { grid-area: main; min-width: 0; display: flex; flex-direction: column; }
 .pcol { width: 100%; max-width: var(--read-max); margin-inline: auto; display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .pframe .app { flex: 1; overflow: visible; min-width: 0; scroll-behavior: auto; }
@@ -961,10 +963,11 @@ html[data-mode=demo] .side .note-card { box-shadow: none; }
 .pframe .appbar { position: sticky; top: 0; z-index: 10; background: var(--bg); padding: max(6px, env(safe-area-inset-top, 0px)) var(--gutter) 10px; }
 .pframe .appbar h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pframe .bottombar { position: sticky; bottom: 0; z-index: 9; padding: 12px var(--gutter) calc(12px + env(safe-area-inset-bottom, 0px)); }
-.pframe.has-nav .bottombar { bottom: var(--nav-h); padding-bottom: 12px; }
+.pframe.has-nav .bottombar { bottom: var(--nav-space); padding-bottom: 12px; }
 
 /* 내비: base 하단 탭바 */
-.pnav { grid-area: nav; position: sticky; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; min-height: var(--nav-h); background: var(--surface); border-top: 1px solid var(--border); padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
+/* 폰 하단 탭은 화면에 고정한다. sticky 는 문서 흐름 안에 있어 iOS 끝까지 스크롤(바운스)할 때 내용과 함께 끌려 올라갔다(10/20 피드백). */
+.pnav { grid-area: nav; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; min-height: var(--nav-h); background: var(--surface); border-top: 1px solid var(--border); padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
 .pnav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0; min-height: 44px; padding: 6px 2px; font-size: 0.75rem; color: var(--text-3); border-radius: 12px; }
 .pnav button span { max-width: 100%; overflow-wrap: anywhere; text-align: center; line-height: 1.2; }   /* 글자 확대에서는 줄바꿈(말줄임으로 글자를 숨기지 않는다) */
 .pnav button svg { width: 24px; height: 24px; flex: none; }
@@ -975,7 +978,8 @@ html[data-mode=demo] .side .note-card { box-shadow: none; }
 /* md ≥600: 레일 */
 @media (min-width: 600px) {
   .pframe.has-nav { grid-template-columns: var(--nav-rail) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); grid-template-areas: "nav main"; }
-  .pnav { position: sticky; top: 0; bottom: auto; height: 100dvh; align-self: start; display: flex; flex-direction: column; justify-content: flex-start; gap: 4px; min-height: 0; overflow-y: auto; border-top: 0; border-right: 1px solid var(--border); padding: 12px 6px; padding-left: max(6px, env(safe-area-inset-left, 0px)); }
+  .pframe.has-nav { padding-bottom: 0; }
+  .pnav { position: sticky; top: 0; bottom: auto; left: auto; right: auto; height: 100dvh; align-self: start; display: flex; flex-direction: column; justify-content: flex-start; gap: 4px; min-height: 0; overflow-y: auto; border-top: 0; border-right: 1px solid var(--border); padding: 12px 6px; padding-left: max(6px, env(safe-area-inset-left, 0px)); }
   .pframe.has-nav .bottombar { bottom: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 }
 /* xl ≥1200: 사이드 */

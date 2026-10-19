@@ -1199,6 +1199,13 @@ function settlePre() {
   });
   if (moved) applyProgress();
 }
+/* 폰 하단 탭은 화면에 고정(position: fixed)이라 문서 흐름에서 빠진다. 실제 탭 높이만큼 아래를 비워
+   마지막 내용이 가려지지 않게 한다(글자 확대로 탭이 높아져도 맞는다). 레일·사이드에서는 CSS 가 0 으로 둔다. */
+function syncNavSpace() {
+  const n = !LEGACY && $('.pnav');
+  if (n && getComputedStyle(n).position === 'fixed') document.documentElement.style.setProperty('--nav-space', n.offsetHeight + 'px');
+}
+window.addEventListener('resize', () => syncNavSpace());
 function render() {
   settlePre();
   if (!studyShown() && SPK.state !== 'idle') cancelSpeak();
@@ -1218,6 +1225,7 @@ function render() {
   $('#stage').className = 'stage ' + (S.screen.startsWith('a-') ? 'is-admin' : 'is-user');
   $('#stage').innerHTML = body + (LEGACY ? notes(sc) : '');
   if (MODE === 'demo') $('#side-notes').innerHTML = notes(sc);
+  syncNavSpace();
   const ab = $('#api-banner');
   if (ab) { ab.hidden = !API.external; if (API.external) ab.innerHTML = `외부 서버 연결 중: <b>${esc(API.host)}</b> — 이 주소로 요청하고 녹음을 전송합니다`; }
   if (LEGACY) { const na = $('.app'); if (na && same) na.scrollTop = prevTop; }
