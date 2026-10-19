@@ -476,6 +476,14 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .login .ticket { margin-top: auto; }
 .gbtn { width: 100%; height: 52px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border-strong); display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; font-size: 0.9375rem; box-shadow: var(--shadow); }
 .gbtn:hover { border-color: var(--text); }
+/* 로그인 없이 시작: Google 아래 작은 회색 버튼(첫 화면을 단순하게 — 10/20 피드백) */
+.guest-btn { display: block; margin: 12px auto 0; min-height: 44px; padding: 0 16px; border-radius: 999px; background: var(--surface-2); color: var(--text-soft); font-size: 0.8125rem; font-weight: 600; }
+.guest-btn:hover { color: var(--text); }
+/* 이메일 로그인 화면: 두 갈래 선택 */
+.auth-choice { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; padding: 18px 18px; margin-top: 10px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border-strong); text-align: left; box-shadow: var(--shadow); }
+.auth-choice b { font-size: 1rem; }
+.auth-choice span { font-size: 0.8125rem; color: var(--text-soft); }
+.auth-choice:hover { border-color: var(--text); }
 
 /* generating */
 .gen { padding: 30px 24px; display: flex; flex-direction: column; min-height: 100%; }

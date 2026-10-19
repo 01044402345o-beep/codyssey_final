@@ -136,6 +136,7 @@ with sync_playwright() as p:
     # --- 이메일: 누르자마자 덮는다 → 끝나면 이동 뒤 안내 ---
     ctx, page = fresh(b)
     stub(page)
+    page.click('[data-act="auth-open"]'); page.click('[data-act="auth-pick"][data-v="login"]'); page.wait_for_timeout(150)   # 로그인 → 이미 계정이 있어요
     page.fill('[data-auth="email"]', "me@example.com"); page.fill('[data-auth="password"]', "secret12")
     page.click('[data-act="login-email"]')
     page.wait_for_timeout(200)
@@ -151,12 +152,13 @@ with sync_playwright() as p:
     # --- 비밀번호 틀림: 덮개를 걷고 폼 그대로(입력한 이메일 유지) ---
     ctx, page = fresh(b)
     stub(page, badPassword=True, me=400)
+    page.click('[data-act="auth-open"]'); page.click('[data-act="auth-pick"][data-v="login"]'); page.wait_for_timeout(150)   # 로그인 → 이미 계정이 있어요
     page.fill('[data-auth="email"]', "me@example.com"); page.fill('[data-auth="password"]', "wrong")
     page.click('[data-act="login-email"]')
     page.wait_for_timeout(800)
     s = page.evaluate(STATE); toasts = page.evaluate("window.__toasts")
-    check("비밀번호 틀림: 덮개가 걷히고 이유 안내, 입력한 이메일 그대로",
-          not s["covered"] and s["scr"] == "u-login" and toasts and "비밀번호가 맞지 않아요" in toasts[-1]["msg"]
+    check("비밀번호 틀림: 덮개가 걷히고 이유 안내, 입력한 이메일 그대로(이메일 화면에 남는다)",
+          not s["covered"] and s["scr"] == "u-auth" and toasts and "비밀번호가 맞지 않아요" in toasts[-1]["msg"]
           and page.input_value('[data-auth="email"]') == "me@example.com", str(toasts))
     ctx.close()
 

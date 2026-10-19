@@ -467,7 +467,7 @@ function fillProgress(d) {
 function resumeScreen() {
   /* 저장해 둔 여행 입력으로 실제 여행을 되살린다. 계획은 그 화면에 들어갈 때 규칙으로 다시 만들어진다. */
   if (RESTORE.trip && !S.trip) S.trip = tripFromInput(RESTORE.trip);
-  let dest = RESTORE.screen && RESTORE.screen !== 'u-login' && SCR[RESTORE.screen] ? RESTORE.screen : null;
+  let dest = RESTORE.screen && RESTORE.screen !== 'u-login' && RESTORE.screen !== 'u-auth' && SCR[RESTORE.screen] ? RESTORE.screen : null;   // 로그인 단계는 되살리지 않는다
   /* 만들던 보고서·문장 생성은 메모리에서 진행돼 새로고침으로 이어지지 않는다 — 실제 여행이 있으면 홈으로 보낸다. */
   if (dest && S.trip && (dest === 'u-gen' || dest === 'u-report')) dest = 'u-home';
   /* 계정 없이 저장된 화면이 있으면 손님으로 이어서 연다. 그대로 두면 화면 준비(ensure)가 데모 사용자 '김여행'으로 채운다. */
@@ -577,7 +577,7 @@ function initState() {
   cancelGen();
   const today = AI.calendarToday(new Date());
   S = {
-    screen: 'u-login', user: null, authMode: 'login', today,
+    screen: 'u-login', user: null, authMode: null, today,
     flags: { fail: false, stuck: false, routeInvalid: false, noTts: false },
     draft: defaultDraft(today), showErrors: false,
     trip: null, places: [], reportMeta: {}, reportMode: 'example', routeView: 'code', itineraryBlocks: null,
@@ -1095,6 +1095,8 @@ if (ttsSupported()) {
 const SCREENS = [
   { group: '사용자 화면', id: 'u-login', no: 'SCR-01', name: '로그인', fr: ['FR-AUTH-01', 'FR-AUTH-02'],
     tips: ['"Google로 계속하기"를 누르면 로그인돼요.', '여행이 없으면 여행 입력, 있으면 홈으로 이동해요.', '로그인 상태에서는 로그아웃할 수 있어요.'] },
+  { id: 'u-auth', no: 'SCR-01b', name: '이메일 로그인', fr: ['FR-AUTH-01'],
+    tips: ['로그인 화면의 "로그인"으로 들어와요(Firebase 가 켜진 배포에서만).', '"이미 계정이 있어요" / "아직 계정이 없어요"를 고르면 그 폼만 보여요.'] },
   { id: 'u-input', no: 'SCR-02', name: '여행 입력', fr: ['FR-TRIP-01', 'FR-TRIP-03', 'FR-TRIP-04', 'FR-TRIP-05'],
     tips: ['도시 날짜를 비우거나 겹치게 바꾼 뒤 "보고서 만들기"로 오류를 확인하세요.', '나라를 "일본"으로 바꾸면 영어권이 아닌 나라 안내가 나와요.', '학습 시작일을 여행 3일 전 이후로 두면 짧은 학습 경고가 나와요.', '진행 중인 여행이 있으면 보관 확인 창이 떠요.'],
     demos: [['빈 날 오류 예시 넣기', 'demo-gap'], ['짧은 학습(3일) 예시 넣기', 'demo-short'], ['여행 당일 시작 예시 넣기', 'demo-zero'], ['기본 예시로 되돌리기', 'demo-default']] },
@@ -1285,6 +1287,7 @@ function closeModal() { const m = S.modal; S.modal = null; modalFn = null; if (m
 function userScreen() {
   switch (S.screen) {
     case 'u-login': return scrLogin();
+    case 'u-auth': return scrAuth();
     case 'u-input': return scrInput();
     case 'u-gen': return scrGen();
     case 'u-report': return scrReport();
@@ -1305,21 +1308,14 @@ function scrLogin() {
   const signed = `<div class="card" style="display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:50%;background:var(--sea);color:var(--on-sea);display:grid;place-items:center;font-weight:700">${initial}</div>
         <div style="flex:1"><b>${esc(userName())}</b><div class="small">${esc(userEmail())}</div></div></div>
        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn soft" style="flex:1" data-act="logout">로그아웃</button><button class="btn primary" style="flex:2" data-act="after-login">계속하기</button></div>`;
-  const signup = S.authMode === 'signup';
-  const emailForm = `<form data-act="noop" style="display:flex;flex-direction:column;gap:8px" autocomplete="on">
-        ${signup ? `<input class="input" data-auth="name" placeholder="이름" autocomplete="name" maxlength="40" value="${esc(authDraft.name)}">` : ''}
-        <input class="input" type="email" data-auth="email" placeholder="이메일" autocomplete="username" value="${esc(authDraft.email)}">
-        <input class="input" type="password" data-auth="password" placeholder="비밀번호 (6자 이상)" autocomplete="${signup ? 'new-password' : 'current-password'}">
-        <button class="btn primary block" type="button" data-act="login-email">${signup ? '가입하기' : '이메일로 계속하기'}</button>
-        <button class="btn soft block" type="button" data-act="login-switch">${signup ? '이미 계정이 있어요' : '계정이 없어요 · 가입하기'}</button>
-      </form><p class="small" style="text-align:center;margin:8px 0">또는</p>`;
-  // 로그인 없이 시작: 첫 화면 맨 위에 둔다(사용자 테스트·심사에서 가입 없이 바로 써 볼 수 있어야 한다)
-  const guestBtn = `<button class="btn accent block" type="button" data-act="guest">로그인 없이 시작</button>
-      <p class="small" style="text-align:center;margin:8px 0">또는 계정으로 — 다른 기기에서도 이어져요</p>`;
-  const body = (S.user && !isGuest()
-    ? signed
-    : `${fbOn() ? guestBtn + emailForm : ''}<button class="gbtn" data-act="login">${I.google}Google로 계속하기</button>`)
-    + withdrawProofBlock();
+  // 첫 화면은 고르기만 한다(10/20 피드백 "로그인 화면이 너무 복잡하다"): 로그인 → 이메일 화면, Google,
+  // 그 아래 작은 회색 '로그인 없이 시작'. 이메일 입력 폼은 '로그인'을 눌러 여는 별도 화면(u-auth)에 있다.
+  const choices = fbOn()
+    ? `<button class="btn primary block" type="button" data-act="auth-open">로그인</button>
+      <button class="gbtn" style="margin-top:10px" data-act="login">${I.google}Google로 계속하기</button>
+      <button class="guest-btn" type="button" data-act="guest">로그인 없이 시작</button>`
+    : `<button class="gbtn" data-act="login">${I.google}Google로 계속하기</button>`;
+  const body = (S.user && !isGuest() ? signed : choices) + withdrawProofBlock();
   const gate = fbOn() ? '로그인하지 않아도 쓸 수 있어요. 기록은 이 브라우저에만 남아요.' : '로그인하지 않으면 다른 화면에 들어갈 수 없어요.';
   return frame(`<div class="login">
     <div class="stamp" aria-hidden="true">MADI · 마디<br>TRAVEL ENGLISH<br>— 2026 —</div>
@@ -1330,6 +1326,34 @@ function scrLogin() {
     <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">${gate}</p>
       <p class="small" style="text-align:center;margin-top:8px">맛집 문장은 AI가 만들고 'AI 생성' 표시가 붙어요 · 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API로 전송돼요 · 장소 목록은 예시 데이터예요 · 로그인하면 학습 진도·복습 목록·여행 설정이 계정에 저장되고, 로그인하지 않으면 이 브라우저에만 남아요 · 말하기 연습에서의 녹음 데이터를 사용자가 동의한 뒤에만 서버로 보내요.</p></div>
   </div>`);
+}
+
+/* SCR-01b 이메일 로그인: 먼저 두 갈래만 보여 주고, 고른 쪽의 폼을 연다. */
+function scrAuth() {
+  const mode = S.authMode;   // null = 고르기, 'login' | 'signup' = 폼
+  let inner;
+  if (!mode) {
+    inner = `<div class="app-pad auth-pick">
+      <div class="title-lg">이메일로 계속하기</div>
+      <p class="sub" style="margin-bottom:18px">계정이 있으면 로그인하고, 없으면 가입해요. 기록이 다른 기기에서도 이어져요.</p>
+      <button class="auth-choice" type="button" data-act="auth-pick" data-v="login"><b>이미 계정이 있어요</b><span>이메일로 로그인할래요</span></button>
+      <button class="auth-choice" type="button" data-act="auth-pick" data-v="signup"><b>아직 계정이 없어요</b><span>새로 가입할래요</span></button>
+    </div>`;
+  } else {
+    const signup = mode === 'signup';
+    inner = `<div class="app-pad">
+      <div class="title-lg">${signup ? '가입하기' : '이메일로 로그인'}</div>
+      <p class="sub" style="margin-bottom:18px">${signup ? '이름·이메일·비밀번호(6자 이상)로 가입해요.' : '가입할 때 쓴 이메일과 비밀번호를 입력해요.'}</p>
+      <form data-act="noop" style="display:flex;flex-direction:column;gap:8px" autocomplete="on">
+        ${signup ? `<input class="input" data-auth="name" placeholder="이름" autocomplete="name" maxlength="40" value="${esc(authDraft.name)}">` : ''}
+        <input class="input" type="email" data-auth="email" placeholder="이메일" autocomplete="username" value="${esc(authDraft.email)}">
+        <input class="input" type="password" data-auth="password" placeholder="비밀번호 (6자 이상)" autocomplete="${signup ? 'new-password' : 'current-password'}">
+        <button class="btn primary block" type="button" data-act="login-email">${signup ? '가입하기' : '로그인'}</button>
+      </form>
+      <button class="guest-btn" type="button" data-act="auth-pick" data-v="${signup ? 'login' : 'signup'}">${signup ? '이미 계정이 있어요 · 로그인' : '아직 계정이 없어요 · 가입하기'}</button>
+    </div>`;
+  }
+  return frame(inner, { appbar: appbar(mode ? (mode === 'signup' ? '가입' : '로그인') : '로그인', { back: 'u-login' }) });
 }
 
 /* SCR-02 */
@@ -2044,6 +2068,7 @@ function onPop(state) {
   if (S.withdrawing) { wdEnd(); render(); return; }                  // 실패·완료 창은 뒤로가기로 닫는다
   // 열려 있는 것부터 닫는다. 사용자가 '취소'를 기대하는 순서다.
   if (S.modal) { navQuiet = true; try { closeModal(); } finally { navQuiet = false; } return; }   // 창의 onCancel 이동이 기록을 더 쌓지 않게
+  if (S.screen === 'u-auth' && S.authMode) { S.authMode = null; render(); return; }   // 이메일 폼 → 두 갈래 고르기
   if (S.sheet) { closeSheet(); return; }                             // 회화 연습 시트
   if (sideOpen()) { closeSide(); return; }
   const target = (state && typeof state.screen === 'string') ? state.screen : null;
@@ -2647,7 +2672,12 @@ const ACT = {
     }).catch(err => { enEnd(); render(); const msg = FirebaseAuth.koreanError(err); if (msg) toast(msg); });
   },
   guest: () => { S.user = GUEST_USER; toast('로그인 없이 시작해요. 기록은 이 브라우저에만 남아요.'); ACT['after-login'](); },
-  'login-switch': () => { S.authMode = S.authMode === 'signup' ? 'login' : 'signup'; render(); },
+  'auth-open': () => { S.authMode = null; go('u-auth'); },
+  'auth-pick': el => {   // 두 갈래 중 하나를 고르면 폼을 연다. 폼에서 뒤로가기는 고르기로 돌아간다(오버레이 한 칸)
+    const v = el.dataset.v || null;
+    if (v && !S.authMode) pushOverlay('auth-form');
+    S.authMode = v; render();
+  },
   'after-login': () => {
     // 저장된 여행이 있으면 계획을 다시 만들어 곧바로 홈까지 보낸다(새로고침·재로그인 뒤 메인화면 도달).
     if (!S.trip || S.trip.archived) {
