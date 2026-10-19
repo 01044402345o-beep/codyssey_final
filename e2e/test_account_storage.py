@@ -60,11 +60,15 @@ with sync_playwright() as p:
     check("A 로 돌아오면 A 의 화면을 연다", back == "u-sched", back)
     check("B 키는 그대로", "2026-01-02" in (page.evaluate("localStorage.getItem('cd_session:uidB')") or ""))
 
+    # S.user 만 바꿔 넣고 그대로 두면, 그 사이 배경 render(진도 저장)가 A 의 진도를 B 칸에 덮어쓴다
+    # (CI 에서 가끔 아래 로그아웃 검사가 B 의 완료 날짜를 잃던 원인). 끝나면 원래 계정으로 되돌린다.
     weak = page.evaluate(f"""() => {{
+      const prev = S.user;
       S.user = {UID_A};
       saveWeakList([{{ category_id: 'restaurant', id: 'order_menu', situation: 'A만', en: 'Water', ko: '물' }}]);
       S.user = {UID_B};
       saveWeakList([{{ category_id: 'restaurant', id: 'order_menu', situation: 'B만', en: '', ko: '' }}]);
+      S.user = prev;
       return {{
         a: AI.loadWeak(AI.scopedStorage(localStorage, 'uidA'))[0].situation,
         b: AI.loadWeak(AI.scopedStorage(localStorage, 'uidB'))[0].situation,
