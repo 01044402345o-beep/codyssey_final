@@ -587,6 +587,7 @@ function initState() {
     coll: { tab: 'common', filter: 'all' }, schedFilter: 'all', ttsRate: 0.95,
     commons: JSON.parse(JSON.stringify(COMMON_SITUATIONS)), commonsDraft: null,
     jobFilter: 'all', mockTrips: JSON.parse(JSON.stringify(MOCK_TRIPS)), modal: null, lastScreen: null,
+    sheet: false,   // 학습 화면 하단 '회화 연습' 시트가 열려 있는지
   };
 }
 
@@ -667,7 +668,7 @@ function archiveTrip() {
   S.trip.archived = true;
   S.archived.unshift({ id: S.trip.id, route: tripTitle(S.trip), dates: `${Dt.md(S.trip.tripStart)}~${Dt.md(S.trip.tripEnd)}` });
 }
-function resetCard(date = null) { S.card = { date, i: 0, flipped: new Set() }; }
+function resetCard(date = null) { S.card = { date, i: 0, flipped: new Set() }; S.sheet = false; }
 
 /* ---------- 보고서 (AI-01 흉내) ---------- */
 function genReport(t, round) {
@@ -1252,7 +1253,7 @@ function frame(inner, o = {}) {
     <div class="app">${inner}</div>
     ${o.bottom ? `<div class="bottombar">${o.bottom}</div>` : ''}
     ${o.tabbar ? `<nav class="tabbar">${tabs.map(([id, l, ic]) => `<button class="${tabActive === id ? 'on' : ''}" data-act="tab" data-id="${id}">${ic}${l}</button>`).join('')}</nav>` : ''}
-    ${modalHtml()}
+    ${sheetHtml()}${modalHtml()}
   </div></div>`;
 }
 /* 제품 셸: 폰 프레임·상태바 없이 뷰포트 전체를 쓴다. 내비는 CSS 가 탭바 → 레일 → 사이드로 바꾼다(docs/RESPONSIVE_STRATEGY.md §3). */
@@ -1264,7 +1265,7 @@ function pframe(inner, o = {}) {
     ${o.appbar || ''}
     <div class="app">${inner}</div>
     ${o.bottom ? `<div class="bottombar">${o.bottom}</div>` : ''}
-  </div></div>${modalHtml()}</div>`;
+  </div></div>${sheetHtml()}${modalHtml()}</div>`;
 }
 const appbar = (title, o = {}) => `<div class="appbar">${o.back ? `<button class="back" data-act="tab" data-id="${o.back}">${I.back}</button>` : ''}<h2>${title}</h2>${o.step ? `<span class="step">${o.step}</span>` : ''}</div>`;
 const notice = (html, kind = '') => `<div class="notice ${kind}">${kind === 'warn' || kind === 'bad' ? I.alert : I.info}<div>${html}</div></div>`;
@@ -1737,13 +1738,14 @@ function studyView(r, opts = {}) {
   const tts = ts === 'ok'
     ? `<div class="tts-row"><button class="tts-btn" data-act="speak-card">${I.speaker}듣기</button><button class="tts-rate" data-act="rate">${S.ttsRate < 0.9 ? '느리게' : '보통 속도'}</button></div>`
     : `<div class="tts-off">${ttsOffMsg()}</div>`;
-  const inner = `<div class="app-pad">${head}${banner ? banner + '<div style="height:10px"></div>' : ''}
+  // 완료 안내는 위(제목 아래)로 옮겼다 — 아래쪽은 '회화 연습' 시트 자리다(목업 #97).
+  const inner = `<div class="app-pad">${head}<div class="study-status" data-live="status">${completeBtn(r)}</div>${banner ? banner + '<div style="height:10px"></div>' : ''}
     <div class="flip ${S.card.back === S.card.i ? 'flipped' : ''}" data-act="flip">
       <div class="flip-inner">
         <div class="face front"><div class="ctx">${tag}${aiBadges(s)}${isNew ? '<span class="badge b-new">새 문장</span>' : ''}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
           <div class="ko">${phHtml(s.ko)}</div><div class="hint">탭해서 영어 문장 보기 ↻</div></div>
         <div class="face back"><div class="ctx">${tag}${aiBadges(s)}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
-          <div class="en">${phHtml(s.en, 'en')}</div><div class="ko-s">${phHtml(s.ko)}</div>${tts}<div class="speak" data-live="speak">${speakHtml(s)}</div></div>
+          <div class="en">${phHtml(s.en, 'en')}</div><div class="ko-s">${phHtml(s.ko)}</div>${tts}</div>
       </div>
     </div>
     <div class="card-nav"><button class="round" data-act="card-prev" ${i === 0 ? 'disabled' : ''}>${I.back}</button>
@@ -1751,7 +1753,43 @@ function studyView(r, opts = {}) {
       <div class="small" style="margin-top:6px" data-live="flipcount">${i + 1} / ${r.ids.length} · 뒤집은 카드 ${S.card.flipped.size}</div></div>
       <button class="round" data-act="card-next" ${i === r.ids.length - 1 ? 'disabled' : ''}>${I.next}</button></div>
   </div>`;
-  return { inner, bottom: completeBtn(r), tabbar: false };
+  return { inner, bottom: `<button class="btn accent block" data-act="sheet-open" aria-haspopup="dialog">↑ 회화 연습 열기</button>`, tabbar: false };
+}
+/* 하단 '회화 연습' 시트(Leechangjin 님 목업 #97): 내 문장 + 말해보기, 상대의 예상 답변, 내가 이어서 할 말.
+   공통 문장에만 예상 답변(talk)이 있다. 장소 문장은 말해보기만 보인다. */
+const curSent = () => { const r = studyShown() && pickRow(); return r ? S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]] : null; };
+function talkLine(t, k) {
+  if (!t) return null;
+  if (k === 'ask') return t.ask || null;
+  if (k === 'next') return t.next || null;
+  const m = /^r(\d)$/.exec(k);
+  return m ? (t.replies || [])[+m[1]] || null : null;
+}
+function sheetHtml() {
+  const s = S.sheet && curSent();
+  if (!s) return '';
+  const t = s.talk, tts = ttsState() === 'ok';
+  const line = (k, label) => {
+    const L = talkLine(t, k);
+    return L ? `<div class="talk-line">${label ? `<span class="talk-pill">${esc(label)}</span>` : ''}<b lang="en">${esc(L.en)}</b><p>${esc(L.ko)}</p>
+      ${tts ? `<button class="talk-say" data-act="say-line" data-k="${k}">${I.speaker}듣기</button>` : ''}</div>` : '';
+  };
+  const body = t
+    ? `<h4>상대방의 예상 답변</h4>${(t.replies || []).map((r, j) => line('r' + j, r.label)).join('')}<h4>내가 이어서</h4>${line('next')}`
+    : `<p class="small">이 문장은 예상 답변이 아직 없어요. 공통 문장에만 있어요.</p>`;
+  return `<div class="sheet-wrap" data-act="sheet-bg"><section class="sheet" role="dialog" aria-modal="true" aria-label="회화 연습" data-act="noop">
+    <div class="sheet-handle"></div><h3>회화 연습</h3>
+    ${t && t.ask ? `<h4>상대가 먼저</h4>${line('ask')}<h4>내가 대답하기</h4>` : ''}
+    <div class="talk-me"><b lang="en">${phHtml(s.en, 'en')}</b><div>${phHtml(s.ko)}</div></div>
+    <div class="speak" data-live="speak">${speakHtml(s)}</div>
+    ${body}
+    <button class="btn primary block" data-act="sheet-close">↓ 회화 연습 닫기</button>
+  </section></div>`;
+}
+function closeSheet() {
+  S.sheet = false;
+  if (SPK.state === 'recording' || SPK.state === 'requesting') cancelSpeak();   // 닫으면 녹음도 멈춘다
+  render();
 }
 function scrStudy() {
   if (S.drill) {   // 상황별 연습: 넓은 화면에서도 일정 목록 없이 카드만 (뒤로 → 문장 모음)
@@ -1806,7 +1844,7 @@ function updateStudyLive() {
   const dots = document.querySelectorAll('.dots i');
   dots.forEach((d, k) => d.classList.toggle('seen', S.card.flipped.has(k)));
   const fc = $('[data-live=flipcount]'); if (fc) fc.textContent = `${Math.min(S.card.i, r.ids.length - 1) + 1} / ${r.ids.length} · 뒤집은 카드 ${S.card.flipped.size}`;
-  const bb = $('.bottombar'); if (bb) bb.innerHTML = completeBtn(r);
+  const st = $('[data-live=status]'); if (st) st.innerHTML = completeBtn(r);
 }
 
 /* SCR-09 */
@@ -1964,7 +2002,7 @@ function endDrill() { if (S.drill) { S.card = S.drill.savedCard; S.drill = null;
 function go(id) {
   skipStateWrite = false;
   cancelSpeak(); S.card.back = null; if (id !== 'u-study') endDrill();
-  S.screen = id; S.modal = null; pushScreen(id); render();
+  S.screen = id; S.modal = null; S.sheet = false; pushScreen(id); render();
 }
 
 /* ================= 화면 히스토리 (안드로이드 하단 뒤로가기) =================
@@ -2005,6 +2043,7 @@ function onPop(state) {
   if (S.withdrawing) { wdEnd(); render(); return; }                  // 실패·완료 창은 뒤로가기로 닫는다
   // 열려 있는 것부터 닫는다. 사용자가 '취소'를 기대하는 순서다.
   if (S.modal) { navQuiet = true; try { closeModal(); } finally { navQuiet = false; } return; }   // 창의 onCancel 이동이 기록을 더 쌓지 않게
+  if (S.sheet) { closeSheet(); return; }                             // 회화 연습 시트
   if (sideOpen()) { closeSide(); return; }
   const target = (state && typeof state.screen === 'string') ? state.screen : null;
   if (!target || target === S.screen) return;         // 같은 화면이면 히스토리만 되감는다
@@ -2810,10 +2849,14 @@ const ACT = {
     mineAudio.onended = mineAudio.onpause = mineAudio.onerror = done;
     mineAudio.play().catch(() => { done(); toast('이 브라우저에서는 녹음을 다시 재생하지 못했어요.'); });
   },
-  'card-prev': () => { cancelSpeak(); S.card.i = Math.max(0, S.card.i - 1); render(); },
-  'card-next': () => { cancelSpeak(); const r = pickRow(); S.card.i = Math.min(r.ids.length - 1, S.card.i + 1); render(); },
+  'card-prev': () => { cancelSpeak(); S.sheet = false; S.card.i = Math.max(0, S.card.i - 1); render(); },
+  'card-next': () => { cancelSpeak(); S.sheet = false; const r = pickRow(); S.card.i = Math.min(r.ids.length - 1, S.card.i + 1); render(); },
   'speak-card': el => { const r = pickRow(); speak(S.smap[r.ids[S.card.i]].en, el); },
   speak: el => speak(S.smap[el.dataset.id].en, el),
+  'sheet-open': () => { S.sheet = true; pushOverlay('sheet'); render(); },
+  'sheet-close': () => closeSheet(),
+  'sheet-bg': (el, e) => { if (e.target === el) closeSheet(); },
+  'say-line': el => { const s = curSent(); const L = s && talkLine(s.talk, el.dataset.k); if (L) speak(L.en, el); },
   rate: el => { S.ttsRate = S.ttsRate < 0.9 ? 0.95 : 0.75; el.textContent = S.ttsRate < 0.9 ? '느리게' : '보통 속도'; },
   complete: () => {
     const r = pickRow();

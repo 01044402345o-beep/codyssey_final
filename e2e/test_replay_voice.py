@@ -55,6 +55,7 @@ with sync_playwright() as p:
     page.evaluate("S.modal && S.modal.title === '아직 학습일이 아니에요' && ACT['modal-ok']()")   # 미래 날짜 확인 창 → 미리 학습하기
     page.locator('[data-act="flip"]').first.click(position={"x": 30, "y": 30})
     page.wait_for_timeout(600)
+    page.locator('[data-act="sheet-open"]').first.click(); page.wait_for_timeout(300)   # 말해보기는 하단 회화 연습 시트 안
     check("녹음 전에는 '내 발음 듣기'가 없다", page.locator('[data-act="play-mine"]').count() == 0)
 
     page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(300)

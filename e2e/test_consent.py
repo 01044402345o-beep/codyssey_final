@@ -42,6 +42,7 @@ with sync_playwright() as p:
 
     def flip():
         page.locator('[data-act="flip"]').first.click(position={"x": 30, "y": 30}); page.wait_for_timeout(700)
+        page.locator('[data-act="sheet-open"]').first.click(); page.wait_for_timeout(300)   # 말해보기는 하단 회화 연습 시트 안
 
     page.goto(BASE + "/?demo=1&frame=1#u-study")
     page.wait_for_timeout(800)

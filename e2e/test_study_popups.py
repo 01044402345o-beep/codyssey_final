@@ -60,8 +60,8 @@ with sync_playwright() as p:
     page.evaluate(f"ACT['study-date']({{ dataset: {{ date: '{d2}' }} }})"); page.wait_for_timeout(300)
     page.locator('[data-act="modal-ok"]').click(); page.wait_for_timeout(300)
     check("'미리 학습하기' → 카드가 열림", page.locator(".flip").count() == 1 and modal(page) is None)
-    check("하단: 미리 학습 중 안내(완료 버튼 없음)", "미리 학습 중" in page.inner_text(".bottombar") and page.locator('[data-act="complete"]').count() == 0,
-          page.inner_text(".bottombar"))
+    check("제목 아래: 미리 학습 중 안내(완료 버튼 없음)", "미리 학습 중" in page.inner_text("[data-live=status]") and page.locator('[data-act="complete"]').count() == 0,
+          page.inner_text("[data-live=status]"))
 
     # --- 미래 날짜를 다 뒤집기: 미리 학습 기록 + 축하 창, 완료율은 그대로 ---
     done0 = page.evaluate("progress().done")
@@ -70,7 +70,7 @@ with sync_playwright() as p:
     check("다 뒤집으면 '미리 학습을 마쳤어요' 창", m and m["title"] == "미리 학습을 마쳤어요", str(m))
     check("미리 학습 기록이 남고 완료율은 그대로", page.evaluate(f"!!PROG.pre['{d2}']") and page.evaluate("progress().done") == done0)
     page.locator('[data-act="modal-cancel"]').click(); page.wait_for_timeout(300)
-    check("하단: '미리 학습 완료 · 그날 자동 완료'", "미리 학습 완료" in page.inner_text(".bottombar"), page.inner_text(".bottombar"))
+    check("제목 아래: '미리 학습 완료 · 그날 자동 완료'", "미리 학습 완료" in page.inner_text("[data-live=status]"), page.inner_text("[data-live=status]"))
 
     page.reload(); page.wait_for_timeout(1200)
     check("새로고침해도 미리 학습 기록이 남는다", page.evaluate(f"!!PROG.pre['{d2}']"))

@@ -307,7 +307,15 @@ with sync_playwright() as p:
     page.wait_for_timeout(700)
     check("상황별 연습: 왼쪽 스와이프 1회 = 카드 1장(1/5 → 2/5)", page.evaluate("S.card.i") == 1 and "2 / 5" in page.locator('[data-live="flipcount"]').inner_text(), page.locator('[data-live="flipcount"]').inner_text())
     page.locator(".flip").click(); page.wait_for_timeout(200)
-    check("상황별 연습: 카드 뒤집으면 뒷면에 말해보기 영역", page.locator('[data-live="speak"]').count() == 1)
+    check("상황별 연습: 뒷면에는 말해보기가 없고 하단에 '회화 연습 열기'",
+          page.locator('[data-live="speak"]').count() == 0 and page.locator('[data-act="sheet-open"]').count() == 1)
+    page.locator('[data-act="sheet-open"]').click(); page.wait_for_timeout(300)
+    has_talk = page.evaluate("!!(curSent() && curSent().talk)")
+    check("회화 연습 시트: 말해보기 영역 + (공통 문장이면) 예상 답변",
+          page.locator('.sheet [data-live="speak"]').count() == 1
+          and (page.locator('.sheet .talk-line').count() >= 2 if has_talk else page.locator('.sheet .talk-line').count() == 0), f"talk={has_talk}")
+    page.locator('[data-act="sheet-close"]').click(); page.wait_for_timeout(300)
+    check("회화 연습 시트 닫기", page.locator('.sheet').count() == 0 and not page.evaluate("S.sheet"))
     page.locator('.appbar .back').click(); page.wait_for_timeout(300)
     check("뒤로 → 문장 모음, 연습 묶음 해제", page.evaluate("S.screen") == "u-coll" and page.evaluate("S.drill") is None)
     back = page.evaluate("({ date: S.card.date, i: S.card.i, n: S.card.flipped.size })")
