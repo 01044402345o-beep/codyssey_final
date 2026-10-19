@@ -116,18 +116,13 @@ def _card(value: Any) -> dict[str, Any] | None:
 def _session(value: Any) -> dict[str, Any] | None:
     if value is None:
         return None
-    if not isinstance(value, dict) or set(value) - {"v", "at", "done", "screen", "studyDate", "card"}:
+    if not isinstance(value, dict) or set(value) - {"v", "at", "done", "pre", "screen", "studyDate", "card"}:
         _fail()
     if value.get("v") != 1:
         _fail()
-    done_in = value.get("done")
-    if not isinstance(done_in, dict) or len(done_in) > 400:
-        _fail()
-    done: dict[str, int] = {}
-    for key, stamp in done_in.items():
-        if not isinstance(key, str) or not _DATE.fullmatch(key):
-            _fail()
-        done[key] = _num(stamp, 0, 10**15)
+    done = _date_stamps(value.get("done"))
+    # 미리 학습한 날짜(선택). 그날이 오면 화면이 완료로 옮긴다 — 없는 옛 화면도 그대로 통과한다.
+    pre = _date_stamps(value.get("pre", {}))
     screen = value.get("screen")
     if not isinstance(screen, str) or not _SCREEN.fullmatch(screen):
         _fail()
@@ -141,7 +136,20 @@ def _session(value: Any) -> dict[str, Any] | None:
         "screen": screen,
         "studyDate": study,
         "card": _card(value.get("card")),
+        **({"pre": pre} if pre else {}),
     }
+
+
+def _date_stamps(value: Any) -> dict[str, int]:
+    """{'YYYY-MM-DD': 시각(ms)} — 완료·미리 학습 기록이 같은 모양이다."""
+    if not isinstance(value, dict) or len(value) > 400:
+        _fail()
+    out: dict[str, int] = {}
+    for key, stamp in value.items():
+        if not isinstance(key, str) or not _DATE.fullmatch(key):
+            _fail()
+        out[key] = _num(stamp, 0, 10**15)
+    return out
 
 
 def _weak(value: Any) -> list[dict[str, Any]]:

@@ -52,6 +52,7 @@ with sync_playwright() as p:
     check("누르면 여행 입력으로, 계정 없음(uid 빈 값)", st["scr"] == "u-input" and st["guest"] and st["uid"] == "", str(st))
 
     page.evaluate("ensure('plan'); go('u-study')"); page.wait_for_timeout(300)
+    page.evaluate("S.modal && S.modal.title === '아직 학습일이 아니에요' && ACT['modal-ok']()")   # 미래 날짜 확인 창 → 미리 학습하기
     page.locator(".flip").first.click(); page.wait_for_timeout(150)
     page.evaluate("ACT['card-next']()"); page.wait_for_timeout(150)
     made = page.evaluate("({ i: S.card.i, n: S.card.flipped.size, guest: !!S.user.guest })")

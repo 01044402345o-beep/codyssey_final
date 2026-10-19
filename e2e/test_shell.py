@@ -202,6 +202,9 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 1280, "height": 800})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(BASE + "/#u-sched"); page.wait_for_timeout(700)
+    # 미래 날짜는 일정표를 여는 것만으로 창을 띄우지 않고, 오른쪽 상세 안에 '미리 학습하기'를 둔다
+    check("1280px 미래 날짜: 창 없이 상세 안에 '미리 학습하기'", page.evaluate("S.modal") is None and page.locator(".split-detail [data-act=preview-ok]").count() == 1)
+    page.locator(".split-detail [data-act=preview-ok]").click(); page.wait_for_timeout(300)
     check("1280px 일정표: 2열(목록+상세)", page.locator(".split-list .srow").count() >= 6 and page.locator(".split-detail .flip").count() == 1)
     check("1280px: 콘텐츠 열이 읽기 폭(640)보다 넓다", page.evaluate("document.querySelector('.pcol').getBoundingClientRect().width") > 800)
     check("1280px: 가로 스크롤 없음", hscroll(page) <= 0)
@@ -213,6 +216,8 @@ with sync_playwright() as p:
     check("선택 표시가 하나", page.locator(".srow.sel").count() == 1 and page.locator(".srow.sel").get_attribute("aria-current") == "true")
     check("목록 스크롤 위치 유지", abs(page.evaluate("document.querySelector('.split-list').scrollTop") - 260) <= 4, str(page.evaluate("document.querySelector('.split-list').scrollTop")))
     check("상세 머리글이 선택한 날짜", page.evaluate("document.querySelector('.split-detail .study-head b').textContent").replace(" ", "").startswith(page.evaluate("Dt.full(document.querySelector('.srow.sel').dataset.date)").replace(" ", "")[:5]))
+    if page.locator(".split-detail [data-act=preview-ok]").count():
+        page.locator(".split-detail [data-act=preview-ok]").click(); page.wait_for_timeout(300)
     page.locator(".split-detail .flip").click(); page.wait_for_timeout(300)
     check("카드 뒤집기가 2열에서도 동작(뒤집은 카드 1)", "뒤집은 카드 1" in page.locator("[data-live=flipcount]").inner_text())
     page.locator('.pnav button[data-id="u-study"]').click(); page.wait_for_timeout(300)
@@ -280,6 +285,7 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 360, "height": 780}, has_touch=True, is_mobile=True)
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(BASE + "/#u-study"); page.wait_for_timeout(600)
+    page.evaluate("S.modal && S.modal.title === '아직 학습일이 아니에요' && ACT['modal-ok']()"); page.wait_for_timeout(200)   # 미래 날짜 확인 창
     page.locator(".flip").click(); page.wait_for_timeout(200)
     day = page.evaluate("({ date: S.card.date, i: S.card.i, n: S.card.flipped.size })")
     page.evaluate("navFromMenu('u-coll')"); page.wait_for_timeout(300)
