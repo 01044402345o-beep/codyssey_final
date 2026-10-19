@@ -90,6 +90,7 @@ jobs:
           python ../e2e/test_login_transition.py http://localhost:8768 ../e2e-shots   # 로그인 전환 화면: 이동 뒤 완료 안내
           python ../e2e/test_consent.py http://localhost:8768 ../e2e-shots
           python ../e2e/test_silence.py http://localhost:8768 ../e2e-shots
+          python ../e2e/test_replay_voice.py http://localhost:8768 ../e2e-shots   # 내 발음 다시 듣기(설문 Q14)
           python ../e2e/test_shell.py http://localhost:8768 ../e2e-shots   # 반응형 셸·터치·테마
           python ../e2e/test_speech_text.py http://localhost:8768
           python ../e2e/test_back_nav.py http://localhost:8768   # 하단 뒤로가기 = 이전 화면
