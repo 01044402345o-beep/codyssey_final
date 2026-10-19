@@ -3,7 +3,7 @@
 문서 목록: [docs/README.md](../README.md).
 
 과제 요건: 실제 사용자 **5명 이상**에게 서비스를 제공하고 피드백을 수집해 반영한다.
-이 폴더: 계획(이 문서) · 진행자 체크리스트 [`facilitator-checklist.md`](facilitator-checklist.md) · 설문 [`survey.md`](survey.md) · 결과 기록 [`results.md`](results.md)
+이 폴더: 계획(이 문서) · 진행자 체크리스트 [`facilitator-checklist.md`](facilitator-checklist.md) · 설문 [`survey.md`](survey.md) · 결과 기록 [`results.md`](results.md) · Android 에뮬레이터로 배포본 확인 [`android-emulator.md`](android-emulator.md)
 
 ## 1. 목적과 측정할 것
 
