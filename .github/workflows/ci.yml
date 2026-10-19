@@ -82,7 +82,9 @@ jobs:
       - name: 동의 · 무음 · 반응형 셸 E2E
         working-directory: backend
         run: |
-          uvicorn app.main:app --port 8768 &
+          # 모든 스위트가 한 서버·한 IP(127.0.0.1)를 나눠 쓴다. 기본 한도(20/60s)면 스위트가 늘수록
+          # 뒤쪽 /generate 가 429 를 받아 test_full_regen 이 깨진다. 429 를 검사하는 E2E 는 없다.
+          RATE_LIMIT=1000 uvicorn app.main:app --port 8768 &
           for i in $(seq 1 30); do curl -sf localhost:8768/health > /dev/null && break; sleep 1; done
           mkdir -p ../e2e-shots
           python ../e2e/test_account_withdrawal.py http://localhost:8768   # 탈퇴: 버튼 위치·확인·브라우저 기록 폐기
