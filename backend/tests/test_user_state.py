@@ -253,6 +253,19 @@ class T(unittest.TestCase):
         self.assertEqual(bad.status_code, 400)
         self.assertEqual(bad.json()["detail"], "invalid_state")
 
+    def test_pre_study_dates_round_trip_and_are_validated(self):
+        # 미리 학습한 날짜(pre)는 선택 항목이다 — 그날이 오면 화면이 완료로 옮긴다.
+        session = {**SESSION, "pre": {"2026-09-25": 1_700_000_000_200}}
+        saved = self.put(claims_for("uid-1"), {**BODY, "session": session})
+        self.assertEqual(saved.status_code, 200, saved.text)
+        self.assertEqual(self.get(claims_for("uid-1")).json()["session"]["pre"], {"2026-09-25": 1_700_000_000_200})
+        state = user_state.parse_state({**BODY, "session": session})
+        self.assertEqual(user_state.decode_document(user_state.encode_document(state)), state)
+        self.assertNotIn("pre", user_state.parse_state(BODY)["session"])   # 없는 옛 본문은 그대로
+        for bad in ({"10/01": 1}, {"2026-09-25": "x"}, ["2026-09-25"]):
+            res = self.put(claims_for("uid-1"), {**BODY, "session": {**SESSION, "pre": bad}})
+            self.assertEqual(res.status_code, 400, bad)
+
     def test_state_without_trip_reads_as_empty(self):
         # trip 은 나중에 붙은 항목이라 예전 본문(키 없음)도 받아들인다.
         self.assertEqual(user_state.parse_state(BODY)["trip"], None)

@@ -219,7 +219,7 @@ const STORE = (() => { try { return window.localStorage; } catch (e) { return nu
 const SESSION_KEY = 'cd_session';
 const SESSION_V = 1;
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000;   /* 30일 지난 기록은 버린다 */
-const PROG = { done: {} };                          /* 'YYYY-MM-DD' → 완료 시각(ms). 계획을 다시 만들어도 날짜로 다시 붙는다 */
+const PROG = { done: {}, pre: {} };                 /* done: 'YYYY-MM-DD' → 완료 시각(ms). pre: 미리 학습을 마친 날짜 — 그날이 되면 done 으로 옮긴다(settlePre) */
 const RESTORE = { screen: null, studyDate: null, card: null, trip: null };
 let SESS_READY = false;                             /* 복원이 끝나기 전에는 저장하지 않는다 — 빈 진도로 덮어쓰지 않기 위해 */
 let skipStateWrite = false;                         /* 계정을 갈아 끼우는 동안 이전 기록을 새 칸에 쓰지 않는다 */
@@ -279,7 +279,7 @@ function sessionWrite() {
   if (!box || !SESS_READY || skipStateWrite) return;
   try {
     box.setItem(SESSION_KEY, JSON.stringify({
-      v: SESSION_V, at: Date.now(), done: PROG.done, screen: S.screen, studyDate: S.studyDate,
+      v: SESSION_V, at: Date.now(), done: PROG.done, ...(Object.keys(PROG.pre).length ? { pre: PROG.pre } : {}), screen: S.screen, studyDate: S.studyDate,
       card: sessionCard(S.card),
     }));
   } catch (e) { /* 저장 불가(시크릿 모드·용량 초과): 이번 방문 동안만 유지 */ }
@@ -383,7 +383,7 @@ async function handleAccountDeleted(uid, epoch) {
   S.user = null;
   S.trip = null; resetDerived();
   S.archived = [];
-  PROG.done = {};
+  PROG.done = {}; PROG.pre = {};
   RESTORE.screen = null; RESTORE.studyDate = null; RESTORE.card = null; RESTORE.trip = null;
   aiRefreshKey = null;
   SESS_READY = true;
@@ -455,6 +455,8 @@ function fillProgress(d) {
   if (!d) return;
   if (d.done && typeof d.done === 'object')
     Object.keys(d.done).forEach(k => { if (/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof d.done[k] === 'number') PROG.done[k] = d.done[k]; });
+  if (d.pre && typeof d.pre === 'object')
+    Object.keys(d.pre).forEach(k => { if (/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof d.pre[k] === 'number') PROG.pre[k] = d.pre[k]; });
   RESTORE.screen = typeof d.screen === 'string' ? d.screen : null;
   RESTORE.studyDate = typeof d.studyDate === 'string' ? d.studyDate : null;
   const c = d.card;
@@ -495,7 +497,7 @@ async function adoptAccount(account, opts) {
   if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; }
   S.user = account || null;
   S.trip = null; resetDerived();          // 계정을 갈아 끼우면 이전 계정의 여행·계획을 들고 가지 않는다
-  PROG.done = {};
+  PROG.done = {}; PROG.pre = {};
   RESTORE.screen = null;
   RESTORE.studyDate = null;
   RESTORE.card = null;
@@ -516,7 +518,7 @@ async function adoptAccount(account, opts) {
     const remoteTrip = AI.cleanTrip(remote.trip);
     remote.trip = AI.preferTrip(remote.trip, loadTripHere());
     writeLocalState(remote);
-    PROG.done = {};
+    PROG.done = {}; PROG.pre = {};
     RESTORE.screen = null;
     RESTORE.studyDate = null;
     RESTORE.card = null;
@@ -1184,7 +1186,18 @@ function updateSideActive() {
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.id === S.screen));
 }
 
+/* 미리 학습한 날이 오면 완료로 옮긴다. 안내("카드를 모두 뒤집어 두면 그날 자동으로 완료돼요")가 사실이 되게 한다.
+   예전 안내("미리 학습해 두면 그날 바로 완료돼요")는 기록을 남기지 않아 지켜지지 않았다. */
+function settlePre() {
+  if (!S.trip || S.today > S.trip.tripEnd) return;
+  let moved = false;
+  Object.keys(PROG.pre).forEach(k => {
+    if (k <= S.today) { if (!PROG.done[k]) PROG.done[k] = PROG.pre[k]; delete PROG.pre[k]; moved = true; }
+  });
+  if (moved) applyProgress();
+}
 function render() {
+  settlePre();
   if (!studyShown() && SPK.state !== 'idle') cancelSpeak();
   const app = $('.app'), same = S.lastScreen === S.screen;
   const prevTop = LEGACY ? (app ? app.scrollTop : 0) : window.scrollY;   // 제품·데모 모드는 문서 스크롤
@@ -1263,7 +1276,10 @@ function modalHtml(center = false) {
     <div class="acts"><button class="btn soft" data-act="modal-cancel">${m.cancel || '취소'}</button><button class="btn ${m.danger ? 'accent' : 'primary'}" data-act="modal-ok">${m.ok}</button></div></div></div>`;
 }
 let modalFn = null;
+const previewOk = new Set();   // 이번 접속에서 '미리 학습하기'를 고른 날짜
 function confirmBox(title, body, ok, fn, o = {}) { S.modal = { title, body, ok, ...o }; modalFn = fn; pushOverlay('modal'); render(); }
+/* 확인 창을 닫는다. o.onCancel 이 있으면(예: 미래 날짜 확인 → 일정표로) 그것을 부른다 — 취소·바깥 클릭·뒤로가기 공통. */
+function closeModal() { const m = S.modal; S.modal = null; modalFn = null; if (m && typeof m.onCancel === 'function') m.onCancel(); else render(); }
 
 function userScreen() {
   switch (S.screen) {
@@ -1665,13 +1681,13 @@ function scrSched() {
 function scrSplit(tab) {
   const r = pickRow();
   let detail = `<div class="empty">일정이 없어요</div>`;
-  if (r) { const v = studyView(r); detail = `${v.inner}${v.bottom ? `<div class="bottombar">${v.bottom}</div>` : ''}`; }
+  if (r) { const v = studyView(r, { inline: true }); detail = `${v.inner}${v.bottom ? `<div class="bottombar">${v.bottom}</div>` : ''}`; }
   return frame(`<div class="split"><div class="split-list">${schedListHtml(r ? r.date : null)}</div><div class="split-detail">${detail}</div></div>`,
     { appbar: appbar(tab === 'u-study' ? '학습' : '일정표'), tabbar: true, tab, wide: true });
 }
 
 /* SCR-08 */
-function studyView(r) {
+function studyView(r, opts = {}) {
   if (S.card.date !== r.date) resetCard(r.date);
   const st = rowStatus(r), ended = S.today > S.trip.tripEnd;
   const head = r.kind === 'drill'
@@ -1684,6 +1700,23 @@ function studyView(r) {
   else if (r.completed) banner = notice('완료한 날이에요. 다시 학습해도 완료 상태는 유지돼요.', 'plain');
   /* 미래 날짜 안내는 아래 완료 버튼 옆으로 옮겼다 — 같은 말을 두 곳에서 하지 않는다 */
   else if (st === 'miss') banner = notice('지난 날짜예요. 지금 학습하면 완료로 기록돼요.', 'warn');
+
+  // 미래 날짜: 카드를 보여 주기 전에 확인 창(팀 요청 — 안내문이 눈에 띄지 않아 사용자 흐름이 끊겼다).
+  // '미리 학습하기'를 고른 날·이미 미리 학습을 마친 날은 다시 묻지 않는다.
+  if (r.kind !== 'drill' && r.kind !== 'free' && !r.completed && !ended && r.date > S.today && !PROG.pre[r.date] && !previewOk.has(r.date)) {
+    const gateBody = `${Dt.full(r.date)} 학습이에요. 지금 학습한 기록은 완료율에 바로 들어가지 않아요. <b>카드를 모두 뒤집어 두면 그날 자동으로 완료</b>돼요.`;
+    if (opts.inline) {   // 넓은 화면 2열: 일정표를 여는 것만으로 창이 뜨지 않게, 오른쪽 상세 안에 같은 안내를 둔다
+      return { inner: `<div class="app-pad">${head}<div class="card" style="margin-top:12px"><b>아직 학습일이 아니에요</b><p class="small" style="margin:8px 0 12px;line-height:1.6">${gateBody}</p>
+        <button class="btn primary block" data-act="preview-ok" data-date="${r.date}">미리 학습하기</button></div></div>`, bottom: '', tabbar: true };
+    }
+    if (!S.modal) {
+      S.modal = { title: '아직 학습일이 아니에요',
+        body: gateBody,
+        ok: '미리 학습하기', cancel: '일정표로', onCancel: () => go('u-sched') };
+      modalFn = () => { previewOk.add(r.date); S.modal = null; render(); };
+    }
+    return { inner: `<div class="app-pad">${head}<div class="empty" style="padding-top:60px"><div class="ico">⏳</div><p>미리 학습할지 고르면 카드가 열려요.</p></div></div>`, bottom: '', tabbar: true };
+  }
 
   if (r.kind === 'free') {
     return { inner: `<div class="app-pad">${head}<div class="empty" style="padding-top:70px"><div class="ico">☼</div><b style="color:var(--text);font-size:1.0625rem">오늘은 자유 일정이에요</b>
@@ -1731,15 +1764,42 @@ function scrStudy() {
   const v = studyView(r);
   return frame(v.inner, { appbar: appbar('학습', { back: 'u-sched' }), bottom: v.bottom || undefined, tabbar: v.tabbar, tab: 'u-study' });
 }
+/* 모든 카드를 뒤집으면 버튼을 누르지 않아도 끝난다(팀 요청 10/19). 날짜에 따라 완료·미리 학습·연습 축하 창을 띄운다. */
+function allFlipped(r) {
+  const n = r.ids.length, md = Dt.md(r.date);
+  if (r.kind === 'drill') {
+    confirmBox('이 상황을 다 봤어요', `${esc(r.label)} 문장 ${n}개를 모두 확인했어요. 상황별 연습은 날짜별 완료율에 들어가지 않아요.`,
+      '다른 상황 고르기', () => { S.modal = null; endDrill(); go('u-coll'); }, { cancel: '계속 보기' });
+    return;
+  }
+  if (r.completed) return;                                   // 이미 완료한 날을 다시 본 경우
+  if (canComplete(r)) {
+    r.completed = true; r.completedAt = Date.now(); PROG.done[r.date] = r.completedAt; S.studyDate = r.date;
+    const rate = Math.round(progress().rate * 100);
+    confirmBox('학습 완료! 🎉', `${md} 문장 ${n}개를 모두 확인했어요. 완료율이 <b>${rate}%</b>로 올랐어요.`,
+      '홈으로', () => { S.modal = null; go('u-home'); }, { cancel: '계속 보기', celebrate: true });
+    return;
+  }
+  if (r.date > S.today && S.today <= S.trip.tripEnd) {
+    PROG.pre[r.date] = Date.now();
+    confirmBox('미리 학습을 마쳤어요', `${Dt.full(r.date)}이 되면 자동으로 완료로 기록돼요. 그 전까지는 완료율에 들어가지 않아요.`,
+      '일정표로', () => { S.modal = null; go('u-sched'); }, { cancel: '계속 보기', celebrate: true });
+    render();
+    return;
+  }
+  toast('여행이 끝난 뒤에는 완료로 기록되지 않아요.');
+}
 function completeBtn(r) {
   const all = S.card.flipped.size >= r.ids.length;
   if (r.kind === 'drill') return `<button class="btn ${all ? 'accent' : 'soft'} block" data-act="tab" data-id="u-coll">${all ? '다 봤어요 · 다른 상황 고르기' : `문장 모음으로 (${S.card.flipped.size}/${r.ids.length})`}</button>`;
   if (r.completed) return `<button class="btn soft block" disabled>완료한 날이에요</button>`;
   if (S.today > S.trip.tripEnd) return `<button class="btn soft block" disabled>여행 종료 후에는 완료할 수 없어요</button>`;
-  if (r.date > S.today) return `<button class="btn soft block" disabled>${Dt.md(r.date)}부터 완료할 수 있어요</button>
-    <div class="small" style="text-align:center">카드는 지금 봐도 돼요. 미리 학습해 두면 그날 바로 완료돼요</div>`;
-  return `<button class="btn accent block" data-act="complete" ${all && canComplete(r) ? '' : 'disabled'}>학습 완료 (${S.card.flipped.size}/${r.ids.length})</button>
-    ${all ? '' : '<div class="small" style="text-align:center">모든 카드를 한 번 이상 뒤집으면 완료할 수 있어요</div>'}`;
+  const cnt = `${S.card.flipped.size}/${r.ids.length}`;
+  if (r.date > S.today) return PROG.pre[r.date]
+    ? `<button class="btn soft block" disabled>미리 학습 완료 · ${Dt.md(r.date)}에 자동으로 완료돼요</button>`
+    : `<button class="btn soft block" disabled>미리 학습 중 (${cnt})</button>
+    <div class="small" style="text-align:center">카드를 모두 뒤집어 두면 ${Dt.md(r.date)}에 자동으로 완료돼요</div>`;
+  return `<button class="btn soft block" disabled>카드를 모두 뒤집으면 자동으로 완료돼요 (${cnt})</button>`;
 }
 function updateStudyLive() {
   const r = pickRow(); if (!r) return;
@@ -1944,7 +2004,7 @@ function onPop(state) {
   if (wdRunning() || S.entering) { try { history.pushState({ screen: S.screen, overlay: 'busy' }, ''); } catch (e) { /* 무시 */ } return; }   // 로그인 전환 중도 같다
   if (S.withdrawing) { wdEnd(); render(); return; }                  // 실패·완료 창은 뒤로가기로 닫는다
   // 열려 있는 것부터 닫는다. 사용자가 '취소'를 기대하는 순서다.
-  if (S.modal) { S.modal = null; modalFn = null; render(); return; }
+  if (S.modal) { navQuiet = true; try { closeModal(); } finally { navQuiet = false; } return; }   // 창의 onCancel 이동이 기록을 더 쌓지 않게
   if (sideOpen()) { closeSide(); return; }
   const target = (state && typeof state.screen === 'string') ? state.screen : null;
   if (!target || target === S.screen) return;         // 같은 화면이면 히스토리만 되감는다
@@ -1976,7 +2036,7 @@ function navFromMenu(id) {
 
 /* 새로고침 복원: 저장해 둔 진도·화면·카드를 되살린다. 저장분이 없거나 못 쓰면 첫 화면 그대로 뜬다 */
 function sessionResume() {
-  PROG.done = {};
+  PROG.done = {}; PROG.pre = {};
   RESTORE.screen = null;
   RESTORE.studyDate = null;
   RESTORE.card = null;
@@ -1996,7 +2056,7 @@ function applyDraftPreset(kind) {
 }
 
 function demoGen(mode) {
-  PROG.done = {}; sessionClear();   // 새 데모 여행 — 날짜가 같아도 이전 완료가 다시 붙지 않게
+  PROG.done = {}; PROG.pre = {}; sessionClear();   // 새 데모 여행 — 날짜가 같아도 이전 완료가 다시 붙지 않게
   ensure('user');
   S.flags.fail = mode === 'fail'; S.flags.stuck = mode === 'stuck';
   createTrip(defaultDraft(S.today));
@@ -2008,7 +2068,7 @@ function preset(kind) {
   cancelGen();
   pushStateNow();                   // 계정에 남아 있던 진도를 데모 키로 옮기지 않고 먼저 올린다
   S.user = DEMO_USER;
-  PROG.done = {}; sessionClear();   // 예시 여행은 직전 완료를 이어받지 않는다. 데모 키만 지운다.
+  PROG.done = {}; PROG.pre = {}; sessionClear();   // 예시 여행은 직전 완료를 이어받지 않는다. 데모 키만 지운다.
   const base = BASE_TODAY;
   const d = defaultDraft(base);
   d.studyStart = kind === 'short' ? Dt.add(d.cities[0].start, -3) : d.cities[0].start;
@@ -2453,7 +2513,7 @@ async function doWithdraw() {
   S.user = null;
   S.trip = null; resetDerived();
   S.archived = [];                           // 보관한 여행 제목도 메모리에서 지운다(관리자 화면에 남지 않게)
-  PROG.done = {};
+  PROG.done = {}; PROG.pre = {};
   RESTORE.screen = null; RESTORE.studyDate = null; RESTORE.card = null; RESTORE.trip = null;
   aiRefreshKey = null;                       // 다음 여행에서 복원 시 AI 문장 채우기가 다시 돌게
   SESS_READY = true;
@@ -2483,7 +2543,7 @@ const ACT = {
   link: el => window.open(el.getAttribute('href'), '_blank', 'noopener'),
   reset: () => {
     const c = S.demoClosed;
-    PROG.done = {};
+    PROG.done = {}; PROG.pre = {};
     // 여행을 먼저 지운 뒤에 진도를 비워야 한다. sessionClear 가 지금 저장소를 서버로 올리므로, 순서가 반대면 지운 여행이 다시 올라간다.
     AI.saveTrip(personalStore(), null);
     sessionClear();
@@ -2568,7 +2628,7 @@ const ACT = {
       S.user = null;
       S.trip = null;
       resetDerived();
-      PROG.done = {};
+      PROG.done = {}; PROG.pre = {};
       RESTORE.screen = null;
       RESTORE.studyDate = null;
       RESTORE.card = null;
@@ -2732,7 +2792,11 @@ const ACT = {
     el.classList.toggle('flipped');
     // 보고 있는 면을 기억한다. 동의 창 등으로 화면을 다시 그려도 카드가 앞면으로 돌아가지 않게.
     S.card.back = el.classList.contains('flipped') ? S.card.i : null;
-    if (el.classList.contains('flipped')) { S.card.flipped.add(S.card.i); updateStudyLive(); }
+    if (el.classList.contains('flipped')) {
+      const r = pickRow(), before = S.card.flipped.size;
+      S.card.flipped.add(S.card.i); updateStudyLive();
+      if (r && before < r.ids.length && S.card.flipped.size >= r.ids.length) allFlipped(r);   // 방금 다 뒤집었다
+    }
     else if (ttsSupported()) speechSynthesis.cancel();
     sessionWrite();   /* 뒤집은 카드·보던 카드 위치를 남긴다 — 여기만 render 를 거치지 않는다 */
   },
@@ -2777,7 +2841,7 @@ const ACT = {
     S.justCompleted = null; resetCard(S.drill.date); go('u-study'); window.scrollTo(0, 0);
   },
   'new-trip': () => confirmBox('새 여행을 만들까요?', '이 여행은 보관되고 더 이상 보이지 않아요. (삭제되지는 않아요)', '보관하고 새로 만들기', () => {
-    PROG.done = {};
+    PROG.done = {}; PROG.pre = {};
     archiveTrip();
     // 저장해 둔 여행 입력을 먼저 지운 뒤 진도를 비운다. 반대로 하면 서버에 이전 여행이 다시 올라간다.
     AI.saveTrip(personalStore(), null);
@@ -2787,9 +2851,10 @@ const ACT = {
   }, { danger: true }),
 
   'modal-ok': () => { const fn = modalFn; modalFn = null; fn && fn(); },
-  'modal-cancel': () => { S.modal = null; render(); },
+  'modal-cancel': () => closeModal(),
+  'preview-ok': el => { previewOk.add(el.dataset.date); render(); },   // 2열 상세의 '미리 학습하기'
   'wd-close': () => { if (!wdRunning()) { wdEnd(); render(); } },   // 실패했을 때만 보인다
-  'modal-bg': (el, e) => { if (e.target === el) { S.modal = null; render(); } },
+  'modal-bg': (el, e) => { if (e.target === el) closeModal(); },
 
   'job-filter': el => { S.jobFilter = el.dataset.v; render(); },
   'job-fail': el => {

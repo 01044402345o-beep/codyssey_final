@@ -95,6 +95,7 @@ jobs:
           python ../e2e/test_speech_text.py http://localhost:8768
           python ../e2e/test_back_nav.py http://localhost:8768   # 하단 뒤로가기 = 이전 화면
           python ../e2e/test_progress_persist.py http://localhost:8768   # 새로고침 진도 유지
+          python ../e2e/test_study_popups.py http://localhost:8768   # 미래 날짜 확인 창·다 뒤집으면 자동 완료·축하 창
           python ../e2e/test_home_settings.py http://localhost:8768   # 새로고침 뒤 여행 복원·D-Day 수정·하단 로그아웃
           python ../e2e/test_account_storage.py http://localhost:8768   # 계정마다 진도·복습 키
           python ../e2e/test_ai_restore.py http://localhost:8768   # 복원 뒤 백그라운드 /generate 로 AI 문장 채우기

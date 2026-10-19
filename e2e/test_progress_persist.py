@@ -53,11 +53,13 @@ with sync_playwright() as p:
     flipped = page.evaluate("S.card.flipped.size")
     check("카드를 모두 뒤집었다", flipped == rowN, f"{flipped}/{rowN}")
 
-    page.locator('[data-act="complete"]').first.click()      # 실제 완료 버튼 — 여기서 진도가 기록된다
+    # 마지막 카드를 뒤집는 순간 자동으로 완료되고 축하 창이 뜬다 — 여기서 진도가 기록된다
+    check("다 뒤집으면 축하 창", "학습 완료" in (page.evaluate("S.modal && S.modal.title") or ""), str(page.evaluate("S.modal && S.modal.title")))
+    page.locator('[data-act="modal-cancel"]').first.click()   # '계속 보기'
     page.wait_for_timeout(400)
     done1 = page.evaluate("progress().done")
     i_before = page.evaluate("S.card.i")
-    check("완료 버튼으로 1일이 기록됐다", done1 == 1, f"완료 {done1}일")
+    check("다 뒤집어 1일이 기록됐다", done1 == 1, f"완료 {done1}일")
 
     page.reload()
     page.wait_for_timeout(900)

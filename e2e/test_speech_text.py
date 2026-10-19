@@ -89,6 +89,8 @@ with sync_playwright() as p:
 
     page.locator('.pnav button[data-id="u-study"]').click()
     page.wait_for_timeout(700)
+    page.evaluate("S.modal && S.modal.title === '아직 학습일이 아니에요' && ACT['modal-ok']()")   # 미래 날짜 확인 창 → 미리 학습하기
+    page.wait_for_timeout(200)
     if page.evaluate("S.screen") == "u-study" and page.locator('.face.back .en').count():
         page.locator('[data-act="flip"]').first.click()
         page.wait_for_timeout(400)
