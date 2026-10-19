@@ -1,0 +1,162 @@
+{
+ "documents": [
+  {
+   "fields": {
+    "archive_id": {
+     "stringValue": "fixture-archive-1"
+    },
+    "chunks": {
+     "integerValue": "1"
+    },
+    "ciphertext_sha256": {
+     "stringValue": "4bbfb55b2ea78a344d49e48cda2ea377d8f270eff2346c91df1e26e3525c79f5"
+    },
+    "commit": {
+     "stringValue": "0000000000000000000000000000000000000000"
+    },
+    "created_at": {
+     "integerValue": "1792000000"
+    },
+    "digest": {
+     "stringValue": "cff487193f145b0d8c9865efbe00c78801382d059764e397d1ca9b7621731c8a"
+    },
+    "expire_at": {
+     "integerValue": "1799776000"
+    },
+    "key_id": {
+     "stringValue": "4bb06f8e4e3a7715"
+    },
+    "ledger": {
+     "stringValue": "[{\"step\":\"tombstone\",\"ok\":true}]"
+    },
+    "plain_bytes": {
+     "integerValue": "12"
+    },
+    "prev_digest": {
+     "stringValue": ""
+    },
+    "recipient_key_id": {
+     "stringValue": "4bb06f8e4e3a7715"
+    },
+    "schema": {
+     "stringValue": "SEAL-SIG-v1"
+    },
+    "seq": {
+     "integerValue": "1"
+    },
+    "size": {
+     "integerValue": "12"
+    },
+    "trigger": {
+     "stringValue": "erase_failed"
+    },
+    "truncated": {
+     "stringValue": "{}"
+    },
+    "verification": {
+     "stringValue": "{}"
+    }
+   },
+   "name": "projects/demo/databases/(default)/documents/evidence_archives/fixture-archive-1"
+  },
+  {
+   "fields": {
+    "archive_id": {
+     "stringValue": ""
+    },
+    "challenge": {
+     "stringValue": "abababababababababababababababab"
+    },
+    "created_at": {
+     "integerValue": "1792000000"
+    },
+    "digest": {
+     "stringValue": "e13935906c3227527ffce68b8b18cb7ab761b8f6958fcc86d3b377d4b046fd5f"
+    },
+    "kind": {
+     "stringValue": "attempt"
+    },
+    "outcome": {
+     "stringValue": "pending"
+    },
+    "prev_digest": {
+     "stringValue": "cff487193f145b0d8c9865efbe00c78801382d059764e397d1ca9b7621731c8a"
+    },
+    "recipient_key_id": {
+     "stringValue": "4bb06f8e4e3a7715"
+    },
+    "schema": {
+     "stringValue": "SEAL-SIG-v1"
+    },
+    "seq": {
+     "integerValue": "2"
+    },
+    "trigger": {
+     "stringValue": "erase_attempt"
+    },
+    "uid_hash": {
+     "stringValue": "c1152910151d4a4d"
+    }
+   },
+   "name": "projects/demo/databases/(default)/documents/evidence_entries/2"
+  },
+  {
+   "fields": {
+    "archive_id": {
+     "stringValue": ""
+    },
+    "challenge": {
+     "stringValue": "abababababababababababababababab"
+    },
+    "created_at": {
+     "integerValue": "1792000001"
+    },
+    "digest": {
+     "stringValue": "8c395c810aecfe7b7b4db6c97013312a01bd6757ac5f4c3c8e6c813f01cc78be"
+    },
+    "kind": {
+     "stringValue": "outcome"
+    },
+    "note": {
+     "stringValue": ""
+    },
+    "outcome": {
+     "stringValue": "ok"
+    },
+    "prev_digest": {
+     "stringValue": "e13935906c3227527ffce68b8b18cb7ab761b8f6958fcc86d3b377d4b046fd5f"
+    },
+    "recipient_key_id": {
+     "stringValue": "4bb06f8e4e3a7715"
+    },
+    "schema": {
+     "stringValue": "SEAL-SIG-v1"
+    },
+    "seq": {
+     "integerValue": "3"
+    },
+    "trigger": {
+     "stringValue": "erase_outcome"
+    },
+    "uid_hash": {
+     "stringValue": "c1152910151d4a4d"
+    }
+   },
+   "name": "projects/demo/databases/(default)/documents/evidence_entries/3"
+  }
+ ],
+ "head": {
+  "created_at": {
+   "integerValue": "1792000001"
+  },
+  "digest": {
+   "stringValue": "8c395c810aecfe7b7b4db6c97013312a01bd6757ac5f4c3c8e6c813f01cc78be"
+  },
+  "expire_at": {
+   "integerValue": "1799776001"
+  },
+  "seq": {
+   "integerValue": "3"
+  }
+ }
+}

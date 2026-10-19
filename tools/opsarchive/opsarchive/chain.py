@@ -37,10 +37,25 @@ class ChainError(Exception):
 
 # ------------------------------------------------------------------ 매니페스트(앱이 만든다)
 
+# digest 에 들어가는 필드 — 서버(backend/app/evidence.py)가 digest 를 계산할 때 쓰는 것과 같아야 한다.
+# Firestore 에서 읽은 문서에는 그 밖의 필드가 섞여 있다: 아카이브는 메타(expire_at·key_id·commit·ledger…),
+# 그리고 목록 읽기(gcp.Firestore.list)가 붙이는 `_id`. 문서 전체로 계산하면 실제 데이터가 전부
+# digest_mismatch 가 되고 anchor 가 chain_broken 으로 거부한다(10/19 실제 Firestore 로 확인).
+ARCHIVE_FIELDS = ("schema", "archive_id", "created_at", "ciphertext_sha256", "size", "chunks",
+                  "recipient_key_id", "trigger", "seq", "prev_digest")
+ENTRY_FIELDS = ("schema", "created_at", "recipient_key_id", "seq", "prev_digest",
+                "kind", "challenge", "uid_hash", "trigger", "outcome", "archive_id", "note")
+
+
+def manifest_body(document: dict[str, Any]) -> dict[str, Any]:
+    """digest 대상 필드만 고른다. 시도·결과 항목은 `kind` 가 있다(아카이브 매니페스트에는 없다)."""
+    fields = ENTRY_FIELDS if "kind" in document else ARCHIVE_FIELDS
+    return {k: document[k] for k in fields if k in document}
+
+
 def manifest_digest(manifest: dict[str, Any]) -> str:
     """매니페스트의 digest — `prev_digest` 를 포함해 계산하므로 체인이 된다."""
-    body = {k: v for k, v in manifest.items() if k != "digest"}
-    return hashlib.sha256(DOMAIN_MANIFEST + C.canonical_json(body)).hexdigest()
+    return hashlib.sha256(DOMAIN_MANIFEST + C.canonical_json(manifest_body(manifest))).hexdigest()
 
 
 def build_manifest(*, archive_id: str, created_at: int, ciphertext_sha256: str, size: int,
