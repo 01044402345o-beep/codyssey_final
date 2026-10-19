@@ -488,6 +488,21 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .steps li.done .ic { background: var(--ok); border-color: var(--ok); color: var(--on-ok); }
 .steps li.now { color: var(--text); font-weight: 600; }
 .steps li.now .ic { border-color: var(--accent); border-top-color: transparent; animation: spin .9s linear infinite; }
+.steps li.fail { color: var(--text); font-weight: 600; }
+.steps li.fail .ic { background: var(--bad); border-color: var(--bad); color: var(--on-bad); }
+
+/* 탈퇴 진행 창 — 스피너·경과 시간·단계(.steps 재사용) */
+.modal.wd .wd-head { display: flex; align-items: center; gap: 12px; }
+.modal.wd .wd-head h3 { margin: 0; flex: 1; }
+.wd-spin { width: 28px; height: 28px; border-radius: 50%; flex: none; border: 3px solid var(--border-strong); border-top-color: var(--accent); animation: spin .9s linear infinite; }
+.wd-spin.done { border-color: var(--ok); animation: none; background: var(--ok); }
+.wd-spin.fail { border-color: var(--bad); animation: none; background: var(--bad); }
+.wd-time { font-family: var(--mono); font-size: 0.8125rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.modal.wd .wd-steps { margin: 14px 0 12px; }
+.wd-detail { display: block; margin-top: 2px; font-weight: 400; color: var(--text-3); }
+.modal.wd .wd-err { margin: 0 0 6px; color: var(--text); font-weight: 600; }
+.modal.wd p.small { margin: 0 0 14px; }
+@media (prefers-reduced-motion: reduce) { .wd-spin { animation-duration: 2.4s; } }
 
 /* places */
 .city-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 12px; }

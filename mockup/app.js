@@ -1251,6 +1251,7 @@ function pframe(inner, o = {}) {
 const appbar = (title, o = {}) => `<div class="appbar">${o.back ? `<button class="back" data-act="tab" data-id="${o.back}">${I.back}</button>` : ''}<h2>${title}</h2>${o.step ? `<span class="step">${o.step}</span>` : ''}</div>`;
 const notice = (html, kind = '') => `<div class="notice ${kind}">${kind === 'warn' || kind === 'bad' ? I.alert : I.info}<div>${html}</div></div>`;
 function modalHtml(center = false) {
+  if (S.withdrawing) return withdrawModalHtml();   // 탈퇴 진행 창이 다른 창보다 앞선다
   const m = S.modal; if (!m) return '';
   return `<div class="modal-wrap ${center ? 'center' : ''}" data-act="modal-bg"><div class="modal" data-act="noop"><h3>${m.title}</h3><p>${m.body}</p>
     <div class="acts"><button class="btn soft" data-act="modal-cancel">${m.cancel || '취소'}</button><button class="btn ${m.danger ? 'accent' : 'primary'}" data-act="modal-ok">${m.ok}</button></div></div></div>`;
@@ -1933,6 +1934,9 @@ function sideOpen() { const el = $('#side'); return !!(el && el.classList.contai
 function closeSide() { const el = $('#side'); if (el) el.classList.remove('open'); }
 
 function onPop(state) {
+  // 탈퇴가 진행 중이면 뒤로가기로 화면을 떠나지 않는다(서버가 지우는 도중에 화면만 바뀌면 상태가 엇갈린다).
+  if (wdRunning()) { try { history.pushState({ screen: S.screen, overlay: 'withdraw' }, ''); } catch (e) { /* 무시 */ } return; }
+  if (S.withdrawing) { wdEnd(); render(); return; }                  // 실패·완료 창은 뒤로가기로 닫는다
   // 열려 있는 것부터 닫는다. 사용자가 '취소'를 기대하는 순서다.
   if (S.modal) { S.modal = null; modalFn = null; render(); return; }
   if (sideOpen()) { closeSide(); return; }
@@ -2288,6 +2292,51 @@ async function deleteStateOnServer(token) {
     return !!(body && body.deleted === true);
   } catch (e) { return false; }
 }
+/* 탈퇴 진행 창. 확인을 누른 뒤 서버 응답(수 초)을 기다리는 동안 화면이 멈춘 것처럼 보였다(사용자 신고).
+   확인 창 자리에 스피너·경과 시간·단계 목록을 띄우고, 실제 처리 순서대로 갱신한다.
+   진행 중에는 닫히지 않는다 — 바깥 클릭(noop)·뒤로가기(onPop)·새로고침(beforeunload 경고). */
+const WD_SERVER_DETAIL = '증거 기록 → 토큰 취소 → 기록 삭제 → 계정 삭제';
+const WD_STEPS = {
+  admin: ['로그인 정보 확인', '탈퇴 증명(챌린지) 준비', '서버에서 계정·기록 삭제', '이 기기의 기록 정리', '로그아웃'],
+  rules: ['로그인 정보 확인', '탈퇴 증명(챌린지) 준비', '서버의 저장 기록 삭제', '이 기기의 기록 정리', '계정 삭제'],
+  local: ['이 기기의 기록 정리'],
+};
+let wdTimer = null;
+const wdRunning = () => !!(S.withdrawing && !S.withdrawing.done && !S.withdrawing.error);
+const wdSecs = () => Math.floor((Date.now() - S.withdrawing.started) / 1000);
+function wdStart(steps) {
+  S.modal = null; modalFn = null;
+  S.withdrawing = { steps: steps.slice(), step: 0, detail: '', error: '', done: false, started: Date.now() };
+  clearInterval(wdTimer);
+  wdTimer = setInterval(() => {            // 경과 시간만 고친다(화면 전체를 다시 그리지 않는다)
+    const el = $('[data-live=wd-elapsed]');
+    if (!wdRunning()) { clearInterval(wdTimer); wdTimer = null; return; }
+    if (el) el.textContent = wdSecs() + '초';
+  }, 250);
+  render();
+}
+function wdStep(i, detail = '') { if (!S.withdrawing) return; S.withdrawing.step = i; S.withdrawing.detail = detail; render(); }
+function wdFail(msg) { if (!S.withdrawing) { toast(msg); return; } S.withdrawing.error = msg; render(); }
+function wdEnd() { clearInterval(wdTimer); wdTimer = null; S.withdrawing = null; }
+function withdrawModalHtml() {
+  const w = S.withdrawing;
+  const items = w.steps.map((label, i) => {
+    const st = w.error ? (i < w.step ? 'done' : i === w.step ? 'fail' : '') : (w.done || i < w.step) ? 'done' : i === w.step ? 'now' : '';
+    const detail = st === 'now' && w.detail ? `<span class="small wd-detail">${w.detail}</span>` : '';
+    return `<li class="${st}" data-wd-step="${i}"><span class="ic">${st === 'done' ? '✓' : st === 'fail' ? '!' : ''}</span><span>${label}${detail}</span></li>`;
+  }).join('');
+  const state = w.error ? 'fail' : w.done ? 'done' : 'run';
+  const title = w.error ? '탈퇴를 멈췄어요' : w.done ? '탈퇴를 마쳤어요' : '탈퇴하는 중이에요';
+  const foot = w.error
+    ? `<p class="wd-err">${esc(w.error)}</p><p class="small">계정과 기록은 그대로예요.</p><div class="acts"><button class="btn primary" data-act="wd-close">닫기</button></div>`
+    : w.done ? '<p class="small">로그인 화면으로 이동해요.</p>'
+      : '<p class="small">창을 닫거나 새로고침하지 마세요. 끝나면 자동으로 넘어가요.</p>';
+  return `<div class="modal-wrap" data-act="noop"><div class="modal wd" data-act="noop" role="dialog" aria-modal="true" aria-labelledby="wd-title" aria-busy="${state === 'run'}">
+    <div class="wd-head"><span class="wd-spin ${state}" aria-hidden="true"></span><h3 id="wd-title">${title}</h3><span class="wd-time" data-live="wd-elapsed">${wdSecs()}초</span></div>
+    <ul class="steps wd-steps" aria-live="polite">${items}</ul>${foot}</div></div>`;
+}
+window.addEventListener('beforeunload', e => { if (wdRunning()) { e.preventDefault(); e.returnValue = ''; } });
+
 /* 탈퇴: 서버(관리자 또는 규칙) → 브라우저 → (폴백이면) 클라이언트 deleteUser. 되돌릴 수 없다.
    서버 단계가 확정된 뒤에 브라우저 기록을 지운다 — 중간에 멈추면 계정·기록을 그대로 두고,
    나중에 화면을 다시 그려도 빈 기록이 서버로 올라가 지워지지 않게 한다. */
@@ -2295,31 +2344,39 @@ async function doWithdraw() {
   const uid = accountUid();
   const fb = !!(window.FirebaseAuth && FirebaseAuth.enabled);
   const accountUser = fb && !!uid;
-  const stop = m => { skipStateWrite = false; toast(m); };
+  const stop = m => { skipStateWrite = false; wdFail(m); };   // 진행 창에 멈춘 단계와 이유를 보여 준다
   if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; }   // 예약된 업로드가 지운 기록을 되살리지 않게
   cancelGen();                                                       // 진행 중인 생성 응답도 상태를 덮지 않게
   skipStateWrite = true;
 
   let msg = accountUser ? '탈퇴했어요. 계정과 저장된 기록을 모두 지웠어요.' : '이 브라우저에 저장된 기록을 모두 지웠어요.';
   if (accountUser && API.base !== null) {
+    wdStart(WD_STEPS.admin);
     let token = '';
     try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
     if (!token) return stop('로그인 정보를 확인하지 못해 탈퇴를 멈췄어요. 잠시 뒤 다시 시도해 주세요.');
+    wdStep(1);
     const challenge = newChallenge();
     if (challenge) saveWithdrawProof({ challenge: challenge, at: Date.now(), receipt: null });
+    wdStep(2, WD_SERVER_DETAIL);                                     // 가장 오래 걸리는 단계(서버 응답 대기)
     const admin = await eraseOnServer(token, challenge);
-    if (accountClosed) return;    // 기다리는 사이 다른 경로가 '탈퇴한 계정'을 감지해 이미 정리했다(이중 처리 금지)
+    if (accountClosed) { wdEnd(); return; }    // 기다리는 사이 다른 경로가 '탈퇴한 계정'을 감지해 이미 정리했다(이중 처리 금지)
     if (admin.status === 'ok') {
       saveWithdrawProof({ challenge: challenge, at: Date.now(), receipt: admin.receipt });
+      wdStep(3);
       clearAccountStorage();                   // 서버가 계정·토큰·기록을 지웠다 — 이제 로컬만 정리
+      wdStep(4);
       try { await FirebaseAuth.signOut(); } catch (e) { /* 화면 상태는 비운다 */ }
     } else if (admin.status === 'unavailable') {
       // 서비스 계정 키가 없는 환경: 규칙 삭제 + 클라이언트 deleteUser 로 되돌아간다.
+      S.withdrawing.steps = WD_STEPS.rules.slice(); wdStep(2);
       if (!await deleteStateOnServer(token)) return stop('저장된 계정 기록을 지우지 못해 탈퇴를 멈췄어요. 잠시 뒤 다시 시도해 주세요.');
-      if (accountClosed) return;
+      if (accountClosed) { wdEnd(); return; }
+      wdStep(3);
       clearAccountStorage();                   // 서버 기록이 지워진 뒤에 로컬도 지운다
+      wdStep(4);
       const r = await FirebaseAuth.deleteAccount();
-      if (accountClosed) return;
+      if (accountClosed) { wdEnd(); return; }
       if (!r.ok) {
         msg = r.code === 'auth/requires-recent-login'
           ? '저장된 기록은 지웠어요. 보안을 위해 다시 로그인한 뒤 탈퇴를 다시 눌러 주세요.'
@@ -2329,6 +2386,7 @@ async function doWithdraw() {
       return stop('탈퇴를 완료하지 못했어요. 잠시 뒤 다시 시도해 주세요.');   // 계정·기록을 그대로 둔다
     }
   } else {
+    wdStart(WD_STEPS.local);
     clearAccountStorage();                     // 서버를 쓰지 않는(데모) 경우: 로컬만
   }
 
@@ -2341,8 +2399,11 @@ async function doWithdraw() {
   aiRefreshKey = null;                       // 다음 여행에서 복원 시 AI 문장 채우기가 다시 돌게
   SESS_READY = true;
   skipStateWrite = false;
-  toast(msg);
+  // 모든 단계를 체크로 바꿔 '마쳤어요'를 잠깐 보여 준 뒤 닫는다. 뒤에는 이미 로그인 화면이 열려 있다.
+  const w = S.withdrawing;
+  if (w) { w.done = true; w.step = w.steps.length; }
   go('u-login');
+  setTimeout(() => { if (S.withdrawing === w) { wdEnd(); render(); } toast(msg); }, 1200);   // 그사이 새 진행 창이면 건드리지 않는다
 }
 
 const ACT = {
@@ -2653,6 +2714,7 @@ const ACT = {
 
   'modal-ok': () => { const fn = modalFn; modalFn = null; fn && fn(); },
   'modal-cancel': () => { S.modal = null; render(); },
+  'wd-close': () => { if (!wdRunning()) { wdEnd(); render(); } },   // 실패했을 때만 보인다
   'modal-bg': (el, e) => { if (e.target === el) { S.modal = null; render(); } },
 
   'job-filter': el => { S.jobFilter = el.dataset.v; render(); },
