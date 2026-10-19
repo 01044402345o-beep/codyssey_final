@@ -277,6 +277,10 @@ class EvidenceChainTest(unittest.TestCase):
         self.assertEqual(res.status_code, 503, res.text)
         self.assertEqual(res.json()["detail"], "evidence_unavailable")        # 500 이 아니다
         self.assertEqual(self.admin.erased, [])
+        # 이 실패도 봉인한다 — 예전에는 삭제 전 실패가 봉인되지 않아 관리자 아카이브 목록이 비었다
+        self.assertEqual(self.sealed[0][0], "attempt_unrecorded")
+        self.assertEqual(self.sealed[0][1], "uid-1")
+        self.assertEqual(self.sealed[0][3]["challenge"], "ef" * 16)
 
     def test_transient_chain_failure_is_retried(self):
         self.admin.fail_writes = 1                                             # 첫 쓰기만 실패
