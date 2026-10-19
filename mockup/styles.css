@@ -503,6 +503,9 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .modal.wd .wd-err { margin: 0 0 6px; color: var(--text); font-weight: 600; }
 .modal.wd p.small { margin: 0 0 14px; }
 @media (prefers-reduced-motion: reduce) { .wd-spin { animation-duration: 2.4s; } }
+/* 로그인 전환 화면 — 로그인 화면을 불투명하게 덮고 가운데에 단계 카드 */
+.modal-wrap.entering { background: var(--bg); align-items: center; justify-content: center; }
+.modal-wrap.entering .modal.en { width: min(420px, calc(100% - 32px)); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); padding-bottom: 18px; }
 
 /* places */
 .city-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 12px; }
