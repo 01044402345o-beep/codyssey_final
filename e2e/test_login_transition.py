@@ -66,7 +66,10 @@ def check(name, cond, extra=""):
 
 def fresh(b, w=390):
     ctx = b.new_context(viewport={"width": w, "height": 844})
-    ctx.route("**/auth.js*", lambda route: route.fulfill(response=route.fetch(), body=route.fetch().text() + FB_ON))
+    def fb_on(route):                        # auth.js 를 한 번만 받아 덧붙인다(예전: 두 번 받아 바쁠 때 첫 로딩이 늦었다)
+        resp = route.fetch()
+        route.fulfill(response=resp, body=resp.text() + FB_ON)
+    ctx.route("**/auth.js*", fb_on)
     page = ctx.new_page()
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(BASE + "/")

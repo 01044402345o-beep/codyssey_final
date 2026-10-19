@@ -1069,6 +1069,7 @@ const ttsText = shown => String(shown).replace(/[\[\]]/g, '');
 function speak(text, btn) {
   if (ttsState() !== 'ok') { toast(ttsOffMsg()); return; }
   speechSynthesis.cancel();
+  if (mineAudio) { try { mineAudio.pause(); } catch (e) { /* 이미 멈춤 */ } }   // 내 발음과 겹치지 않게
   document.querySelectorAll('.playing').forEach(e => e.classList.remove('playing'));
   // 호출부는 저장 문장(.en, 편집 input)을 넘긴다. 화면과 같으려면 여기서 slotText 를 먼저 거친다.
   const u = new SpeechSynthesisUtterance(ttsText(slotText(text)));
@@ -2018,7 +2019,14 @@ function preset(kind) {
 
 /* ================= 말하기 연습 (녹음 → /speak-check) =================
    작업 토큰(SPK.tok)으로 취소·늦은 응답을 구분한다. 카드 이동·화면 전환·재진입 시 cancelSpeak(). */
-const SPK = { state: 'idle', tok: 0, rec: null, stream: null, ctl: null, timer: null, sid: null, result: null };
+const SPK = { state: 'idle', tok: 0, rec: null, stream: null, ctl: null, timer: null, sid: null, result: null, clip: null };
+/* 내 발음 다시 듣기(설문 Q14 "내가 연습한 발음을 들어볼 수 있으면"). 녹음은 이 탭 메모리에만 둔다 —
+   서버에 따로 저장하지 않고, 다시 녹음하거나 카드를 넘기면(cancelSpeak) 재생 주소를 해제한다. */
+let mineAudio = null;
+function dropClip() {
+  if (mineAudio) { try { mineAudio.pause(); } catch (e) { /* 이미 멈춤 */ } mineAudio = null; }
+  if (SPK.clip) { try { URL.revokeObjectURL(SPK.clip.url); } catch (e) { /* 이미 해제 */ } SPK.clip = null; }
+}
 const stopTracks = st => { try { st && st.getTracks().forEach(t => t.stop()); } catch (e) { /* 이미 종료 */ } };
 const canRecord = () => typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;   // 기능 감지(UA 아님)
 const speakAvailable = () => API.base !== null && canRecord();
@@ -2051,8 +2059,10 @@ function speakHtml(s) {
     res = `<div class="speak-res">${parts.filter(Boolean).map(esc).join(' · ')}</div>`;
     if (r.offer) res += `<button class="speak-btn" data-act="weak-save">이 상황을 복습 목록에 저장</button>`;
   }
+  // 결과가 나온 뒤(오류·말소리 없음 포함) 방금 녹음을 다시 들을 수 있다 — 원어민 '듣기'와 비교하라고
+  if (mine && SPK.clip && SPK.clip.sid === s.id && st === 'idle') res += `<button class="speak-btn" data-act="play-mine">▶ 내 발음 듣기</button>`;
   return `<button class="speak-btn ${st === 'recording' ? 'rec' : ''}" data-act="speak-rec" ${st === 'requesting' || st === 'uploading' ? 'disabled' : ''}>${label}</button>${res}
-    <div class="speak-note">녹음은 ${esc(host)} 서버로 가고, 말소리가 있을 때만 전사·교차검증 AI(Groq·AssemblyAI)로 전송돼요.${voiceConsent().voice ? ' (동의함 · 홈에서 철회)' : ' 처음 녹음할 때 동의를 받아요.'}</div>`;
+    <div class="speak-note">녹음은 ${esc(host)} 서버로 가고, 말소리가 있을 때만 전사·교차검증 AI(Groq·AssemblyAI)로 전송돼요. 다시 듣기용 녹음은 이 화면에만 있어요.${voiceConsent().voice ? ' (동의함 · 홈에서 철회)' : ' 처음 녹음할 때 동의를 받아요.'}</div>`;
 }
 /* 말하기 연습 동의 — 녹음이 서버와 Google 로 나가고 복습 목록이 쌓이므로 첫 녹음 전에 받는다.
    저장소가 막힌 브라우저에서는 이번 접속 동안만 기억한다(consentMem). */
@@ -2120,6 +2130,7 @@ function cancelSpeak() {
   stopTracks(SPK.stream); SPK.stream = null; SPK.rec = null;
   if (SPK.ctl) { SPK.ctl.abort(); SPK.ctl = null; }
   SPK.state = 'idle'; SPK.result = null;
+  dropClip();
 }
 function stopSpeak() { clearTimeout(SPK.timer); SPK.timer = null; if (SPK.rec && SPK.rec.state === 'recording') SPK.rec.stop(); }
 async function toggleSpeak() {
@@ -2147,7 +2158,10 @@ async function toggleSpeak() {
     stopTracks(stream);
     if (tok !== SPK.tok || rec.cancelled) return;                            // 취소는 업로드하지 않는다
     // 말소리 여부는 서버의 Silero 신경망 VAD 가 판정한다(음량·데시벨 기준이 아님). 말이 없으면 외부 AI 로 보내지 않는다.
-    uploadSpeech(tok, new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' }), s);
+    const blob = new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' });
+    dropClip();
+    try { SPK.clip = { sid: s.id, url: URL.createObjectURL(blob) }; } catch (e) { SPK.clip = null; }   // 다시 듣기용(메모리)
+    uploadSpeech(tok, blob, s);
   };
   rec.start();
   SPK.state = 'recording'; SPK.timer = setTimeout(stopSpeak, 15000); updateSpeakUi();
@@ -2710,6 +2724,16 @@ const ACT = {
     if (el.classList.contains('flipped')) { S.card.flipped.add(S.card.i); updateStudyLive(); }
     else if (ttsSupported()) speechSynthesis.cancel();
     sessionWrite();   /* 뒤집은 카드·보던 카드 위치를 남긴다 — 여기만 render 를 거치지 않는다 */
+  },
+  'play-mine': el => {
+    if (!SPK.clip) return;
+    try { speechSynthesis.cancel(); } catch (e) { /* 듣기 미지원 */ }
+    if (mineAudio) { try { mineAudio.pause(); } catch (e) { /* 이미 멈춤 */ } }
+    mineAudio = new Audio(SPK.clip.url);
+    el.classList.add('playing');
+    const done = () => el.classList.remove('playing');
+    mineAudio.onended = mineAudio.onpause = mineAudio.onerror = done;
+    mineAudio.play().catch(() => { done(); toast('이 브라우저에서는 녹음을 다시 재생하지 못했어요.'); });
   },
   'card-prev': () => { cancelSpeak(); S.card.i = Math.max(0, S.card.i - 1); render(); },
   'card-next': () => { cancelSpeak(); const r = pickRow(); S.card.i = Math.min(r.ids.length - 1, S.card.i + 1); render(); },
