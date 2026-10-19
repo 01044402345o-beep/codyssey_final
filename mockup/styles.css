@@ -252,6 +252,7 @@ a { color: inherit; }
   display: inline-flex; align-items: center; gap: 10px;
   font-family: var(--display); font-size: 1.3125rem; font-weight: 600; letter-spacing: -0.02em; color: var(--inv-text);
 }
+.side-brand .mark img { width: 30px; height: 30px; border-radius: 8px; }
 .side-brand .mark i {
   width: 30px; height: 30px; border-radius: 50%;
   border: 2px dashed var(--accent);
@@ -466,6 +467,12 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .login .stamp::before { content: ''; position: absolute; inset: 14px; border-radius: 50%; border: 1.5px solid var(--accent-a40); }
 .login h1 { font-family: var(--display); font-size: 2.75rem; line-height: 1.02; letter-spacing: -0.04em; margin: 150px 0 14px; font-weight: 600; }
 .login h1 em { font-style: italic; color: var(--accent-text); }
+/* 브랜드(마디 MADI): 앱 아이콘 + 이름 + 태그라인. 아이콘 원본은 Flutter 앱 assets/brand/madi_icon.png */
+.login .brand-row { display: flex; align-items: center; gap: 12px; position: relative; }
+.login .brand-row img { width: 48px; height: 48px; border-radius: 12px; box-shadow: var(--shadow); }
+.brand-name { font-size: 1.375rem; font-weight: 900; letter-spacing: -0.02em; }
+.brand-name span { color: var(--accent-text); font-size: 0.8125rem; letter-spacing: 0.18em; margin-left: 4px; }
+.brand-tag { font-size: 0.8125rem; color: var(--text-soft); }
 .login .ticket { margin-top: auto; }
 .gbtn { width: 100%; height: 52px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border-strong); display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; font-size: 0.9375rem; box-shadow: var(--shadow); }
 .gbtn:hover { border-color: var(--text); }
