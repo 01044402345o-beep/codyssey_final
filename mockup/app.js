@@ -1,4 +1,4 @@
-/* 여행영어 목업 — prd.md v2 기준 동작 시뮬레이션
+/* 마디(MADI) 목업 — prd.md v2 기준 동작 시뮬레이션
    계산 규칙(R)은 PRD FR-TRIP-02, FR-SENT-02, FR-SCHED-01·02, FR-STUDY-03을 그대로 구현한다. */
 'use strict';
 
@@ -1157,7 +1157,7 @@ const isWide = () => !LEGACY && !!wideMq && wideMq.matches;
 if (wideMq) { const onWide = () => { try { if (typeof S !== 'undefined' && S && S.plan) render(); } catch (e) { /* 첫 렌더 전 */ } }; (wideMq.addEventListener ? wideMq.addEventListener.bind(wideMq, 'change') : wideMq.addListener.bind(wideMq))(onWide); }
 const studyShown = () => S.screen === 'u-study' || (S.screen === 'u-sched' && isWide());   // 학습 카드가 화면에 있는가(말하기·TTS 상태 갱신 대상)
 function renderSide() {
-  let html = `<div class="side-brand"><div class="mark"><i>EN</i>여행영어 목업</div><p>prd.md v2 기준 · 왼쪽 메뉴로 화면을 고르고, 화면 안 버튼으로 실제 흐름을 따라가 보세요.</p></div><nav class="side-nav">`;
+  let html = `<div class="side-brand"><div class="mark"><img src="icon-192.png" alt="" width="22" height="22">마디 목업</div><p>prd.md v2 기준 · 왼쪽 메뉴로 화면을 고르고, 화면 안 버튼으로 실제 흐름을 따라가 보세요.</p></div><nav class="side-nav">`;
   SCREENS.forEach(s => {
     if (s.group) html += `<div class="nav-group">${s.group}${s.tag ? `<span class="tag">${s.tag}</span>` : ''}</div>`;
     html += `<button class="nav-item" data-act="nav" data-id="${s.id}"><span class="no">${s.no}</span><span>${s.name}</span></button>`;
@@ -1322,8 +1322,9 @@ function scrLogin() {
     + withdrawProofBlock();
   const gate = fbOn() ? '로그인하지 않아도 쓸 수 있어요. 기록은 이 브라우저에만 남아요.' : '로그인하지 않으면 다른 화면에 들어갈 수 없어요.';
   return frame(`<div class="login">
-    <div class="stamp" aria-hidden="true">TRIP · ENGLISH<br>PASSPORT<br>— 2026 —</div>
-    <div class="eyebrow" style="margin-top:130px">Travel English, planned</div>
+    <div class="stamp" aria-hidden="true">MADI · 마디<br>TRAVEL ENGLISH<br>— 2026 —</div>
+    <div class="brand-row"><img src="icon-192.png" alt="" width="48" height="48"><div><b class="brand-name">마디 <span>MADI</span></b><div class="brand-tag">여행을 잇는 한마디</div></div></div>
+    <div class="eyebrow" style="margin-top:74px">Travel English, planned</div>
     <h1 style="margin-top:10px">Speak where<br>you'll <em>actually</em><br>be.</h1>
     <p class="sub">여행지와 일정을 입력하면, 실제로 갈 관광지와 맛집에서 쓸 영어 문장을 만들어 출발 전부터 매일 학습하게 해 드려요.</p>
     <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">${gate}</p>
@@ -1895,9 +1896,9 @@ function adminScreen() {
   const nav = SCREENS.filter(s => s.id.startsWith('a-')).map(s => `<button class="${S.screen === s.id ? 'on' : ''}" data-act="nav" data-id="${s.id}">${s.name}</button>`).join('');
   const path = { 'a-metrics': 'metrics', 'a-jobs': 'jobs', 'a-common': 'common-sentences', 'a-users': 'users' }[S.screen];
   const body = { 'a-metrics': admMetrics, 'a-jobs': admJobs, 'a-common': admCommon, 'a-users': admUsers }[S.screen]();
-  if (!LEGACY) return `<div class="admin-shell"><div class="admin"><nav class="admin-nav"><div class="brand">여행영어 <span>ADMIN</span></div>${nav}</nav><div class="admin-main">${body}</div></div>${modalHtml(true)}</div>`;
+  if (!LEGACY) return `<div class="admin-shell"><div class="admin"><nav class="admin-nav"><div class="brand">마디 <span>ADMIN</span></div>${nav}</nav><div class="admin-main">${body}</div></div>${modalHtml(true)}</div>`;
   return `<div class="window"><div class="win-bar"><i></i><i></i><i></i><div class="url">admin.trip-english.web.app/${path}</div></div>
-    <div class="admin"><nav class="admin-nav"><div class="brand">여행영어 <span>ADMIN</span></div>${nav}</nav><div class="admin-main">${body}</div></div>${modalHtml(true)}</div>`;
+    <div class="admin"><nav class="admin-nav"><div class="brand">마디 <span>ADMIN</span></div>${nav}</nav><div class="admin-main">${body}</div></div>${modalHtml(true)}</div>`;
 }
 function allTripsForAdmin() {
   const rows = S.mockTrips.map(m => ({ ...m, me: false }));

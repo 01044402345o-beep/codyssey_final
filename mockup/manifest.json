@@ -1,0 +1,17 @@
+{
+  "name": "마디 MADI — 여행을 잇는 한마디",
+  "short_name": "마디",
+  "description": "여행지와 일정에 맞춘 영어 한마디를 만들고, 말해 보고, 기억하는 학습 서비스",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fbf8f1",
+  "theme_color": "#fbf8f1",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-monochrome-512.png", "sizes": "512x512", "type": "image/png", "purpose": "monochrome" }
+  ]
+}
