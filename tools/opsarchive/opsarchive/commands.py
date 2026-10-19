@@ -463,7 +463,7 @@ def archives(project_id: str, sa_path: str, *, limit: int = 300) -> list[dict]:
 
 def chain_entries(project_id: str, sa_path: str, *, limit: int = 300) -> list[dict]:
     """시도·결과 체인 항목(문서가 없으면 빈 목록 — 404 를 오류로 보지 않는다)."""
-    return gcp.Firestore(project_id, sa_path).list("evidence_chain/entries", page_size=limit)
+    return gcp.Firestore(project_id, sa_path).list("evidence_entries", page_size=limit)
 
 
 def observe_requests(project_id: str, sa_path: str, service: str, *, path: str = "/account/erase",
@@ -474,7 +474,7 @@ def observe_requests(project_id: str, sa_path: str, service: str, *, path: str =
     "요청은 왔는데 체인에 시도가 없다"를 드러낸다. 로그 보존 기간이 곧 관측 범위이므로 자주 돌린다.
     """
     store = gcp.Firestore(project_id, sa_path)
-    entries = store.list("evidence_chain/entries", page_size=300)
+    entries = store.list("evidence_entries", page_size=300)
     cutoff = int(time.time()) - max(1, int(since_minutes)) * 60
     attempts = [e for e in entries
                 if str(e.get("kind", "")) == "attempt"
