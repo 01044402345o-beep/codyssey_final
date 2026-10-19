@@ -394,14 +394,16 @@ async function handleAccountDeleted(uid, epoch) {
 }
 /* 탈퇴가 예상 밖 상태로 끝났음을 서버에 보고한다(증거 봉인 트리거).
    개인정보·토큰은 보내지 않는다 — 상태 코드와 화면 이름뿐이다. 실패해도 조용히 넘어간다. */
+/* 반환: 'sent' | 'no_login'(서버는 로그인한 사용자의 보고만 받는다) | 'failed'.
+   예전에는 결과를 돌려주지 않아, 로그아웃 상태에서 아무것도 보내지 않고도 '보고했어요'라고 안내했다. */
 async function reportWithdrawIssue(reason, serverSaidErased) {
   const uid = accountUid();
-  if (!uid || API.base === null || !window.FirebaseAuth || !FirebaseAuth.idToken) return;
+  if (!uid || API.base === null || !window.FirebaseAuth || !FirebaseAuth.idToken) return 'no_login';
   let token = '';
   try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
-  if (!token) return;
+  if (!token) return 'no_login';
   try {
-    await fetch((API.base || '') + '/diagnostics/withdraw', {
+    const res = await fetch((API.base || '') + '/diagnostics/withdraw', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
@@ -412,7 +414,8 @@ async function reportWithdrawIssue(reason, serverSaidErased) {
       }),
       keepalive: true,
     });
-  } catch (e) { /* 보고 실패는 사용자 흐름을 막지 않는다 */ }
+    return res && res.ok ? 'sent' : 'failed';
+  } catch (e) { return 'failed'; }   // 보고 실패는 사용자 흐름을 막지 않는다
 }
 function scheduleStatePush() {  const uid = accountUid();
   if (!uid || !personalStore() || API.base === null || !SESS_READY || skipStateWrite) return;
@@ -2262,7 +2265,7 @@ function clearWithdrawProof() {
 }
 function reportSavedProof() {
   const info = withdrawProofState();
-  if (info.state !== 'unknown') return Promise.resolve();
+  if (info.state !== 'unknown') return Promise.resolve('nothing');
   // 서버에 "영수증을 못 받았다"고 보고한다(증거 봉인 트리거). 로그인 상태에서만 가능하다.
   return reportWithdrawIssue('no_receipt', true);
 }
@@ -2577,7 +2580,15 @@ const ACT = {
     '로그아웃', () => { S.modal = null; ACT.logout(); }, { danger: true }),
   // 탈퇴 증명 카드 동작
   'proof-download': () => downloadWithdrawProof(),
-  'proof-report': () => { reportSavedProof().catch(() => {}); toast('관리자에게 보고했어요.'); },
+  // 실제로 보낸 결과대로 안내한다(예전에는 보내지 못해도 늘 '보고했어요').
+  'proof-report': () => {
+    reportSavedProof().then(r => toast(
+      r === 'sent' ? '관리자에게 보고했어요.'
+        : r === 'no_login' ? '로그인한 뒤에 보고할 수 있어요. 지금은 증명 파일을 내려받아 관리자에게 보여 주세요.'
+          : r === 'nothing' ? '보고할 \'상태 불명\' 탈퇴 기록이 없어요.'
+            : '보고하지 못했어요. 잠시 뒤 다시 시도하거나 증명 파일을 내려받아 관리자에게 보여 주세요.'
+    )).catch(() => toast('보고하지 못했어요. 증명 파일을 내려받아 관리자에게 보여 주세요.'));
+  },
   'proof-clear': () => clearWithdrawProof(),
   // 탈퇴: 계정과 저장된 기록을 모두 지운다(되돌릴 수 없음).
   'withdraw': () => confirmBox('탈퇴하면 계정과 기록이 모두 지워져요',

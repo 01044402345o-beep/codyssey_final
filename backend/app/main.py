@@ -968,6 +968,10 @@ async def account_erase(request: Request) -> dict[str, Any]:
             attempt = await _chain_write(evidence.record_attempt, challenge, account["uid"])
         except Exception as exc:  # noqa: BLE001
             logging.getLogger("app.evidence").exception("시도 기록 실패 — 탈퇴를 시작하지 않는다")
+            # 이 실패도 봉인한다. 예전에는 계정 삭제 **전** 실패가 봉인 코드(아래 except)에 닿지 못해
+            # 10/18~19 탈퇴 실패 10건의 증거가 하나도 남지 않았다(관리자 GUI 아카이브 목록이 빔).
+            _seal_in_background("attempt_unrecorded", account["uid"], [],
+                                {"challenge": challenge, "stage": "record_attempt"}, exc)
             raise HTTPException(status_code=503, detail="evidence_unavailable") from exc
     ledger: list[dict[str, Any]] = []
     try:

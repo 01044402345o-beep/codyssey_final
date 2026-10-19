@@ -252,7 +252,35 @@ with sync_playwright() as p:
     unknown = page.evaluate("({ text: document.body.innerText, rep: !!document.querySelector('[data-act=\"proof-report\"]') })")
     check("탈퇴 증명(영수증 없음): '상태 불명'을 보여주고 서버 보고 버튼을 제공한다",
           "상태 불명" in unknown["text"] and unknown["rep"], str(unknown["text"])[:200])
-    page.evaluate("() => { localStorage.removeItem('cd_withdraw_proof'); render(); }")
+
+    # --- '서버에 보고'는 실제로 보낸 결과대로 안내한다(예전: 로그아웃이라 안 보내도 늘 '보고했어요') ---
+    def report(logged_in, status=200):
+        page.evaluate("""(cfg) => {
+          window.__diag = 0;
+          window.fetch = async (url) => {
+            if (String(url).includes('/diagnostics/withdraw')) { window.__diag++; return { ok: cfg.status === 200, status: cfg.status, json: async () => ({}) }; }
+            return { ok: true, status: 200, json: async () => ({}) };
+          };
+          const fa = window.FirebaseAuth; fa.idToken = async () => 'tok';
+          wdEnd(); S.modal = null;                 // 앞 검사(탈퇴 실패)가 남긴 진행 창을 닫는다
+          S.user = cfg.logged ? { uid: 'uidR', provider: 'google.com', name: 'R', email: 'r@example.com' } : null;
+          localStorage.setItem('cd_withdraw_proof', JSON.stringify({ challenge: 'ef'.repeat(16), at: Date.now(), receipt: null }));
+          S.screen = 'u-login'; render();
+        }""", {"logged": logged_in, "status": status})
+        page.wait_for_timeout(150)
+        page.click('[data-act="proof-report"]')
+        page.wait_for_timeout(400)
+        return {"sent": page.evaluate("window.__diag"), "toast": page.inner_text("#toast")}
+
+    r = report(False)
+    check("로그아웃 상태 '서버에 보고': 보내지 않았으면 '보고했어요'라고 하지 않고 로그인·증명 파일을 안내",
+          r["sent"] == 0 and "보고했어요" not in r["toast"] and "로그인한 뒤에 보고할 수 있어요" in r["toast"], str(r))
+    r = report(True)
+    check("로그인 상태 '서버에 보고': 실제로 보내고(/diagnostics/withdraw) '관리자에게 보고했어요'",
+          r["sent"] == 1 and r["toast"] == "관리자에게 보고했어요.", str(r))
+    r = report(True, 500)
+    check("서버가 받지 못하면(500) '보고하지 못했어요'", r["sent"] == 1 and "보고하지 못했어요" in r["toast"], str(r))
+    page.evaluate("() => { S.user = null; localStorage.removeItem('cd_withdraw_proof'); render(); }")
 
     check("자바스크립트 오류 없음", not errors, str(errors[:3]))
     b.close()
