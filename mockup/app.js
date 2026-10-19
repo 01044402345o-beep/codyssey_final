@@ -1780,7 +1780,7 @@ function sheetHtml() {
   return `<div class="sheet-wrap" data-act="sheet-bg"><section class="sheet" role="dialog" aria-modal="true" aria-label="회화 연습" data-act="noop">
     <div class="sheet-handle"></div><h3>회화 연습</h3>
     ${t && t.ask ? `<h4>상대가 먼저</h4>${line('ask')}<h4>내가 대답하기</h4>` : ''}
-    <div class="talk-me"><b lang="en">${phHtml(s.en, 'en')}</b><div>${phHtml(s.ko)}</div></div>
+    <div class="talk-me"><b lang="en">${phHtml(s.en, 'en')}</b><div>${phHtml(s.ko)}</div>${tts ? `<button class="talk-say" data-act="speak-card">${I.speaker}듣기</button>` : ''}</div>
     <div class="speak" data-live="speak">${speakHtml(s)}</div>
     ${body}
     <button class="btn primary block" data-act="sheet-close">↓ 회화 연습 닫기</button>
