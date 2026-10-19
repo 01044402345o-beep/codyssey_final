@@ -42,8 +42,10 @@ with sync_playwright() as p:
     check("Firebase 켜짐: 첫 화면은 로그인 화면", page.evaluate("S.screen") == "u-login" and page.evaluate("FirebaseAuth.enabled"))
     g = page.locator('[data-act="guest"]')
     check("'로그인 없이 시작' 버튼이 보인다", g.count() == 1 and g.is_visible())
-    gy, ey = g.bounding_box()["y"], page.locator('[data-auth="email"]').bounding_box()["y"]
-    check("버튼이 이메일 입력보다 위(첫 화면 안)", gy < ey and gy + 48 < 844, f"guest y={gy:.0f}, email y={ey:.0f}")
+    gy, ly = g.bounding_box()["y"], page.locator('[data-act="login"]').bounding_box()["y"]
+    check("첫 화면은 고르기만: 로그인·Google·(그 아래) 로그인 없이 시작, 이메일 입력 없음",
+          page.locator('[data-act="auth-open"]').count() == 1 and page.locator('[data-auth="email"]').count() == 0
+          and ly < gy and gy + 44 < 844, f"google y={ly:.0f}, guest y={gy:.0f}")
     check("안내 문구: 로그인하지 않아도 쓸 수 있다", "로그인하지 않아도 쓸 수 있어요" in page.locator(".ticket").inner_text()
           and "들어갈 수 없어요" not in page.locator(".ticket").inner_text())
 
@@ -71,8 +73,8 @@ with sync_playwright() as p:
     check("홈 계정 카드: 손님 표시 + 로그인 버튼, 탈퇴 없음",
           "손님" in acc and page.locator('.account-card [data-id="u-login"]').count() == 1 and page.locator('[data-act="withdraw"]').count() == 0, acc.replace("\n", " / "))
     page.locator('.account-card [data-id="u-login"]').click(); page.wait_for_timeout(300)
-    check("손님이 로그인 화면으로 가면 로그인 폼이 보인다(로그아웃 카드 아님)",
-          page.locator('[data-auth="email"]').count() == 1 and page.locator('[data-act="logout"]').count() == 0)
+    check("손님이 로그인 화면으로 가면 로그인 버튼이 보인다(로그아웃 카드 아님)",
+          page.locator('[data-act="auth-open"]').count() == 1 and page.locator('[data-act="logout"]').count() == 0)
     check("손님은 계정 서버(/user/state)에 아무것도 보내지 않는다", len(pushes) == 0, str(pushes[:3]))
     ctx.close()
 
