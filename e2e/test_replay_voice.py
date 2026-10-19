@@ -80,9 +80,9 @@ with sync_playwright() as p:
           sum(1 for u in sent if "/speak-check" in u) == 1 and not [u for u in posts if "blob" in u], str(sent))
 
     # 원어민 듣기를 누르면 내 녹음 재생이 멈춘다(겹치지 않게) — 이 브라우저에 음성이 없으면 건너뛴다
-    if page.locator('[data-act="speak-card"]').count():
+    if page.locator('.sheet [data-act="speak-card"]').count():   # 시트 안 내 문장 '듣기'
         page.locator('[data-act="play-mine"]').click(); page.wait_for_timeout(200)
-        page.locator('[data-act="speak-card"]').click(); page.wait_for_timeout(200)
+        page.locator('.sheet [data-act="speak-card"]').click(); page.wait_for_timeout(200)
         check("원어민 '듣기'를 누르면 내 녹음 재생이 멈춘다", page.evaluate("!mineAudio || mineAudio.paused"))
 
     # 다시 녹음하면 이전 녹음은 해제되고 새 녹음으로 바뀐다

@@ -72,6 +72,9 @@ with sync_playwright() as p:
     page.evaluate("window.__spoken = []")
     page.locator('.sheet [data-act="say-line"][data-k="next"]').click(); page.wait_for_timeout(200)
     check("이어서 할 말 '듣기'", page.evaluate("window.__spoken") == [s["talk"]["next"]["en"]], str(page.evaluate("window.__spoken")))
+    page.evaluate("window.__spoken = []")
+    page.locator('.sheet [data-act="speak-card"]').click(); page.wait_for_timeout(200)   # 내 녹음과 비교할 원어민 듣기
+    check("시트 안 내 문장 '듣기'", page.evaluate("window.__spoken") == [s["en"]], str(page.evaluate("window.__spoken")))
 
     # 닫는 세 가지 방법
     page.locator('[data-act="sheet-close"]').click(); page.wait_for_timeout(300)

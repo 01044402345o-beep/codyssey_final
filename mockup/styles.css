@@ -982,6 +982,7 @@ html[data-mode=demo] .side .note-card { box-shadow: none; }
 .sheet h4 { margin: 16px 0 6px; font-size: 0.875rem; color: var(--text-soft); }
 .talk-me { background: var(--surface-3); border-radius: 14px; padding: 14px; line-height: 1.6; }
 .talk-me b { display: block; font-size: 1rem; }
+.talk-me .talk-say { margin-top: 8px; }
 .talk-line { border-top: 1px solid var(--border); padding: 12px 0; }
 .talk-line b { display: block; margin: 4px 0; }
 .talk-line p { margin: 0 0 8px; font-size: 0.8125rem; color: var(--text-soft); }
