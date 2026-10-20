@@ -11,5 +11,5 @@
 | [deploy](deploy/README.md) | 배포 런북, 고·노고, 시나리오 트래커 |
 | [measurement](measurement/README.md) | 지연·채점 측정 |
 | [design](design/README.md) | 반응형 화면 전략 |
-| [research](research/README.md) | 말하기 채점·브라우저 듣기 조사 |
+| [research](research/README.md) | 말하기 채점·브라우저 듣기·실시간 회화 에이전트 및 번역 API 조사 |
 | [user-test](user-test/README.md) | 실사용자 테스트 계획·결과 |
