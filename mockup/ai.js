@@ -522,7 +522,72 @@
     return Promise.all(jobs);
   }
 
+  /* ---------- 대화하기 (실시간 회화 1a — 스크립트, AI 호출 0회) ----------
+     docs/research/realtime-agent/README.md 4절 1a · 3절 Must. 대사는 data.js 의 검수된 talk 만 쓴다.
+     - 상대가 먼저(ask)가 있으면 상대 → 나 → 상대(replies[nextFor]) → 나(next). 없으면 나 → 상대 → 나.
+     - nextFor 는 '내가 이어서(next)' 가 자연스럽게 이어지는 갈래다(6절 ⑤). 없거나 범위를 벗어나면 0.
+     - 대화 중에는 점수를 보이지 않는다. 끝난 뒤 고칠 점은 한 가지만(talkSummary). */
+  function talkTurns(talk, me) {
+    if (!talk || !Array.isArray(talk.replies) || !talk.replies.length || !talk.next || !me || !str(me.en)) return [];
+    const k = Number.isInteger(talk.nextFor) && talk.nextFor >= 0 && talk.nextFor < talk.replies.length ? talk.nextFor : 0;
+    const t = [];
+    if (talk.ask) t.push({ who: 'ai', key: 'ask', en: talk.ask.en, ko: talk.ask.ko });
+    t.push({ who: 'me', key: 'me', en: me.en, ko: me.ko || '' });
+    t.push({ who: 'ai', key: 'r' + k, en: talk.replies[k].en, ko: talk.replies[k].ko });
+    t.push({ who: 'me', key: 'next', en: talk.next.en, ko: talk.next.ko });
+    return t;
+  }
+  /* 힌트는 누를 때만 한 단계씩(조사 3절 Must): 0 없음 → 1 바로 앞 상대 질문의 한국어 뜻 → 2 내 답의 첫 단어 → 3 예시 답 전체.
+     내가 먼저 말하는 턴(앞에 상대 턴이 없음)이면 1단계는 내 문장의 한국어 뜻으로 대신한다. */
+  const TALK_HINT_MAX = 3;
+  function talkHint(turns, idx, level) {
+    const turn = (turns || [])[idx];
+    if (!turn || turn.who !== 'me') return [];
+    const n = Math.max(0, Math.min(TALK_HINT_MAX, Math.trunc(Number(level)) || 0));
+    const prev = idx > 0 ? turns[idx - 1] : null;
+    const out = [];
+    if (n >= 1) {
+      if (prev && prev.who === 'ai' && str(prev.ko)) out.push({ kind: 'ask-ko', text: prev.ko });
+      else if (str(turn.ko)) out.push({ kind: 'me-ko', text: turn.ko });
+    }
+    if (n === 2) out.push({ kind: 'first', text: String(turn.en).trim().split(/\s+/)[0] + ' …' });
+    if (n >= 3) out.push({ kind: 'en', text: turn.en });
+    return out;
+  }
+  /* "Sorry?" — 처음은 같은 대사를 0.15 더 천천히(하한 0.6, 기준보다 빨라지지 않음).
+     두 번째부터는 조사 3절이 '검수된 쉬운 말로 바꿔 말하기'를 요구한다. 1a 데이터에는 쉬운 말 필드가 없어서
+     rephrase:true 로 알리고, 화면은 영어 자막과 한국어 뜻을 함께 펼친다(쉬운 말 데이터는 후속). */
+  function talkRepeat(base, again) {
+    const b = Number.isFinite(base) && base > 0 ? base : 0.8;
+    const n = Math.max(0, Math.trunc(Number(again)) || 0);
+    if (!n) return { rate: b, rephrase: false };
+    const slow = Math.round((b - 0.15) * 100) / 100;
+    return { rate: Math.min(b, Math.max(0.6, slow)), rephrase: n >= 2 };
+  }
+  /* 끝난 뒤 요약. results 는 턴 key('me'·'next') → /speak-check 응답(녹음 없이 넘김·서버 없음은 빈 칸).
+     점수는 weakDecision 과 같은 기준으로 교차검증된 것만 센다. 고칠 점은 점수가 가장 낮은 턴의 fix_one 하나. */
+  function talkScored(r) {
+    return !!r && typeof r === 'object' && r.usable === true && r.limited !== true && r.mock !== true && r.score_discarded !== true &&
+      r.cross_validated !== false && !('raw' in r) && typeof r.heard === 'string' && !!r.heard.trim() &&
+      typeof r.score === 'number' && Number.isFinite(r.score) && r.score >= 0 && r.score <= 100;
+  }
+  function talkSummary(turns, results) {
+    const box = results && typeof results === 'object' ? results : {};
+    const mine = (turns || []).filter(t => t.who === 'me').map(t => ({ t, r: box[t.key] || null }));
+    const spoken = mine.filter(x => x.r && str(x.r.heard)).length;
+    const scored = mine.filter(x => talkScored(x.r));
+    const withFix = scored.filter(x => str(x.r.fix_one)).sort((a, b) => a.r.score - b.r.score);
+    return {
+      myTurns: mine.length,
+      spoken,
+      lines: mine.map(x => ({ en: x.t.en, heard: x.r && str(x.r.heard) ? x.r.heard : '',
+        score: talkScored(x.r) ? Math.round(x.r.score) : null, kind: talkScored(x.r) ? x.r.score_kind || null : null })),
+      fix: withFix.length ? { en: withFix[0].t.en, text: withFix[0].r.fix_one } : null,
+    };
+  }
+
   const api = {
+    talkTurns, talkHint, TALK_HINT_MAX, talkRepeat, talkScored, talkSummary,
     inAppBrowser, WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
     TRIP_KEY, cleanTrip, loadTrip, saveTrip, preferTrip,
     categoryOfKind,

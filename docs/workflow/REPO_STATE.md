@@ -98,6 +98,24 @@
 2. 2차 테스트의 과업 성공률·설문. `results.md` 2·3·4절은 비어 있다. 이 머지에서 채우지 않는다.
 3. §6.1 스크린샷과 발표 사용 동의. 파일명은 비어 있고, 동의 전 외부 공개는 금지라고 적혀 있다.
 
+## 이번 작업 — 실시간 회화 1a '대화하기' (2026-10-20)
+
+기준: 팀 `main` `1c1b1cf`(처음 `594b3b9` 위에서 만들고 재배치. `3f43c00` 따라 읽기의 `speak(text, btn, target)` 과 충돌해 대화하기 옵션을 넷째 인자 `speak(text, btn, target, o)` 로 옮겼다. 재배치 뒤 같은 검사를 다시 돌렸고 `test_read_along` 8/8 도 통과). 브랜치 `feat/talk-mode-1a`. 근거 문서: `docs/research/realtime-agent/README.md` 3절 Must·4절 1a·6절 ⑤.
+범위: 프론트만(AI 호출 0회, 새 API 없음). 1b `/talk/turn`·2단계 Gemini Live 는 이 브랜치에 넣지 않는다(5절 ①② 약관·고지 선행).
+
+| 단계 | 목적 | 파일 | 완료 조건 | 읽을 것 |
+|---|---|---|---|---|
+| 1 | 갈래 데이터 + 순수 로직 | `mockup/data.js`(`talk.nextFor` 30개), `mockup/ai.js`(`talkTurns`·`talkHint`·`talkRepeat`·`talkScored`·`talkSummary`), `ai.test.js`, `commons.test.js` | 상대가 먼저면 상대→나→상대(nextFor)→나 · 힌트 3단계(질문 뜻→첫 단어→예시 답) · Sorry? 첫 번째 더 느리게(하한 0.6), 두 번째 바꿔 말하기 신호 · 점수는 weakDecision 이상으로 엄격 · 고칠 점 하나 | README 3절, 6절 ⑤, `weakDecision` |
+| 2 | 시트 안 대화 UI | `mockup/app.js`(TALK 상태 머신, `toggleSpeak(opt)`·`uploadSpeech(…,opt)`·`askVoiceConsent(after)`·`speak(…,o)` 선택 인자), `styles.css`, `e2e/test_talk_mode.py` | 대화 중 점수 없음 · 말을 마친 뒤 3초 넘으면 한국어 안내 · 마이크 거부도 대화 안에 안내 · 자막 18px·마이크 64px·주요 버튼 3개 · 시트 닫는 모든 경로에서 정지 · 동의 전 마이크 안 열림 · 기존 말하기 흐름 회귀 없음 | README 3절, 기존 `speakHtml`·동의 창 |
+
+검증:
+
+- 단계 1 첫 대조: 다른 에이전트가 불일치 6건(힌트 1단계가 질문이 아닌 내 문장 뜻, 두 번째 Sorry? 바꿔 말하기 없음, 속도가 빨라지는 경계, 채점 조건이 weakDecision 보다 느슨, score_kind 누락, 결과를 배열 위치로 매칭). 고친 뒤 재대조: 통과. `nextFor` 30개 의미 검토 통과(24번 사이즈의 next 는 약간 어색 — 검수표 후보).
+- 단계 2 첫 대조: 불일치 7건(3초 안내가 녹음 시작부터 계산, 마이크 거부가 대화에 안 보임, 녹음 중 Sorry? 가능, 상태 영역·포커스 소실, 버튼 수, TTS 꺼짐 문구, 테스트 정리). 고친 뒤 재대조: 포커스·sticky·TTS 섞임 3건 남음. 다시 고친 뒤 재대조: 통과.
+- 실행: `node --test ai.test.js tokens.test.js commons.test.js` 54/54 · `test_talk_mode` 33/33 · `test_conversation_sheet` 20/20 · `test_speech_text` 16/16 · `test_study_popups` 18/18 · `test_back_nav` 12/12 · `test_bottom_nav` 11/11 · `test_shell` 131/131 (정적 서버). `test_consent` 34/37 — 실패 3건은 실제 백엔드가 필요한 항목이고 `594b3b9` 기준에서도 같게 실패.
+
+남은 것(후속): 침묵 8·15·25초 처리, 한국어 답 감지, 검수된 쉬운 말 데이터(두 번째 Sorry?), 갈래별 next(지금은 한 갈래만 재생), 122줄 정적 음성(카톡 인앱), 실기기(iOS·카톡) 확인, 턴 지연 실측.
+
 ## 이번 작업
 
 목적: 팀 `main` `169954b`를 `docs/results-pr55`(`8b5a92d`)에 합치면서 세 문서의 충돌을 푼다. `mockup/`은 수정하지 않는다. `team`에는 푸시하지 않는다.

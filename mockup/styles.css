@@ -1018,6 +1018,42 @@ html[data-mode=demo] .side .note-card { box-shadow: none; }
 .sheet .speak-btn.rec { background: var(--bad); border-color: var(--bad); color: var(--on-bad); }
 .sheet .speak-note { color: var(--text-soft); }
 .sheet .speak-res { color: var(--text); background: var(--surface-3); }
+/* 대화하기 (실시간 회화 1a) — 조사 3절 접근성: 자막 18px 이상, 큰 마이크 56px 이상, 상태를 한국어 글자로, 주요 버튼 3개 이하 */
+.talk-start { margin-bottom: 4px; flex-direction: column; gap: 2px; height: auto; min-height: 52px; padding: 8px 14px; }
+.talk-start .small { color: inherit; opacity: .85; }
+.talk-state { margin: 0 0 10px; font-weight: 700; color: var(--accent-text); }
+.talk-log { display: flex; flex-direction: column; gap: 8px; }
+.talk-bubble { border-radius: 14px; padding: 12px 14px; line-height: 1.5; }
+.talk-bubble b { display: block; font-size: 1.125rem; }
+.talk-bubble p { margin: 4px 0 0; font-size: 0.875rem; color: var(--text-soft); }
+.talk-bubble.ai { background: var(--surface-3); margin-right: 32px; }
+.talk-bubble.me { background: var(--accent-soft); margin-left: 32px; }
+.talk-who { display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-soft); margin-bottom: 2px; }
+.talk-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.talk-turn { margin-top: 12px; }
+.talk-hints .talk-hint { margin: 0 0 6px; font-size: 1rem; }
+.talk-hint.en, .talk-hint.first { font-size: 1.125rem; font-weight: 700; }
+.talk-note { margin: 6px 0; font-size: 0.9375rem; color: var(--text); }
+.talk-ctl { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; }
+.talk-ctl .btn { flex: 1; }
+.talk-mic { flex: 0 0 64px; width: 64px; height: 64px; border-radius: 50%; border: 0; background: var(--fill-strong); color: var(--on-fill); font-size: 1.5rem; }
+.talk-mic.rec { background: var(--bad); color: var(--on-bad); }
+.talk-prog { text-align: center; margin: 10px 0 0; }
+.talk-done h4 { margin-top: 12px; }
+.talk-sum { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-direction: column; gap: 8px; }
+.talk-sum li { border-top: 1px solid var(--border); padding-top: 8px; }
+.talk-sum b { display: block; font-size: 1rem; }
+.talk-fix { background: var(--accent-soft); border-radius: 14px; padding: 12px 14px; margin-top: 8px; }
+.talk-fix b { display: block; }
+.talk-fix p { margin: 4px 0 0; }
+.talk-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.talk-exit { min-height: 44px; padding: 0 12px; border: 0; background: none; color: var(--text-soft); font-weight: 700; font-size: 0.875rem; text-decoration: underline; }
+.talk-say.sub { height: 36px; font-size: 0.75rem; font-weight: 600; }
+.talk-say:disabled { opacity: .5; }
+/* 내 차례 줄(힌트·마이크·넘어가기)은 시트를 스크롤해도 맨 아래에 남는다 — .talk-turn 자체를 붙인다 */
+.sheet.talk .talk-turn, .sheet.talk [data-live=talk] > .talk-ctl { position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom, 0px)); background: var(--bg); padding: 8px 0 calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 1; }
+.talk-mic[aria-disabled="true"] { opacity: .6; }
+.talk-state:focus { outline: none; }
 .sheet .tts-off { color: var(--text-soft); }
 .sheet > .btn { margin-top: 14px; }
 
