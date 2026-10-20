@@ -1072,7 +1072,46 @@ const DETERMINER = { name: 'your name', destination: 'your destination' };
 const slotText = s => String(s).replace(/\[(name|destination)\]/g, (_, k) => `[${DETERMINER[k]}]`);
 /* 대괄호만 벗긴다. 펼침은 slotText 한 곳이다. */
 const ttsText = shown => String(shown).replace(/[\[\]]/g, '');
-function speak(text, btn) {
+/* 따라 읽기(NaturalReaders 처럼): 영어 문장을 단어 단위 span 으로 그린다. data-c 는 '실제로 읽는 문장'(ttsText) 안의
+   단어 시작 위치다 — 대괄호를 빼고 읽으므로 그만큼 당겨 센다. 자리표시자 단어에는 ph 를 붙여 기존 강조를 유지한다. */
+function enHtml(text) {
+  let out = '', pos = 0, inPh = false;
+  for (const part of slotText(text).split(/(\s+)/)) {
+    if (!part) continue;
+    if (/^\s+$/.test(part)) { out += part; pos += part.length; continue; }
+    const opens = part.includes('['), closes = part.includes(']');
+    out += `<span class="w${inPh || opens ? ' ph' : ''}" data-c="${pos}">${esc(part)}</span>`;
+    if (opens) inPh = true; if (closes) inPh = false;
+    pos += part.replace(/[\[\]]/g, '').length;
+  }
+  return out;
+}
+let readTimer = null;
+function readMark(target, at) {   // at = 읽는 문장 안 글자 위치. 그 위치를 지난 마지막 단어를 칠한다
+  if (!target) return;
+  let cur = null;
+  target.querySelectorAll('.w').forEach(w => { if (+w.dataset.c <= at) cur = w; });
+  target.querySelectorAll('.w.now').forEach(w => w !== cur && w.classList.remove('now'));
+  if (cur) cur.classList.add('now');
+}
+function readClear() { clearTimeout(readTimer); readTimer = null; document.querySelectorAll('.w.now').forEach(w => w.classList.remove('now')); }
+/* 브라우저가 단어 경계(boundary) 이벤트를 주지 않으면(Android 의 일부 음성) 글자 수로 시간을 어림해 따라간다.
+   진짜 경계 이벤트가 한 번이라도 오면 어림은 멈춘다. */
+function readEstimate(target, spoken, rate) {
+  const words = [...target.querySelectorAll('.w')].map(w => +w.dataset.c);
+  const msPerChar = 62 / (rate || 1);
+  let k = 0;
+  const step = () => {
+    if (k >= words.length) return;
+    readMark(target, words[k]);
+    const next = k + 1 < words.length ? words[k + 1] : spoken.length;
+    const wait = Math.max(160, (next - words[k]) * msPerChar);
+    k++; readTimer = setTimeout(step, wait);
+  };
+  step();
+}
+const readTarget = el => { const box = el && el.closest('.talk-line, .talk-me, .face, .sent'); return box ? box.querySelector('[data-read]') : null; };
+function speak(text, btn, target) {
   if (ttsState() !== 'ok') { toast(ttsOffMsg()); return; }
   speechSynthesis.cancel();
   if (mineAudio) { try { mineAudio.pause(); } catch (e) { /* 이미 멈춤 */ } }   // 내 발음과 겹치지 않게
@@ -1082,8 +1121,19 @@ function speak(text, btn) {
   u.lang = 'en-US';
   const v = enVoice(); if (v) u.voice = v;
   u.rate = S.ttsRate;
-  u.onstart = () => btn && btn.classList.add('playing');
-  u.onend = u.onerror = () => btn && btn.classList.remove('playing');
+  readClear();
+  const tgt = target && target.querySelector('.w') ? target : null;
+  let gotBoundary = false;
+  u.onstart = () => {
+    if (btn) btn.classList.add('playing');
+    if (tgt) readTimer = setTimeout(() => { if (!gotBoundary) readEstimate(tgt, u.text, u.rate); }, 350);
+  };
+  u.onboundary = e => {
+    if (!tgt || (e.name && e.name !== 'word')) return;
+    if (!gotBoundary) { gotBoundary = true; clearTimeout(readTimer); readTimer = null; }
+    readMark(tgt, e.charIndex);
+  };
+  u.onend = u.onerror = () => { if (btn) btn.classList.remove('playing'); readClear(); };
   speechSynthesis.speak(u);
 }
 if (ttsSupported()) {
@@ -1778,7 +1828,7 @@ function studyView(r, opts = {}) {
         <div class="face front"><div class="ctx">${tag}${aiBadges(s)}${isNew ? '<span class="badge b-new">새 문장</span>' : ''}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
           <div class="ko">${phHtml(s.ko)}</div><div class="hint">탭해서 영어 문장 보기 ↻</div></div>
         <div class="face back"><div class="ctx">${tag}${aiBadges(s)}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
-          <div class="en">${phHtml(s.en, 'en')}</div><div class="ko-s">${phHtml(s.ko)}</div>${tts}</div>
+          <div class="en" data-read>${enHtml(s.en)}</div><div class="ko-s">${phHtml(s.ko)}</div>${tts}</div>
       </div>
     </div>
     <div class="card-nav"><button class="round" data-act="card-prev" ${i === 0 ? 'disabled' : ''}>${I.back}</button>
@@ -1804,7 +1854,7 @@ function sheetHtml() {
   const t = s.talk, tts = ttsState() === 'ok';
   const line = (k, label) => {
     const L = talkLine(t, k);
-    return L ? `<div class="talk-line">${label ? `<span class="talk-pill">${esc(label)}</span>` : ''}<b lang="en">${esc(L.en)}</b><p>${esc(L.ko)}</p>
+    return L ? `<div class="talk-line">${label ? `<span class="talk-pill">${esc(label)}</span>` : ''}<b lang="en" data-read>${enHtml(L.en)}</b><p>${esc(L.ko)}</p>
       ${tts ? `<button class="talk-say" data-act="say-line" data-k="${k}">${I.speaker}듣기</button>` : ''}</div>` : '';
   };
   const body = t
@@ -1813,7 +1863,7 @@ function sheetHtml() {
   return `<div class="sheet-wrap" data-act="sheet-bg"><section class="sheet" role="dialog" aria-modal="true" aria-label="회화 연습" data-act="noop">
     <div class="sheet-handle"></div><h3>회화 연습</h3>
     ${t && t.ask ? `<h4>상대가 먼저</h4>${line('ask')}<h4>내가 대답하기</h4>` : ''}
-    <div class="talk-me"><b lang="en">${phHtml(s.en, 'en')}</b><div>${phHtml(s.ko)}</div>${tts ? `<button class="talk-say" data-act="speak-card">${I.speaker}듣기</button>` : ''}</div>
+    <div class="talk-me"><b lang="en" data-read>${enHtml(s.en)}</b><div>${phHtml(s.ko)}</div>${tts ? `<button class="talk-say" data-act="speak-card">${I.speaker}듣기</button>` : ''}</div>
     <div class="speak" data-live="speak">${speakHtml(s)}</div>
     ${body}
     <button class="btn primary block" data-act="sheet-close">↓ 회화 연습 닫기</button>
@@ -1884,7 +1934,7 @@ function updateStudyLive() {
 function scrColl() {
   const tab = S.coll.tab, f = S.coll.filter;
   const learnBadge = s => s.learnPhase === 'none' ? '<span class="badge b-only">문장 모음 전용</span>' : s.learnPhase === 'trip' ? '<span class="badge b-new">여행 중 새 문장</span>' : '';
-  const item = s => `<div class="sent"><div><div class="tags">${learnBadge(s)}${aiBadges(s)}<span class="small">${esc(s.situation)}</span></div><div class="en">${phHtml(s.en, 'en')}</div><div class="ko">${phHtml(s.ko)}</div></div>
+  const item = s => `<div class="sent"><div><div class="tags">${learnBadge(s)}${aiBadges(s)}<span class="small">${esc(s.situation)}</span></div><div class="en" data-read>${enHtml(s.en)}</div><div class="ko">${phHtml(s.ko)}</div></div>
     <button class="play" data-act="speak" data-id="${s.id}">${I.speaker}</button></div>`;
   /* 묶음 머리에 '카드로 연습' — 사용자 피드백: 날짜별 말고 상황별로 모아서 연습하고 싶다 */
   const drillBtn = (by, v, n) => `<button class="drill-btn" data-act="drill" data-by="${by}" data-v="${esc(v)}">${I.cards}카드로 연습 ${n}</button>`;
@@ -2890,12 +2940,12 @@ const ACT = {
   },
   'card-prev': () => { cancelSpeak(); S.sheet = false; S.card.i = Math.max(0, S.card.i - 1); render(); },
   'card-next': () => { cancelSpeak(); S.sheet = false; const r = pickRow(); S.card.i = Math.min(r.ids.length - 1, S.card.i + 1); render(); },
-  'speak-card': el => { const r = pickRow(); speak(S.smap[r.ids[S.card.i]].en, el); },
-  speak: el => speak(S.smap[el.dataset.id].en, el),
+  'speak-card': el => { const r = pickRow(); speak(S.smap[r.ids[S.card.i]].en, el, readTarget(el)); },
+  speak: el => speak(S.smap[el.dataset.id].en, el, readTarget(el)),
   'sheet-open': () => { S.sheet = true; pushOverlay('sheet'); render(); },
   'sheet-close': () => closeSheet(),
   'sheet-bg': (el, e) => { if (e.target === el) closeSheet(); },
-  'say-line': el => { const s = curSent(); const L = s && talkLine(s.talk, el.dataset.k); if (L) speak(L.en, el); },
+  'say-line': el => { const s = curSent(); const L = s && talkLine(s.talk, el.dataset.k); if (L) speak(L.en, el, readTarget(el)); },
   rate: el => { S.ttsRate = S.ttsRate < 0.9 ? 0.95 : 0.75; el.textContent = S.ttsRate < 0.9 ? '느리게' : '보통 속도'; },
   complete: () => {
     const r = pickRow();
