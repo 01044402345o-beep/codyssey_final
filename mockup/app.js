@@ -219,7 +219,7 @@ const STORE = (() => { try { return window.localStorage; } catch (e) { return nu
 const SESSION_KEY = 'cd_session';
 const SESSION_V = 1;
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000;   /* 30일 지난 기록은 버린다 */
-const PROG = { done: {}, pre: {} };                 /* done: 'YYYY-MM-DD' → 완료 시각(ms). pre: 미리 학습을 마친 날짜 — 그날이 되면 done 으로 옮긴다(settlePre) */
+const PROG = { done: {}, pre: {}, act: {} };   /* act: 'YYYY-MM-DD' → 그날 처음 뒤집은 카드 수(연속 학습·오늘 목표, Duolingo 처럼) */                 /* done: 'YYYY-MM-DD' → 완료 시각(ms). pre: 미리 학습을 마친 날짜 — 그날이 되면 done 으로 옮긴다(settlePre) */
 const RESTORE = { screen: null, studyDate: null, card: null, trip: null };
 let SESS_READY = false;                             /* 복원이 끝나기 전에는 저장하지 않는다 — 빈 진도로 덮어쓰지 않기 위해 */
 let skipStateWrite = false;                         /* 계정을 갈아 끼우는 동안 이전 기록을 새 칸에 쓰지 않는다 */
@@ -279,7 +279,7 @@ function sessionWrite() {
   if (!box || !SESS_READY || skipStateWrite) return;
   try {
     box.setItem(SESSION_KEY, JSON.stringify({
-      v: SESSION_V, at: Date.now(), done: PROG.done, ...(Object.keys(PROG.pre).length ? { pre: PROG.pre } : {}), screen: S.screen, studyDate: S.studyDate,
+      v: SESSION_V, at: Date.now(), done: PROG.done, ...(Object.keys(PROG.pre).length ? { pre: PROG.pre } : {}), ...(Object.keys(PROG.act).length ? { act: PROG.act } : {}), screen: S.screen, studyDate: S.studyDate,
       card: sessionCard(S.card),
     }));
   } catch (e) { /* 저장 불가(시크릿 모드·용량 초과): 이번 방문 동안만 유지 */ }
@@ -383,7 +383,7 @@ async function handleAccountDeleted(uid, epoch) {
   S.user = null;
   S.trip = null; resetDerived();
   S.archived = [];
-  PROG.done = {}; PROG.pre = {};
+  PROG.done = {}; PROG.pre = {}; PROG.act = {};
   RESTORE.screen = null; RESTORE.studyDate = null; RESTORE.card = null; RESTORE.trip = null;
   aiRefreshKey = null;
   SESS_READY = true;
@@ -457,6 +457,8 @@ function fillProgress(d) {
     Object.keys(d.done).forEach(k => { if (/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof d.done[k] === 'number') PROG.done[k] = d.done[k]; });
   if (d.pre && typeof d.pre === 'object')
     Object.keys(d.pre).forEach(k => { if (/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof d.pre[k] === 'number') PROG.pre[k] = d.pre[k]; });
+  if (d.act && typeof d.act === 'object')
+    Object.keys(d.act).forEach(k => { const n = d.act[k]; if (/^\d{4}-\d{2}-\d{2}$/.test(k) && Number.isInteger(n) && n >= 0 && n <= 10000) PROG.act[k] = n; });
   RESTORE.screen = typeof d.screen === 'string' ? d.screen : null;
   RESTORE.studyDate = typeof d.studyDate === 'string' ? d.studyDate : null;
   const c = d.card;
@@ -497,7 +499,7 @@ async function adoptAccount(account, opts) {
   if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; }
   S.user = account || null;
   S.trip = null; resetDerived();          // 계정을 갈아 끼우면 이전 계정의 여행·계획을 들고 가지 않는다
-  PROG.done = {}; PROG.pre = {};
+  PROG.done = {}; PROG.pre = {}; PROG.act = {};
   RESTORE.screen = null;
   RESTORE.studyDate = null;
   RESTORE.card = null;
@@ -518,7 +520,7 @@ async function adoptAccount(account, opts) {
     const remoteTrip = AI.cleanTrip(remote.trip);
     remote.trip = AI.preferTrip(remote.trip, loadTripHere());
     writeLocalState(remote);
-    PROG.done = {}; PROG.pre = {};
+    PROG.done = {}; PROG.pre = {}; PROG.act = {};
     RESTORE.screen = null;
     RESTORE.studyDate = null;
     RESTORE.card = null;
@@ -1665,6 +1667,7 @@ function scrHome() {
     <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 12px"><div><div class="small">안녕하세요</div><b style="font-size:1.125rem">${esc(userName())}${isGuest() ? '' : '님'}</b></div><span class="badge t-norm">${STATUS_KO[t.status]}</span></div>
     ${hero}<div style="height:12px"></div>${today}
     ${pr.miss ? `<div style="height:10px"></div>${notice(`지난 학습 ${pr.miss}일이 미완료예요. 일정표에서 여행 종료일까지 언제든 채울 수 있어요.`, 'warn')}` : ''}
+    ${streakCard()}
     <div class="sec-title"><h4>진도</h4><button data-act="tab" data-id="u-sched">일정표 ›</button></div>
     <div class="card progress-row">${ring(pr.rate)}
       <div class="mini-stats"><div><span>완료한 날</span><b>${pr.done}일</b></div><div><span>학습 날짜</span><b>${pr.den}일</b></div>
@@ -1675,6 +1678,34 @@ function scrHome() {
     ${accountCard()}
   </div>`;
   return frame(inner, { tabbar: true });
+}
+/* ---- 연속 학습·오늘 목표 (Duolingo 처럼) ----
+   '오늘'은 앱의 오늘(S.today, 데모에서 바꿀 수 있음)이다. 카드를 처음 뒤집을 때마다 그날 +1. 오늘 아직 안 했으면
+   어제까지의 연속을 보여 준다(오늘 하면 이어진다). 120일보다 오래된 기록은 지운다. */
+const DAY_GOAL = 10;
+const actToday = () => PROG.act[S.today] || 0;
+function streakDays() {
+  let d = actToday() > 0 ? S.today : Dt.add(S.today, -1), n = 0;
+  while ((PROG.act[d] || 0) > 0) { n++; d = Dt.add(d, -1); }
+  return n;
+}
+function bumpAct() {
+  const k = S.today, n = (PROG.act[k] || 0) + 1;
+  PROG.act[k] = n;
+  const old = Dt.add(S.today, -120);
+  Object.keys(PROG.act).forEach(d => { if (d < old) delete PROG.act[d]; });
+  if (n === DAY_GOAL) toast(`오늘 목표 달성! 🔥 연속 ${streakDays()}일`);
+}
+function streakCard() {
+  const n = actToday(), s = streakDays(), pct = Math.min(100, Math.round(n / DAY_GOAL * 100));
+  const week = Array.from({ length: 7 }, (_, i) => Dt.add(S.today, i - 6)).map(d => {
+    const on = (PROG.act[d] || 0) > 0, dow = '일월화수목금토'[new Date(Dt.parse(d)).getUTCDay()];
+    return `<i class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}" title="${Dt.md(d)}${on ? ' · 학습함' : ''}"><b>${on ? '🔥' : ''}</b><span>${dow}</span></i>`;
+  }).join('');
+  const msg = n >= DAY_GOAL ? '오늘 목표 달성! 내일도 이어 가요.' : n ? `카드 ${DAY_GOAL - n}장만 더 뒤집으면 오늘 목표예요.` : s ? '오늘 카드를 뒤집으면 연속이 이어져요.' : `오늘 카드 ${DAY_GOAL}장을 뒤집어 보세요.`;
+  return `<div class="sec-title"><h4>오늘의 목표</h4></div>
+    <div class="card streak-card" data-live="streak"><div class="goal-ring${n >= DAY_GOAL ? ' done' : ''}" style="--p:${pct}" role="img" aria-label="오늘 카드 ${n}장 / 목표 ${DAY_GOAL}장"><b>${n}</b><span>/${DAY_GOAL}장</span></div>
+      <div class="streak"><b class="streak-n">🔥 연속 ${s}일</b><p class="small">${msg}</p><div class="week" aria-label="최근 7일">${week}</div></div></div>`;
 }
 function ring(rate) {
   const r = 40, c = 2 * Math.PI * r;
@@ -2109,7 +2140,7 @@ function navFromMenu(id) {
 
 /* 새로고침 복원: 저장해 둔 진도·화면·카드를 되살린다. 저장분이 없거나 못 쓰면 첫 화면 그대로 뜬다 */
 function sessionResume() {
-  PROG.done = {}; PROG.pre = {};
+  PROG.done = {}; PROG.pre = {}; PROG.act = {};
   RESTORE.screen = null;
   RESTORE.studyDate = null;
   RESTORE.card = null;
@@ -2129,7 +2160,7 @@ function applyDraftPreset(kind) {
 }
 
 function demoGen(mode) {
-  PROG.done = {}; PROG.pre = {}; sessionClear();   // 새 데모 여행 — 날짜가 같아도 이전 완료가 다시 붙지 않게
+  PROG.done = {}; PROG.pre = {}; PROG.act = {}; sessionClear();   // 새 데모 여행 — 날짜가 같아도 이전 완료가 다시 붙지 않게
   ensure('user');
   S.flags.fail = mode === 'fail'; S.flags.stuck = mode === 'stuck';
   createTrip(defaultDraft(S.today));
@@ -2141,7 +2172,7 @@ function preset(kind) {
   cancelGen();
   pushStateNow();                   // 계정에 남아 있던 진도를 데모 키로 옮기지 않고 먼저 올린다
   S.user = DEMO_USER;
-  PROG.done = {}; PROG.pre = {}; sessionClear();   // 예시 여행은 직전 완료를 이어받지 않는다. 데모 키만 지운다.
+  PROG.done = {}; PROG.pre = {}; PROG.act = {}; sessionClear();   // 예시 여행은 직전 완료를 이어받지 않는다. 데모 키만 지운다.
   const base = BASE_TODAY;
   const d = defaultDraft(base);
   d.studyStart = kind === 'short' ? Dt.add(d.cities[0].start, -3) : d.cities[0].start;
@@ -2586,7 +2617,7 @@ async function doWithdraw() {
   S.user = null;
   S.trip = null; resetDerived();
   S.archived = [];                           // 보관한 여행 제목도 메모리에서 지운다(관리자 화면에 남지 않게)
-  PROG.done = {}; PROG.pre = {};
+  PROG.done = {}; PROG.pre = {}; PROG.act = {};
   RESTORE.screen = null; RESTORE.studyDate = null; RESTORE.card = null; RESTORE.trip = null;
   aiRefreshKey = null;                       // 다음 여행에서 복원 시 AI 문장 채우기가 다시 돌게
   SESS_READY = true;
@@ -2616,7 +2647,7 @@ const ACT = {
   link: el => window.open(el.getAttribute('href'), '_blank', 'noopener'),
   reset: () => {
     const c = S.demoClosed;
-    PROG.done = {}; PROG.pre = {};
+    PROG.done = {}; PROG.pre = {}; PROG.act = {};
     // 여행을 먼저 지운 뒤에 진도를 비워야 한다. sessionClear 가 지금 저장소를 서버로 올리므로, 순서가 반대면 지운 여행이 다시 올라간다.
     AI.saveTrip(personalStore(), null);
     sessionClear();
@@ -2706,7 +2737,7 @@ const ACT = {
       S.user = null;
       S.trip = null;
       resetDerived();
-      PROG.done = {}; PROG.pre = {};
+      PROG.done = {}; PROG.pre = {}; PROG.act = {};
       RESTORE.screen = null;
       RESTORE.studyDate = null;
       RESTORE.card = null;
@@ -2873,6 +2904,7 @@ const ACT = {
     if (el.classList.contains('flipped')) {
       const r = pickRow(), before = S.card.flipped.size;
       S.card.flipped.add(S.card.i); updateStudyLive();
+      if (S.card.flipped.size > before) bumpAct();   // 이 카드를 이번에 처음 뒤집었다 → 오늘 활동 +1
       if (r && before < r.ids.length && S.card.flipped.size >= r.ids.length) allFlipped(r);   // 방금 다 뒤집었다
     }
     else if (ttsSupported()) speechSynthesis.cancel();
@@ -2923,7 +2955,7 @@ const ACT = {
     S.justCompleted = null; resetCard(S.drill.date); go('u-study'); window.scrollTo(0, 0);
   },
   'new-trip': () => confirmBox('새 여행을 만들까요?', '이 여행은 보관되고 더 이상 보이지 않아요. (삭제되지는 않아요)', '보관하고 새로 만들기', () => {
-    PROG.done = {}; PROG.pre = {};
+    PROG.done = {}; PROG.pre = {}; PROG.act = {};
     archiveTrip();
     // 저장해 둔 여행 입력을 먼저 지운 뒤 진도를 비운다. 반대로 하면 서버에 이전 여행이 다시 올라간다.
     AI.saveTrip(personalStore(), null);
