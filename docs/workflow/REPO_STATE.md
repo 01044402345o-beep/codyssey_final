@@ -98,6 +98,24 @@
 2. 2차 테스트의 과업 성공률·설문. `results.md` 2·3·4절은 비어 있다. 이 머지에서 채우지 않는다.
 3. §6.1 스크린샷과 발표 사용 동의. 파일명은 비어 있고, 동의 전 외부 공개는 금지라고 적혀 있다.
 
+## 이번 작업 — 실시간 회화 1a '대화하기' (2026-10-20)
+
+기준: 팀 `main` `1c1b1cf`(처음 `594b3b9` 위에서 만들고 재배치. `3f43c00` 따라 읽기의 `speak(text, btn, target)` 과 충돌해 대화하기 옵션을 넷째 인자 `speak(text, btn, target, o)` 로 옮겼다. 재배치 뒤 같은 검사를 다시 돌렸고 `test_read_along` 8/8 도 통과). 브랜치 `feat/talk-mode-1a`. 근거 문서: `docs/research/realtime-agent/README.md` 3절 Must·4절 1a·6절 ⑤.
+범위: 프론트만(AI 호출 0회, 새 API 없음). 1b `/talk/turn`·2단계 Gemini Live 는 이 브랜치에 넣지 않는다(5절 ①② 약관·고지 선행).
+
+| 단계 | 목적 | 파일 | 완료 조건 | 읽을 것 |
+|---|---|---|---|---|
+| 1 | 갈래 데이터 + 순수 로직 | `mockup/data.js`(`talk.nextFor` 30개), `mockup/ai.js`(`talkTurns`·`talkHint`·`talkRepeat`·`talkScored`·`talkSummary`), `ai.test.js`, `commons.test.js` | 상대가 먼저면 상대→나→상대(nextFor)→나 · 힌트 3단계(질문 뜻→첫 단어→예시 답) · Sorry? 첫 번째 더 느리게(하한 0.6), 두 번째 바꿔 말하기 신호 · 점수는 weakDecision 이상으로 엄격 · 고칠 점 하나 | README 3절, 6절 ⑤, `weakDecision` |
+| 2 | 시트 안 대화 UI | `mockup/app.js`(TALK 상태 머신, `toggleSpeak(opt)`·`uploadSpeech(…,opt)`·`askVoiceConsent(after)`·`speak(…,o)` 선택 인자), `styles.css`, `e2e/test_talk_mode.py` | 대화 중 점수 없음 · 말을 마친 뒤 3초 넘으면 한국어 안내 · 마이크 거부도 대화 안에 안내 · 자막 18px·마이크 64px·주요 버튼 3개 · 시트 닫는 모든 경로에서 정지 · 동의 전 마이크 안 열림 · 기존 말하기 흐름 회귀 없음 | README 3절, 기존 `speakHtml`·동의 창 |
+
+검증:
+
+- 단계 1 첫 대조: 다른 에이전트가 불일치 6건(힌트 1단계가 질문이 아닌 내 문장 뜻, 두 번째 Sorry? 바꿔 말하기 없음, 속도가 빨라지는 경계, 채점 조건이 weakDecision 보다 느슨, score_kind 누락, 결과를 배열 위치로 매칭). 고친 뒤 재대조: 통과. `nextFor` 30개 의미 검토 통과(24번 사이즈의 next 는 약간 어색 — 검수표 후보).
+- 단계 2 첫 대조: 불일치 7건(3초 안내가 녹음 시작부터 계산, 마이크 거부가 대화에 안 보임, 녹음 중 Sorry? 가능, 상태 영역·포커스 소실, 버튼 수, TTS 꺼짐 문구, 테스트 정리). 고친 뒤 재대조: 포커스·sticky·TTS 섞임 3건 남음. 다시 고친 뒤 재대조: 통과.
+- 실행: `node --test ai.test.js tokens.test.js commons.test.js` 54/54 · `test_talk_mode` 33/33 · `test_conversation_sheet` 20/20 · `test_speech_text` 16/16 · `test_study_popups` 18/18 · `test_back_nav` 12/12 · `test_bottom_nav` 11/11 · `test_shell` 131/131 (정적 서버). `test_consent` 34/37 — 실패 3건은 실제 백엔드가 필요한 항목이고 `594b3b9` 기준에서도 같게 실패.
+
+남은 것(후속): 침묵 8·15·25초 처리, 한국어 답 감지, 검수된 쉬운 말 데이터(두 번째 Sorry?), 갈래별 next(지금은 한 갈래만 재생), 122줄 정적 음성(카톡 인앱), 실기기(iOS·카톡) 확인, 턴 지연 실측.
+
 ## 이번 작업
 
 목적: 팀 `main` `169954b`를 `docs/results-pr55`(`8b5a92d`)에 합치면서 세 문서의 충돌을 푼다. `mockup/`은 수정하지 않는다. `team`에는 푸시하지 않는다.
@@ -284,3 +302,17 @@ Firestore `(default)`를 asia-northeast3에 만들었다. `firestore.rules`는 �
 브랜치 HEAD 기준 백엔드 `unittest discover` 190 통과(규칙 대조 3 포함), 프론트 `node --test ai.test.js` 34·`tokens.test.js` 7 통과. Playwright e2e 11종 301 통과(`home_settings 33`·`test_account_withdrawal 10` 포함). Firebase 를 켠 로컬 서버(`--env-file .env`)에서 `/auth/config` enabled=true, 로그인 화면 이메일 폼 노출, JS 오류 0 을 확인했다. PR CI 는 push 마다 `test`·`e2e` 잡이 돈다. **남은 관찰: 로그인한 실제 계정의 `/user/state` 쓰기·삭제 왕복(FR-16·FR-17 부분). 규칙은 이미 올라가 있어 머지 시 계정 저장이 깨지지 않는다.**
 
 **탈퇴 (FR-17)**: 홈 계정 카드 **패딩 밖** 아래에 연하고 작은 `탈퇴하기`(`.withdraw`). 순서 = (1) 서버 `POST /account/erase`(관리자: 토큰 취소 + 문서 삭제 + Auth 계정 삭제 — 최근 로그인 불필요) → (2) 성공하면 브라우저 계정 칸 + 로그인 전 공용 칸 기록 폐기 → (3) 관리자 키가 없으면(503 `admin_unavailable`) 규칙 삭제 `DELETE /user/state` + 클라이언트 `deleteUser` 로 되돌아간다. **서버 단계가 확정된 뒤에 로컬을 지운다** — 중간에 멈추면 계정·기록을 그대로 두고, 이후 화면 재렌더의 빈 기록이 서버로 올라가지 않는다. 탈퇴 시작 시 예약 업로드(`stateTimer`)·진행 중 생성(`cancelGen`)을 취소하고, `pushPayload` 는 토큰을 받은 뒤 `skipStateWrite`/uid 를 다시 확인한다. `eraseOnServer` 는 200 이어도 본문 `erased:true` 를 확인한다(프록시 200 오인 방지). 관리자 경로는 서비스 계정 키(`FIREBASE_SERVICE_ACCOUNT_JSON`, 최소 권한 스코프 `firebase`+`identitytoolkit`+`datastore`)가 있어야 하며, 없으면 폴백으로 동작한다. 관리자 탈퇴는 **탈퇴 흔적 `deleted/{uid}`(uid·시각만)를 가장 먼저** 남기고(취소 → 문서 삭제 → 계정 삭제), `GET`·`PUT /user/state` 는 흔적이 있는 uid 를 **403 `account_deleted`** 로 거부한다 — 다른 기기의 미만료 ID 토큰(≤1h)이 문서를 다시 만들지 못한다. 도중 실패하면 흔적을 되돌려 다시 시도할 수 있다. 흔적은 서비스 계정만 읽고 써서 **추가 규칙 배포가 필요 없고**, 조회는 양성만 캐시(1h)하며 실패 시에는 통과시킨다. 화면은 403 을 받으면 계정이 정말 사라졌는지 강제 갱신으로 확인한 뒤 로컬을 비우고 로그아웃한다. **키가 없으면 흔적이 쓰이지 않아 이 차단은 동작하지 않는다.** 실계정 탈퇴 왕복은 아직 관찰하지 않아 부분이다.
+
+## 이번 작업 — 대화하기 UI/UX 재디자인 (2026-10-20)
+
+기준: 팀 `main` `5ef1cac`(1a 머지). 브랜치 `feat/talk-mode-redesign`. 동작·상태머신·채점 계약은 그대로, 화면만 바꿨다.
+
+- 고친 문제(1a 화면 실측): 시트 높이가 턴마다 바뀌어 마이크 위치가 출렁임 · 마이크가 검은 원+이모지라 주 행동으로 안 보임 · 힌트/넘어가기가 마이크와 같은 무게의 테두리 버튼 · 상태 문구가 늘 같은 주황 글자라 단계 구분이 안 됨 · 내 말 말풍선이 상대와 색만 조금 달라 대화로 안 읽힘 · 요약 끝의 버튼이 스크롤 아래로 밀림.
+- 새 구조: 시트 높이 고정(85dvh, 키 700px 이하 94dvh) → 머리(상황·그만하기) / 상태 띠(`data-phase` = ai·me·rec·busy·done, 단계마다 색) / 진행 점(내 차례 수) / 대화 기록(이 칸만 스크롤, 새 대사로 자동 스크롤) / 바닥 고정 조작부.
+- 조작부: 가운데 76px 주황 마이크(녹음 중 빨강+맥동, 처리 중 회전 테) + 아래 글자 표시, 좌우는 아이콘+글자의 가벼운 버튼(힌트·넘어가기). 녹음/처리 중에는 힌트도 막는다.
+- 대화 기록: 상대=왼쪽 흰 말풍선(말하는 중 청록 테두리+소리 막대), 나=오른쪽 짙은 말풍선(넘어간 턴은 점선), 지난 상대 대사는 한 단계 작게.
+- 힌트: 노란 칸에 단계 이름표(질문 뜻·첫 단어·예시 답). 되받기는 체크 아이콘+초록.
+- 요약: 완료 배지 → "다음엔 이것 하나만"(고칠 점) → 주고받은 문장(단어 일치 막대, 발음 점수 아님 표기 유지) → 바닥 고정 버튼.
+- 시트 진입 버튼: 짙은 카드+마이크 원+주고받기 횟수.
+- 색은 토큰만(다크 모드 확인), `prefers-reduced-motion`에서 맥동·소리 막대를 끈다.
+- 검사: node 54/54 · `test_talk_mode` 42/42(배치 검사 9개 추가: 바닥 고정, 진행 점, 단계 표시, 시트 비스크롤, 힌트 이름표, 힌트 펼쳐도 높이 불변, 녹음 중 힌트 비활성, 요약 버튼 고정, done 단계) · read_along 8 · conversation_sheet 20 · speech_text 16 · study_popups 18 · back_nav 12 · bottom_nav 11 · shell 131. Chromium 390×844·360×640·다크만, iOS·카톡 인앱 실기기 미확인.

@@ -39,6 +39,8 @@ test('공통 문장: 학습량 30개 모두 회화 연습(예상 답변 1~2개 +
     it.talk.replies.forEach((r, i) => line(r, `${w} replies[${i}]`));
     line(it.talk.next, `${w} next`);
     if (it.talk.ask) line(it.talk.ask, `${w} ask`);
+    // 대화하기(1a): '내가 이어서'가 이어지는 갈래. 갈래가 둘이면 어느 쪽인지 반드시 적는다(조사 6절 ⑤).
+    assert.ok(Number.isInteger(it.talk.nextFor) && it.talk.nextFor >= 0 && it.talk.nextFor < it.talk.replies.length, `${w}: nextFor 범위`);
   }
 });
 
@@ -57,6 +59,8 @@ test('공통 문장: 학습량 30개 모두 다른 표현 1~2개(라벨·자리�
       const at = `${w} alt[${i}]`;
       assert.ok(a && typeof a.en === 'string' && a.en.trim() && typeof a.ko === 'string' && a.ko.trim(), `${at}: 영어·한국어 필요`);
       assert.ok(!a.en.includes('/') && a.en.split(/\s+/).length <= 15, `${at}: 한 문장·15단어 이하 — ${a.en}`);
+      // 축약 뒤 공백이 빠진 문장(I'llhave) — 편집 도구가 공백을 먹은 적이 있다
+      assert.ok(!/'(ll|m|d|s|t|re|ve)[a-z]/i.test(a.en), `${at}: 축약 뒤 띄어쓰기 — ${a.en}`);
       assert.ok(LABELS.includes(a.label), `${at}: 라벨은 ${LABELS.join('·')} 중 하나 — ${a.label}`);
       assert.notEqual(a.en.trim().toLowerCase(), it.en.trim().toLowerCase(), `${at}: 원문과 같은 문장`);
       assert.equal(slots(a.en), slots(it.en), `${at}: 자리표시자([name]·[destination])는 원문과 같게 — ${a.en}`);

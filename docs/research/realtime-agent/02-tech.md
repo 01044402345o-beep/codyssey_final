@@ -63,6 +63,9 @@
 | **2. 실시간 모드(A)** | 기능 감지(AudioWorklet, getUserMedia, 인앱 여부)를 통과한 브라우저에서만 '실시간 대화(베타)' 를 연다. 서버는 `/talk/token` 에서 시스템 지시를 잠근 임시 토큰을 발급한다. 회화가 끝나면 전사를 `/talk/feedback` 으로 보내 텍스트 피드백을 받는다. **점수는 내지 않는다**(단일 전사이기 때문). | `mockup/live.js`, 워크렛 2개, `/talk/token`, `/talk/feedback`, 새 동의 | iOS Safari, Android Chrome, 카톡 인앱(iOS/Android)을 실기기에서 확인한다. 세션 비용은 `usage_metadata` 로 실측한다. |
 | (선택) 3 | A 세션 중 '목표 문장 턴'만 별도로 MediaRecorder 로 떠서 `/speak-check` 로 채점한다. 하이브리드 방식이다. | | 동의와 비용을 다시 검토한다. |
 
+> **번역 계층 및 다국어 실시간 API 연계**:
+> - 1b단계의 상대 대사 번역(한국어 뜻) 생성 및 2단계 다국어 실시간 스트리밍 대안(OpenAI Realtime Translation `gpt-realtime-translate`, Azure Speech Translation, DeepL API, Google Cloud Translation 등)의 세부 사양과 비교는 [docs/research/realtime-translation-apis.md](../realtime-translation-apis.md)를 참고한다.
+
 ---
 
 ## 3. 구체 설계
@@ -204,6 +207,7 @@ After that, close the interaction naturally in one short sentence and call end_r
 | `core/openai_openai-realtime-console/server.js`, `client/components/App.jsx` | 서버 `/token` 이 `client_secrets` 로 단기 키를 발급하고 브라우저가 WebRTC(`RTCPeerConnection`, `oai-events` 데이터 채널, `ontrack` → autoplay audio)로 직접 붙는 구조. A 와 같은 형태다. | 비교용이다. |
 | `core/openai_openai-realtime-agents/src/app/agentConfigs/guardrails.ts` | 실시간 출력을 별도 분류기(OFFENSIVE/OFF_BRAND/VIOLENCE/NONE)로 검사하고 트립와이어가 걸리면 교정 메시지로 대화를 되돌리는 패턴. | 2단계에서 `outputTranscription` 에 대해 사후 검사가 필요할 때 참고한다. |
 | `apps/Madhu1539_ai-voice-tutor/backend/app/services/tutor_service.py` | 학습자 문장 → `{is_perfect, corrected_sentence, grammar_feedback, vocabulary_feedback, overall_feedback, pronunciation_tips}` JSON 피드백 프롬프트, ```json 펜스 제거, 키가 없을 때 규칙 기반으로 대체. | `/talk/feedback` 스키마의 출발점이다. 우리 원칙(고칠 것 하나, AI 표시)에 맞게 줄인다. |
+| `docs/research/realtime-translation-apis.md` | OpenAI Realtime Translation(WebSocket/WebRTC), Azure Speech Translation(C#), DeepL/Google Cloud 번역 API 코드 예시 및 모듈형 vs 통합형 구조 비교. | [번역 API 조사 문서](../realtime-translation-apis.md) 참조. 1b 턴 대사 번역 및 2단계 실시간 다국어 지원 시 활용. |
 
 ---
 
@@ -227,7 +231,8 @@ After that, close the interaction naturally in one short sentence and call end_r
 4. **영어 음성 선택.** Live 는 "TTS 모델의 모든 음성" 을 지원한다고 한다 **[확인]**. 하지만 목록과 개수는 문서에서 확인하지 못했다. 역할별(심사관은 차분한 저음, 점원은 밝은 톤) 음성을 실제로 들어 보고 정해야 한다.
 5. **C 의 실제 턴 지연.** `/speak-check` 의 `timing_ms`(decode, silero, pyannote, stt, feedback, total)로 측정한다. 너무 길면 1b 에서 `/speak-check` 와 `/talk/turn` 을 **하나의 요청으로 합쳐** 왕복을 줄일지 결정한다(예: `/speak-check` 에 `talk_context` 를 선택 필드로 추가).
 6. **초급자에게 맞는 방식이 실시간인지 버튼식인지.** 사용자 테스트(P·S 참가자)로 A 의 자동 VAD 와 C·눌러서 말하기 모드를 비교한다.
-7. **AudioContext 16kHz 생성을 iOS Safari 와 카톡 인앱 WebView 가 허용하는지**, 출력 24kHz 재생과 같은 컨텍스트를 쓸 수 있는지(web-console 은 녹음과 재생 컨텍스트를 분리한다).
+7. **AudioContext 16kHz 생성을 iOS Safari 와 카톡 인앱 WebView 가 허용하는지**, 출력 24kHz 재생과 같은 컨텍스트를 쓸 수 있는지(web-console 은 녹음과 재생 컨텍스트를 분리한다).  
+   → **해결 및 우회 방안 상세**: 48kHz 네이티브 캡처 후 AudioWorklet 3:1 다운샘플링, WebKit 볼륨 반감(Bug 251532) 우회, 카카오톡 인앱 탈출 프로토콜은 [docs/research/mobile-audio-pipeline-constraints.md](../mobile-audio-pipeline-constraints.md)에 상세히 실측·정리되어 있다.
 8. **`emergency_call` 묶음을 실시간 롤플레이 대상에 넣을지.** 실제 응급 상황과 혼동될 위험이 있으므로, 연습 고지를 고정 첫 문장으로 넣거나 1단계에서는 제외한다.
 
 ---
