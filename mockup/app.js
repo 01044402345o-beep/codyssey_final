@@ -2190,7 +2190,7 @@ function navFromMenu(id) {
   if (id === 'u-report') did = ensure('report');
   if (['u-route', 'u-home', 'u-sched', 'u-study', 'u-coll', 'u-end'].includes(id)) did = ensure('plan');
   if (id === 'u-end' && phase() !== 'ended') { S.today = Dt.add(S.trip.tripEnd, 1); toast(`데모: 오늘을 여행 종료 다음 날(${Dt.md(S.today)})로 바꿨어요.`); }
-  else if (did) toast('데모: 이 화면에 필요한 데이터를 자동으로 준비했어요.');
+  else if (did) toast('이 화면에 필요한 데이터를 자동으로 준비했어요.');
   if (id === 'u-study') { S.studyDate = null; endDrill(); }
   S.justCompleted = null;
   go(id);
