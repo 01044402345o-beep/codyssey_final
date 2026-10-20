@@ -1113,7 +1113,7 @@ function readEstimate(target, spoken, rate) {
   step();
 }
 const readTarget = el => { const box = el && el.closest('.talk-line, .talk-me, .face, .sent'); return box ? box.querySelector('[data-read]') : null; };
-function speak(text, btn, target) {
+function speak(text, btn, target, o = {}) {   // o = { rate, onend } — 대화하기가 쓴다
   if (ttsState() !== 'ok') { toast(ttsOffMsg()); return; }
   speechSynthesis.cancel();
   if (mineAudio) { try { mineAudio.pause(); } catch (e) { /* 이미 멈춤 */ } }   // 내 발음과 겹치지 않게
@@ -1122,7 +1122,7 @@ function speak(text, btn, target) {
   const u = new SpeechSynthesisUtterance(ttsText(slotText(text)));
   u.lang = 'en-US';
   const v = enVoice(); if (v) u.voice = v;
-  u.rate = S.ttsRate;
+  u.rate = o.rate || S.ttsRate;
   readClear();
   const tgt = target && target.querySelector('.w') ? target : null;
   let gotBoundary = false;
@@ -1135,7 +1135,7 @@ function speak(text, btn, target) {
     if (!gotBoundary) { gotBoundary = true; clearTimeout(readTimer); readTimer = null; }
     readMark(tgt, e.charIndex);
   };
-  u.onend = u.onerror = () => { if (btn) btn.classList.remove('playing'); readClear(); };
+  u.onend = u.onerror = () => { if (btn) btn.classList.remove('playing'); readClear(); if (o.onend) o.onend(); };
   speechSynthesis.speak(u);
 }
 if (ttsSupported()) {
@@ -1260,6 +1260,7 @@ function syncNavSpace() {
 window.addEventListener('resize', () => syncNavSpace());
 function render() {
   settlePre();
+  if (TALK.on && (!S.sheet || !studyShown())) cancelTalk();   // 시트를 닫는 모든 경로(닫기·카드 넘김·화면 이동)
   if (!studyShown() && SPK.state !== 'idle') cancelSpeak();
   const app = $('.app'), same = S.lastScreen === S.screen;
   const prevTop = LEGACY ? (app ? app.scrollTop : 0) : window.scrollY;   // 제품·데모 모드는 문서 스크롤
@@ -1882,6 +1883,7 @@ function talkLine(t, k) {
 function sheetHtml() {
   const s = S.sheet && curSent();
   if (!s) return '';
+  if (TALK.on && TALK.sid === s.id) return talkSheetHtml(s);
   const t = s.talk, tts = ttsState() === 'ok';
   const line = (k, label) => {
     const L = talkLine(t, k);
@@ -1893,6 +1895,7 @@ function sheetHtml() {
     : `<p class="small">이 문장은 예상 답변이 아직 없어요. 공통 문장에만 있어요.</p>`;
   return `<div class="sheet-wrap" data-act="sheet-bg"><section class="sheet" role="dialog" aria-modal="true" aria-label="회화 연습" data-act="noop">
     <div class="sheet-handle"></div><h3>회화 연습</h3>
+    ${AI.talkTurns(t, s).length ? `<button class="talk-start" data-act="talk-start"><span class="talk-start-ic">${TALK_SVG.mic}</span><span class="talk-start-tx"><b>대화하기</b><span>상대가 영어로 물으면 말로 답해요 · ${AI.talkTurns(t, s).filter(x => x.who === 'me').length}번 주고받기</span></span>${I.next}</button>` : ''}
     ${t && t.ask ? `<h4>상대가 먼저</h4>${line('ask')}<h4>내가 대답하기</h4>` : ''}
     <div class="talk-me"><b lang="en" data-read>${enHtml(s.en)}</b><div>${phHtml(s.ko)}</div>${tts ? `<button class="talk-say" data-act="speak-card">${I.speaker}듣기</button>` : ''}</div>
     <div class="speak" data-live="speak">${speakHtml(s)}</div>
@@ -2285,7 +2288,7 @@ function speakHtml(s) {
    저장소가 막힌 브라우저에서는 이번 접속 동안만 기억한다(consentMem). */
 let consentMem = false;
 const voiceConsent = () => { const c = AI.loadConsent(personalStore()); return c.voice ? c : consentMem ? { voice: true, at: null } : c; };
-function askVoiceConsent() {
+function askVoiceConsent(after) {
   const host = esc(API.host || location.host);
   confirmBox('말하기 연습 전에 확인해 주세요',
     `<b>보내는 것</b> · 녹음한 목소리(최대 15초)와 연습 중인 영어 문장<br>
@@ -2299,7 +2302,7 @@ function askVoiceConsent() {
     '동의하고 녹음하기', () => {
       S.modal = null;
       if (!saveConsentHere(true)) consentMem = true;
-      render(); toggleSpeak();
+      render(); (after || (() => toggleSpeak()))();
     }, { cancel: '동의하지 않기' });
 }
 function privacyCard() {
@@ -2335,6 +2338,7 @@ function accountCard() {
 }
 const weakItem = s => ({ category_id: s.categoryId, id: s.situationId, situation: s.situation, en: s.en, ko: s.ko });
 function updateSpeakUi() {
+  if (TALK.on) updateTalkUi();
   const el = $('[data-live=speak]'); const r = studyShown() && pickRow();
   if (!el || !r) return;
   const s = S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]];
@@ -2350,24 +2354,35 @@ function cancelSpeak() {
   dropClip();
 }
 function stopSpeak() { clearTimeout(SPK.timer); SPK.timer = null; if (SPK.rec && SPK.rec.state === 'recording') SPK.rec.stop(); }
-async function toggleSpeak() {
+/* opt = { target, onResult } — 대화하기는 턴마다 목표 문장이 다르고(내 문장·이어서), 결과를 카드가 아니라 대화로 넘긴다. */
+async function toggleSpeak(opt) {
   if (SPK.state === 'requesting' || SPK.state === 'uploading') return;      // 중복 요청 방지
   if (SPK.state === 'recording') { stopSpeak(); return; }
-  if (!voiceConsent().voice) { askVoiceConsent(); return; }                 // 동의 전에는 마이크도 열지 않는다
+  if (!voiceConsent().voice) { askVoiceConsent(opt ? () => toggleSpeak(opt) : null); return; }   // 동의 전에는 마이크도 열지 않는다
   const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]]; if (!s) return;
   cancelSpeak();
   const tok = SPK.tok; SPK.sid = s.id; SPK.state = 'requesting'; updateSpeakUi();
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch (e) {
-    if (tok === SPK.tok) { SPK.state = 'idle'; SPK.result = { error: `마이크를 사용할 수 없어요. 권한을 확인하거나 ${betterBrowser()}에서 열어 주세요. 카드 학습은 계속할 수 있어요.` }; updateSpeakUi(); }
+    if (tok === SPK.tok) {
+      SPK.state = 'idle';
+      const err = { error: `마이크를 사용할 수 없어요. 권한을 확인하거나 ${betterBrowser()}에서 열어 주세요. 카드 학습은 계속할 수 있어요.` };
+      if (opt && opt.onResult) opt.onResult(err); else SPK.result = err;
+      updateSpeakUi();
+    }
     return;
   }
   if (tok !== SPK.tok) { stopTracks(stream); return; }                      // 취소 뒤에 늦게 허용된 권한: 바로 해제
   const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'].find(m => MediaRecorder.isTypeSupported?.(m));
   let rec;
   try { rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); }
-  catch (e) { stopTracks(stream); SPK.state = 'idle'; SPK.result = { error: `이 브라우저에서는 녹음을 시작할 수 없어요. ${betterBrowser()}에서 열어 주세요.` }; updateSpeakUi(); return; }
+  catch (e) {
+    stopTracks(stream); SPK.state = 'idle';
+    const err = { error: `이 브라우저에서는 녹음을 시작할 수 없어요. ${betterBrowser()}에서 열어 주세요.` };
+    if (opt && opt.onResult) opt.onResult(err); else SPK.result = err;
+    updateSpeakUi(); return;
+  }
   const chunks = [];
   SPK.stream = stream; SPK.rec = rec;
   rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
@@ -2378,29 +2393,224 @@ async function toggleSpeak() {
     const blob = new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' });
     dropClip();
     try { SPK.clip = { sid: s.id, url: URL.createObjectURL(blob) }; } catch (e) { SPK.clip = null; }   // 다시 듣기용(메모리)
-    uploadSpeech(tok, blob, s);
+    uploadSpeech(tok, blob, s, opt);
   };
   rec.start();
   SPK.state = 'recording'; SPK.timer = setTimeout(stopSpeak, 15000); updateSpeakUi();
 }
-async function uploadSpeech(tok, blob, s) {
-  SPK.state = 'uploading'; SPK.rec = null; SPK.stream = null; updateSpeakUi();
+async function uploadSpeech(tok, blob, s, opt) {
+  SPK.state = 'uploading'; SPK.rec = null; SPK.stream = null;
+  if (opt && opt.onUpload) opt.onUpload();   // 대화하기: '말을 마친 뒤' 3초 안내는 여기서부터 잰다
+  updateSpeakUi();
   const ctl = SPK.ctl = new AbortController();
   let res;
-  try { res = await AI.speakCheck({ fetchImpl: (u, o) => fetch(u, o), base: API.base, blob, target: s.en, situation: s.situation, signal: ctl.signal }); }
+  try { res = await AI.speakCheck({ fetchImpl: (u, o) => fetch(u, o), base: API.base, blob, target: (opt && opt.target) || s.en, situation: s.situation, signal: ctl.signal }); }
   catch (e) {
     if (tok !== SPK.tok) return;
     SPK.state = 'idle'; SPK.ctl = null;
-    SPK.result = { error: e.message === 'too-large' || e.status === 413 ? '녹음이 너무 길어요. 짧게 다시 말해 주세요.' : e.message === 'empty-audio' || e.status === 400 ? '녹음된 소리가 없어요. 다시 시도해 주세요.' : e.status === 429 ? '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.' : e.status === 415 ? '이 브라우저의 녹음 형식은 지원되지 않아요.' : '채점 서버에 연결하지 못했어요. 카드 학습은 계속할 수 있어요.' };
+    const err = { error: e.message === 'too-large' || e.status === 413 ? '녹음이 너무 길어요. 짧게 다시 말해 주세요.' : e.message === 'empty-audio' || e.status === 400 ? '녹음된 소리가 없어요. 다시 시도해 주세요.' : e.status === 429 ? '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.' : e.status === 415 ? '이 브라우저의 녹음 형식은 지원되지 않아요.' : '채점 서버에 연결하지 못했어요. 카드 학습은 계속할 수 있어요.' };
+    if (opt && opt.onResult) { opt.onResult(err); updateSpeakUi(); return; }
+    SPK.result = err;
     updateSpeakUi(); return;
   }
   if (tok !== SPK.tok) return;                                               // 늦은 응답: 표시도 저장도 하지 않는다
   SPK.state = 'idle'; SPK.ctl = null;
+  if (opt && opt.onResult) { opt.onResult(res); updateSpeakUi(); return; }   // 대화 중에는 점수·자동 저장 없음(끝난 뒤 요약)
   const decision = AI.weakDecision(s, res);
   const save = decision === 'auto';
   if (save) saveWeakList(AI.upsertWeak(weakList(), weakItem(s)));
   SPK.result = { ...res, saved: save, savedBy: save ? 'auto' : null, offer: decision === 'ask', coverage: typeof res.heard === 'string' ? AI.heardCoverage(s.en, res.heard) : null };
   updateSpeakUi(); renderDemo();
+}
+
+/* ================= 대화하기 (실시간 회화 1a — 스크립트, AI 호출 0회) =================
+   docs/research/realtime-agent/README.md 4절 1a. 상대 대사는 검수된 talk 데이터만, 소리는 브라우저 TTS.
+   상대가 먼저(ask) → 내 답 녹음(/speak-check) → 상대(replies[nextFor]) → 내가 이어서(next) → 끝난 뒤 요약.
+   대화 중에는 점수를 보이지 않고, 고칠 점은 끝난 뒤 한 가지만. 서버·마이크가 없으면 채점 없이 '다음'으로 진행한다.
+   주요 버튼은 내 차례 줄의 힌트·마이크·넘어가기 셋이고(맨 아래), 상대 대사의 다시 듣기·Sorry? 는 작은 보조 버튼이다.
+   아직 없음(후속): 침묵 8·15·25초 처리, 한국어 답 감지, 검수된 쉬운 말 바꿔 말하기, 정적 음성 파일(카톡 인앱). */
+const TALK = { on: false, sid: null, turns: [], i: 0, hint: 0, again: {}, results: {}, note: '', slow: false, tok: 0, timer: null, say: 0 };
+const talkCur = () => TALK.turns[TALK.i] || null;
+function cancelTalk() {
+  TALK.tok++; clearTimeout(TALK.timer); TALK.timer = null;
+  if (ttsSupported()) { try { speechSynthesis.cancel(); } catch (e) { /* 이미 멈춤 */ } }
+  if (TALK.on) cancelSpeak();
+  Object.assign(TALK, { on: false, sid: null, turns: [], i: 0, hint: 0, again: {}, results: {}, note: '', slow: false });
+}
+function startTalk() {
+  const s = curSent(); const turns = s ? AI.talkTurns(s.talk, s) : [];
+  if (!turns.length) return;
+  cancelTalk(); cancelSpeak();
+  Object.assign(TALK, { on: true, sid: s.id, turns, i: 0 });
+  render(); talkEnter();
+}
+/* 현재 턴에 들어설 때: 상대 턴이면 자막과 함께 읽고, 다 읽으면 내 차례로 넘어간다(녹음은 버튼으로 시작). */
+function talkEnter() {
+  const t = talkCur(); TALK.hint = 0; TALK.note = ''; TALK.slow = false;
+  if (!t) { updateTalkUi(); return; }
+  if (t.who === 'ai') talkSay(TALK.i, true);
+  updateTalkUi();
+}
+function talkSay(idx, advance) {
+  const t = TALK.turns[idx]; if (!t || t.who !== 'ai') return;
+  const tok = TALK.tok, rep = AI.talkRepeat(S.ttsRate, TALK.again[idx] || 0), say = ++TALK.say;
+  // 다시 듣기가 앞 발화를 끊으면 그 onend 도 불린다 — 마지막 발화만 턴을 넘긴다
+  const go = () => { if (advance && say === TALK.say && tok === TALK.tok && TALK.i === idx) TALK.timer = setTimeout(() => { if (tok === TALK.tok && TALK.i === idx) talkNext(); }, 250); };
+  if (ttsState() !== 'ok') { updateTalkUi(); return; }   // 소리가 없으면 자막을 읽고 '다음'을 누른다
+  speak(t.en, $(`[data-act="talk-say"][data-i="${idx}"]`), null, { rate: rep.rate, onend: go });
+}
+function talkNext() {
+  if (!TALK.on) return;
+  if (SPK.state !== 'idle') cancelSpeak();
+  clearTimeout(TALK.timer); TALK.timer = null;
+  TALK.i = Math.min(TALK.turns.length, TALK.i + 1);
+  talkEnter();
+}
+function talkRecord() {
+  const t = talkCur(); if (!t || t.who !== 'me') return;
+  if (SPK.state === 'requesting' || SPK.state === 'uploading') return;
+  if (ttsSupported()) { try { speechSynthesis.cancel(); } catch (e) { /* 이미 멈춤 */ } }   // 상대 목소리가 녹음에 섞이지 않게
+  if (SPK.state === 'recording') { stopSpeak(); return; }
+  const tok = TALK.tok, idx = TALK.i;
+  TALK.note = ''; TALK.slow = false;
+  toggleSpeak({ target: t.en,
+    // 말을 마친 뒤(전송 시작) 3초가 넘으면 한국어로 이유를 알린다(멈춘 화면 없음, 조사 3절)
+    onUpload: () => {
+      clearTimeout(TALK.timer);
+      TALK.timer = setTimeout(() => { if (tok === TALK.tok && TALK.i === idx && SPK.state === 'uploading') { TALK.slow = true; updateTalkUi(); } }, 3000);
+    },
+    onResult: res => {
+      clearTimeout(TALK.timer); TALK.timer = null;
+      if (tok !== TALK.tok || TALK.i !== idx) return;
+      TALK.slow = false;
+      if (res && res.error) { TALK.note = res.error.replace(/ ?카드 학습은 계속할 수 있어요\./, '') + ' 넘어가기로 대화를 이어 갈 수 있어요.'; updateTalkUi(); return; }
+      const heard = res && typeof res.heard === 'string' ? res.heard.trim() : '';
+      TALK.results[t.key] = res;
+      // 점수 없이 되받기만 한다. 들린 말이 있으면 잠깐 보여 주고 상대 차례로 넘어간다.
+      TALK.note = heard ? `들렸어요: “${talkCap(heard)}”` : (res && res.reason) || '잘 안 들렸어요. 다시 말하거나 넘어가도 돼요.';
+      updateTalkUi();
+      if (heard) TALK.timer = setTimeout(() => { if (tok === TALK.tok && TALK.i === idx) talkNext(); }, 1200);
+    } });
+}
+function talkStateText() {
+  const t = talkCur();
+  if (!t) return '대화가 끝났어요';
+  if (t.who === 'ai') return ttsState() === 'ok' ? '상대가 말하고 있어요' : '자막을 읽고 다음을 눌러요';
+  if (SPK.state === 'requesting') return '마이크를 확인하고 있어요';
+  if (SPK.state === 'recording') return '듣고 있어요 — 다 말하면 버튼을 눌러요';
+  if (SPK.state === 'uploading') return TALK.slow ? '조금만 기다려 주세요 — 서버가 깨어나는 중일 수 있어요' : '알아듣는 중이에요…';
+  return '내 차례예요 — 영어로 답해 보세요';
+}
+/* 대화하기 화면(재디자인): 머리(상황·진행·상태) / 대화 기록(스크롤) / 아래 고정 조작부.
+   시트 높이를 고정해 턴마다 화면이 출렁이지 않게 하고, 한 번에 눈에 띄는 큰 행동은 하나(마이크)만 둔다. */
+const TALK_SVG = {
+  mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>',
+  stop: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>',
+  bulb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0012 3z"/></svg>',
+  skip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l8 7-8 7zM17 5v14"/></svg>',
+  slow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>',
+  ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>',
+};
+const talkCap = x => x ? x.charAt(0).toUpperCase() + x.slice(1) : x;   // 되받기 표시만 문장 첫 글자를 대문자로(내용은 그대로)
+function talkPhase() {
+  const t = talkCur();
+  if (!t) return 'done';
+  if (t.who === 'ai') return 'ai';
+  if (SPK.state === 'recording') return 'rec';
+  if (SPK.state === 'requesting' || SPK.state === 'uploading') return 'busy';
+  return 'me';
+}
+function talkLineHtml(t, idx) {
+  const cur = idx === TALK.i;
+  if (t.who === 'ai') {
+    const last = cur || (idx === TALK.i - 1 && talkCur() && talkCur().who === 'me');
+    const rep = AI.talkRepeat(S.ttsRate, TALK.again[idx] || 0), off = SPK.state !== 'idle' ? 'disabled' : '';
+    const live = cur && ttsState() === 'ok';
+    return `<div class="talk-row ai${last ? ' last' : ''}">
+      <div class="talk-bubble ai${live ? ' live' : ''}"><span class="talk-who">상대${live ? '<i class="talk-eq" aria-hidden="true"><b></b><b></b><b></b></i>' : ''}</span>
+      <b lang="en">${esc(t.en)}</b>
+      ${rep.rephrase ? `<p>${esc(t.ko)}</p>` : ''}
+      ${last && ttsState() === 'ok' ? `<div class="talk-acts">
+        <button class="talk-say sub" data-act="talk-say" data-i="${idx}" ${off}>${I.speaker}다시 듣기</button>
+        <button class="talk-say sub" data-act="talk-sorry" data-i="${idx}" ${off}>${TALK_SVG.slow}Sorry? 천천히</button></div>` : ''}</div></div>`;
+  }
+  if (idx >= TALK.i) return '';
+  const r = TALK.results[t.key];
+  const said = r && typeof r.heard === 'string' && r.heard.trim() ? r.heard.trim() : '';
+  return `<div class="talk-row me"><div class="talk-bubble me${said ? '' : ' skipped'}"><span class="talk-who">나</span>
+    <b lang="en">${esc(said ? talkCap(said) : t.en)}</b>${said ? '' : '<p>(녹음 없이 넘어감)</p>'}</div></div>`;
+}
+function talkMeHtml(t) {
+  const hints = AI.talkHint(TALK.turns, TALK.i, TALK.hint);
+  const ph = talkPhase(), busy = ph === 'busy', rec = ph === 'rec';
+  const HL = { 'ask-ko': '질문 뜻', 'me-ko': '할 말 뜻', first: '첫 단어', en: '예시 답' };
+  const micLabel = rec ? '다 말했어요' : busy ? (SPK.state === 'requesting' ? '마이크 확인 중' : '알아듣는 중') : '눌러서 말하기';
+  const mic = speakAvailable()
+    ? `<div class="talk-micwrap ${ph}"><button class="talk-mic ${rec ? 'rec' : ''}${busy ? ' busy' : ''}" data-act="talk-rec" ${busy ? 'aria-disabled="true"' : ''} aria-label="${rec ? '녹음 끝내기' : '말하기'}">${rec ? TALK_SVG.stop : TALK_SVG.mic}</button><span class="talk-miclabel" aria-hidden="true">${micLabel}</span></div>`
+    : `<p class="talk-nomic">${API.base !== null && !canRecord() ? `이 브라우저에서는 녹음이 안 돼요. ${betterBrowser()}에서 열면 말로 답할 수 있어요.` : '소리 내어 말해 본 뒤 다음을 눌러요.'} 채점은 하지 않아요.</p>`;
+  const note = TALK.note ? `<p class="talk-note${/^들렸어요/.test(TALK.note) ? ' heard' : ''}">${/^들렸어요/.test(TALK.note) ? TALK_SVG.ok : ''}${esc(TALK.note)}</p>` : '';
+  return `<div class="talk-turn">
+    ${hints.length ? `<div class="talk-hints">${hints.map(h => `<div class="talk-hrow"><span class="talk-hlabel">${HL[h.kind] || '힌트'}</span><p class="talk-hint ${h.kind}" ${h.kind === 'en' || h.kind === 'first' ? 'lang="en"' : ''}>${esc(h.text)}</p></div>`).join('')}</div>` : ''}
+    ${note}
+    <div class="talk-ctl">
+      <button class="talk-side" data-act="talk-hint" ${TALK.hint >= AI.TALK_HINT_MAX || rec || busy ? 'disabled' : ''}>${TALK_SVG.bulb}<span>힌트${TALK.hint ? ` ${TALK.hint}/${AI.TALK_HINT_MAX}` : ''}</span></button>
+      ${mic}
+      <button class="talk-side" data-act="talk-next" ${busy || rec ? 'disabled' : ''}>${TALK_SVG.skip}<span>${TALK.results[t.key] ? '다음' : '넘어가기'}</span></button>
+    </div></div>`;
+}
+function talkSummaryHtml() {
+  const sum = AI.talkSummary(TALK.turns, TALK.results);
+  const rows = sum.lines.map(l => {
+    const wm = l.kind === 'word_match' || l.kind === 'word_match_consensus';
+    const sc = l.score !== null ? `<span class="talk-meter"><i style="width:${Math.max(0, Math.min(100, l.score))}%"></i></span><span class="small">${wm ? `단어 일치 ${l.score}% (발음 점수 아님)` : `점수 ${l.score}`}</span>` : '';
+    return `<li><b lang="en">${esc(l.en)}</b>
+      <span class="talk-heard">${l.heard ? `들린 문장: <span lang="en">${esc(talkCap(l.heard))}</span>` : '녹음 없음'}</span>${sc}</li>`;
+  }).join('');
+  return `<div class="talk-done">
+    <div class="talk-scroll">
+      <div class="talk-hero"><span class="talk-badge">${TALK_SVG.ok}</span><div><h4>대화를 마쳤어요</h4><p>내 차례 ${sum.myTurns}번 중 <b>${sum.spoken}번</b> 말했어요.</p></div></div>
+      ${sum.fix ? `<div class="talk-fix"><span class="talk-who">다음엔 이것 하나만</span><b lang="en">${esc(sum.fix.en)}</b><p>${esc(sum.fix.text)}</p></div>` : ''}
+      <h5 class="talk-subh">주고받은 문장</h5>
+      <ul class="talk-sum">${rows}</ul>
+    </div>
+    <div class="talk-dock"><div class="talk-ctl end"><button class="btn soft" data-act="talk-start">다시 해보기</button><button class="btn primary" data-act="talk-exit">회화 연습으로</button></div></div></div>`;
+}
+function talkProgHtml() {
+  const mine = TALK.turns.map((x, k) => x.who === 'me' ? k : -1).filter(k => k >= 0);
+  const cur = talkCur();
+  const pos = cur ? mine.filter(k => k < TALK.i).length + 1 : mine.length;
+  return `<div class="talk-prog" aria-label="내 차례 ${pos} / ${mine.length}">${mine.map(k => `<i class="${k < TALK.i ? 'done' : k === TALK.i ? 'now' : ''}"></i>`).join('')}<span class="small">내 차례 ${pos} / ${mine.length}</span></div>`;
+}
+function talkBodyHtml() {
+  const t = talkCur(), shown = TALK.turns.slice(0, Math.min(TALK.i + 1, TALK.turns.length));
+  if (!t) return talkProgHtml() + talkSummaryHtml();
+  const dock = t.who === 'me' ? talkMeHtml(t)
+    : `<div class="talk-ctl wait"><button class="btn soft block" data-act="talk-next">${ttsState() === 'ok' ? '다 들었어요 · 다음' : '다음'}</button></div>`;
+  return `${talkProgHtml()}
+    <div class="talk-scroll"><div class="talk-log">${shown.map((x, k) => talkLineHtml(x, k)).join('')}</div></div>
+    <div class="talk-dock">${dock}</div>`;
+}
+function talkSheetHtml(s) {
+  const cat = (S.drill && S.drill.label) || '';
+  return `<div class="sheet-wrap" data-act="sheet-bg"><section class="sheet talk" role="dialog" aria-modal="true" aria-label="대화하기" data-act="noop">
+    <div class="sheet-handle"></div>
+    <div class="talk-head"><div><span class="talk-kicker">대화하기${cat ? ` · ${esc(cat)}` : ''}</span><h3>${esc(s.situation)}</h3></div><button class="talk-exit" data-act="talk-exit">${I.x}그만하기</button></div>
+    <p class="talk-state" role="status" aria-live="polite" tabindex="-1" data-phase="${talkPhase()}">${esc(talkStateText())}</p>
+    <div data-live="talk">${talkBodyHtml()}</div>
+  </section></div>`;
+}
+/* 상태 문구는 고정된 role=status 의 글자만 바꾼다(스크린리더가 바뀐 상태를 읽게). 다시 그린 뒤 같은 버튼으로 포커스를 돌린다. */
+function updateTalkUi() {
+  const el = $('[data-live=talk]'); if (!el || !TALK.on) return;
+  const st = $('.talk-state'); if (st) { const v = talkStateText(); if (st.textContent !== v) st.textContent = v; }
+  if (st) st.dataset.phase = talkPhase();
+  const f = document.activeElement && el.contains(document.activeElement) ? document.activeElement.dataset.act : null;
+  el.innerHTML = talkBodyHtml();
+  const sc = el.querySelector('.talk-scroll'); if (sc && !el.querySelector('.talk-done')) sc.scrollTop = sc.scrollHeight;   // 새 대사가 늘 보이게
+  if (f) {   // 같은 버튼 → 내 차례의 마이크 → 상태 문구 순으로 포커스를 돌려 <body> 로 빠지지 않게
+    const b = el.querySelector(`[data-act="${f}"]:not([disabled])`) || el.querySelector('[data-act="talk-rec"]') || $('.talk-state');
+    if (b) b.focus();
+  }
 }
 
 /* 이 계정의 브라우저 기록을 모두 지운다. 계정 칸(:uid)과, 로그인 전에 이 브라우저에 남은
@@ -2976,6 +3186,13 @@ const ACT = {
   speak: el => speak(S.smap[el.dataset.id].en, el, readTarget(el)),
   'sheet-open': () => { S.sheet = true; pushOverlay('sheet'); render(); },
   'sheet-close': () => closeSheet(),
+  'talk-start': () => startTalk(),
+  'talk-exit': () => { cancelTalk(); render(); },
+  'talk-next': () => talkNext(),
+  'talk-rec': () => talkRecord(),
+  'talk-hint': () => { TALK.hint = Math.min(AI.TALK_HINT_MAX, TALK.hint + 1); updateTalkUi(); },
+  'talk-say': el => { if (SPK.state !== 'idle') return; const i = +el.dataset.i; talkSay(i, i === TALK.i); },   // 녹음에 TTS 가 섞이지 않게
+  'talk-sorry': el => { if (SPK.state !== 'idle') return; const i = +el.dataset.i; TALK.again[i] = (TALK.again[i] || 0) + 1; updateTalkUi(); talkSay(i, i === TALK.i); },
   'sheet-bg': (el, e) => { if (e.target === el) closeSheet(); },
   'say-line': el => { const s = curSent(); const L = s && talkLine(s.talk, el.dataset.k); if (L) speak(L.en, el, readTarget(el)); },
   rate: el => { S.ttsRate = S.ttsRate < 0.9 ? 0.95 : 0.75; el.textContent = S.ttsRate < 0.9 ? '느리게' : '보통 속도'; },

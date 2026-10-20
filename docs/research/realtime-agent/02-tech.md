@@ -231,7 +231,8 @@ After that, close the interaction naturally in one short sentence and call end_r
 4. **영어 음성 선택.** Live 는 "TTS 모델의 모든 음성" 을 지원한다고 한다 **[확인]**. 하지만 목록과 개수는 문서에서 확인하지 못했다. 역할별(심사관은 차분한 저음, 점원은 밝은 톤) 음성을 실제로 들어 보고 정해야 한다.
 5. **C 의 실제 턴 지연.** `/speak-check` 의 `timing_ms`(decode, silero, pyannote, stt, feedback, total)로 측정한다. 너무 길면 1b 에서 `/speak-check` 와 `/talk/turn` 을 **하나의 요청으로 합쳐** 왕복을 줄일지 결정한다(예: `/speak-check` 에 `talk_context` 를 선택 필드로 추가).
 6. **초급자에게 맞는 방식이 실시간인지 버튼식인지.** 사용자 테스트(P·S 참가자)로 A 의 자동 VAD 와 C·눌러서 말하기 모드를 비교한다.
-7. **AudioContext 16kHz 생성을 iOS Safari 와 카톡 인앱 WebView 가 허용하는지**, 출력 24kHz 재생과 같은 컨텍스트를 쓸 수 있는지(web-console 은 녹음과 재생 컨텍스트를 분리한다).
+7. **AudioContext 16kHz 생성을 iOS Safari 와 카톡 인앱 WebView 가 허용하는지**, 출력 24kHz 재생과 같은 컨텍스트를 쓸 수 있는지(web-console 은 녹음과 재생 컨텍스트를 분리한다).  
+   → **해결 및 우회 방안 상세**: 48kHz 네이티브 캡처 후 AudioWorklet 3:1 다운샘플링, WebKit 볼륨 반감(Bug 251532) 우회, 카카오톡 인앱 탈출 프로토콜은 [docs/research/mobile-audio-pipeline-constraints.md](../mobile-audio-pipeline-constraints.md)에 상세히 실측·정리되어 있다.
 8. **`emergency_call` 묶음을 실시간 롤플레이 대상에 넣을지.** 실제 응급 상황과 혼동될 위험이 있으므로, 연습 고지를 고정 첫 문장으로 넣거나 1단계에서는 제외한다.
 
 ---

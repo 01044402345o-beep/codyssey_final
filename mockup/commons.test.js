@@ -39,6 +39,8 @@ test('공통 문장: 학습량 30개 모두 회화 연습(예상 답변 1~2개 +
     it.talk.replies.forEach((r, i) => line(r, `${w} replies[${i}]`));
     line(it.talk.next, `${w} next`);
     if (it.talk.ask) line(it.talk.ask, `${w} ask`);
+    // 대화하기(1a): '내가 이어서'가 이어지는 갈래. 갈래가 둘이면 어느 쪽인지 반드시 적는다(조사 6절 ⑤).
+    assert.ok(Number.isInteger(it.talk.nextFor) && it.talk.nextFor >= 0 && it.talk.nextFor < it.talk.replies.length, `${w}: nextFor 범위`);
   }
 });
 

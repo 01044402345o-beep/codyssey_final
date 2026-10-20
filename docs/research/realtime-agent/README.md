@@ -12,6 +12,7 @@
 | [04-risk-cost.md](04-risk-cost.md) | 법과 약관, 동의 문구 초안, 비용 추정과 상한, 보안·남용 대응, 운영 체크리스트 |
 | [연계: realtime-translation-apis.md](../realtime-translation-apis.md) | 실시간 회화 에이전트 번역 계층: 6대 번역 API 비교(OpenAI·Azure·DeepL·Google·Amazon·Papago) 및 GitHub 레퍼런스 |
 | [연계: multi-agent-population-sampling.md](../multi-agent-population-sampling.md) | 다중 에이전트 기반 모집단 대표 표본집단 조사: 층화 표집 설계, 4대 코호트 페르소나 시뮬레이션, 편향 감사 |
+| [연계: mobile-audio-pipeline-constraints.md](../mobile-audio-pipeline-constraints.md) | 모바일 브라우저 오디오 파이프라인: iOS WebKit 볼륨 반감(Bug 251532) 우회, 카카오톡 인앱 제약, AudioWorklet 다운샘플링 |
 
 ---
 

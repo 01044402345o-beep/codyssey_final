@@ -497,3 +497,70 @@ test('collectItinerary: /itinerary 만 부르고 실패한 도시는 나머지�
   const offline = await AI.collectItinerary({ fetchImpl, base: null, cities });
   assert.equal(offline.every(r => r.error === 'network'), true);
 });
+
+/* ---------- 대화하기 1a (스크립트 회화) ---------- */
+const TALK_ASK = { ask: { en: 'Would you like chicken or beef?', ko: '치킨과 소고기 중?' }, nextFor: 1,
+  replies: [{ en: 'Here you are.', ko: '여기요.' }, { en: "Sorry, we're out of chicken. Is beef okay?", ko: '떨어졌어요.' }], next: { en: 'Beef is fine, thank you.', ko: '소고기 좋아요.' } };
+const ME = { en: 'Chicken, please.', ko: '치킨으로 주세요.' };
+
+test('talkTurns: 상대가 먼저면 상대→나→상대(nextFor 갈래)→나', () => {
+  const t = AI.talkTurns(TALK_ASK, ME);
+  assert.deepEqual(t.map(x => x.who), ['ai', 'me', 'ai', 'me']);
+  assert.deepEqual(t.map(x => x.key), ['ask', 'me', 'r1', 'next']);
+  assert.equal(t[2].en, "Sorry, we're out of chicken. Is beef okay?");
+});
+test('talkTurns: ask 없으면 나→상대→나, nextFor 없거나 범위 밖이면 0번 갈래', () => {
+  const noAsk = { replies: TALK_ASK.replies, next: TALK_ASK.next };
+  assert.deepEqual(AI.talkTurns(noAsk, ME).map(x => x.key), ['me', 'r0', 'next']);
+  assert.equal(AI.talkTurns({ ...noAsk, nextFor: 5 }, ME)[1].key, 'r0');
+  assert.equal(AI.talkTurns({ ...noAsk, nextFor: -1 }, ME)[1].key, 'r0');
+  assert.equal(AI.talkTurns({ ...noAsk, nextFor: '1' }, ME)[1].key, 'r0');
+});
+test('talkTurns: 데이터가 모자라면 빈 배열(대화하기 버튼을 숨긴다)', () => {
+  assert.deepEqual(AI.talkTurns(null, ME), []);
+  assert.deepEqual(AI.talkTurns({ replies: [], next: TALK_ASK.next }, ME), []);
+  assert.deepEqual(AI.talkTurns({ replies: TALK_ASK.replies }, ME), []);
+  assert.deepEqual(AI.talkTurns(TALK_ASK, { en: ' ' }), []);
+});
+test('talkHint: 누를 때만 한 단계씩 — 앞 상대 질문의 한국어 뜻 → 내 답 첫 단어 → 예시 답 전체', () => {
+  const T = AI.talkTurns(TALK_ASK, ME);
+  assert.deepEqual(AI.talkHint(T, 1, 0), []);
+  assert.deepEqual(AI.talkHint(T, 1, 1), [{ kind: 'ask-ko', text: '치킨과 소고기 중?' }]);
+  assert.deepEqual(AI.talkHint(T, 1, 2), [{ kind: 'ask-ko', text: '치킨과 소고기 중?' }, { kind: 'first', text: 'Chicken, …' }]);
+  assert.deepEqual(AI.talkHint(T, 1, 3), [{ kind: 'ask-ko', text: '치킨과 소고기 중?' }, { kind: 'en', text: 'Chicken, please.' }]);
+  assert.deepEqual(AI.talkHint(T, 1, 99), AI.talkHint(T, 1, 3));
+  assert.deepEqual(AI.talkHint(T, 3, 1), [{ kind: 'ask-ko', text: '떨어졌어요.' }]);
+  assert.deepEqual(AI.talkHint(T, 0, 3), [], '상대 턴에는 힌트 없음');
+});
+test('talkHint: 내가 먼저 말하는 턴은 1단계가 내 문장의 한국어 뜻', () => {
+  const T = AI.talkTurns({ replies: TALK_ASK.replies, next: TALK_ASK.next }, ME);
+  assert.deepEqual(AI.talkHint(T, 0, 1), [{ kind: 'me-ko', text: '치킨으로 주세요.' }]);
+});
+test('talkRepeat: 첫 Sorry? 는 더 천천히(하한 0.6, 기준보다 빨라지지 않음), 두 번째는 바꿔 말하기 신호', () => {
+  assert.deepEqual(AI.talkRepeat(0.95, 0), { rate: 0.95, rephrase: false });
+  assert.deepEqual(AI.talkRepeat(0.95, 1), { rate: 0.8, rephrase: false });
+  assert.deepEqual(AI.talkRepeat(0.95, 2), { rate: 0.8, rephrase: true });
+  assert.deepEqual(AI.talkRepeat(0.7, 1), { rate: 0.6, rephrase: false });
+  assert.deepEqual(AI.talkRepeat(0.5, 1), { rate: 0.5, rephrase: false }, '이미 느리면 빨라지지 않는다');
+  assert.deepEqual(AI.talkRepeat(0.8, -1), { rate: 0.8, rephrase: false });
+  assert.deepEqual(AI.talkRepeat(undefined, 0), { rate: 0.8, rephrase: false });
+});
+test('talkSummary: 결과는 턴 key 로 찾고, 교차검증된 점수만 세며, 고칠 점은 가장 낮은 턴 하나', () => {
+  const turns = AI.talkTurns(TALK_ASK, ME);
+  const s = AI.talkSummary(turns, { me: { usable: true, score: 90, heard: 'chicken please', fix_one: 'A', score_kind: 'word_match' }, next: { usable: true, score: 55, heard: 'beef fine thank', fix_one: 'B', score_kind: 'word_match' } });
+  assert.equal(s.myTurns, 2); assert.equal(s.spoken, 2);
+  assert.deepEqual(s.lines.map(l => [l.score, l.kind]), [[90, 'word_match'], [55, 'word_match']]);
+  assert.deepEqual(s.fix, { en: 'Beef is fine, thank you.', text: 'B' });
+});
+test('talkSummary: 제한·샘플·폐기·교차검증 실패·heard 없음·범위 밖은 점수 없음', () => {
+  const turns = AI.talkTurns(TALK_ASK, ME);
+  const bad = [{ limited: true }, { mock: true }, { score_discarded: true }, { cross_validated: false }, { raw: 'x' }, { heard: '' }, { score: 140 }];
+  for (const b of bad) {
+    const r = { usable: true, score: 40, heard: 'x', fix_one: 'Z', ...b };
+    const s = AI.talkSummary(turns, { me: r });
+    assert.equal(s.lines[0].score, null, JSON.stringify(b)); assert.equal(s.fix, null, JSON.stringify(b));
+  }
+  const none = AI.talkSummary(turns, {});
+  assert.equal(none.spoken, 0); assert.equal(none.fix, null);
+  assert.equal(AI.talkSummary(turns, [{ usable: true, score: 10, heard: 'x', fix_one: 'Q' }]).fix, null, '배열 위치로는 붙지 않는다');
+});

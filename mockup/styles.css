@@ -1034,6 +1034,115 @@ html[data-mode=demo] .side .note-card { box-shadow: none; }
 .sheet .speak-btn.rec { background: var(--bad); border-color: var(--bad); color: var(--on-bad); }
 .sheet .speak-note { color: var(--text-soft); }
 .sheet .speak-res { color: var(--text); background: var(--surface-3); }
+/* 대화하기 (실시간 회화 1a) — 조사 3절 접근성: 자막 18px 이상, 큰 마이크 56px 이상, 상태를 한국어 글자로, 주요 버튼 3개 이하 */
+/* ── 대화하기 (재디자인) ─────────────────────────────────────────
+   시트 높이를 고정하고 세 칸으로 나눈다: 머리(상황·진행·상태) / 대화 기록(이 칸만 스크롤) / 아래 조작부(고정).
+   한 화면에서 큰 행동은 마이크 하나. 색은 토큰만 쓴다(다크 모드 자동). */
+.talk-start { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; margin-bottom: 6px; padding: 10px 14px 10px 10px; border: 0; border-radius: 18px; background: var(--fill-strong); color: var(--on-fill); text-align: left; }
+.talk-start:hover { background: var(--fill-strong-hover); }
+.talk-start-ic { flex: 0 0 44px; height: 44px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+.talk-start-ic svg { width: 22px; height: 22px; }
+.talk-start-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.talk-start-tx b { font-size: 1rem; }
+.talk-start-tx span { font-size: 0.8125rem; opacity: .8; line-height: 1.35; }
+.talk-start > svg { flex: 0 0 auto; opacity: .7; }
+
+.sheet.talk { display: flex; flex-direction: column; height: 85dvh; overflow: hidden; padding-bottom: 0; }
+.sheet.talk > [data-live=talk] { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.talk-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.talk-kicker { display: block; font-size: 0.75rem; font-weight: 700; letter-spacing: .02em; color: var(--accent-text); }
+.sheet.talk .talk-head h3 { margin: 2px 0 0; font-size: 1.25rem; }
+.talk-exit { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 12px; margin: -6px -8px 0 0; border: 0; border-radius: 999px; background: none; color: var(--text-soft); font-weight: 700; font-size: 0.8125rem; }
+.talk-exit:hover { background: var(--surface-2); color: var(--text); }
+.talk-state { margin: 10px 0 0; padding: 8px 12px; border-radius: 12px; font-size: 0.875rem; font-weight: 700; background: var(--surface-3); color: var(--text-soft); }
+.talk-state[data-phase=me] { background: var(--accent-soft); color: var(--on-accent-soft); }
+.talk-state[data-phase=rec] { background: var(--bad-soft); color: var(--on-bad-soft); }
+.talk-state[data-phase=ai] { background: var(--sea-soft); color: var(--on-sea-soft); }
+.talk-state[data-phase=done] { background: var(--ok-soft); color: var(--ok-text); }
+.talk-state:focus { outline: none; }
+.talk-prog { display: flex; align-items: center; gap: 4px; margin: 10px 0 4px; }
+.talk-prog i { flex: 0 0 22px; height: 4px; border-radius: 4px; background: var(--surface-seg); }
+.talk-prog i.done { background: var(--ok); }
+.talk-prog i.now { background: var(--accent); }
+.talk-prog .small { margin-left: 6px; }
+
+.talk-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 2px 12px; scroll-behavior: smooth; }
+.talk-log { display: flex; flex-direction: column; gap: 10px; }
+.talk-row { display: flex; }
+.talk-row.me { justify-content: flex-end; }
+.talk-bubble { max-width: 86%; border-radius: 18px; padding: 10px 14px 12px; line-height: 1.45; }
+.talk-bubble b { display: block; font-size: 1.125rem; letter-spacing: -0.01em; }
+.talk-bubble p { margin: 4px 0 0; font-size: 0.875rem; color: var(--text-soft); }
+.talk-bubble.ai { background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 6px; }
+.talk-row.ai.last .talk-bubble.ai { max-width: 100%; }
+.talk-row.ai:not(.last) .talk-bubble b { font-size: 1rem; color: var(--text-2); }
+.talk-bubble.ai.live { border-color: var(--sea); box-shadow: 0 0 0 3px var(--sea-soft); }
+.talk-bubble.me { background: var(--fill-strong); color: var(--on-fill); border-bottom-right-radius: 6px; }
+.talk-bubble.me .talk-who, .talk-bubble.me p { color: inherit; opacity: .75; }
+.talk-bubble.me.skipped { background: var(--surface-3); color: var(--text-soft); border: 1px dashed var(--border-strong); }
+.talk-who { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; font-weight: 700; letter-spacing: .04em; color: var(--text-3); margin-bottom: 3px; }
+.talk-eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 10px; }
+.talk-eq b { display: block; width: 3px; height: 4px; border-radius: 2px; background: var(--sea); animation: talkEq .9s ease-in-out infinite; font-size: 0; }
+.talk-eq b:nth-child(2) { animation-delay: .15s; } .talk-eq b:nth-child(3) { animation-delay: .3s; }
+@keyframes talkEq { 50% { height: 10px; } }
+.talk-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.talk-say.sub { height: 36px; padding: 0 12px; font-size: 0.8125rem; font-weight: 700; background: var(--surface-3); border-color: transparent; }
+.talk-say.sub svg { width: 15px; height: 15px; }
+.talk-say:disabled { opacity: .45; }
+
+.talk-dock { flex: 0 0 auto; margin: 0 -20px; padding: 12px 20px calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--bg); border-top: 1px solid var(--border); }
+.talk-hints { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; padding: 10px 12px; border-radius: 14px; background: var(--sun-soft); }
+.talk-hrow { display: flex; align-items: baseline; gap: 10px; }
+.talk-hlabel { flex: 0 0 auto; min-width: 46px; font-size: 0.6875rem; font-weight: 700; color: var(--on-sun-soft); }
+.talk-hint { margin: 0; font-size: 0.9375rem; color: var(--text); }
+.talk-hint.en, .talk-hint.first { font-size: 1.0625rem; font-weight: 700; }
+.talk-note { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 10px; font-size: 0.9375rem; color: var(--text); }
+.talk-note svg { flex: 0 0 18px; width: 18px; height: 18px; margin-top: 2px; color: var(--ok-text); }
+.talk-note.heard { color: var(--ok-text); font-weight: 700; }
+.talk-nomic { flex: 1; margin: 0; font-size: 0.8125rem; color: var(--text-soft); text-align: center; }
+.talk-ctl { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+.talk-ctl.wait, .talk-ctl.end { display: flex; }
+.talk-ctl.end .btn { flex: 1; }
+.talk-side { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 64px; border: 0; border-radius: 16px; background: none; color: var(--text-soft); font-size: 0.8125rem; font-weight: 700; }
+.talk-side svg { width: 22px; height: 22px; }
+.talk-side:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.talk-side:disabled { opacity: .4; }
+.talk-micwrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.talk-mic { position: relative; width: 76px; height: 76px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); box-shadow: 0 6px 18px var(--accent-a40); transition: transform .1s, background .15s; }
+.talk-mic svg { width: 32px; height: 32px; }
+.talk-mic:active { transform: scale(.96); }
+.talk-mic.rec { background: var(--bad); color: var(--on-bad); box-shadow: none; }
+.talk-mic.rec::before, .talk-mic.rec::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 3px solid var(--bad); opacity: .5; animation: talkPulse 1.4s ease-out infinite; }
+.talk-mic.rec::after { animation-delay: .7s; }
+@keyframes talkPulse { from { transform: scale(.9); opacity: .6; } to { transform: scale(1.35); opacity: 0; } }
+.talk-mic.busy { background: var(--surface-2); color: var(--text-3); box-shadow: none; }
+.talk-mic.busy::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 3px solid transparent; border-top-color: var(--accent); animation: spin .9s linear infinite; }
+.talk-mic[aria-disabled="true"] { cursor: default; }
+.talk-miclabel { font-size: 0.75rem; font-weight: 700; color: var(--text-soft); }
+.talk-micwrap.rec .talk-miclabel { color: var(--bad-text); }
+
+.talk-done { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.talk-hero { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; background: var(--ok-soft); }
+.talk-badge { flex: 0 0 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--ok); color: var(--on-ok); }
+.talk-badge svg { width: 22px; height: 22px; }
+.talk-hero h4 { margin: 0; font-size: 1.0625rem; color: var(--text); }
+.talk-hero p { margin: 2px 0 0; font-size: 0.875rem; color: var(--text-soft); }
+.talk-fix { margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: var(--accent-soft); border-left: 4px solid var(--accent); }
+.talk-fix .talk-who { color: var(--on-accent-soft); }
+.talk-fix b { display: block; font-size: 1.0625rem; }
+.talk-fix p { margin: 4px 0 0; color: var(--text); }
+.talk-subh { margin: 18px 0 4px; font-size: 0.8125rem; color: var(--text-soft); }
+.talk-sum { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
+.talk-sum li { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-top: 1px solid var(--border); }
+.talk-sum b { font-size: 1rem; }
+.talk-heard { font-size: 0.8125rem; color: var(--text-soft); }
+.talk-meter { display: block; height: 4px; border-radius: 4px; background: var(--surface-seg); overflow: hidden; }
+.talk-meter i { display: block; height: 100%; background: var(--sea); }
+@media (prefers-reduced-motion: reduce) {
+  .talk-eq b, .talk-mic.rec::before, .talk-mic.rec::after { animation: none; }
+  .talk-mic.busy::after { animation-duration: 2.4s; }
+  .talk-scroll { scroll-behavior: auto; }
+}
 .sheet .tts-off { color: var(--text-soft); }
 .sheet > .btn { margin-top: 14px; }
 
@@ -1310,3 +1419,17 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
 .flip-edge span { display: none; width: 100%; padding: 0 8px; text-align: center;
   font-size: 0.8125rem; font-weight: 700; line-height: 1.35; word-break: keep-all; color: var(--text); }
 .flip-edge.shown span { display: block; }
+/* 대화하기 — 키 작은 화면(≤700px): 기록 칸이 먼저 줄지 않게 머리·조작부를 압축한다 */
+@media (max-height: 700px) {
+  .sheet.talk { height: 94dvh; max-height: 94dvh; }
+  .sheet.talk .sheet-handle { margin-bottom: 8px; }
+  .sheet.talk .talk-head h3 { font-size: 1.0625rem; }
+  .talk-state { margin-top: 6px; padding: 6px 10px; font-size: 0.8125rem; }
+  .talk-prog { margin: 6px 0 2px; }
+  .talk-dock { padding-top: 8px; }
+  .talk-hints { padding: 8px 10px; gap: 4px; margin-bottom: 8px; }
+  .talk-mic { width: 64px; height: 64px; }
+  .talk-mic svg { width: 28px; height: 28px; }
+  .talk-side { min-height: 52px; }
+  .talk-bubble b { font-size: 1rem; }
+}
