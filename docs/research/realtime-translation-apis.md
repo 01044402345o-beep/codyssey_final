@@ -2,6 +2,11 @@
 
 > **목적**: 실시간 회화 에이전트의 번역 계층을 설계할 때 참고할 주요 번역 서비스 API와 오픈소스 GitHub 저장소를 체계적으로 정리한다.
 > **작성일**: 2026-10-20
+> **연관 프로젝트 문서**:
+> - [실시간 회화 에이전트 조사 종합 (realtime-agent/README.md)](realtime-agent/README.md)
+> - [기술 아키텍처 및 단계별 경로 (realtime-agent/02-tech.md)](realtime-agent/02-tech.md)
+> - [대화 및 롤플레이 설계 (realtime-agent/03-conversation-design.md)](realtime-agent/03-conversation-design.md)
+> - [위험·개인정보·비용 (realtime-agent/04-risk-cost.md)](realtime-agent/04-risk-cost.md)
 
 ---
 
@@ -555,6 +560,10 @@ for translation in response.translations:
 | **학습 피드백** | GPT-4 계열 LLM 에이전트 (문법·어휘·발음 피드백) |
 | **연결 방식** | WebRTC (브라우저 마이크) |
 | **참고 저장소** | [GPT-Realtime-Translate Live Event Interpreter](https://github.com/backblaze-b2-samples/gpt-realtime-translate-live-event-interpreter), [local-multilingual-voice-translator](https://github.com/dwain-barnes/local-multilingual-voice-translator) |
+
+> **여행영어(MADI) 프로젝트 적용 시사점**:
+> - **1b단계 (턴 단위 자유 응답)**: 대화 상대의 대사 생성 시 한국어 번역 힌트 제공을 위해 경량 MT API(DeepL API 또는 Gemini 내장 번역)를 `/talk/turn` 백엔드에 통합.
+> - **2단계 (실시간 스트리밍 모드)**: Gemini Live(임시 토큰)의 단일 전사 한계를 보완하기 위해 브라우저 WebRTC 기반 OpenAI `gpt-realtime-translate` 또는 Azure Speech Translation과의 성능·비용·지연 비교 기준으로 활용([02-tech.md](realtime-agent/02-tech.md) 참조).
 
 ### 6.2 콜센터·고객 지원용 회화 에이전트
 

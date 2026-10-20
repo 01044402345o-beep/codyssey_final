@@ -10,6 +10,7 @@
 | [02-tech.md](02-tech.md) | 아키텍처 후보 A·B·C 비교, 단계별 경로, 시스템 지시 골격, 바꿀 파일, 참고 저장소 코드 지점 |
 | [03-conversation-design.md](03-conversation-design.md) | 학습 원리 근거, 시나리오 구조, 난이도 3단계, 예시 대화 2개(입국·교통), 피드백 설계, 경쟁 서비스 비교 |
 | [04-risk-cost.md](04-risk-cost.md) | 법과 약관, 동의 문구 초안, 비용 추정과 상한, 보안·남용 대응, 운영 체크리스트 |
+| [연계: realtime-translation-apis.md](../realtime-translation-apis.md) | 실시간 회화 에이전트 번역 계층: 6대 번역 API 비교(OpenAI·Azure·DeepL·Google·Amazon·Papago) 및 GitHub 레퍼런스 |
 
 ---
 
