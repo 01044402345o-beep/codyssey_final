@@ -1864,7 +1864,7 @@ function sheetHtml() {
     : `<p class="small">이 문장은 예상 답변이 아직 없어요. 공통 문장에만 있어요.</p>`;
   return `<div class="sheet-wrap" data-act="sheet-bg"><section class="sheet" role="dialog" aria-modal="true" aria-label="회화 연습" data-act="noop">
     <div class="sheet-handle"></div><h3>회화 연습</h3>
-    ${AI.talkTurns(t, s).length ? `<button class="btn accent block talk-start" data-act="talk-start">대화하기 <span class="small">상대가 영어로 말하면 말로 답해요</span></button>` : ''}
+    ${AI.talkTurns(t, s).length ? `<button class="talk-start" data-act="talk-start"><span class="talk-start-ic">${TALK_SVG.mic}</span><span class="talk-start-tx"><b>대화하기</b><span>상대가 영어로 물으면 말로 답해요 · ${AI.talkTurns(t, s).filter(x => x.who === 'me').length}번 주고받기</span></span>${I.next}</button>` : ''}
     ${t && t.ask ? `<h4>상대가 먼저</h4>${line('ask')}<h4>내가 대답하기</h4>` : ''}
     <div class="talk-me"><b lang="en" data-read>${enHtml(s.en)}</b><div>${phHtml(s.ko)}</div>${tts ? `<button class="talk-say" data-act="speak-card">${I.speaker}듣기</button>` : ''}</div>
     <div class="speak" data-live="speak">${speakHtml(s)}</div>
@@ -2456,7 +2456,7 @@ function talkRecord() {
       const heard = res && typeof res.heard === 'string' ? res.heard.trim() : '';
       TALK.results[t.key] = res;
       // 점수 없이 되받기만 한다. 들린 말이 있으면 잠깐 보여 주고 상대 차례로 넘어간다.
-      TALK.note = heard ? `들렸어요: “${heard}”` : (res && res.reason) || '잘 안 들렸어요. 다시 말하거나 넘어가도 돼요.';
+      TALK.note = heard ? `들렸어요: “${talkCap(heard)}”` : (res && res.reason) || '잘 안 들렸어요. 다시 말하거나 넘어가도 돼요.';
       updateTalkUi();
       if (heard) TALK.timer = setTimeout(() => { if (tok === TALK.tok && TALK.i === idx) talkNext(); }, 1200);
     } });
@@ -2470,56 +2470,101 @@ function talkStateText() {
   if (SPK.state === 'uploading') return TALK.slow ? '조금만 기다려 주세요 — 서버가 깨어나는 중일 수 있어요' : '알아듣는 중이에요…';
   return '내 차례예요 — 영어로 답해 보세요';
 }
+/* 대화하기 화면(재디자인): 머리(상황·진행·상태) / 대화 기록(스크롤) / 아래 고정 조작부.
+   시트 높이를 고정해 턴마다 화면이 출렁이지 않게 하고, 한 번에 눈에 띄는 큰 행동은 하나(마이크)만 둔다. */
+const TALK_SVG = {
+  mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>',
+  stop: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>',
+  bulb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0012 3z"/></svg>',
+  skip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l8 7-8 7zM17 5v14"/></svg>',
+  slow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>',
+  ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>',
+};
+const talkCap = x => x ? x.charAt(0).toUpperCase() + x.slice(1) : x;   // 되받기 표시만 문장 첫 글자를 대문자로(내용은 그대로)
+function talkPhase() {
+  const t = talkCur();
+  if (!t) return 'done';
+  if (t.who === 'ai') return 'ai';
+  if (SPK.state === 'recording') return 'rec';
+  if (SPK.state === 'requesting' || SPK.state === 'uploading') return 'busy';
+  return 'me';
+}
 function talkLineHtml(t, idx) {
+  const cur = idx === TALK.i;
   if (t.who === 'ai') {
-    const last = idx === TALK.i || (idx === TALK.i - 1 && talkCur() && talkCur().who === 'me');
+    const last = cur || (idx === TALK.i - 1 && talkCur() && talkCur().who === 'me');
     const rep = AI.talkRepeat(S.ttsRate, TALK.again[idx] || 0), off = SPK.state !== 'idle' ? 'disabled' : '';
-    return `<div class="talk-bubble ai"><span class="talk-who">상대</span><b lang="en">${esc(t.en)}</b>
+    const live = cur && ttsState() === 'ok';
+    return `<div class="talk-row ai${last ? ' last' : ''}">
+      <div class="talk-bubble ai${live ? ' live' : ''}"><span class="talk-who">상대${live ? '<i class="talk-eq" aria-hidden="true"><b></b><b></b><b></b></i>' : ''}</span>
+      <b lang="en">${esc(t.en)}</b>
       ${rep.rephrase ? `<p>${esc(t.ko)}</p>` : ''}
-      ${last ? `<div class="talk-acts">${ttsState() === 'ok' ? `<button class="talk-say sub" data-act="talk-say" data-i="${idx}" ${off}>${I.speaker}다시 듣기</button>
-        <button class="talk-say sub" data-act="talk-sorry" data-i="${idx}" ${off}>Sorry? 천천히</button>` : ''}</div>` : ''}</div>`;
+      ${last && ttsState() === 'ok' ? `<div class="talk-acts">
+        <button class="talk-say sub" data-act="talk-say" data-i="${idx}" ${off}>${I.speaker}다시 듣기</button>
+        <button class="talk-say sub" data-act="talk-sorry" data-i="${idx}" ${off}>${TALK_SVG.slow}Sorry? 천천히</button></div>` : ''}</div></div>`;
   }
+  if (idx >= TALK.i) return '';
   const r = TALK.results[t.key];
   const said = r && typeof r.heard === 'string' && r.heard.trim() ? r.heard.trim() : '';
-  return idx < TALK.i ? `<div class="talk-bubble me"><span class="talk-who">나</span><b lang="en">${esc(said || t.en)}</b>${said ? '' : '<p>(녹음 없이 넘어감)</p>'}</div>` : '';
+  return `<div class="talk-row me"><div class="talk-bubble me${said ? '' : ' skipped'}"><span class="talk-who">나</span>
+    <b lang="en">${esc(said ? talkCap(said) : t.en)}</b>${said ? '' : '<p>(녹음 없이 넘어감)</p>'}</div></div>`;
 }
 function talkMeHtml(t) {
   const hints = AI.talkHint(TALK.turns, TALK.i, TALK.hint);
-  const busy = SPK.state === 'requesting' || SPK.state === 'uploading';
+  const ph = talkPhase(), busy = ph === 'busy', rec = ph === 'rec';
+  const HL = { 'ask-ko': '질문 뜻', 'me-ko': '할 말 뜻', first: '첫 단어', en: '예시 답' };
+  const micLabel = rec ? '다 말했어요' : busy ? (SPK.state === 'requesting' ? '마이크 확인 중' : '알아듣는 중') : '눌러서 말하기';
   const mic = speakAvailable()
-    ? `<button class="talk-mic ${SPK.state === 'recording' ? 'rec' : ''}" data-act="talk-rec" ${busy ? 'aria-disabled="true"' : ''} aria-label="${SPK.state === 'recording' ? '녹음 끝내기' : '말하기'}">${SPK.state === 'recording' ? '■' : '🎤'}</button>`
-    : `<p class="small">${API.base !== null && !canRecord() ? `이 브라우저에서는 녹음이 안 돼요. ${betterBrowser()}에서 열면 말로 답할 수 있어요.` : '소리 내어 말해 본 뒤 다음을 눌러요.'} 채점은 하지 않아요.</p>`;
+    ? `<div class="talk-micwrap ${ph}"><button class="talk-mic ${rec ? 'rec' : ''}${busy ? ' busy' : ''}" data-act="talk-rec" ${busy ? 'aria-disabled="true"' : ''} aria-label="${rec ? '녹음 끝내기' : '말하기'}">${rec ? TALK_SVG.stop : TALK_SVG.mic}</button><span class="talk-miclabel" aria-hidden="true">${micLabel}</span></div>`
+    : `<p class="talk-nomic">${API.base !== null && !canRecord() ? `이 브라우저에서는 녹음이 안 돼요. ${betterBrowser()}에서 열면 말로 답할 수 있어요.` : '소리 내어 말해 본 뒤 다음을 눌러요.'} 채점은 하지 않아요.</p>`;
+  const note = TALK.note ? `<p class="talk-note${/^들렸어요/.test(TALK.note) ? ' heard' : ''}">${/^들렸어요/.test(TALK.note) ? TALK_SVG.ok : ''}${esc(TALK.note)}</p>` : '';
   return `<div class="talk-turn">
-    <div class="talk-hints">${hints.map(h => `<p class="talk-hint ${h.kind}" ${h.kind === 'en' || h.kind === 'first' ? 'lang="en"' : ''}>${esc(h.text)}</p>`).join('')}</div>
-    ${TALK.note ? `<p class="talk-note">${esc(TALK.note)}</p>` : ''}
+    ${hints.length ? `<div class="talk-hints">${hints.map(h => `<div class="talk-hrow"><span class="talk-hlabel">${HL[h.kind] || '힌트'}</span><p class="talk-hint ${h.kind}" ${h.kind === 'en' || h.kind === 'first' ? 'lang="en"' : ''}>${esc(h.text)}</p></div>`).join('')}</div>` : ''}
+    ${note}
     <div class="talk-ctl">
-      <button class="btn soft" data-act="talk-hint" ${TALK.hint >= AI.TALK_HINT_MAX ? 'disabled' : ''}>힌트${TALK.hint ? ` ${TALK.hint}/${AI.TALK_HINT_MAX}` : ''}</button>
+      <button class="talk-side" data-act="talk-hint" ${TALK.hint >= AI.TALK_HINT_MAX || rec || busy ? 'disabled' : ''}>${TALK_SVG.bulb}<span>힌트${TALK.hint ? ` ${TALK.hint}/${AI.TALK_HINT_MAX}` : ''}</span></button>
       ${mic}
-      <button class="btn soft" data-act="talk-next" ${busy || SPK.state === 'recording' ? 'disabled' : ''}>${TALK.results[t.key] ? '다음' : '넘어가기'}</button>
+      <button class="talk-side" data-act="talk-next" ${busy || rec ? 'disabled' : ''}>${TALK_SVG.skip}<span>${TALK.results[t.key] ? '다음' : '넘어가기'}</span></button>
     </div></div>`;
 }
 function talkSummaryHtml() {
   const sum = AI.talkSummary(TALK.turns, TALK.results);
-  const rows = sum.lines.map(l => `<li><b lang="en">${esc(l.en)}</b>
-    <span class="small">${l.heard ? `들린 문장: ${esc(l.heard)}` : '녹음 없음'}${l.score !== null ? ` · ${l.kind === 'word_match' || l.kind === 'word_match_consensus' ? `단어 일치 ${l.score}% (발음 점수 아님)` : `점수 ${l.score}`}` : ''}</span></li>`).join('');
-  return `<div class="talk-done"><h4>대화를 마쳤어요</h4>
-    <p class="small">내 차례 ${sum.myTurns}번 중 ${sum.spoken}번 말했어요.</p>
-    <ul class="talk-sum">${rows}</ul>
-    ${sum.fix ? `<div class="talk-fix"><span class="talk-who">고칠 점 한 가지</span><b lang="en">${esc(sum.fix.en)}</b><p>${esc(sum.fix.text)}</p></div>` : ''}
-    <div class="talk-ctl"><button class="btn soft" data-act="talk-start">다시 해보기</button><button class="btn primary" data-act="talk-exit">회화 연습으로</button></div></div>`;
+  const rows = sum.lines.map(l => {
+    const wm = l.kind === 'word_match' || l.kind === 'word_match_consensus';
+    const sc = l.score !== null ? `<span class="talk-meter"><i style="width:${Math.max(0, Math.min(100, l.score))}%"></i></span><span class="small">${wm ? `단어 일치 ${l.score}% (발음 점수 아님)` : `점수 ${l.score}`}</span>` : '';
+    return `<li><b lang="en">${esc(l.en)}</b>
+      <span class="talk-heard">${l.heard ? `들린 문장: <span lang="en">${esc(talkCap(l.heard))}</span>` : '녹음 없음'}</span>${sc}</li>`;
+  }).join('');
+  return `<div class="talk-done">
+    <div class="talk-scroll">
+      <div class="talk-hero"><span class="talk-badge">${TALK_SVG.ok}</span><div><h4>대화를 마쳤어요</h4><p>내 차례 ${sum.myTurns}번 중 <b>${sum.spoken}번</b> 말했어요.</p></div></div>
+      ${sum.fix ? `<div class="talk-fix"><span class="talk-who">다음엔 이것 하나만</span><b lang="en">${esc(sum.fix.en)}</b><p>${esc(sum.fix.text)}</p></div>` : ''}
+      <h5 class="talk-subh">주고받은 문장</h5>
+      <ul class="talk-sum">${rows}</ul>
+    </div>
+    <div class="talk-dock"><div class="talk-ctl end"><button class="btn soft" data-act="talk-start">다시 해보기</button><button class="btn primary" data-act="talk-exit">회화 연습으로</button></div></div></div>`;
+}
+function talkProgHtml() {
+  const mine = TALK.turns.map((x, k) => x.who === 'me' ? k : -1).filter(k => k >= 0);
+  const cur = talkCur();
+  const pos = cur ? mine.filter(k => k < TALK.i).length + 1 : mine.length;
+  return `<div class="talk-prog" aria-label="내 차례 ${pos} / ${mine.length}">${mine.map(k => `<i class="${k < TALK.i ? 'done' : k === TALK.i ? 'now' : ''}"></i>`).join('')}<span class="small">내 차례 ${pos} / ${mine.length}</span></div>`;
 }
 function talkBodyHtml() {
   const t = talkCur(), shown = TALK.turns.slice(0, Math.min(TALK.i + 1, TALK.turns.length));
-  const total = TALK.turns.filter(x => x.who === 'me').length, done = TALK.turns.slice(0, TALK.i).filter(x => x.who === 'me').length;
-  return `<div class="talk-log">${shown.map((x, k) => talkLineHtml(x, k)).join('')}</div>
-    ${!t ? talkSummaryHtml() : t.who === 'me' ? talkMeHtml(t) : `<div class="talk-ctl"><button class="btn soft" data-act="talk-next">다음</button></div>`}
-    ${t ? `<p class="small talk-prog">내 차례 ${done + 1} / ${total} · 대화 중에는 점수를 보여 주지 않아요</p>` : ''}`;
+  if (!t) return talkProgHtml() + talkSummaryHtml();
+  const dock = t.who === 'me' ? talkMeHtml(t)
+    : `<div class="talk-ctl wait"><button class="btn soft block" data-act="talk-next">${ttsState() === 'ok' ? '다 들었어요 · 다음' : '다음'}</button></div>`;
+  return `${talkProgHtml()}
+    <div class="talk-scroll"><div class="talk-log">${shown.map((x, k) => talkLineHtml(x, k)).join('')}</div></div>
+    <div class="talk-dock">${dock}</div>`;
 }
 function talkSheetHtml(s) {
+  const cat = (S.drill && S.drill.label) || '';
   return `<div class="sheet-wrap" data-act="sheet-bg"><section class="sheet talk" role="dialog" aria-modal="true" aria-label="대화하기" data-act="noop">
     <div class="sheet-handle"></div>
-    <div class="talk-head"><h3>대화하기 <span class="small">${esc(s.situation)}</span></h3><button class="talk-exit" data-act="talk-exit">그만하기</button></div>
-    <p class="talk-state" role="status" aria-live="polite" tabindex="-1">${esc(talkStateText())}</p>
+    <div class="talk-head"><div><span class="talk-kicker">대화하기${cat ? ` · ${esc(cat)}` : ''}</span><h3>${esc(s.situation)}</h3></div><button class="talk-exit" data-act="talk-exit">${I.x}그만하기</button></div>
+    <p class="talk-state" role="status" aria-live="polite" tabindex="-1" data-phase="${talkPhase()}">${esc(talkStateText())}</p>
     <div data-live="talk">${talkBodyHtml()}</div>
   </section></div>`;
 }
@@ -2527,8 +2572,10 @@ function talkSheetHtml(s) {
 function updateTalkUi() {
   const el = $('[data-live=talk]'); if (!el || !TALK.on) return;
   const st = $('.talk-state'); if (st) { const v = talkStateText(); if (st.textContent !== v) st.textContent = v; }
+  if (st) st.dataset.phase = talkPhase();
   const f = document.activeElement && el.contains(document.activeElement) ? document.activeElement.dataset.act : null;
   el.innerHTML = talkBodyHtml();
+  const sc = el.querySelector('.talk-scroll'); if (sc && !el.querySelector('.talk-done')) sc.scrollTop = sc.scrollHeight;   // 새 대사가 늘 보이게
   if (f) {   // 같은 버튼 → 내 차례의 마이크 → 상태 문구 순으로 포커스를 돌려 <body> 로 빠지지 않게
     const b = el.querySelector(`[data-act="${f}"]:not([disabled])`) || el.querySelector('[data-act="talk-rec"]') || $('.talk-state');
     if (b) b.focus();

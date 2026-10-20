@@ -77,6 +77,14 @@ with sync_playwright() as p:
     check("대화 중 점수 문구 없음", "%" not in page.locator(".sheet.talk").inner_text())
     check("큰 마이크 버튼(≥56px)", page.locator('[data-act="talk-rec"]').bounding_box()["height"] >= 56)
 
+    # 재디자인: 시트 높이 고정(턴마다 출렁이지 않음) · 조작부는 시트 바닥 · 진행 점 · 기록 칸만 스크롤
+    h0 = page.locator(".sheet.talk").bounding_box()["height"]
+    dock = page.locator(".talk-dock").bounding_box(); sh = page.locator(".sheet.talk").bounding_box()
+    check("조작부가 시트 바닥에 붙음", abs((dock["y"] + dock["height"]) - (sh["y"] + sh["height"])) < 2, f"{dock} {sh}")
+    check("진행 점 = 내 차례 수(2), 지금 1개", page.locator(".talk-prog i").count() == 2 and page.locator(".talk-prog i.now").count() == 1)
+    check("상태 띠에 단계 표시(me)", page.locator(".talk-state").get_attribute("data-phase") == "me")
+    check("시트 자체는 스크롤하지 않음(기록 칸만)", page.evaluate("getComputedStyle(document.querySelector('.sheet.talk')).overflowY") == "hidden"
+          and page.evaluate("getComputedStyle(document.querySelector('.talk-scroll')).overflowY") == "auto")
     hint = page.locator('[data-act="talk-hint"]')
     check("힌트는 처음엔 숨김", page.locator(".talk-hint").count() == 0)
     hint.click(); page.wait_for_timeout(100)
@@ -86,9 +94,12 @@ with sync_playwright() as p:
     hint.click(); page.wait_for_timeout(100)
     check("힌트 3: 예시 답 전체", page.locator(".talk-hint.en").inner_text() == "I'm here for sightseeing.")
     check("힌트 3단계에서 멈춤", hint.is_disabled())
+    check("힌트에 단계 이름표(질문 뜻·예시 답)", "질문 뜻" in page.locator(".talk-hints").inner_text() and "예시 답" in page.locator(".talk-hints").inner_text())
+    check("힌트를 펼쳐도 시트 높이 그대로", abs(page.locator(".sheet.talk").bounding_box()["height"] - h0) < 2)
 
     # 내 답 녹음 → 서버(가로챔) → 들린 말 되받기 → 상대 차례 자동
     page.locator('[data-act="talk-rec"]').click(); page.wait_for_timeout(1200)
+    check("녹음 중: 상태 띠 rec · 힌트 비활성", page.locator(".talk-state").get_attribute("data-phase") == "rec" and hint.is_disabled())
     page.locator('[data-act="talk-rec"]').click(); page.wait_for_timeout(600)
     check("첫 녹음 target = 내 문장", targets[:1] == ["I'm here for sightseeing."], str(targets))
     check("들린 말을 되받고 점수는 숨김", "들렸어요" in page.locator(".talk-note").inner_text()
@@ -113,6 +124,8 @@ with sync_playwright() as p:
     check("요약: 단어 일치(발음 점수 아님) 표기", "단어 일치 88%" in txt and "발음 점수 아님" in txt, txt[:200])
     check("고칠 점은 한 가지(가장 낮은 턴)", page.locator(".talk-fix").count() == 1 and "fix-52" in txt and "fix-88" not in txt)
     check("자동 복습 저장 없음(대화 중)", page.evaluate("weakList().length") == 0)
+    check("요약: 다시 해보기·돌아가기는 바닥 고정 칸", page.locator(".talk-done .talk-dock [data-act=talk-exit]").count() == 1)
+    check("요약 상태 띠 done", page.locator(".talk-state").get_attribute("data-phase") == "done")
 
     # 다시 해보기 → 닫기로 대화 정지
     page.locator('.talk-done [data-act="talk-start"]').click(); page.wait_for_timeout(200)
