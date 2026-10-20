@@ -2333,7 +2333,7 @@ function accountCard() {
     <div class="acc-row"><span class="acc-avatar">${initial}</span>
       <span class="acc-who"><b>${esc(userName())}</b><span class="small">${esc(userEmail())}</span></span></div>
     <p class="small acc-note">${signed
-      ? '학습 진도와 여행 설정은 계정에 저장돼요. 로그아웃하면 이 브라우저에서만 나가고, 다시 로그인하면 이어서 할 수 있어요.'
+      ? '학습 진도와 여행 설정은 계정에 저장돼요. 이 브라우저에서 로그아웃되고, 로그인하면 다시 이어서 학습할 수 있어요.'
       : '로그인하면 학습 진도·복습 목록·여행 설정이 계정에 저장돼요.'}</p>
     ${signed
       ? '<button class="btn soft block" data-act="logout-home">로그아웃</button>'
