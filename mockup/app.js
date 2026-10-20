@@ -1377,7 +1377,7 @@ function scrLogin() {
       <button class="guest-btn" type="button" data-act="guest">로그인 없이 시작</button>`
     : `<button class="gbtn" data-act="login">${I.google}Google로 계속하기</button>`;
   const body = (S.user && !isGuest() ? signed : choices) + withdrawProofBlock();
-  const gate = fbOn() ? '로그인하지 않아도 쓸 수 있어요. 기록은 이 브라우저에만 남아요.' : '로그인하지 않으면 다른 화면에 들어갈 수 없어요.';
+  const gate = fbOn() ? '로그인하지 않아도 쓸 수 있어요. 기록은 이 브라우저에만 남아요.' : '로그인하지 않으면 다른 화면에 들어가기 어려워요.';
   return frame(`<div class="login">
     <div class="stamp" aria-hidden="true">MADI · 마디<br>TRAVEL ENGLISH<br>— 2026 —</div>
     <div class="brand-row"><img src="icon-192.png" alt="" width="48" height="48"><div><b class="brand-name">마디 <span>MADI</span></b><div class="brand-tag">여행을 잇는 한마디</div></div></div>
