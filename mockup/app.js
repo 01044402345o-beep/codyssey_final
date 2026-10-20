@@ -1897,9 +1897,9 @@ function sheetHtml() {
   const body = t
     ? `<h4>상대방의 예상 답변</h4>${(t.replies || []).map((r, j) => line('r' + j, r.label)).join('')}<h4>내가 이어서</h4>${line('next')}`
     : `<p class="small">이 문장은 예상 답변이 아직 없어요. 공통 문장에만 있어요.</p>`;
-  return `<div class="sheet-wrap" data-act="sheet-bg"><section class="sheet" role="dialog" aria-modal="true" aria-label="회화 연습" data-act="noop">
+  return `<div class="sheet-wrap" data-act="sheet-bg"><section class="sheet" role="dialog" aria-modal="true" aria-label="회화 연습 · ${AI.talkTurns(t, s).filter(x => x.who === 'me').length}번 주고받기" data-act="noop">
     <div class="sheet-handle"></div><h3>회화 연습</h3>
-    ${AI.talkTurns(t, s).length ? `<button class="talk-start" data-act="talk-start"><span class="talk-start-ic">${TALK_SVG.mic}</span><span class="talk-start-tx"><b>대화하기</b><span>상대가 영어로 물으면 말로 답해요 · ${AI.talkTurns(t, s).filter(x => x.who === 'me').length}번 주고받기</span></span>${I.next}</button>` : ''}
+    ${AI.talkTurns(t, s).length ? `<button class="talk-start" data-act="talk-start"><span class="talk-start-ic">${TALK_SVG.mic}</span><span class="talk-start-tx"><b>대화하기</b><span>상대가 영어로 물으면 말로 답해요</span></span>${I.next}</button>` : ''}
     ${t && t.ask ? `<h4>상대가 먼저</h4>${line('ask')}<h4>내가 대답하기</h4>` : ''}
     <div class="talk-me"><b lang="en" data-read>${enHtml(s.en)}</b><div>${phHtml(s.ko)}</div>${tts ? `<button class="talk-say" data-act="speak-card">${I.speaker}듣기</button>` : ''}</div>
     <div class="speak" data-live="speak">${speakHtml(s)}</div>
