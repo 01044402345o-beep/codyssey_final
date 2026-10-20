@@ -109,6 +109,7 @@ jobs:
           python ../e2e/test_brand.py http://localhost:8768   # 마디 브랜드: 앱 아이콘·매니페스트·로그인 브랜드 줄
           python ../e2e/test_bottom_nav.py http://localhost:8768   # 폰 하단 탭 고정(스크롤·끝 바운스에 끌려가지 않음)
           python ../e2e/test_read_along.py http://localhost:8768   # 따라 읽기: 듣기 중 지금 읽는 단어 강조
+          python ../e2e/test_streak.py http://localhost:8768   # 연속 학습·오늘의 목표(카드 10장)
       - uses: actions/upload-artifact@v4
         if: always()
         with:
