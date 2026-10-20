@@ -18,6 +18,7 @@
 4. [실시간 음성 회화 번역 GitHub 저장소 레퍼런스](#4-실시간-음성-회화-번역-github-저장소-레퍼런스)
 5. [실시간 회화 에이전트 번역 모듈 설계 지침](#5-실시간-회화-에이전트-번역-모듈-설계-지침)
 6. [시나리오별 추천 조합과 참고 자료 정리](#6-시나리오별-추천-조합과-참고-자료-정리)
+7. [검증과 마디 적용 (2026-10-20 보강)](#7-검증과-마디-적용-2026-10-20-보강)
 
 ---
 
@@ -239,9 +240,10 @@ aws translate translate-text \
 ### 2.6 Naver Papago & NHN Cloud
 
 > [!WARNING]
-> Papago 번역 오픈 API는 **2024년 2월 29일에 지원 종료**되었다. 신규 서비스에서는 사용 불가.
+> 네이버 개발자센터의 **무료 Papago 오픈 API**(`openapi.naver.com/v1/papago/n2mt`)는 종료됐다고 알려져 있다. 다만 종료일(2024-02-29)은 2026-10-20 검색에서 공지 원문을 찾지 못해 **[미확인]**이다.
+> **정정(2026-10-20):** "Papago 는 신규 서비스에서 쓸 수 없다"는 틀렸다. Papago Translation 은 **네이버 클라우드 플랫폼(NCP) 유료 API**로 제공된다(텍스트 `https://papago.apigw.ntruss.com/nmt/v1`, 문서·웹 번역, 언어 감지, 용어집, NCP 콘솔 Application 의 Client ID/Secret 인증). NCP 문서는 **원문을 저장하거나 학습에 쓰지 않는다**고 밝힌다. 국내 사업자라 국외 이전 문제가 줄어드는 선택지다(아래 7절). 출처: [NCP Papago Translation API](https://api.ncloud-docs.com/docs/ai-naver-papagonmt)
 
-**Papago NMT API (과거)**:
+**Papago NMT API (구 개발자센터, 과거)**:
 - 엔드포인트: `https://openapi.naver.com/v1/papago/n2mt`
 - 29개 언어쌍, 최대 5,000자
 - 비로그인 방식 클라이언트 ID/Secret 인증
@@ -274,7 +276,7 @@ aws translate translate-text \
 | **DeepL API** | 고품질, 용어집·스타일 룰·번역 메모리 | 용어집, 스타일 규칙 | 도메인 특화 전문 용어·브랜드명 번역 | [링크](https://developers.deepl.com/docs/getting-started/auth) |
 | **Google Cloud Translation** | 189개 언어, Glossary·Adaptive MT | Glossary, 사용자 정의 모델 | 다국어 콜센터·영상 자막·음성 더빙 | [링크](https://docs.cloud.google.com/translate/docs/api-overview) |
 | **Amazon Translate** | TranslateText/Document, AWS 생태계 통합 | 자동 언어 감지 | AWS 마이크로서비스 아키텍처 내 자연스러운 통합 | [링크](https://docs.aws.amazon.com/translate/latest/dg/sync-api.html) |
-| **Papago NMT (종료)** | 한국어 중심 29개 언어쌍 | 용어집 (과거) | ⚠️ 오픈 API 종료로 신규 사용 불가 | [링크](https://developers.naver.com/docs/papago/papago-nmt-api-reference.md) |
+| **Papago (구 오픈 API 종료 → NCP 유료)** | 한국어 중심 | 용어집·언어 감지 | 구 무료 API 는 종료, **NCP Papago Translation 으로 사용 가능**(원문 미저장·미학습 명시) | [링크](https://developers.naver.com/docs/papago/papago-nmt-api-reference.md) |
 
 ### 3.3 언어 감지와 다국어 회화 흐름 관리
 
@@ -422,33 +424,40 @@ const ws = new WebSocket(
   }
 );
 
+// ⚠️ 2026-10-20 정정: 처음 실린 예시의 이벤트 이름(input_audio_buffer.append·commit,
+// output_audio_delta, output_text_delta)은 번역 세션의 이름이 아니었다. 번역 세션은 모든 이벤트가
+// `session.` 으로 시작하고 commit·response.create 가 없다. 아래는 공식 가이드와
+// backblaze 샘플(services/api/app/repo/openai_realtime.py·tests/test_realtime.py)로 확인한 형태다.
 ws.on("open", () => {
-  console.log("Realtime translation WebSocket connected");
-
-  // 24kHz PCM16 오디오를 base64로 변환하여 전송
-  const audioBuffer = fs.readFileSync("input.pcm");
-  const base64Audio = audioBuffer.toString("base64");
-
+  // 1) 출력 언어를 정한다(세션 하나 = 출력 언어 하나)
   ws.send(JSON.stringify({
-    type: "input_audio_buffer.append",
-    audio: base64Audio,
+    type: "session.update",
+    session: { audio: { output: { language: "en" } } },
   }));
 
-  ws.send(JSON.stringify({
-    type: "input_audio_buffer.commit",
-  }));
+  // 2) 24kHz PCM16 mono 를 조금씩(예: 100ms = 4,800바이트) base64 로 보낸다
+  const pcm = fs.readFileSync("input.pcm");
+  for (let i = 0; i < pcm.length; i += 4800) {
+    ws.send(JSON.stringify({
+      type: "session.input_audio_buffer.append",
+      audio: pcm.subarray(i, i + 4800).toString("base64"),
+    }));
+  }
 });
 
 ws.on("message", (data) => {
   const event = JSON.parse(data.toString());
-
-  if (event.type === "output_audio_delta") {
-    const audioBytes = Buffer.from(event.audio, "base64");
-    console.log("Received audio delta, length:", audioBytes.length);
-  } else if (event.type === "output_text_delta") {
-    process.stdout.write(event.text);
+  if (event.type === "session.output_audio.delta") {          // 번역된 음성(base64 PCM16)
+    const audioBytes = Buffer.from(event.delta, "base64");
+    console.log("translated audio bytes:", audioBytes.length);
+  } else if (event.type === "session.output_transcript.delta") { // 번역 자막
+    process.stdout.write(event.delta);
+  } else if (event.type === "session.input_transcript.delta") {  // 원문 전사
+    // 원문 자막이 필요하면 여기서 쓴다
   }
 });
+
+// 끝낼 때: ws.send(JSON.stringify({ type: "session.close" })) → 서버가 session.closed 를 보낸다
 
 ws.on("close", () => console.log("WebSocket closed"));
 ws.on("error", (err) => console.error("WebSocket error:", err));
@@ -584,20 +593,68 @@ for translation in response.translations:
 
 ---
 
+## 7. 검증과 마디 적용 (2026-10-20 보강)
+
+이 문서와 함께 받은 추가 조사(Gemini Live Translation, DeepL Voice, Azure Live Interpreter, Sokuji, Agora, LiveKit 다중 사용자 번역)를 **공식 문서와 받아 둔 저장소 코드로 대조**했다. 저장소는 읽기만 했고 실행하지 않았다.
+
+### 7.1 검증표
+
+| 주장 | 결과 | 근거 |
+|---|---|---|
+| OpenAI `gpt-realtime-translate`, `wss://…/v1/realtime/translations`, `…/translations/client_secrets` | **맞음.** WebRTC 용 `…/translations/calls` 도 있다 | [OpenAI 가이드](https://developers.openai.com/api/docs/guides/realtime-translation) |
+| 번역 세션 이벤트 이름 | **처음 실린 예시가 틀렸다**(5.3 정정). 실제는 `session.update`·`session.input_audio_buffer.append`·`session.output_audio.delta`·`session.output_transcript.delta`·`session.input_transcript.delta`·`session.close`/`session.closed`. commit·`response.create` 없음 | 위 가이드, backblaze 샘플 `services/api/app/repo/openai_realtime.py`·`tests/test_realtime.py` |
+| 입력 24kHz PCM16, 200ms 청크 권장 | 24kHz PCM16 은 맞음. **200ms 권장은 [미확인]** — 가이드 Ruby 예시는 4,800바이트(약 100ms) | 위 가이드 |
+| 번역 세션과 도구 호출형 에이전트 세션은 별개 | **맞음.** 가이드는 도구 호출을 음성 에이전트 세션에만 둔다 | 위 가이드 |
+| Gemini Live Translation | **있음.** `gemini-3.5-live-translate-preview`, `generationConfig.translationConfig`(`targetLanguageCode`, `echoTargetLanguage`), 70+ 언어(ko 포함), 입력 16kHz·출력 24kHz PCM, 100ms 청크 권장, 임시 토큰은 v1beta. **"번역만 — 도구·지시 미지원", 오디오 입력만(텍스트 불가)** | [Gemini Live Translate](https://ai.google.dev/gemini-api/docs/live-api/live-translate) |
+| DeepL Voice API | **맞음.** WebSocket 으로 전사·번역·번역 음성, 여러 용어집 우선순위 적용. **유료 DeepL API 구독**이면 사용 가능. 한국어 지원 여부는 개요에 없음 **[미확인]** | [DeepL Voice 개요](https://developers.deepl.com/docs/voice/overview) |
+| Azure Live Interpreter 는 제한 접근 승인 필요 | **부분적으로 틀림.** 승인이 필요한 것은 **개인 음성(BYO voice)** 뿐이다. Live Interpreter 자체는 입력 언어 자동 감지·대화 중 언어 전환을 제공 | [Azure Speech translation](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-translation) |
+| Papago 신규 사용 불가 | **틀림** — NCP 유료 API 로 제공(2.6 정정) | [NCP Papago](https://api.ncloud-docs.com/docs/ai-naver-papagonmt) |
+| LiveKit 다중 사용자 번역 예제 | **있음.** `examples/other/translation/multi-user-translator.py`: 참가자 토큰 속성의 언어별로 번역 작업을 만들고 LLM 번역 + TTS 음성 트랙 `"{입력트랙}-{언어}"` 과 자막 텍스트 스트림을 방에 게시 | 받아 둔 `livekit/agents` |
+| Sokuji | **있음.** 양방향 회의 통역 앱. 클라우드(OpenAI·Gemini 등) 또는 **기기 안 추론(WASM·WebGPU, 오프라인)**. **라이선스 AGPL-3.0** — 코드를 가져오면 우리 코드도 AGPL 의무가 생기므로 **구조만 참고** | 받아 둔 `kizuna-ai-lab/sokuji` README |
+| Agora 번역 레시피 | **있음.** Deepgram STT → OpenAI 번역 → MiniMax TTS, MIT | 받아 둔 `AgoraIO-Conversational-AI/recipe-agent-translator` README |
+
+### 7.2 마디에 주는 의미
+
+1. **번역 전용 모드는 회화 상대가 될 수 없다.** OpenAI·Gemini 모두 번역 세션은 지시·도구를 받지 않는다. 그래서 "천천히·쉬운 영어로·막히면 한국어 힌트" 같은 학습 규칙([realtime-agent/03](realtime-agent/03-conversation-design.md))을 걸 수 없다. 회화 상대는 지금 계획대로 **에이전트 세션**(1b Gemini 텍스트 → 2 Gemini Live)이고, 번역 API 는 보조 역할이다.
+2. **"내가 하고 싶은 말 → 영어로"(참고 도구 ④) 후보:**
+   - **Gemini 텍스트(지금 쓰는 스택):** 프롬프트로 "짧고 공손한 여행 영어, 15단어 이하, 한국어 뜻 확인"을 지시할 수 있다. 다만 결과는 AI 생성물이라 'AI 생성' 표시가 필요하다.
+   - **NCP Papago:** 국내 사업자이고 원문을 저장·학습하지 않는다고 명시한다. 국외 이전 고지 부담이 작다. 대신 학습 수준 조절(쉬운 말)은 못 한다.
+   - **Gemini Live Translate:** 말로 한 한국어를 바로 영어 음성으로 바꾼다. 하지만 오디오 입력만 받고 지시를 받지 않아, 학습용으로는 쓰기 어렵다.
+   - **선택은 [realtime-agent/README.md](realtime-agent/README.md) 8절의 팀 결정과 묶여 있다.** 유료 등급, 처리방침과 국외 이전 고지가 먼저다.
+3. **개인정보 측면의 장기 선택지:** Sokuji 처럼 STT·번역·TTS 를 **기기 안에서** 돌리면 음성이 밖으로 나가지 않는다. 다만 모델 크기와 저사양 Android 성능을 실측해야 한다(대표 집단의 기기). AGPL 이라 코드는 가져오지 않는다.
+4. **비교 실험 기준(실서비스 전):** 한국어↔영어 실제 음성으로 다섯 가지를 비교한다. ① 첫 번역 음성까지의 지연 ② 끼어들기 ③ 자막 동기화 ④ 고유명사·숫자 정확도 ⑤ 재연결. 카톡 인앱 브라우저도 포함한다([mobile-audio-pipeline-constraints.md](mobile-audio-pipeline-constraints.md)).
+
+### 7.3 받아 둔 참고 저장소 (로컬 `reference/realtime-voice/`, git 무시 · 읽기 전용)
+
+| 경로 | 저장소 | 커밋(받은 날) |
+|---|---|---|
+| `translation/backblaze-b2-samples_gpt-realtime-translate-live-event-interpreter` | 번역 세션 래퍼와 이벤트 테스트 — 이벤트 이름의 근거 | 2026-10-20 받음 |
+| `translation/kizuna-ai-lab_sokuji` | 양방향 통역, 기기 안 추론 (AGPL-3.0) | 〃 |
+| `translation/AgoraIO-Conversational-AI_recipe-agent-translator` | STT→LLM 번역→TTS 레시피 (MIT) | `c7f12dc` (2026-08-17) |
+| `translation/dwain-barnes_local-multilingual-voice-translator` | 로컬 LLM·TTS 번역 UI | 2026-10-20 받음 |
+| `translation/acyclics_speech-to-speech-translator` | STT+MT+TTS 장치형 예제 | 〃 |
+| `translation/api-evangelist_papago` | Papago API 표면 정리 | `a064307` (2026-10-17) |
+| `translation/Azure-Samples_cognitive-services-speech-sdk` | C#·JS 브라우저·Python 샘플만 (sparse) | `6e3d0b2` (2026-09-30) |
+| `core/livekit_livekit` | WebRTC SFU 서버 | `39622cc` (2026-10-19) |
+| `core/livekit_agents` (기존) | `examples/other/translation/multi-user-translator.py` | 기존 |
+
 ## 부록: 전체 링크 정리
 
 ### 서비스 API 문서
 
 | 서비스 | 링크 |
 |--------|------|
-| OpenAI Realtime Translation | [가이드 (중국어)](https://github.com/hl8086/openai-developer-doc-zh/blob/main/zh/guides/realtime-translation.md) |
+| OpenAI Realtime Translation | [공식 가이드](https://developers.openai.com/api/docs/guides/realtime-translation) · [중국어 번역본](https://github.com/hl8086/openai-developer-doc-zh/blob/main/zh/guides/realtime-translation.md) |
 | Azure Translator | [제품 페이지](https://azure.microsoft.com/en-us/products/ai-foundry/tools/translator) |
 | Azure Speech | [제품 페이지](https://azure.microsoft.com/en-us/products/ai-foundry/tools/speech) |
 | DeepL API 인증 | [문서](https://developers.deepl.com/docs/getting-started/auth) |
 | DeepL Voice WebSocket | [명세](https://developers.deepl.com/api-reference/voice/voice.asyncapi.yaml) |
 | Google Cloud Translation | [제품](https://cloud.google.com/translate) · [API 개요](https://docs.cloud.google.com/translate/docs/api-overview) · [REST](https://docs.cloud.google.com/translate/docs/reference/rest) |
 | Amazon Translate | [실시간 번역 문서](https://docs.aws.amazon.com/translate/latest/dg/sync-api.html) |
-| Papago NMT (종료) | [API 문서](https://developers.naver.com/docs/papago/papago-nmt-api-reference.md) |
+| Papago | [NCP Papago Translation (현행)](https://api.ncloud-docs.com/docs/ai-naver-papagonmt) · [구 개발자센터 NMT (종료)](https://developers.naver.com/docs/papago/papago-nmt-api-reference.md) |
+| Gemini Live Translation | [문서](https://ai.google.dev/gemini-api/docs/live-api/live-translate) |
+| DeepL Voice API | [개요](https://developers.deepl.com/docs/voice/overview) |
+| Azure Speech translation (Live Interpreter) | [개요](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-translation) |
 | NHN Cloud | [Public API 개요](https://docs.nhncloud.com/en/nhncloud/en/public-api/overview/) |
 
 ### GitHub 저장소
@@ -610,6 +667,10 @@ for translation in response.translations:
 | [cognitive-services-speech-sdk (C#)](https://github.com/Azure-Samples/cognitive-services-speech-sdk/tree/master/samples/csharp/dotnetcore/console) | Azure Speech SDK 샘플 |
 | [openai-developer-doc-zh](https://github.com/hl8086/openai-developer-doc-zh/blob/main/zh/guides/realtime-translation.md) | OpenAI 문서 중국어 번역 |
 | [papago (API Evangelist)](https://github.com/api-evangelist/papago) | Papago API 프로파일 (아카이브) |
+| [sokuji](https://github.com/kizuna-ai-lab/sokuji) | 양방향 통역, 기기 안 추론 (AGPL-3.0 — 구조만 참고) |
+| [recipe-agent-translator](https://github.com/AgoraIO-Conversational-AI/recipe-agent-translator) | Agora STT→번역→TTS 레시피 (MIT) |
+| [livekit/agents 다중 사용자 번역 예제](https://github.com/livekit/agents/blob/main/examples/other/translation/multi-user-translator.py) | 참가자별 언어로 자막·음성 트랙 |
+| [livekit/livekit](https://github.com/livekit/livekit) | WebRTC SFU 서버 |
 
 ---
 
