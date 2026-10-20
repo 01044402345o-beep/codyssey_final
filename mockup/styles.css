@@ -588,6 +588,22 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .today-card h3 { margin: 10px 0 4px; font-size: 1.1875rem; letter-spacing: -0.02em; }
 .progress-row { display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: center; }
 .ring { width: 96px; height: 96px; position: relative; }
+/* 오늘의 목표·연속 학습(Duolingo 처럼) */
+.streak-card { display: flex; align-items: center; gap: 16px; }
+.goal-ring { --p: 0; flex: none; width: 84px; height: 84px; border-radius: 50%; display: grid; place-content: center; text-align: center;
+  background: radial-gradient(closest-side, var(--surface) 76%, transparent 77%), conic-gradient(var(--accent) calc(var(--p) * 1%), var(--surface-seg) 0); }
+.goal-ring.done { background: radial-gradient(closest-side, var(--surface) 76%, transparent 77%), conic-gradient(var(--ok) 100%, var(--surface-seg) 0); }
+.goal-ring b { font-size: 1.5rem; line-height: 1; }
+.goal-ring span { font-size: 0.75rem; color: var(--text-3); }
+.streak { min-width: 0; flex: 1; }
+.streak-n { font-size: 1.0625rem; }
+.streak .small { margin: 4px 0 8px; }
+.week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.week i { font-style: normal; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.week i b { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); font-size: 0.8125rem; }
+.week i.on b { background: var(--accent-soft); }
+.week i.today b { box-shadow: 0 0 0 2px var(--accent); }
+.week i span { font-size: 0.75rem; color: var(--text-3); }
 .ring svg { transform: rotate(-90deg); }
 .ring .v { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
 .ring .v b { font-family: var(--display); font-size: 1.5rem; font-weight: 600; display: block; line-height: 1; }
