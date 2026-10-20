@@ -1526,7 +1526,7 @@ function scrGen() {
       <div class="title-lg" style="text-align:center">${STAGE_OBJ[stage]} 만들고 있어요</div>
       <p class="sub" style="text-align:center">화면을 닫거나 새로고침해도 이어서 진행돼요.</p>`;
     bottom = `<button class="btn soft block" disabled>생성 중에는 다시 요청할 수 없어요</button>`;
-    if (g.stuck) extra = notice('서버 응답이 오지 않고 있어요. (데모: 오른쪽 "16분 경과시키기"로 멈춤 처리를 확인하세요)', 'plain');
+    if (g.stuck) extra = notice('서버 응답이 오지 않고 있어요. (오른쪽 "16분 경과시키기"로 멈춤 처리를 확인하세요)', 'plain');
     else if (g.waitNote) extra = notice(esc(g.waitNote), 'plain');
   }
   return frame(`<div class="gen">${head}${stepList}<div style="margin-top:14px">${extra}</div></div>`, { bottom });
@@ -2078,7 +2078,7 @@ function admJobs() {
       <td class="mono">${r.failStreak}</td><td class="mono">${r.regen}/3</td>
       <td>${stale(r) ? `<button class="btn soft sm" data-act="job-fail" data-id="${r.id}">실패로 처리</button>` : /_failed$/.test(r.status) ? '<span class="small">사용자 재시도 대기</span>' : ''}</td></tr>`).join('') || `<tr><td colspan="7"><div class="empty">해당하는 작업이 없어요</div></td></tr>`}
     </tbody></table></div></div>
-    <p class="small" style="margin-top:10px">데모: 사이드바에서 "생성 멈춤"을 켜고 여행을 만든 뒤, SCR-03의 "16분 경과시키기"를 누르면 데모 여행이 멈춤으로 표시돼요.</p>`;
+    <p class="small" style="margin-top:10px">사이드바에서 "생성 멈춤"을 켜고 여행을 만든 뒤, SCR-03의 "16분 경과시키기"를 누르면 데모 여행이 멈춤으로 표시돼요.</p>`;
 }
 function admCommon() {
   S.commonsDraft ??= JSON.parse(JSON.stringify(S.commons));
@@ -2189,7 +2189,7 @@ function navFromMenu(id) {
   if (id === 'u-input' || id === 'u-gen') did = ensure('user');
   if (id === 'u-report') did = ensure('report');
   if (['u-route', 'u-home', 'u-sched', 'u-study', 'u-coll', 'u-end'].includes(id)) did = ensure('plan');
-  if (id === 'u-end' && phase() !== 'ended') { S.today = Dt.add(S.trip.tripEnd, 1); toast(`데모: 오늘을 여행 종료 다음 날(${Dt.md(S.today)})로 바꿨어요.`); }
+  if (id === 'u-end' && phase() !== 'ended') { S.today = Dt.add(S.trip.tripEnd, 1); toast(`오늘을 여행 종료 다음 날(${Dt.md(S.today)})로 바꿨어요.`); }
   else if (did) toast('이 화면에 필요한 데이터를 자동으로 준비했어요.');
   if (id === 'u-study') { S.studyDate = null; endDrill(); }
   S.justCompleted = null;
@@ -2223,7 +2223,7 @@ function demoGen(mode) {
   S.flags.fail = mode === 'fail'; S.flags.stuck = mode === 'stuck';
   createTrip(defaultDraft(S.today));
   request('report');
-  toast(mode === 'fail' ? '데모: "AI 생성 실패"를 켜고 새 여행으로 보고서를 요청했어요.' : mode === 'stuck' ? '데모: "생성 멈춤"을 켜고 요청했어요. 끝까지 진행 후 멈춰요.' : '새 데모 여행으로 보고서 생성을 요청했어요.');
+  toast(mode === 'fail' ? '"AI 생성 실패"를 켜고 새 여행으로 보고서를 요청했어요.' : mode === 'stuck' ? '"생성 멈춤"을 켜고 요청했어요. 끝까지 진행 후 멈춰요.' : '새 데모 여행으로 보고서 생성을 요청했어요.');
 }
 
 function preset(kind) {
