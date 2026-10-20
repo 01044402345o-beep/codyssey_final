@@ -66,6 +66,71 @@
 | 약국 | — | Where is the nearest pharmacy?<br>가장 가까운 약국이 어디예요? | There's one across the street.<br>길 건너편에 있어요.<br><br>It's closed now. Try the 24-hour one near the station.<br>지금은 문을 닫았어요. 역 근처 24시간 약국에 가 보세요. | Which way is the station?<br>역은 어느 쪽이에요? |
 | 천천히 | — | Can you speak more slowly, please?<br>좀 더 천천히 말해 주시겠어요? | Of course. Sorry about that.<br>물론이죠. 죄송해요.<br><br>Sure. Would you like me to write it down?<br>네. 적어 드릴까요? | Yes, please. Thank you.<br>네, 부탁해요. 감사합니다. |
 
+## 같은 뜻, 다른 표현 (alt)
+
+> 회화 연습 시트의 '같은 뜻, 다른 표현'(Thesaurus 처럼). 데이터: mockup/data.js 의 alt. 라벨은 더 공손하게 · 짧게 · 다르게 말하기 중 하나다.
+> 원문과 뜻이 달라졌거나, 실제로 잘 안 쓰는 말이면 리뷰 코멘트로 남겨 주세요.
+
+### 공항·기내 (airport)
+
+| 상황 | 원문 | 다른 표현 |
+|---|---|---|
+| 좌석 요청 | Can I have a window seat, please?<br>창가 자리로 주시겠어요? | (더 공손하게) Could I get a window seat, if possible?<br>가능하면 창가 자리로 주실 수 있을까요?<br><br>(짧게) Window seat, please.<br>창가 자리요. |
+| 탑승구 찾기 | Where is my boarding gate?<br>제 탑승구가 어디예요? | (더 공손하게) Could you tell me where my gate is?<br>제 게이트가 어디인지 알려 주시겠어요?<br><br>(다르게 말하기) Which gate does this flight leave from?<br>이 비행기는 몇 번 게이트에서 출발해요? |
+| 기내 요청 | Could I get some water, please?<br>물 좀 주시겠어요? | (짧게) Water, please.<br>물 주세요.<br><br>(더 공손하게) May I have a glass of water?<br>물 한 잔 주시겠어요? |
+| 기내식 선택 | Chicken, please.<br>치킨으로 주세요. | (더 공손하게) I'llhave the chicken, please.<br>치킨으로 할게요.<br><br>(다르게 말하기) The chicken, thank you.<br>치킨 주세요, 감사합니다. |
+| 수하물 찾기 | Where can I pick up my baggage?<br>짐은 어디서 찾나요? | (다르게 말하기) Where is the baggage claim?<br>수하물 찾는 곳이 어디예요?<br><br>(더 공손하게) Could you tell me where to get my bags?<br>짐 찾는 곳을 알려 주시겠어요? |
+
+### 입국심사 (immigration)
+
+| 상황 | 원문 | 다른 표현 |
+|---|---|---|
+| 방문 목적 | I'm here for sightseeing.<br>관광하러 왔어요. | (짧게) Sightseeing.<br>관광이요.<br><br>(다르게 말하기) I'mhere on vacation.<br>휴가로 왔어요. |
+| 첫 방문 | It's my first visit.<br>처음 방문이에요. | (다르게 말하기) This is my first time here.<br>여기 처음 와 봐요.<br><br>(짧게) First time.<br>처음이에요. |
+| 숙소 설명 | I'm staying at a hotel in the city.<br>시내 호텔에 묵어요. | (다르게 말하기) I'llbe staying at a hotel downtown.<br>시내 호텔에 머물 거예요.<br><br>(짧게) At a hotel in the city.<br>시내 호텔이요. |
+| 귀국 항공권 | Here is my return ticket.<br>여기 귀국 항공권이에요. | (다르게 말하기) This is my ticket back home.<br>이게 돌아가는 표예요.<br><br>(더 공손하게) Here you are. This is my return ticket.<br>여기요. 귀국 항공권이에요. |
+| 동행 여부 | I'm traveling alone.<br>혼자 여행 중이에요. | (다르게 말하기) I'mtraveling by myself.<br>혼자 여행하고 있어요.<br><br>(짧게) Just me.<br>저 혼자요. |
+
+### 숙소 (hotel)
+
+| 상황 | 원문 | 다른 표현 |
+|---|---|---|
+| 체크인 | I have a reservation under [name].<br>[name] 이름으로 예약했어요. | (더 공손하게) I'd like to check in. The name is [name].<br>체크인하려고요. 이름은 [name]이에요.<br><br>(짧게) Checking in, [name].<br>체크인이요, [name]입니다. |
+| 조식 시간 | What time is breakfast?<br>조식은 몇 시예요? | (다르게 말하기) When is breakfast served?<br>조식은 언제 나와요?<br><br>(더 공손하게) Could you tell me the breakfast hours?<br>조식 시간을 알려 주시겠어요? |
+| 와이파이 | Could I get the Wi-Fi password?<br>와이파이 비밀번호 알려 주시겠어요? | (짧게) What's the Wi-Fi password?<br>와이파이 비밀번호가 뭐예요?<br><br>(다르게 말하기) Do you have the Wi-Fi password?<br>와이파이 비밀번호 있으세요? |
+| 짐 보관 | Can you keep my luggage until 3 p.m.?<br>오후 3시까지 짐 좀 맡아 주실 수 있나요? | (더 공손하게) Could I leave my bags here until 3 p.m.?<br>오후 3시까지 짐을 여기 둬도 될까요?<br><br>(다르게 말하기) Can I store my bags here?<br>짐을 맡길 수 있나요? |
+| 체크아웃 | I'd like to check out, please.<br>체크아웃할게요. | (짧게) Check out, please.<br>체크아웃이요.<br><br>(다르게 말하기) I'mchecking out. Here is my key.<br>체크아웃할게요. 여기 열쇠요. |
+
+### 대중교통 (transit)
+
+| 상황 | 원문 | 다른 표현 |
+|---|---|---|
+| 길 찾기 | How do I get to [destination]?<br>[destination]에 어떻게 가요? | (더 공손하게) Could you tell me the way to [destination]?<br>[destination] 가는 길을 알려 주시겠어요?<br><br>(짧게) Which way to [destination]?<br>[destination]은 어느 쪽이에요? |
+| 노선 묻기 | Which line goes to [destination]?<br>[destination] 가는 노선이 뭐예요? | (다르게 말하기) What train do I take to [destination]?<br>[destination]에 가려면 어떤 열차를 타요?<br><br>(더 공손하게) Could you tell me which line to take for [destination]?<br>[destination]에 가려면 몇 호선을 타야 하는지 알려 주시겠어요? |
+| 표 구매 | One ticket, please.<br>표 한 장 주세요. | (더 공손하게) Can I get one ticket, please?<br>표 한 장 살 수 있을까요?<br><br>(다르게 말하기) One adult, please.<br>어른 한 명이요. |
+| 정차 확인 | Does this train stop at [destination]?<br>이 열차 [destination]에 서나요? | (다르게 말하기) Is this the train to [destination]?<br>이게 [destination] 가는 열차예요?<br><br>(짧게) Does this go to [destination]?<br>이거 [destination] 가요? |
+| 하차 부탁 | Please let me know when we get there.<br>도착하면 알려 주세요. | (더 공손하게) Could you tell me when to get off?<br>언제 내려야 하는지 알려 주시겠어요?<br><br>(다르게 말하기) Please tell me my stop.<br>제가 내릴 곳을 알려 주세요. |
+
+### 길 묻기·쇼핑 (shopping)
+
+| 상황 | 원문 | 다른 표현 |
+|---|---|---|
+| 역 찾기 | Excuse me, where is the nearest subway station?<br>실례지만, 가장 가까운 지하철역이 어디예요? | (다르게 말하기) Is there a subway station near here?<br>근처에 지하철역이 있나요?<br><br>(짧게) Excuse me, which way is the subway?<br>실례지만, 지하철은 어느 쪽이에요? |
+| 거리 묻기 | Is it far from here?<br>여기서 멀어요? | (다르게 말하기) How far is it from here?<br>여기서 얼마나 멀어요?<br><br>(다르게 말하기) Is it within walking distance?<br>걸어갈 만한 거리예요? |
+| 가격 묻기 | How much is this?<br>이거 얼마예요? | (다르게 말하기) How much does this cost?<br>이건 가격이 얼마예요?<br><br>(더 공손하게) Could you tell me the price, please?<br>가격 좀 알려 주시겠어요? |
+| 사이즈 | Do you have this in a smaller size?<br>이거 더 작은 사이즈 있어요? | (짧게) Is there a smaller size?<br>더 작은 사이즈 있나요?<br><br>(더 공손하게) Could I try a smaller size, please?<br>더 작은 사이즈로 입어 볼 수 있을까요? |
+| 영수증 | Can I get a receipt, please?<br>영수증 주시겠어요? | (짧게) Receipt, please.<br>영수증이요.<br><br>(더 공손하게) Could I have a receipt, please?<br>영수증 받을 수 있을까요? |
+
+### 돌발 상황 (emergency)
+
+| 상황 | 원문 | 다른 표현 |
+|---|---|---|
+| 분실 | I lost my passport. Can you help me?<br>여권을 잃어버렸어요. 도와주시겠어요? | (다르게 말하기) I can't find my passport. Please help me.<br>여권을 못 찾겠어요. 도와주세요.<br><br>(짧게) My passport is missing.<br>여권이 없어졌어요. |
+| 신고 | Please call the police.<br>경찰 좀 불러 주세요. | (더 공손하게) Could you call the police, please?<br>경찰 좀 불러 주시겠어요?<br><br>(짧게) Call the police!<br>경찰 불러 주세요! |
+| 진료 | I need to see a doctor.<br>의사한테 진료받아야 해요. | (짧게) I need a doctor.<br>의사가 필요해요.<br><br>(더 공손하게) I'd like to see a doctor, please.<br>진료를 받고 싶어요. |
+| 약국 | Where is the nearest pharmacy?<br>가장 가까운 약국이 어디예요? | (다르게 말하기) Is there a pharmacy near here?<br>근처에 약국이 있나요?<br><br>(더 공손하게) Could you tell me where a pharmacy is?<br>약국이 어디 있는지 알려 주시겠어요? |
+| 천천히 | Can you speak more slowly, please?<br>좀 더 천천히 말해 주시겠어요? | (다르게 말하기) Sorry, could you say that again?<br>죄송하지만 다시 말해 주시겠어요?<br><br>(짧게) Slowly, please.<br>천천히요. |
+
 ## 검수 기록
 
 | 기여자 | 검수 범위 | 날짜 | 메모 |

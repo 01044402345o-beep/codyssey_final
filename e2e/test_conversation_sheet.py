@@ -57,12 +57,12 @@ with sync_playwright() as p:
           and page.locator('.bottombar [data-live="status"]').count() == 0)
 
     page.locator('[data-act="sheet-open"]').click(); page.wait_for_timeout(300)
-    s = page.evaluate("(() => { const s = curSent(); return { en: s.en, talk: s.talk }; })()")
+    s = page.evaluate("(() => { const s = curSent(); return { en: s.en, talk: s.talk, alt: s.alt || [] }; })()")
     check("시트가 열리고 상태가 남는다", page.locator(".sheet").count() == 1 and page.evaluate("S.sheet") is True)
     check("시트에 내 문장과 말해보기", s["en"].split(",")[0] in page.locator(".sheet .talk-me").inner_text()
           and page.locator('.sheet [data-act="speak-rec"]').count() == 1, s["en"])
     lines = page.locator(".sheet .talk-line")
-    want = len(s["talk"]["replies"]) + 1 + (1 if s["talk"].get("ask") else 0)
+    want = len(s["talk"]["replies"]) + 1 + (1 if s["talk"].get("ask") else 0) + len(s["alt"])   # 다른 표현 줄 포함
     check("예상 답변 + 이어서 할 말이 데이터대로", lines.count() == want, f"{lines.count()} / {want}")
     check("예상 답변 문장이 보인다", s["talk"]["replies"][0]["en"] in page.locator(".sheet").inner_text())
 

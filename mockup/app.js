@@ -1841,7 +1841,11 @@ function studyView(r, opts = {}) {
 /* 하단 '회화 연습' 시트(Leechangjin 님 목업 #97): 내 문장 + 말해보기, 상대의 예상 답변, 내가 이어서 할 말.
    공통 문장에만 예상 답변(talk)이 있다. 장소 문장은 말해보기만 보인다. */
 const curSent = () => { const r = studyShown() && pickRow(); return r ? S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]] : null; };
-function talkLine(t, k) {
+/* 시트의 한 줄: ask(상대가 먼저) · r0/r1(예상 답변) · next(내가 이어서) · a0/a1(다른 표현, Thesaurus 처럼) */
+function talkLine(s, k) {
+  const t = s && s.talk;
+  const a = /^a(\d)$/.exec(k);
+  if (a) return (s && s.alt || [])[+a[1]] || null;
   if (!t) return null;
   if (k === 'ask') return t.ask || null;
   if (k === 'next') return t.next || null;
@@ -1853,7 +1857,7 @@ function sheetHtml() {
   if (!s) return '';
   const t = s.talk, tts = ttsState() === 'ok';
   const line = (k, label) => {
-    const L = talkLine(t, k);
+    const L = talkLine(s, k);
     return L ? `<div class="talk-line">${label ? `<span class="talk-pill">${esc(label)}</span>` : ''}<b lang="en" data-read>${enHtml(L.en)}</b><p>${esc(L.ko)}</p>
       ${tts ? `<button class="talk-say" data-act="say-line" data-k="${k}">${I.speaker}듣기</button>` : ''}</div>` : '';
   };
@@ -1865,6 +1869,7 @@ function sheetHtml() {
     ${t && t.ask ? `<h4>상대가 먼저</h4>${line('ask')}<h4>내가 대답하기</h4>` : ''}
     <div class="talk-me"><b lang="en" data-read>${enHtml(s.en)}</b><div>${phHtml(s.ko)}</div>${tts ? `<button class="talk-say" data-act="speak-card">${I.speaker}듣기</button>` : ''}</div>
     <div class="speak" data-live="speak">${speakHtml(s)}</div>
+    ${(s.alt || []).length ? `<h4>같은 뜻, 다른 표현</h4>${s.alt.map((x, j) => line('a' + j, x.label)).join('')}` : ''}
     ${body}
     <button class="btn primary block" data-act="sheet-close">↓ 회화 연습 닫기</button>
   </section></div>`;
@@ -2945,7 +2950,7 @@ const ACT = {
   'sheet-open': () => { S.sheet = true; pushOverlay('sheet'); render(); },
   'sheet-close': () => closeSheet(),
   'sheet-bg': (el, e) => { if (e.target === el) closeSheet(); },
-  'say-line': el => { const s = curSent(); const L = s && talkLine(s.talk, el.dataset.k); if (L) speak(L.en, el, readTarget(el)); },
+  'say-line': el => { const s = curSent(); const L = s && talkLine(s, el.dataset.k); if (L) speak(L.en, el, readTarget(el)); },
   rate: el => { S.ttsRate = S.ttsRate < 0.9 ? 0.95 : 0.75; el.textContent = S.ttsRate < 0.9 ? '느리게' : '보통 속도'; },
   complete: () => {
     const r = pickRow();

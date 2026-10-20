@@ -45,3 +45,24 @@ test('공통 문장: 학습량 30개 모두 회화 연습(예상 답변 1~2개 +
 test('공통 문장: 참고 묶음(응급 전화)에는 회화 연습을 붙이지 않는다(범위: 학습량 30개)', () => {
   for (const g of groups.filter(g => !g.countsTowardPlan)) for (const it of g.items) assert.equal(it.talk, undefined, `${g.key}/${it.situation}`);
 });
+
+// 다른 표현(Thesaurus 처럼): 같은 뜻을 더 공손하게·짧게·다르게 말하는 1~2개. 검수된 고정 문장이다(AI 생성 아님).
+test('공통 문장: 학습량 30개 모두 다른 표현 1~2개(라벨·자리표시자·원문과 다름)', () => {
+  const LABELS = ['더 공손하게', '짧게', '다르게 말하기'];
+  const slots = s => (s.match(/\[(name|destination)\]/g) || []).sort().join();
+  for (const g of groups.filter(g => g.countsTowardPlan)) for (const it of g.items) {
+    const w = `${g.key}/${it.situation}`;
+    assert.ok(Array.isArray(it.alt) && it.alt.length >= 1 && it.alt.length <= 2, `${w}: 다른 표현 1~2개`);
+    it.alt.forEach((a, i) => {
+      const at = `${w} alt[${i}]`;
+      assert.ok(a && typeof a.en === 'string' && a.en.trim() && typeof a.ko === 'string' && a.ko.trim(), `${at}: 영어·한국어 필요`);
+      assert.ok(!a.en.includes('/') && a.en.split(/\s+/).length <= 15, `${at}: 한 문장·15단어 이하 — ${a.en}`);
+      assert.ok(LABELS.includes(a.label), `${at}: 라벨은 ${LABELS.join('·')} 중 하나 — ${a.label}`);
+      assert.notEqual(a.en.trim().toLowerCase(), it.en.trim().toLowerCase(), `${at}: 원문과 같은 문장`);
+      assert.equal(slots(a.en), slots(it.en), `${at}: 자리표시자([name]·[destination])는 원문과 같게 — ${a.en}`);
+      assert.equal(slots(a.ko), slots(it.ko), `${at}: 한국어 자리표시자도 원문과 같게 — ${a.ko}`);
+    });
+    assert.equal(new Set(it.alt.map(a => a.en)).size, it.alt.length, `${w}: 다른 표현끼리 겹침`);
+  }
+  for (const g of groups.filter(g => !g.countsTowardPlan)) for (const it of g.items) assert.equal(it.alt, undefined, `${g.key}/${it.situation}`);
+});
