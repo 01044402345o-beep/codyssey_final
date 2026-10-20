@@ -665,6 +665,9 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .face .ko { font-size: 1.5625rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.35; margin: auto 0; }
 .face .en { font-family: var(--display); font-size: 1.875rem; font-weight: 500; letter-spacing: -0.02em; line-height: 1.2; margin: auto 0 6px; }
 .face .en .ph { color: var(--sun); font-style: italic; }
+/* 따라 읽기: 지금 읽는 단어. 글자색은 그대로 두고 밑줄 + 옅은 바탕으로만 표시한다(대비 유지) */
+.w { border-radius: 4px; transition: background-color .12s; }
+.w.now { background: var(--accent-a40); box-shadow: 0 2px 0 var(--accent); }
 .face .ko-s { font-size: 0.875rem; color: var(--inv-text-2); margin-bottom: auto; }
 .face .hint { font-size: 0.75rem; color: var(--text-3); text-align: center; display: flex; gap: 6px; justify-content: center; align-items: center; }
 .tts-row { display: flex; gap: 8px; align-items: center; }
