@@ -1752,3 +1752,31 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
   font-size: var(--fs-caption); font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
 .appbar .act svg { width: 16px; height: 16px; flex: none; }
 @media (hover: hover) { .appbar .act:hover { background: var(--surface-2); color: var(--text); } }
+
+/* ===== 문장 모음: 탭 3개 + 통역 기록 ===== */
+.seg.coll-seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); margin-bottom: 12px; gap: 4px; }
+.seg.coll-seg button { min-width: 0; padding: 8px 3px; font-size: 0.75rem; line-height: 1.25; white-space: normal; overflow-wrap: anywhere; letter-spacing: -0.02em; }
+.ilog-card { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); margin-bottom: 10px; overflow: hidden; }
+.ilog-head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 14px; text-align: left; color: inherit; }
+.ilog-head .t { flex: 1; min-width: 0; }
+.ilog-head b { display: block; font-size: 0.875rem; }
+.ilog-count { flex: none; font-size: var(--fs-caption); color: var(--text-3); }
+.ilog-body { border-top: 1px solid var(--border-faint); padding: 2px 14px 10px; }
+.ilog-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--border-faint); }
+.ilog-line:last-of-type { border-bottom: 0; }
+.ilog-who { display: inline-block; font-size: var(--fs-caption); font-weight: 700; color: var(--text-3); margin-bottom: 2px; }
+.ilog-who.me { color: var(--accent-text); }
+.ilog-src { margin: 0; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+.ilog-dst { margin: 2px 0 0; font-size: 0.875rem; color: var(--text-2); line-height: 1.45; overflow-wrap: anywhere; }
+.ilog-cp { flex: none; min-height: 34px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2);
+  font-size: var(--fs-caption); color: var(--text-2); white-space: nowrap; }
+.ilog-del, .ilog-clear { display: block; width: 100%; margin-top: 10px; min-height: 40px; padding: 8px; border-radius: 12px;
+  border: 1px solid var(--border); background: transparent; color: var(--bad-text); font-size: var(--fs-caption); font-weight: 600; }
+.ilog-clear { color: var(--text-3); }
+.ilog-picks { display: grid; gap: 6px; }
+.ilog-pick { display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); }
+.ilog-pick.on { border-color: var(--accent-text); background: var(--surface-2); }
+.ilog-pick b { display: block; font-size: 0.8125rem; }
+@media (pointer: coarse) {
+  html:not([data-mode=legacy]) :is(.ilog-cp, .ilog-del, .ilog-clear, .ilog-pick, .ilog-head, .seg.coll-seg button) { min-height: 44px; }
+}
