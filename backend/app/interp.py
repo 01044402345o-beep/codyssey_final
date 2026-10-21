@@ -188,12 +188,15 @@ async def _connect(url: str, headers: dict):
         return await websockets.connect(url, extra_headers=headers, max_size=None)
 
 
+SONIOX_SPECIAL = {"<end>", "<fin>"}   # 끝점·마무리 표시 토큰 — 화면에 내보내지 않는다
+
+
 def render_tokens(tokens: list[dict]) -> tuple[str, str, str, str]:
-    """Soniox 토큰 → (원문 확정, 원문 임시, 번역 확정, 번역 임시)."""
+    """Soniox 토큰 한 응답 → (원문 확정, 원문 임시, 번역 확정, 번역 임시). 특수 토큰(<end> 등)은 뺀다."""
     sf = sp = tf = tp = ""
     for t in tokens or []:
         text = t.get("text") or ""
-        if not text:
+        if not text or text in SONIOX_SPECIAL:
             continue
         is_tr = t.get("translation_status") == "translation"
         if t.get("is_final"):
@@ -207,6 +210,36 @@ def render_tokens(tokens: list[dict]) -> tuple[str, str, str, str]:
             else:
                 sp += text
     return sf, sp, tf, tp
+
+
+class SonioxCaptions:
+    """Soniox 응답을 화면 자막으로 모은다(2026-10-21 공식 문서 대조).
+
+    - '확정 토큰은 한 번만 보내고 다시 보내지 않는다' → 확정은 이어 붙이고, 임시(non-final)는 응답마다 갈아 끼운다.
+      전에는 응답마다 그 응답의 확정만 보내서, 마지막에 온 '<end>' 하나가 앞 문장·번역을 덮었다(화면에 '<end>' 만 남음).
+    - '<end>' 는 말 한 덩이가 끝났다는 표시다. 번역은 '<end>' 뒤에 따라올 수 있어 바로 비우지 않고,
+      다음 원문이 시작될 때 새 문장으로 넘긴다(화면은 이전 번역을 '지난 문장'으로 남긴다).
+    """
+
+    def __init__(self) -> None:
+        self.src = self.tgt = ""
+        self.ended = False
+
+    def feed(self, tokens: list[dict]) -> dict | None:
+        tokens = tokens or []
+        if self.ended and any((t.get("text") or "") not in SONIOX_SPECIAL and t.get("translation_status") != "translation"
+                              and (t.get("text") or "").strip() for t in tokens):
+            self.src = self.tgt = ""        # 새 말이 시작됐다
+            self.ended = False
+        sf, sp, tf, tp = render_tokens(tokens)
+        self.src += sf
+        self.tgt += tf
+        if any(t.get("text") == "<end>" for t in tokens):
+            self.ended = True
+        if not (sf or sp or tf or tp):
+            return None
+        return {"type": "caption", "source": self.src.strip(), "source_partial": sp,
+                "target": self.tgt.strip(), "target_partial": tp}
 
 
 async def _send(ws: WebSocket, payload: dict) -> None:
@@ -278,20 +311,21 @@ class _Session:
                 await up.send(data)
 
             client = asyncio.create_task(self.pump_client(to_provider))
+            caps = SonioxCaptions()
+            closing = False
             try:
                 async for raw in up:
                     evt = json.loads(raw)
                     if evt.get("error_code"):
                         raise ProviderStreamError(f"soniox {evt.get('error_code')}: {str(evt.get('error_message') or '')[:120]}")
-                    sf, sp, tf, tp = render_tokens(evt.get("tokens") or [])
-                    if sf or sp or tf or tp:
-                        await _send(self.ws, {"type": "caption", "source": sf, "source_partial": sp,
-                                              "target": tf, "target_partial": tp})
+                    out = caps.feed(evt.get("tokens") or [])
+                    if out:
+                        await _send(self.ws, out)
                     if evt.get("finished"):
                         break
-                    if client.done():
-                        await up.send("")   # 입력 끝 알림
-                        break
+                    if client.done() and not closing:
+                        await up.send("")   # 입력 끝 알림 — 남은 확정·번역을 받고 'finished' 로 끝난다
+                        closing = True
             finally:
                 client.cancel()
 
