@@ -852,7 +852,10 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
 @app.websocket("/interp/stream")
 async def interp_stream(ws: WebSocket) -> None:
     """실시간 통역: 브라우저 마이크 PCM 을 제공자에게 중계하고 자막·음성을 돌려준다(서버는 저장하지 않는다)."""
-    await interp.serve(ws)
+    def verify(token: str) -> dict[str, str]:
+        return firebase_auth.verify_bearer("Bearer " + token)
+
+    await interp.serve(ws, ip=client_ip(ws), verify=verify)   # WebSocket 도 client·headers 가 있어 같은 규칙
 
 
 @app.get("/auth/config")
