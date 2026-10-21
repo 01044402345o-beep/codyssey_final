@@ -37,6 +37,7 @@ const I = {
   cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
   interp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h9a2 2 0 012 2v5a2 2 0 01-2 2H9l-4 3v-3H4a2 2 0 01-2-2V7a2 2 0 012-2z"/><path d="M15 9h5a2 2 0 012 2v5a2 2 0 01-2 2h-1v3l-4-3h-3a2 2 0 01-2-2v-1"/></svg>',
   cards: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="14" height="15" rx="2"/><path d="M7 3h12a2 2 0 012 2v13"/></svg>',
+  past: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 3-6.5"/><path d="M3.5 4.5V9H8"/><path d="M12 8v4.5l3 1.8"/></svg>',
   book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20V3H6.5A2.5 2.5 0 004 5.5z"/><path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5"/></svg>',
   google: '<svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>',
 };
@@ -587,7 +588,7 @@ function initState() {
     days: [], sents: [], smap: {}, sched: [], plan: null, aiPools: {}, aiBy: {},
     archived: [], gen: null, cityTab: null, showCand: {},
     studyDate: null, drill: null, card: { date: null, i: 0, flipped: new Set() }, justCompleted: null,
-    coll: { tab: 'common', filter: 'all' }, schedFilter: 'all', ttsRate: 0.95,
+    coll: { tab: 'common', filter: 'all' }, schedFilter: 'all', ttsRate: 0.95, calMonth: null, past: { open: null },
     commons: JSON.parse(JSON.stringify(COMMON_SITUATIONS)), commonsDraft: null,
     jobFilter: 'all', mockTrips: JSON.parse(JSON.stringify(MOCK_TRIPS)), modal: null, lastScreen: null,
     sheet: false,   // 학습 화면 하단 '회화 연습' 시트가 열려 있는지
@@ -669,6 +670,7 @@ function openTripEdit() {
 }
 
 function archiveTrip() {
+  histCapture(true);   // 보관하기 전에 학습 상태를 남긴다 — 직후에 PROG 가 비워질 수 있다
   S.trip.archived = true;
   S.archived.unshift({ id: S.trip.id, route: tripTitle(S.trip), dates: `${Dt.md(S.trip.tripStart)}~${Dt.md(S.trip.tripEnd)}` });
 }
@@ -1199,8 +1201,10 @@ const SCREENS = [
     tips: ['사이드바의 날짜 버튼으로 "오늘"을 바꿔 보세요.', '여행 전: D-N, 여행 중: N일차 · 오늘 도시, 종료 후: 결과 요약', '완료율 분모에서 자유 일정 날은 빠져요.'],
     demos: [['지난 날 일부를 완료로 채우기', 'demo-fill']] },
   { id: 'u-sched', no: 'SCR-07', name: '일정표', fr: ['FR-SCHED-01', 'FR-SCHED-02', 'FR-STUDY-04'],
-    tips: ['날짜를 누르면 그날 카드로 이동해요.', '지난 날짜 중 안 한 날은 "미완료"로 표시돼요.', '새 문장 3일 + 복습 1일, 출발 전 2일 총복습 규칙을 확인하세요.'],
+    tips: ['위쪽 달력에서 날짜를 누르면 그날 카드로 이동해요.', '월을 넘겨 여행 전·여행 중 학습일을 한눈에 볼 수 있어요.', '지난 날짜 중 안 한 날은 "미완료"로 표시돼요.'],
     demos: [['지난 날 일부를 완료로 채우기', 'demo-fill']] },
+  { id: 'u-past', no: 'SCR-13', name: '이전 여행 (일정표에서 열기)', fr: ['FR-TRIP-05', 'FR-END-01'],
+    tips: ['지난 여행별 완료율·학습일·학습한 문장 수를 모아 봐요.', '여행 카드를 누르면 그 여행의 학습 목록(날짜별 완료)이 펼쳐져요.', '새 여행을 만들면 기존 여행이 이 목록에 남아요(삭제되지 않아요).'] },
   { id: 'u-study', no: 'SCR-08', name: '학습 카드', fr: ['FR-STUDY-01', 'FR-STUDY-02', 'FR-STUDY-04'],
     tips: ['카드를 눌러 뒤집고 "듣기"로 영어 발음을 들어 보세요.', '모든 카드를 한 번 이상 뒤집어야 완료 버튼이 켜져요.', '[your name]·[your destination]는 채울 자리예요. 듣기도 그대로 읽어요.', '사이드바의 "TTS 미지원"을 켜면 듣기 버튼 대신 안내가 나와요.'] },
   { id: 'u-coll', no: 'SCR-09', name: '문장 모음', fr: ['FR-STUDY-05', 'FR-SENT-01'],
@@ -1347,6 +1351,8 @@ function planNote() {
    여행지에서 바로 쓰는 화면: 문장을 크게 보여 주거나(점원에게 화면을 내민다) 들려주고, 상대의 예상 답변을 한국어 뜻과 함께 본다.
    검수된 문장(공통·장소·참고 묶음)만 쓴다 — AI 호출·외부 전송 없음, 네트워크 없이도 된다.
    내가 친 한국어를 AI 로 번역하는 기능은 개인정보 처리방침·국외 이전 결정 전이라 넣지 않는다(results.md 5절 11). */
+/* 탭은 4개다. '이전 여행'은 탭이 아니라 일정표 화면 오른쪽 위 버튼으로 들어간다(하단 탭을 늘리지 않는다).
+   여행 중에는 '학습' 자리에 '통역'이 온다(개수는 그대로). */
 const navTabs = () => [['u-home', '홈', I.home], ['u-sched', '일정표', I.cal],
   phase() === 'trip' ? ['u-interp', '통역', I.interp] : ['u-study', '학습', I.cards], ['u-coll', '문장 모음', I.book]];
 const interpPool = () => [...(S.sents || []), ...(S.refs || [])];
@@ -2006,7 +2012,9 @@ function pframe(inner, o = {}) {
     ${o.bottom ? `<div class="bottombar">${o.bottom}</div>` : ''}
   </div></div>${sheetHtml()}${interpShowHtml()}${liveSlotHtml()}${modalHtml()}</div>`;
 }
-const appbar = (title, o = {}) => `<div class="appbar">${o.back ? `<button class="back" data-act="tab" data-id="${o.back}">${I.back}</button>` : ''}<h2>${title}</h2>${o.step ? `<span class="step">${o.step}</span>` : ''}</div>`;
+/* o.act: 오른쪽 위 버튼(HTML). 지금은 일정표의 '이전 여행' 하나뿐이다. */
+const appbar = (title, o = {}) => `<div class="appbar">${o.back ? `<button class="back" data-act="tab" data-id="${o.back}">${I.back}</button>` : ''}<h2>${title}</h2>${o.step ? `<span class="step">${o.step}</span>` : ''}${o.act || ''}</div>`;
+const pastEntryBtn = () => `<button class="act" data-act="past-go" aria-label="이전 여행 보기">${I.past}<span>이전 여행</span></button>`;
 const notice = (html, kind = '') => `<div class="notice ${kind}">${kind === 'warn' || kind === 'bad' ? I.alert : I.info}<div>${html}</div></div>`;
 function modalHtml(center = false) {
   if (S.entering) return enteringHtml();           // 로그인 전환 화면(로그인 화면을 덮는다)
@@ -2034,6 +2042,7 @@ function userScreen() {
     case 'u-study': return scrStudy();
     case 'u-coll': return scrColl();
     case 'u-interp': return scrInterp();
+    case 'u-past': return scrPast();
     case 'u-edit': return scrEdit();
     case 'u-end': return frame(`<div class="app-pad">${endBody()}</div>`, { tabbar: true, tab: 'u-home' });
   }
@@ -2467,17 +2476,163 @@ function schedListHtml(selDate = null) {
     ${trip.length ? `<div class="phase-label">여행 중</div>${trip.map(one).join('')}` : ''}
     ${!rows.length ? `<div class="empty"><div class="ico">${I.check}</div>미완료 날짜가 없어요</div>` : ''}`;
 }
+/* ================= 일정표 전체: 달력 =================
+   한 달을 통째로 본다. 칸 색은 rowStatus() 결과를 그대로 쓴다 — 목록과 달력이 다른 말을 하지 않게.
+   일정에 없는 날(학습 기간 밖)은 누를 수 없다. 날짜를 누르면 목록과 같은 동작(study-date)이다. */
+const calMonthOf = d => d.slice(0, 7);
+function calShift(n) {
+  const [y, m] = (S.calMonth || calMonthOf(S.today)).split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1 + n, 1));
+  S.calMonth = `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}`;
+  render();
+}
+function calHtml(compact) {
+  const t = S.trip; if (!t) return '';
+  const month = S.calMonth || calMonthOf(S.today);
+  const [y, m] = month.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const lead = new Date(Dt.parse(`${month}-01`)).getUTCDay();
+  const byDate = {}; S.sched.forEach(r => { byDate[r.date] = r; });
+  const ST = { done: '완료', miss: '미완료', today: '오늘', future: '예정', free: '자유 일정' };
+  const cells = [];
+  for (let i = 0; i < lead; i++) cells.push('<span class="cal-blank" aria-hidden="true"></span>');
+  for (let d = 1; d <= last; d++) {
+    const date = `${month}-${String(d).padStart(2, '0')}`, r = byDate[date];
+    const st = r ? rowStatus(r) : (date < t.studyStart || date > t.tripEnd ? 'out' : 'none');
+    const cls = ['cal-d', st, r && r.kind === 'free' ? 'free' : '', r && r.phase === 'trip' ? 'trip' : '',
+      date === (S.studyDate || S.today) ? 'sel' : ''].filter(Boolean).join(' ');
+    cells.push(r
+      ? `<button class="${cls}" data-act="study-date" data-date="${date}" aria-label="${Dt.full(date)} ${ST[st] || '학습 예정'}"${date === (S.studyDate || S.today) ? ' aria-current="date"' : ''}><b>${d}</b><i class="mk" aria-hidden="true"></i></button>`
+      : `<span class="${cls}" aria-hidden="true"><b>${d}</b></span>`);
+  }
+  const den = S.sched.filter(r => r.kind !== 'free').length, done = S.sched.filter(r => r.completed).length;
+  return `<div class="cal ${compact ? 'compact' : ''}" data-live="cal">
+    <div class="cal-head">
+      <button class="cal-nav" data-act="cal-prev" aria-label="이전 달">${I.back}</button>
+      <b data-live="cal-month">${y}년 ${m}월</b>
+      <button class="cal-nav" data-act="cal-next" aria-label="다음 달">${I.next}</button>
+      <button class="cal-today" data-act="cal-today">오늘</button>
+    </div>
+    <div class="cal-grid cal-dow" aria-hidden="true">${['일', '월', '화', '수', '목', '금', '토'].map(x => `<span>${x}</span>`).join('')}</div>
+    <div class="cal-grid" role="grid" aria-label="${y}년 ${m}월 학습 일정">${cells.join('')}</div>
+    <div class="cal-foot"><span class="small">학습 <b>${done}/${den}일</b> 완료</span>
+      <span class="cal-legend" aria-hidden="true"><i class="ok"></i>완료<i class="miss"></i>미완료<i class="future"></i>예정<i class="free"></i>자유</span></div>
+  </div>`;
+}
+
+/* ================= 이전 여행: 지난 여행·학습 대시보드 =================
+   기록은 여행 단위 스냅숏으로 남긴다(cd_trips). PROG.done 은 새 여행을 만들 때 비워지므로,
+   비우기 전에(archiveTrip) 그리고 이 화면을 열 때 지금 상태로 갱신한다.
+   서버에 저장하지 않는다 — 이 브라우저(계정 칸)에만 남고, 계정 동기화 대상은 아니다. */
+const HIST_KEY = 'cd_trips', HIST_MAX = 20;
+const HIST = { list: null };
+function histLoad() {
+  if (HIST.list) return HIST.list;
+  const box = personalStore();
+  let arr = [];
+  try { const j = JSON.parse((box && box.getItem(HIST_KEY)) || '[]'); arr = Array.isArray(j) ? j : []; } catch (e) { arr = []; }
+  HIST.list = arr.filter(x => x && typeof x.id === 'string' && x.end);
+  return HIST.list;
+}
+function histSave() {
+  const box = personalStore(); if (!box || !HIST.list) return;
+  try { box.setItem(HIST_KEY, JSON.stringify(HIST.list.slice(0, HIST_MAX))); } catch (e) { /* 저장소 막힘: 이번 방문에만 */ }
+  scheduleStatePush();
+}
+/* 지금 여행의 학습 상태를 한 덩어리로. 문장 본문은 담지 않는다 — 날짜·완료 여부·상황 이름과 개수만. */
+function tripSnapshot() {
+  const t = S.trip; if (!t || !S.sched.length) return null;
+  const rows = S.sched.filter(r => r.kind !== 'free');
+  const doneRows = rows.filter(r => r.completed);
+  const learnedIds = new Set(doneRows.flatMap(r => r.ids));
+  const sits = {};
+  learnedIds.forEach(id => { const x = S.smap[id]; if (x) { const k = x.sitLabel || x.situation || '기타'; sits[k] = (sits[k] || 0) + 1; } });
+  return {
+    id: t.id, route: tripTitle(t), country: t.country || '', cities: (t.cities || []).map(c => c.name),
+    start: t.tripStart, end: t.tripEnd, studyStart: t.studyStart,
+    den: rows.length, done: doneRows.length, rate: rows.length ? doneRows.length / rows.length : 0,
+    learned: learnedIds.size, sentences: (S.sents || []).length + (S.refs || []).length,
+    sits, days: rows.map(r => ({ d: r.date, ok: !!r.completed, k: r.kind })), at: Date.now(),
+  };
+}
+function histCapture(force) {
+  const snap = tripSnapshot(); if (!snap) return null;
+  const list = histLoad();
+  const i = list.findIndex(x => x.id === snap.id);
+  const old = i >= 0 ? list[i] : null;
+  // 바뀐 게 없으면 쓰지 않는다(화면을 다시 그릴 때마다 저장하지 않게)
+  if (old && !force && old.done === snap.done && old.learned === snap.learned && old.den === snap.den) return old;
+  if (i >= 0) list[i] = { ...old, ...snap }; else list.push(snap);
+  list.sort((a, b) => (a.end < b.end ? 1 : a.end > b.end ? -1 : 0));
+  if (list.length > HIST_MAX) list.length = HIST_MAX;
+  HIST.list = list; histSave();
+  return snap;
+}
+function scrPast() {
+  // '이전 여행'은 끝난 여행만 보여 준다. 끝난 여행은 여기 들어올 때 기록을 남긴다 —
+  // 진행 중인 여행은 홈에서 보는 것이고, 여기에 섞이면 '이전'이 아니게 된다.
+  if (S.trip && !S.trip.archived && S.today > S.trip.tripEnd) histCapture();
+  const list = histLoad().slice().sort((a, b) => (a.end < b.end ? 1 : a.end > b.end ? -1 : 0));
+  const n = list.length;
+  const sum = k => list.reduce((a, x) => a + (x[k] || 0), 0);
+  const avg = n ? sum('rate') / n : 0;
+  const live = S.trip && !S.trip.archived ? S.trip : null;
+  const tile = (v, l) => `<div class="pstat"><b>${v}</b><span>${l}</span></div>`;
+  const head = `<div class="small">${live ? `${esc(live.country || '')} · 진행 중` : '지난 기록'}</div>
+    <div class="title-lg">이전 여행</div>
+    <p class="sub" style="margin-bottom:14px">여행을 마칠 때마다 학습 기록이 여기에 쌓여요. 카드를 누르면 그 여행의 학습 목록이 펼쳐져요.</p>`;
+  if (!n) {
+    return frame(`<div class="app-pad">${head}
+      <div class="empty" style="padding:44px 0"><div class="ico">${I.past}</div>
+        <b style="color:var(--text);font-size:1.0625rem">아직 지난 여행이 없어요</b>
+        <p>여행을 마치거나 새 여행을 만들면<br>이전 기록이 여기에 정리돼요.</p>
+        <button class="btn soft" data-act="tab" data-id="u-home">홈으로</button></div></div>`, { appbar: appbar('이전 여행', { back: 'u-sched' }), tabbar: true, tab: 'u-sched' });
+  }
+  const card = x => {
+    const open = S.past && S.past.open === x.id;
+    const days = (x.days || []).filter(d => d.ok).length;
+    const len = x.start && x.end ? Dt.diff(x.end, x.start) + 1 : 0;
+    const sits = Object.entries(x.sits || {}).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    const rows = (x.days || []).map(d => `<li class="${d.ok ? 'ok' : 'miss'}">
+        <span class="pd-date">${Dt.full(d.d)}</span><span class="pd-kind">${KIND[d.k] ? KIND[d.k].label : ''}</span>
+        <span class="pd-st">${d.ok ? '완료' : '미완료'}</span></li>`).join('');
+    return `<article class="past-card" data-live="past-${esc(x.id)}">
+      <button class="past-head" data-act="past-open" data-id="${esc(x.id)}" aria-expanded="${open ? 'true' : 'false'}">
+        <span class="past-txt"><b>${esc(x.route)}</b>
+          <span class="small">${esc(x.start)}~${esc(x.end)}${len ? ` · ${len}일` : ''}${(x.cities || []).length > 1 ? ` · ${(x.cities || []).length}도시` : ''}</span></span>
+        <span class="past-pct">${Math.round((x.rate || 0) * 100)}<small>%</small></span></button>
+      <div class="past-bar" aria-hidden="true"><i style="width:${Math.round((x.rate || 0) * 100)}%"></i></div>
+      <div class="past-meta"><span>학습일 <b>${x.done || 0}/${x.den || 0}</b></span><span>학습한 문장 <b>${x.learned || 0}</b></span><span>카드 <b>${days}</b>일</span></div>
+      ${sits.length ? `<div class="past-sits">${sits.map(([k, v]) => `<span class="badge t-norm">${esc(k)} ${v}</span>`).join('')}</div>` : ''}
+      ${open ? `<div class="past-days"><div class="small" style="margin-bottom:6px">학습 목록 ${(x.days || []).length}일</div>
+        <ul>${rows || '<li class="miss">기록이 없어요</li>'}</ul>
+        <div class="small">전체 문장 ${x.sentences || 0}개 중 ${x.learned || 0}개를 학습했어요 · ${ageText(x.at)}</div></div>` : ''}
+    </article>`;
+  };
+  return frame(`<div class="app-pad">${head}
+    <div class="past-stats">${tile(n, '지난 여행')}${tile(sum('done'), '학습한 날')}${tile(sum('learned'), '학습한 문장')}${tile(Math.round(avg * 100) + '%', '평균 완료율')}</div>
+    <div class="sec-title" style="margin-top:18px"><h4>여행별 기록</h4><span class="small">${n}개</span></div>
+    ${list.map(card).join('')}
+    <p class="small" style="margin-top:14px">기록은 이 브라우저에만 남아요(계정 동기화 대상이 아니에요). 새 여행을 만들면 지금 여행의 기록이 여기에 남습니다.</p>
+  </div>`, { appbar: appbar('이전 여행', { back: 'u-sched' }), tabbar: true, tab: 'u-sched' });
+}
+function ageText(ms) {
+  if (!ms) return '';
+  const d = Math.floor((Date.now() - ms) / 864e5);
+  return d <= 0 ? '오늘 기록' : d === 1 ? '어제 기록' : `${d}일 전 기록`;
+}
+
 function scrSched() {
   if (isWide()) return scrSplit('u-sched');
-  return frame(`<div class="app-pad">${schedListHtml()}</div>`, { appbar: appbar('일정표'), tabbar: true });
+  return frame(`<div class="app-pad">${calHtml()}${schedListHtml()}</div>`, { appbar: appbar('일정표', { act: pastEntryBtn() }), tabbar: true, tab: 'u-sched' });
 }
 /* P4: 넓은 화면의 일정표·학습 = 왼쪽 일정 목록 + 오른쪽 선택한 날의 학습 카드. 날짜를 눌러도 화면은 그대로이고 오른쪽만 바뀐다. */
 function scrSplit(tab) {
   const r = pickRow();
   let detail = `<div class="empty">일정이 없어요</div>`;
   if (r) { const v = studyView(r, { inline: true }); detail = `${v.inner}${v.bottom ? `<div class="bottombar">${v.bottom}</div>` : ''}`; }
-  return frame(`<div class="split"><div class="split-list">${schedListHtml(r ? r.date : null)}</div><div class="split-detail">${detail}</div></div>`,
-    { appbar: appbar(tab === 'u-study' ? '학습' : '일정표'), tabbar: true, tab, wide: true });
+  return frame(`<div class="split"><div class="split-list">${calHtml(true)}${schedListHtml(r ? r.date : null)}</div><div class="split-detail">${detail}</div></div>`,
+    { appbar: appbar(tab === 'u-study' ? '학습' : '일정표', { act: tab === 'u-study' ? '' : pastEntryBtn() }), tabbar: true, tab, wide: true });
 }
 
 /* SCR-08 */
@@ -3927,6 +4082,11 @@ const ACT = {
   'live-terms': () => confirmBox('실시간 통역 고지·면책', liveTermsHtml(), '확인', () => { S.modal = null; render(); }),
   'interp-consent-withdraw': () => { stopLive(); try { localStorage.removeItem(INTERP_CONSENT_KEY); } catch (e) { /* 저장소 막힘 */ } render(); toast('실시간 통역 동의를 철회했어요. 다음에 통역을 켤 때 다시 물어봐요.'); },
   'live-stop': () => stopLive(),
+  'cal-prev': () => calShift(-1),
+  'cal-next': () => calShift(1),
+  'cal-today': () => { S.calMonth = null; render(); },
+  'past-go': () => { S.past.open = null; go('u-past'); },
+  'past-open': el => { S.past.open = S.past.open === el.dataset.id ? null : el.dataset.id; render(); },
   'live-turn': () => { LIVE.speaker = LIVE.speaker === 'me' ? 'partner' : 'me'; LIVE.cap = { ...LIVE.cap, sp: '' }; browserListen(); updateLiveUi(); },
   'live-fallback': () => {   // 실시간 엔진이 모두 안 될 때: 서버·인터넷 없이 되는 검수 문장 통역으로
     LIVE.fallback = false; LIVE.note = ''; updateLiveUi();
