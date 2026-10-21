@@ -1250,7 +1250,10 @@ html:not([data-mode=legacy]) :is(.app, .admin-main, .modal) :is(input, select, t
 /* 터치 우선 기기: 44px 이상 (WCAG 2.5.5 AAA · Apple HIG). 마우스(pointer:fine)는 기존 크기 유지 */
 @media (pointer: coarse) {
   html:not([data-mode=legacy]) :is(.btn.sm, .btn.ghost, .chips button, .city-tabs button, .seg button, .filters button, .cand-toggle, .add-city,
-    .speak-btn, .sec-title button, .appbar .back, .round, .tts-btn, .tts-rate, .admin-nav button, .drill-btn, .withdraw) { min-height: 44px; }
+    .speak-btn, .sec-title button, .appbar .back, .round, .tts-btn, .tts-rate, .admin-nav button, .drill-btn, .withdraw,
+    .appbar .act, .cal-nav, .cal-today) { min-height: 44px; }
+  html:not([data-mode=legacy]) :is(.cal-nav, .cal-today, .appbar .act) { min-width: 44px; }
+  html:not([data-mode=legacy]) .cal-d { min-height: 44px; }
   html:not([data-mode=legacy]) :is(.appbar .back, .round, .play) { min-width: 44px; }
   html:not([data-mode=legacy]) .appbar .back { width: 44px; height: 44px; }
   html:not([data-mode=legacy]) .play, html:not([data-mode=legacy]) .cs-row .play { width: 44px; height: 44px; }
@@ -1675,3 +1678,77 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .il-split .conv-big { font-size: clamp(1.75rem, 8.6vw, 2.625rem); }
 @media (orientation: landscape) and (min-width: 700px) { .il-split .conv-big { font-size: clamp(1.75rem, 6.2vh + .6rem, 3rem); } }
 .conv-big { font-size: clamp(1.375rem, 5.4vw, 2rem); }
+
+/* ==== 일정표 전체: 달력 ==================================================== */
+.cal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 12px; margin-bottom: 14px; }
+.cal-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.cal-head b { flex: 1; text-align: center; font-size: 1rem; }
+.cal-nav { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); }
+.cal-nav svg { width: 16px; height: 16px; }
+.cal-today { flex: none; height: 32px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text-soft); font: inherit; font-size: 0.75rem; font-weight: 700; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.cal-dow { margin-bottom: 2px; }
+.cal-dow span { text-align: center; font-size: 0.75rem; font-weight: 700; color: var(--text-3); padding: 2px 0; }
+.cal-dow span:first-child { color: var(--bad-text); }
+.cal-dow span:last-child { color: var(--sea-text); }
+.cal-blank { display: block; }
+.cal-d { position: relative; min-height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border: 1px solid transparent; border-radius: 9px; background: var(--surface-3); color: var(--text-2); font: inherit; font-size: 0.8125rem; font-weight: 700; }
+.cal-d b { font-weight: inherit; }
+.cal-d .mk { display: block; width: 5px; height: 5px; border-radius: 50%; background: var(--border-strong); }
+.cal-d.out { background: transparent; color: var(--text-3); border-color: var(--border-faint); }
+.cal-d.out .mk { background: transparent; }
+.cal-d.free { background: var(--surface-2); color: var(--text-3); }
+.cal-d.future .mk { background: var(--border-strong); }
+.cal-d.now { border-color: var(--accent); color: var(--accent-text); }
+.cal-d.done { background: var(--ok-soft); color: var(--ok-text); }
+.cal-d.done .mk { background: var(--ok); }
+.cal-d.miss { background: var(--bad-soft); color: var(--on-bad-soft); }
+.cal-d.miss .mk { background: var(--bad); }
+.cal-d.sel { box-shadow: 0 0 0 2px var(--accent-a40); }
+.cal-d:active { transform: scale(.96); }
+.cal-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.cal-legend { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--text-3); }
+.cal-legend i { width: 8px; height: 8px; border-radius: 50%; margin-left: 4px; }
+.cal-legend i.ok { background: var(--ok); }
+.cal-legend i.miss { background: var(--bad); }
+.cal-legend i.future { background: var(--border-strong); }
+.cal-legend i.free { background: var(--surface-2); border: 1px solid var(--border-strong); }
+.cal.compact .cal-d { min-height: 34px; font-size: 0.75rem; }
+.cal.compact { padding: 10px; }
+
+/* ==== 이전 여행: 대시보드 ================================================== */
+.past-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pstat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; min-width: 0; }
+.pstat b { display: block; font-size: 1.375rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; }
+.pstat span { font-size: 0.6875rem; color: var(--text-3); }
+@media (min-width: 560px) { .past-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.past-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 12px 13px; margin-bottom: 10px; }
+.past-head { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 0; color: inherit; font: inherit; }
+.past-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.past-txt b { font-size: 1rem; line-height: 1.3; }
+.past-pct { flex: none; font-size: 1.375rem; font-weight: 800; letter-spacing: -0.02em; color: var(--accent-text); }
+.past-pct small { font-size: 0.75rem; font-weight: 700; margin-left: 1px; }
+.past-bar { height: 6px; border-radius: 999px; background: var(--surface-seg); overflow: hidden; margin: 9px 0 8px; }
+.past-bar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.past-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.75rem; color: var(--text-soft); }
+.past-meta b { color: var(--text); }
+.past-sits { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.past-days { margin-top: 10px; border-top: 1px solid var(--border-faint); padding-top: 10px; }
+.past-days ul { list-style: none; margin: 0 0 8px; padding: 0; max-height: 260px; overflow-y: auto; }
+.past-days li { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 0.8125rem; border-bottom: 1px solid var(--border-faint); }
+.pd-date { flex: 1; min-width: 0; }
+.pd-kind { color: var(--text-3); font-size: 0.6875rem; }
+.pd-st { flex: none; font-size: 0.6875rem; font-weight: 700; }
+.past-days li.ok .pd-st { color: var(--ok-text); }
+.past-days li.miss .pd-st { color: var(--bad-text); }
+
+/* 하단 탭이 5개가 됐다 — 개수에 맞춰 칸을 자동으로 나누고, 좁은 폰에서 글자를 줄인다 */
+/* 탭은 4개다(이전 여행은 일정표 안 버튼). 기본 repeat(4,1fr)를 그대로 쓴다. */
+/* 제품 셸의 하단 내비도 탭 개수에 맞춰 자동으로 나눈다(5개: 홈·일정표 전체·학습/통역·문장 모음·이전 여행) */
+/* 일정표 오른쪽 위 '이전 여행' 버튼 */
+.appbar .act { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 6px 11px 6px 9px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
+  font-size: var(--fs-caption); font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+.appbar .act svg { width: 16px; height: 16px; flex: none; }
+@media (hover: hover) { .appbar .act:hover { background: var(--surface-2); color: var(--text); } }
