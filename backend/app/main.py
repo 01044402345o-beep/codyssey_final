@@ -414,6 +414,8 @@ def health() -> dict[str, Any]:
         "stt_models": stt.cached_models(),
         "stt_selftest": selftest.status(),
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
+        # 키 여러 개(주 키 → 예비 키, 풀리면 롤백): 개수·지금 쓰는 키 번호·미뤄 둔 키. 키 값은 없다.
+        "gemini_keys": ai.key_health(),
         "firebase_auth": firebase_auth.configured(),
         # 탈퇴 관리자 경로(서비스 계정)를 쓸 수 있는지만 알린다. 키 값은 노출하지 않는다.
         "admin_erase": firebase_admin.configured(),

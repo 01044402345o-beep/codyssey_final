@@ -18,6 +18,16 @@
    - 마지막으로 성공한 모델을 다음 요청에서 먼저 쓴다.
    - 404(제공 중단)·429(할당량)·5xx(과부하) 로 실패한 모델은 일정 시간 순서의 뒤로 미룬다.
    - 미루는 것이지 빼는 것이 아니다. 모든 모델이 미뤄져 있어도 30회는 그대로 시도한다.
+
+4. API 키를 여러 개 둘 수 있다 — 주 키가 막히면 예비 키로 넘어가고, 주 키가 풀리면 되돌아온다(롤백).
+   - GEMINI_API_KEY(주 키) + GEMINI_API_KEY_FALLBACK(예비 키, 쉼표로 여러 개). 예비 키가 없으면 지금과 같다.
+   - 키 탓인 실패만 키를 미룬다: 401, 400·403 중 'API key' 문구(무효·만료·유출 차단), 429(할당량).
+     키 거부는 모델 탓이 아니므로 모델 쿨다운에 넣지 않는다(잘못된 키 하나가 모든 모델을 6시간 미루지 않게).
+   - 호출마다 '쿨다운이 아닌 키 중 가장 앞 번호'를 쓴다. 그래서 주 키의 쿨다운이 끝나면 다음 호출부터 자동으로 주 키로 돌아온다.
+     모든 키가 쿨다운이면 가장 먼저 풀리는 키를 쓴다(30회 규칙은 그대로).
+   - 키 값은 로그·/health 어디에도 남기지 않는다. '주 키'·'예비 키 1' 같은 번호만 쓴다.
+   - 주의: 예비 키도 주 키와 **같은 등급(유료/무료)·같은 약관**이어야 한다. 무료 등급 키로 넘어가면 보낸 내용이
+     제품 개선에 쓰일 수 있다(docs/product/privacy-policy-draft.md 3절).
 """
 from __future__ import annotations
 
@@ -44,7 +54,8 @@ _EXCLUDE = (
 ERROR_MAX_CHARS = 300   # 응답·로그에 남기는 오류 문구 길이 (API 오류 본문이 길다)
 
 _sleep: Callable[[float], None] = time.sleep          # 테스트에서 바꿔 끼운다
-_client_factory: Callable[[], Any] | None = None      # 테스트에서 가짜 클라이언트를 넣는다
+_client_factory: Callable[[], Any] | None = None      # 테스트에서 가짜 클라이언트를 넣는다(키 회전 없이)
+_key_client_factory: Callable[[str], Any] | None = None   # 테스트: 키 → 가짜 클라이언트(키 회전 포함)
 
 _models_lock = threading.Lock()
 _models_cache: tuple[float, list[str]] | None = None
@@ -55,6 +66,9 @@ _state_lock = threading.Lock()
 # STT 모델은 "groq:whisper-large-v3" 처럼 공급자를 붙인 이름으로 다뤄 쿨다운도 섞이지 않는다.
 _last_good: dict[str, str] = {}
 _cooldown: dict[str, tuple[float, str]] = {}
+# 키 상태: 번호(0 = 주 키) → (해제 시각, 사유). 키 값이 아니라 번호로만 기억한다.
+_key_cooldown: dict[int, tuple[float, str]] = {}
+_key_active: int | None = None   # 마지막으로 쓴 키 번호(전환·롤백 로그용)
 
 
 def _env_int(key: str, default: int) -> int:
@@ -131,15 +145,149 @@ def retry(
         _sleep(backoff(attempt))
 
 
+# ---------------------------------------------------------------- API 키: 주 키 → 예비 키, 롤백
+
+def api_keys() -> list[str]:
+    """[주 키, 예비 키…]. 빈 값·중복은 뺀다."""
+    keys: list[str] = []
+    for raw in [os.getenv("GEMINI_API_KEY") or ""] + (os.getenv("GEMINI_API_KEY_FALLBACK") or "").split(","):
+        k = raw.strip()
+        if k and k not in keys:
+            keys.append(k)
+    return keys
+
+
+def key_label(i: int) -> str:
+    return "주 키" if i == 0 else f"예비 키 {i}"
+
+
+_KEY_WORDS = ("api key", "api_key", "apikey")
+
+
+def is_key_rejection(exc: BaseException) -> bool:
+    """키 자체가 거부됨(무효·만료·유출 차단·권한 없음). 모델을 바꿔도 같은 키로는 낫지 않는다."""
+    code = getattr(exc, "code", None)
+    return code == 401 or (code in (400, 403) and any(w in str(exc).lower() for w in _KEY_WORDS))
+
+
+def key_cooldown_for(exc: BaseException) -> tuple[float, str] | None:
+    """키 탓인 실패면 그 키를 얼마나 미룰지. 그 밖의 실패(과부하·형식·빈 응답)는 None — 키를 바꾸지 않는다."""
+    code = getattr(exc, "code", None)
+    if is_key_rejection(exc):
+        return _env_float("AI_KEY_COOLDOWN_BAD", 3600.0), f"{code} 키 거부"
+    if code == 429:
+        flat = str(exc).lower().replace(" ", "").replace("_", "")
+        if "perday" in flat or "daily" in flat:
+            return _env_float("AI_KEY_COOLDOWN_DAILY", 3600.0), "429 일일 할당량"
+        return _env_float("AI_KEY_COOLDOWN_QUOTA", 120.0), "429 할당량"
+    return None
+
+
+def pick_key(n: int) -> int:
+    """이번 호출에 쓸 키 번호: 쿨다운이 아닌 키 중 가장 앞 번호(주 키가 풀리면 자동으로 롤백)."""
+    global _key_active
+    now = time.time()
+    with _state_lock:
+        cooling = {i: until for i, (until, _r) in _key_cooldown.items() if until > now and i < n}
+        free = [i for i in range(n) if i not in cooling]
+        i = free[0] if free else min(cooling, key=lambda k: (cooling[k], k))
+        prev, _key_active = _key_active, i
+    if prev is not None and prev != i:
+        if i < prev:
+            log.warning("Gemini 키 롤백: %s → %s (앞 키의 쿨다운이 끝남)", key_label(prev), key_label(i))
+        else:
+            log.warning("Gemini 키 전환: %s → %s", key_label(prev), key_label(i))
+    return i
+
+
+def note_key_failure(i: int, exc: BaseException) -> None:
+    cd = key_cooldown_for(exc)
+    if cd is None:
+        return
+    seconds, reason = cd
+    with _state_lock:
+        _key_cooldown[i] = (time.time() + max(0.0, seconds), reason)
+    log.warning("Gemini %s 를 %d초 미룸: %s", key_label(i), int(seconds), reason)
+
+
+def note_key_success(i: int) -> None:
+    with _state_lock:
+        _key_cooldown.pop(i, None)
+
+
+def key_health() -> dict[str, Any]:
+    """/health 용 — 키 개수, 지금 쓰는 키, 미뤄 둔 키. 키 값은 내보내지 않는다."""
+    now = time.time()
+    n = len(api_keys())
+    with _state_lock:
+        return {
+            "count": n,
+            "active": key_label(_key_active) if _key_active is not None and _key_active < n else None,
+            "cooling": {
+                key_label(i): {"reason": r, "seconds_left": int(until - now)}
+                for i, (until, r) in sorted(_key_cooldown.items())
+                if until > now and i < n
+            },
+        }
+
+
+class KeyRotatingClient:
+    """키마다 클라이언트를 두고 호출마다 지금 쓸 키를 고른다.
+
+    retry() 의 다음 시도가 다시 이 객체를 부르므로, 키가 막히면 다음 시도는 자연스럽게 예비 키로 간다.
+    호출 1회 = 키 1개로 API 요청 1회(시도 횟수 = 실제 요청 수 규칙 유지).
+    """
+
+    def __init__(self, keys: list[str], make: Callable[[str], Any]) -> None:
+        self._keys = list(keys)
+        self._make = make
+        self._clients: dict[int, Any] = {}
+        self.models = _RotatingModels(self)
+
+    def _call(self, fn: Callable[[Any], T]) -> T:
+        i = pick_key(len(self._keys))
+        c = self._clients.get(i)
+        if c is None:
+            c = self._clients[i] = self._make(self._keys[i])
+        try:
+            out = fn(c)
+        except Exception as exc:
+            note_key_failure(i, exc)
+            raise
+        note_key_success(i)
+        return out
+
+
+class _RotatingModels:
+    def __init__(self, owner: KeyRotatingClient) -> None:
+        self._owner = owner
+
+    def list(self) -> list[Any]:
+        # 목록은 지연 순회(pager)라 오류가 순회 중에 난다 — 같은 키로 끝까지 받아 둔다
+        return self._owner._call(lambda c: list(c.models.list()))
+
+    def generate_content(self, **kwargs: Any) -> Any:
+        return self._owner._call(lambda c: c.models.generate_content(**kwargs))
+
+
 def make_client() -> Any:
     if _client_factory is not None:
         return _client_factory()
+    keys = api_keys()
+    if len(keys) > 1:
+        return KeyRotatingClient(keys, _key_client)
+    return _key_client(keys[0] if keys else os.environ["GEMINI_API_KEY"])
+
+
+def _key_client(key: str) -> Any:
+    if _key_client_factory is not None:
+        return _key_client_factory(key)
     from google import genai
     from google.genai import types
 
     timeout_ms = int(max(1.0, _env_float("AI_CALL_TIMEOUT", 60.0)) * 1000)
     return genai.Client(
-        api_key=os.environ["GEMINI_API_KEY"],
+        api_key=key,
         http_options=types.HttpOptions(
             timeout=timeout_ms,
             retry_options=types.HttpRetryOptions(attempts=1),
@@ -237,9 +385,12 @@ def reset_cache() -> None:
     global _models_cache
     with _models_lock:
         _models_cache = None
+    global _key_active
     with _state_lock:
         _last_good.clear()
         _cooldown.clear()
+        _key_cooldown.clear()
+        _key_active = None
 
 
 def cooldown_for(exc: BaseException) -> tuple[float, str] | None:
@@ -261,6 +412,8 @@ def cooldown_for(exc: BaseException) -> tuple[float, str] | None:
 
 
 def note_failure(model: str, exc: BaseException) -> None:
+    if is_key_rejection(exc):   # 키 탓 — 모델은 멀쩡하다(키 쿨다운은 KeyRotatingClient 가 맡는다)
+        return
     cd = cooldown_for(exc)
     if cd is None:
         return

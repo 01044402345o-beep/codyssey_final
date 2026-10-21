@@ -30,7 +30,7 @@
 | `/health` 확인 URL | `https://____________.onrender.com/health` | |
 | 프론트 주소 | **기본: 위 배포 URL 과 동일** (`mockup/` 을 같은 서비스의 `/` 에서 서빙) | 별도 프론트를 쓸 때만 CORS `ALLOW_ORIGINS` 에 추가 |
 | Gemini API 키 발급처 | Google AI Studio (`aistudio.google.com/apikey`) | |
-| 키 보관 위치 | Render → Environment → `GEMINI_API_KEY`, `GROQ_API_KEY`(전사), 보충 `OPENAI_API_KEY`·`ASSEMBLYAI_API_KEY` | **코드·깃에 절대 넣지 않음** |
+| 키 보관 위치 | Render → Environment → `GEMINI_API_KEY`(+ 선택 `GEMINI_API_KEY_FALLBACK` 예비 키), `GROQ_API_KEY`(전사), 보충 `OPENAI_API_KEY`·`ASSEMBLYAI_API_KEY` | **코드·깃에 절대 넣지 않음** |
 | 로그인·계정 기록 | `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_APP_ID` | 웹 앱 공개 설정. 비어 있으면 데모 로그인. **탈퇴용 서비스 계정 JSON 은 공개 설정이 아니라** `FIREBASE_SERVICE_ACCOUNT_JSON` 하나로 따로 넣는다(없어도 된다 — 아래 E). Firebase 콘솔에서 이메일/비밀번호와 Google 제공자를 켠다. 로그인한 계정의 진도·복습·동의는 `GET/PUT /user/state` 가 같은 프로젝트의 Firestore `(default)` (asia-northeast3) `users/{uid}` 에 둔다. 규칙은 그 데이터베이스에만 있다. `firestore-native-mode` 는 쓰지 않는다. 저장소 호출이 실패하면 그 경로는 503 이고 브라우저 기록은 남는다. 녹음 파일과 여행 본문은 저장하지 않는다 |
 | 담당(배포) | 최성빈 | |
 | 담당(대리) | ____________ | 한 사람이 막히면 여기서 멈춥니다 — 반드시 지정 |
@@ -273,6 +273,15 @@ curl -s https://<앱>.onrender.com/health | python3 -m json.tool
   3. `ALLOW_ORIGINS`를 프론트 주소로 좁힘 (단, **API 직접 호출 비용은 못 막습니다**)
   4. `/generate`에 인증(간단한 토큰)을 붙이거나, 테스트 기간 종료 후 키 회수
 - **롤백**: 키 재발급 = 즉시 차단
+
+### F11-b. 예비 키로 자동 전환·롤백 (2026-10-21)
+
+- **설정**: Render Environment 에 `GEMINI_API_KEY_FALLBACK`(쉼표로 여러 개 가능). 없으면 동작은 예전과 같다.
+- **언제 넘어가나**: 주 키가 401, 400·403 'API key'(무효·만료·유출 차단)면 `AI_KEY_COOLDOWN_BAD`(기본 3600초), 429 면 `AI_KEY_COOLDOWN_QUOTA`(기본 120초, 'per day' 할당량은 `AI_KEY_COOLDOWN_DAILY` 3600초) 동안 예비 키를 쓴다. 과부하(5xx)·형식 오류로는 키를 바꾸지 않는다.
+- **언제 돌아오나(롤백)**: 호출마다 '쿨다운이 아닌 가장 앞 키'를 쓰므로, 주 키의 쿨다운이 끝나면 다음 호출부터 자동으로 주 키로 돌아온다. 아직 막혀 있으면 한 번 실패하고 다시 미뤄진다.
+- **확인**: `/health` 의 `gemini_keys` — `count`, `active`(주 키/예비 키 n), `cooling`(사유·남은 초). 로그 `Gemini 키 전환:`·`Gemini 키 롤백:`. 키 값은 어디에도 나오지 않는다.
+- **키 유출(F11)일 때**: 유출된 키는 **반드시 폐기**한다. 자동 전환은 폐기를 대신하지 않는다 — 유출 차단(403)된 키는 1시간마다 한 번씩 다시 시도된다. 폐기 후 Render 에서 그 키를 지우거나 새 키로 바꾼다.
+- **주의**: 예비 키도 주 키와 같은 등급(유료)이어야 한다. 무료 등급으로 넘어가면 처리방침(3절 Gemini 행)과 달라진다.
 - **재발 방지**: 예산 **알림**(경고용) + **할당량 한도**(실질 상한)를 **둘 다** 설정. 문서에 절차로 남김
 
 ### F12. 화면이 서버에 연결되지 않음
