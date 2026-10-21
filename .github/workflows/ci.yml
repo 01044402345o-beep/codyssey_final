@@ -112,6 +112,7 @@ jobs:
           python ../e2e/test_alt_expressions.py http://localhost:8768   # 다른 표현: 시트의 같은 뜻 다른 표현·듣기
           python ../e2e/test_streak.py http://localhost:8768   # 연속 학습·오늘의 목표(카드 10장)
           python ../e2e/test_talk_mode.py http://localhost:8768   # 대화하기(스크립트 회화 1a): 상대가 먼저·힌트·Sorry?·대화 중 점수 없음
+          python ../e2e/test_html_valid.py http://localhost:8768   # HTML 구조: 버튼·링크 안 블록 요소·id 중복·역할 없는 aria-label (html5.validator.nu 오류 종류)
       - uses: actions/upload-artifact@v4
         if: always()
         with:
