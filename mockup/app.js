@@ -1411,7 +1411,9 @@ async function loadLiveProviders() {
   if (LIVE.providers) return;
   if (API.base === null) { LIVE.providers = []; return; }
   try { const r = await fetch((API.base || '') + '/interp/providers'); const j = await r.json();   // 화면과 서버가 다른 주소일 수 있다
-    LIVE.providers = j.providers || []; } catch (e) { LIVE.providers = []; }
+    LIVE.providers = j.providers || [];
+    LIVE.wsUrl = typeof j.ws_url === 'string' && /^wss?:\/\/[^\s]+\/interp\/stream$/.test(j.ws_url) ? j.ws_url : null;   // Hosting 도메인이면 서버가 알려 준 직접 주소로
+  } catch (e) { LIVE.providers = []; }
   if (await browserEngineOk()) LIVE.providers = [BROWSER_ENGINE, ...LIVE.providers];
   if (S.screen === 'u-interp') updateLiveUi();
 }
@@ -1659,7 +1661,7 @@ async function startLive(opt) {
   catch (e) { LIVE.on = false; LIVE.note = '마이크를 사용할 수 없어요. 권한을 확인해 주세요.'; updateLiveUi(); return; }
   if (API.base === null) { stopLive('통역 서버가 없는 화면이에요.'); return; }
   // 화면과 서버가 다른 주소일 수 있다(API.base). 브라우저 WebSocket 은 헤더를 못 붙여 토큰은 첫 메시지로 보낸다.
-  const url = (API.base || location.origin).replace(/^http/, 'ws') + '/interp/stream';
+  const url = LIVE.wsUrl || (API.base || location.origin).replace(/^http/, 'ws') + '/interp/stream';
   let token = '';
   if (window.FirebaseAuth && FirebaseAuth.idToken) { try { token = await FirebaseAuth.idToken() || ''; } catch (e) { token = ''; } }
   if (!LIVE.on) return;   // 토큰을 기다리는 사이 멈췄다
