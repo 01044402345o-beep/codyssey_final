@@ -1403,6 +1403,8 @@ const LIVE = { on: false, ws: null, stream: null, ctx: null, proc: null, src: nu
   providers: null, pick: null, paused: false, partner: false, hist: [],
   level: 0, muted: false, mode: '', worklet: null, srcNode: null, raf: 0, gen: 0, bargeUntil: 0, speech: false };
 const livePick = () => LIVE.pick || (() => { try { return localStorage.getItem(INTERP_PROVIDER_KEY) || ''; } catch (e) { return ''; } })();
+// 지금 쓸 엔진: 사용자가 고른 것(켜져 있을 때) → 서버 우선순위의 첫 엔진. 서버도 같은 규칙으로 고른다.
+const liveEngine = engines => { const p = livePick(); return engines.some(e => e.id === p) ? p : (engines[0] || {}).id; };
 async function loadLiveProviders() {
   if (LIVE.providers) return;
   if (API.base === null) { LIVE.providers = []; return; }
@@ -1436,7 +1438,7 @@ function interpLiveHtml() {
     : l.provider ? `<span class="live-badge">${esc((l.providers || []).find(p => p.id === l.provider)?.label || l.provider)}</span>` : '';
   const engines = (l.providers || []).filter(p => p.available);
   const picker = engines.length > 1 ? `<div class="live-engines" role="group" aria-label="통역 엔진">
-      ${engines.map(p => `<button class="chip ${(l.pick || '') === p.id ? 'on' : ''}" data-act="live-engine" data-v="${esc(p.id)}">${esc(p.label)}</button>`).join('')}
+      ${engines.map(p => `<button class="chip ${liveEngine(engines) === p.id ? 'on' : ''}" data-act="live-engine" data-v="${esc(p.id)}">${esc(p.label)}</button>`).join('')}
     </div>` : '';
   if (!l.on) {
     return `<div class="live-card">

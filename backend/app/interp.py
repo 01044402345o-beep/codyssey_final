@@ -15,7 +15,7 @@
 - gemini: Live API BidiGenerateContent, models/gemini-3.5-live-translate-preview, translationConfig. https://ai.google.dev/gemini-api/docs/live-api/live-translate
 - deepl: POST /v3/voice/realtime → streaming_url?token=, 최상위 키 메시지(source_media_chunk 등). run_deepl 참고
 - azure: Speech SDK 번역(자동 언어 감지). 패키지가 없으면 '사용 불가'
-켜는 제공자는 INTERP_PROVIDERS(기본 soniox,openai,fake)로 정한다 — 키가 있다고 저절로 켜지지 않는다.
+켜는 제공자와 우선순위는 INTERP_PROVIDERS(적힌 순서 = 우선순위, 기본 soniox,openai,fake)로 정한다 — 키가 있다고 저절로 켜지지 않는다. 관리자 안내: docs/ops/INTERP_ENGINES.md
 환경 변수: INTERP_PROVIDERS, INTERP_PROVIDER(고정), SONIOX_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, DEEPL_API_KEY,
           AZURE_SPEECH_KEY/AZURE_SPEECH_REGION, INTERP_ALLOW_FAKE, INTERP_MAX_SECONDS,
           INTERP_STARTS(창당 시작 수, 기본 6), INTERP_WINDOW(초, 기본 600)
@@ -99,9 +99,14 @@ def _key(name: str) -> str:
 
 
 def enabled_providers() -> list[str]:
+    """켠 엔진을 **적힌 순서대로** 돌려준다 — 이 순서가 우선순위다(앞에 쓴 엔진을 먼저 쓴다). 운영 안내: docs/ops/INTERP_ENGINES.md"""
     raw = (os.getenv("INTERP_PROVIDERS") or "").strip()   # 비어 있으면 기본값(빈 값으로 모든 엔진이 꺼지지 않게)
     names = [x.strip().lower() for x in (raw or DEFAULT_ENABLED).split(",")]
-    return [x for x in names if x in PROVIDERS]
+    out: list[str] = []
+    for x in names:
+        if x in PROVIDERS and x not in out:
+            out.append(x)
+    return out
 
 
 def provider_available(pid: str) -> bool:
@@ -134,16 +139,22 @@ def azure_sdk_ok() -> bool:
 
 
 def provider_list() -> list[dict]:
-    return [{"id": pid, **{k: v for k, v in info.items() if k != "key"}, "available": provider_available(pid)}
-            for pid, info in PROVIDERS.items()]
+    """켠 엔진(우선순위 순) → 나머지. priority 는 1부터(켜지지 않았으면 None). 화면은 이 순서로 칩을 보이고 첫 엔진을 기본으로 한다."""
+    on = enabled_providers()
+    forced = _key("INTERP_PROVIDER").lower()
+    if forced:   # 고정하면 그 엔진만 보인다(사용자 선택이 무시되므로 고를 칸을 보이지 않는다)
+        on = [forced] if forced in on else []
+    ids = on + [pid for pid in PROVIDERS if pid not in on]
+    return [{"id": pid, **{k: v for k, v in PROVIDERS[pid].items() if k != "key"}, "available": pid in on and provider_available(pid),
+             "priority": on.index(pid) + 1 if pid in on else None} for pid in ids]
 
 
 def provider_choice(requested: str | None = None) -> str:
-    """INTERP_PROVIDER 고정 → 브라우저가 고른 것 → 켜진 제공자 순서. 쓸 수 있는 게 없으면 'none'."""
+    """INTERP_PROVIDER 고정 → 사용자가 고른 것 → INTERP_PROVIDERS 에 적힌 순서. 쓸 수 있는 게 없으면 'none'."""
     forced = _key("INTERP_PROVIDER").lower()
     if forced:
         return forced if provider_available(forced) else "none"
-    order = ([requested] if requested else []) + ["soniox", "openai", "gemini", "deepl", "azure", "fake"]
+    order = ([requested] if requested else []) + enabled_providers()
     for pid in order:
         if pid and provider_available(pid):
             return pid
