@@ -35,8 +35,8 @@ with sync_playwright() as p:
     page.locator('[data-act="live-start"]').click(); page.wait_for_timeout(300)
     modal = page.locator(".modal")
     check("처음 시작할 때 동의 창", modal.count() == 1 and "실시간 통역 전에" in modal.inner_text())
-    check("동의 창에 제공자·저장 안 함·국외 이전 고지",
-          all(k in modal.inner_text() for k in ["Soniox", "저장하지 않아요", "국외"]))
+    check("동의 창에 제공자·저장 안 함·국외 이전 고지(운영에서 켠 네 회사 모두)",
+          all(k in modal.inner_text() for k in ["Soniox", "Microsoft", "OpenAI", "Google", "저장하지 않아요", "국외"]))
     page.locator('[data-act="modal-ok"]').click()
     for _ in range(20):                      # 연결은 첫 요청이 느릴 수 있다(최대 6초)
         page.wait_for_timeout(300)
@@ -91,7 +91,7 @@ with sync_playwright() as p:
     page.locator('[data-act="live-terms"]').click(); page.wait_for_timeout(300)
     terms = page.locator(".modal").inner_text()
     check("면책 전문에 책임·응급·민감정보·국외 이전", all(k in terms for k in ["책임", "응급", "민감정보", "국외"]), terms[:80])
-    check("면책 v2: 참여한 대화에서만·고의·중대한 과실 예외·업체 이름", all(k in terms for k in ["내가 참여한 대화", "중대한 과실", "Soniox"]) and "v2" in terms, terms[-60:])
+    check("면책 v2: 참여한 대화에서만·고의·중대한 과실 예외·업체 이름", all(k in terms for k in ["내가 참여한 대화", "중대한 과실", "Soniox"]) and "v3" in terms and all(k in terms for k in ["Microsoft", "Google"]), terms[-60:])
     page.locator('[data-act="modal-ok"]').click(); page.wait_for_timeout(200)
 
     # 상대에게 크게 보여주기
