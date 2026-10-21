@@ -1467,7 +1467,7 @@ function interpLiveHtml() {
       <button class="btn ${l.paused ? 'primary' : 'soft'}" data-act="live-pause">${l.paused ? '다시 듣기' : '잠시 멈춤'}</button>
       <button class="btn primary" data-act="live-stop">끝내기</button>
     </div>
-    <p class="live-notice">AI 번역 · 정확도 보장 안 함 · 긴급 상황은 사람에게</p></div>${interpPartnerHtml()}`;
+    <p class="live-notice">AI 번역 · 정확도 보장 안 함 · 긴급 상황은 사람에게</p></div>`;
 }
 function interpPartnerHtml() {
   const l = LIVE;
@@ -1486,7 +1486,10 @@ function liveStateText() {
   if (st === 'error') return LIVE.note || '연결 실패';
   return '대기';
 }
-function updateLiveUi() { const el = $('[data-live="live"]'); if (el) el.innerHTML = interpLiveHtml(); }
+function updateLiveUi() {
+  const el = $('[data-live="live"]'); if (el) el.innerHTML = interpLiveHtml();
+  const pv = $('[data-live="partner"]'); if (pv) pv.innerHTML = interpPartnerHtml();   // 상대 보기는 자막만 다시 그린다
+}
 /* 16 kHz · mono · PCM16 으로 줄인다(제공자 공통 입력 형식). */
 function toPcm16(input, inRate) {
   const ratio = inRate / 16000, n = Math.floor(input.length / ratio), out = new Int16Array(n);
@@ -1654,6 +1657,7 @@ function scrInterp() {
     <div class="title-lg">통역</div>
     <p class="sub" style="margin-bottom:12px">필요한 문장을 찾아 <b>크게 보여주거나 들려주세요</b>. 상대가 할 수 있는 대답도 한국어로 볼 수 있어요.</p>
     <div data-live="live">${interpLiveHtml()}</div>
+    <div data-live="partner">${interpPartnerHtml()}</div>
     <input class="input" type="search" data-interp="q" placeholder="찾기 — 예: 영수증, 화장실, receipt" value="${esc(st.q)}" autocomplete="off" aria-label="문장 찾기">
     <div class="chips interp-chips" role="group" aria-label="상황">${chips.map(([k, l]) => `<button class="chip ${!st.q.trim() && st.sit === k ? 'on' : ''}" data-act="interp-sit" data-v="${k}">${esc(l)}</button>`).join('')}</div>
     <div data-live="interp-list">${interpItems()}</div>
