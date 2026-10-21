@@ -84,7 +84,8 @@ jobs:
         run: |
           # 모든 스위트가 한 서버·한 IP(127.0.0.1)를 나눠 쓴다. 기본 한도(20/60s)면 스위트가 늘수록
           # 뒤쪽 /generate 가 429 를 받아 test_full_regen 이 깨진다. 429 를 검사하는 E2E 는 없다.
-          RATE_LIMIT=1000 uvicorn app.main:app --port 8768 &
+          # 실시간 통역 E2E 는 외부 호출 없는 시험 모드 제공자로 파이프만 본다(키 없음).
+          RATE_LIMIT=1000 INTERP_PROVIDER=fake INTERP_ALLOW_FAKE=1 INTERP_STARTS=1000 uvicorn app.main:app --port 8768 &
           for i in $(seq 1 30); do curl -sf localhost:8768/health > /dev/null && break; sleep 1; done
           mkdir -p ../e2e-shots
           python ../e2e/test_account_withdrawal.py http://localhost:8768   # 탈퇴: 버튼 위치·확인·브라우저 기록 폐기
@@ -115,6 +116,7 @@ jobs:
           python ../e2e/test_talk_mode.py http://localhost:8768   # 대화하기(스크립트 회화 1a): 상대가 먼저·힌트·Sorry?·대화 중 점수 없음
           python ../e2e/test_html_valid.py http://localhost:8768   # HTML 구조: 버튼·링크 안 블록 요소·id 중복·역할 없는 aria-label (html5.validator.nu 오류 종류)
           python ../e2e/test_interpret.py http://localhost:8768   # 여행 중 통역 탭: 크게 보여주기·들려주기·예상 답변·찾기(AI 호출 없음)
+          python ../e2e/test_interp_live.py http://localhost:8768   # 실시간 통역: 동의 → 마이크 → 서버 WebSocket → 자막 → 종료 시 마이크 해제(시험 모드)
       - uses: actions/upload-artifact@v4
         if: always()
         with:

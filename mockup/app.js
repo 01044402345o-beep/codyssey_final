@@ -1467,11 +1467,16 @@ async function startLive() {
   updateLiveUi();
   try { LIVE.stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } }); }
   catch (e) { LIVE.on = false; LIVE.note = '마이크를 사용할 수 없어요. 권한을 확인해 주세요.'; updateLiveUi(); return; }
-  const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/interp/stream`;
+  if (API.base === null) { stopLive('통역 서버가 없는 화면이에요.'); return; }
+  // 화면과 서버가 다른 주소일 수 있다(API.base). 브라우저 WebSocket 은 헤더를 못 붙여 토큰은 첫 메시지로 보낸다.
+  const url = (API.base || location.origin).replace(/^http/, 'ws') + '/interp/stream';
+  let token = '';
+  if (window.FirebaseAuth && FirebaseAuth.idToken) { try { token = await FirebaseAuth.idToken() || ''; } catch (e) { token = ''; } }
+  if (!LIVE.on) return;   // 토큰을 기다리는 사이 멈췄다
   let ws;
   try { ws = new WebSocket(url); } catch (e) { stopLive('통역 서버에 연결하지 못했어요.'); return; }
   LIVE.ws = ws;
-  ws.onopen = () => ws.send(JSON.stringify({ type: 'start', a: LIVE.src, b: LIVE.dst }));
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'start', a: LIVE.src, b: LIVE.dst, token }));
   ws.onmessage = ev => {
     let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
     if (m.type === 'ready') { LIVE.status = 'live'; LIVE.provider = m.provider || ''; LIVE.test = !!m.test; updateLiveUi(); }

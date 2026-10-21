@@ -11,16 +11,25 @@
   https://developers.openai.com/api/docs/guides/realtime-translation
 - fake: 키 없이 파이프(마이크→서버→자막)만 검사할 때. INTERP_ALLOW_FAKE=1 일 때만 켠다.
 
-환경 변수: INTERP_PROVIDER(soniox|openai|fake), SONIOX_API_KEY, OPENAI_API_KEY, INTERP_ALLOW_FAKE, INTERP_MAX_SECONDS
+환경 변수: INTERP_PROVIDER(soniox|openai|fake), SONIOX_API_KEY, OPENAI_API_KEY, INTERP_ALLOW_FAKE, INTERP_MAX_SECONDS,
+          INTERP_STARTS(창당 시작 수, 기본 6), INTERP_WINDOW(초, 기본 600)
+
+유료 제공자(soniox·openai)는 키가 서버에 있으면 누구나 과금을 일으킬 수 있으므로:
+- 첫 메시지의 Firebase ID 토큰을 확인한다(브라우저 WebSocket 은 헤더를 못 붙인다). 익명 로그인·로그인 없이 시작은 거절.
+- IP 와 계정마다 시작 횟수를 제한하고, 세션은 MAX_SECONDS 가 지나면 입력이 없어도 끊는다.
+시험 모드(fake)는 외부 호출이 없어 토큰을 요구하지 않는다.
 """
 from __future__ import annotations
 
 import asyncio
+import collections
 import base64
 import json
 import logging
 import os
+import threading
 import time
+from typing import Callable
 
 from fastapi import WebSocket, WebSocketDisconnect
 
@@ -30,6 +39,31 @@ SONIOX_URL = "wss://stt-rt.soniox.com/transcribe-websocket"
 OPENAI_URL = "wss://api.openai.com/v1/realtime/translations?model=gpt-realtime-translate"
 MAX_SECONDS = int(os.getenv("INTERP_MAX_SECONDS", "180") or 180)   # 한 세션 상한(비용·악용 방지)
 MAX_BYTES = 16_000 * 2 * MAX_SECONDS                              # 16 kHz 16-bit
+LANGS = {"ko", "en"}                                              # 지금 화면이 쓰는 쌍만 받는다
+STARTS = int(os.getenv("INTERP_STARTS", "6") or 6)                # 창당 시작 수(IP·계정 각각)
+WINDOW = int(os.getenv("INTERP_WINDOW", "600") or 600)
+_starts: dict[str, collections.deque] = collections.defaultdict(collections.deque)
+_starts_lock = threading.Lock()
+
+
+def allow_start(*keys: str) -> bool:
+    """키(IP·계정)마다 WINDOW 초 안 시작 수가 STARTS 미만이면 기록하고 True. 프로세스 메모리 — 임시 방어."""
+    now = time.time()
+    with _starts_lock:
+        if len(_starts) > 10_000:
+            for k in [k for k, v in _starts.items() if not v or now - v[-1] > WINDOW]:
+                del _starts[k]
+        qs = []
+        for k in keys:
+            q = _starts[k]
+            while q and now - q[0] > WINDOW:
+                q.popleft()
+            if len(q) >= STARTS:
+                return False
+            qs.append(q)
+        for q in qs:
+            q.append(now)
+    return True
 
 
 def provider_choice() -> str:
@@ -219,7 +253,13 @@ class _Session:
             await _send(self.ws, {"type": "closed"})
 
 
-async def serve(ws: WebSocket) -> None:
+async def _refuse(ws: WebSocket, code: str, message: str) -> None:
+    await _send(ws, {"type": "error", "code": code, "message": message})
+    await ws.close()
+
+
+async def serve(ws: WebSocket, ip: str = "unknown", verify: Callable[[str], dict] | None = None) -> None:
+    """verify(token) → 계정 요약(uid·provider). 실패하면 예외. main 이 firebase_auth 로 넘겨준다."""
     await ws.accept()
     try:
         first = json.loads(await asyncio.wait_for(ws.receive_text(), timeout=10))
@@ -232,25 +272,44 @@ async def serve(ws: WebSocket) -> None:
         return
 
     provider = provider_choice()
-    if first.get("provider") == "fake" and provider != "fake":
-        provider = provider_choice()
     if provider == "none":
         await _send(ws, {"type": "error", "code": "no_key",
                          "message": "서버에 통역 서비스 키가 없어 지금은 실시간 통역을 쓸 수 없어요. 운영자에게 문의해 주세요."})
         await ws.close()
         return
 
-    a = str(first.get("a") or "ko")[:5]
-    b = str(first.get("b") or "en")[:5]
+    a = str(first.get("a") or "ko")
+    b = str(first.get("b") or "en")
+    if a not in LANGS or b not in LANGS or a == b:
+        await _refuse(ws, "bad_pair", "지원하지 않는 언어 쌍이에요.")
+        return
+    keys = ["ip:" + ip]
+    if provider != "fake":   # 유료 제공자: 로그인한 계정만(익명·게스트 제외)
+        try:
+            if verify is None:
+                raise ValueError("no verifier")
+            account = await asyncio.to_thread(verify, str(first.get("token") or ""))
+        except Exception:   # noqa: BLE001 — 토큰 없음·만료·로그인 미설정 모두 같은 안내
+            await _refuse(ws, "login_required", "실시간 통역은 로그인한 계정에서만 쓸 수 있어요.")
+            return
+        if account.get("provider") == "anonymous" or not account.get("uid"):
+            await _refuse(ws, "login_required", "실시간 통역은 로그인한 계정에서만 쓸 수 있어요.")
+            return
+        keys.append("uid:" + account["uid"])
+    if not allow_start(*keys):
+        await _refuse(ws, "rate_limited", f"잠시 뒤 다시 시도해 주세요({WINDOW // 60}분에 {STARTS}번까지).")
+        return
     sess = _Session(ws, provider, a, b)
     log.info("interp start provider=%s pair=%s", provider, (a, b))
+    run = sess.run_soniox if provider == "soniox" else sess.run_openai if provider == "openai" else sess.run_fake
     try:
-        if provider == "soniox":
-            await sess.run_soniox()
-        elif provider == "openai":
-            await sess.run_openai()
-        else:
-            await sess.run_fake()
+        await asyncio.wait_for(run(), timeout=MAX_SECONDS + 5)   # 입력이 멈춰도 세션이 열린 채 남지 않게
+    except asyncio.TimeoutError:
+        try:
+            await _send(ws, {"type": "error", "code": "too_long",
+                             "message": f"한 번에 {MAX_SECONDS}초까지 통역할 수 있어요. 다시 시작해 주세요."})
+        except Exception:      # noqa: BLE001
+            pass
     except WebSocketDisconnect:
         pass
     except Exception as exc:      # noqa: BLE001 — 제공자 연결 실패는 사용자에게 상태로 알린다
