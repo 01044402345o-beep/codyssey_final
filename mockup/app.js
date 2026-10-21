@@ -35,6 +35,7 @@ const I = {
   alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/></svg>',
   cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+  interp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h9a2 2 0 012 2v5a2 2 0 01-2 2H9l-4 3v-3H4a2 2 0 01-2-2V7a2 2 0 012-2z"/><path d="M15 9h5a2 2 0 012 2v5a2 2 0 01-2 2h-1v3l-4-3h-3a2 2 0 01-2-2v-1"/></svg>',
   cards: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="14" height="15" rx="2"/><path d="M7 3h12a2 2 0 012 2v13"/></svg>',
   book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20V3H6.5A2.5 2.5 0 004 5.5z"/><path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5"/></svg>',
   google: '<svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>',
@@ -590,6 +591,7 @@ function initState() {
     commons: JSON.parse(JSON.stringify(COMMON_SITUATIONS)), commonsDraft: null,
     jobFilter: 'all', mockTrips: JSON.parse(JSON.stringify(MOCK_TRIPS)), modal: null, lastScreen: null,
     sheet: false,   // 학습 화면 하단 '회화 연습' 시트가 열려 있는지
+    interp: { q: '', sit: 'today', show: null },   // 통역 화면: 찾기·상황 칩·크게 보여주기
   };
 }
 
@@ -1125,7 +1127,7 @@ function readTimeline(target, spoken, rate) {
 /* iOS(WebKit)는 참조가 없는 발화 객체를 말하는 도중에 버려 onend 가 오지 않을 수 있다 → 전역에 붙잡아 둔다.
    그래도 onend 가 안 오면 '말하는 중' 상태를 직접 확인해 끝을 처리한다(버튼·강조가 멈춘 채 남지 않게, 대화하기가 멈추지 않게). */
 let curUtter = null, endPoll = null;
-const readTarget = el => { const box = el && el.closest('.talk-line, .talk-me, .face, .sent'); return box ? box.querySelector('[data-read]') : null; };
+const readTarget = el => { const box = el && el.closest('.talk-line, .talk-me, .face, .sent, .interp-item, .interp-show-card'); return box ? box.querySelector('[data-read]') : null; };
 function speak(text, btn, target, o = {}) {   // o = { rate, onend } — 대화하기가 쓴다
   if (ttsState() !== 'ok') { toast(ttsOffMsg()); return; }
   if (curUtter) curUtter.__cancelled = true;   // 앞 발화의 늦은 onend 가 새 발화를 지우지 않게
@@ -1203,6 +1205,8 @@ const SCREENS = [
     tips: ['카드를 눌러 뒤집고 "듣기"로 영어 발음을 들어 보세요.', '모든 카드를 한 번 이상 뒤집어야 완료 버튼이 켜져요.', '[your name]·[your destination]는 채울 자리예요. 듣기도 그대로 읽어요.', '사이드바의 "TTS 미지원"을 켜면 듣기 버튼 대신 안내가 나와요.'] },
   { id: 'u-coll', no: 'SCR-09', name: '문장 모음', fr: ['FR-STUDY-05', 'FR-SENT-01'],
     tips: ['공통 상황과 장소별 문장을 골라 볼 수 있어요.', '"문장 모음 전용"은 일정에 넣지 않은 문장이에요.', '모든 문장에 듣기 버튼이 있어요.'] },
+  { id: 'u-interp', no: 'SCR-12', name: '통역 (여행 중)', fr: ['FR-TRIP-INTERP'],
+    tips: ['여행 중에는 아래 탭의 "학습" 자리에 "통역"이 나와요.', '문장을 크게 보여주거나 들려주고, 상대의 예상 답변을 한국어로 봐요.', '검수된 문장만 쓰고 AI 호출은 없어요.'] },
   { id: 'u-end', no: 'SCR-06', name: '여행 종료 요약', fr: ['FR-END-01', 'FR-TRIP-04'],
     tips: ['이 메뉴를 누르면 "오늘"이 여행 종료 다음 날로 바뀌어요.', '종료 후에는 완료 처리를 할 수 없어요.', '"새 여행 만들기"는 이 여행을 보관(비활성화)해요.'] },
   { id: 'u-edit', no: 'SCR-10', name: '여행 설정 수정', fr: ['FR-TRIP-01', 'FR-SENT-02'],
@@ -1339,10 +1343,74 @@ function planNote() {
     여행 중 새 문장 ${p.tripNew} · 문장 모음 전용 ${p.none}</p></div>`;
 }
 
+/* ---- 통역 (여행 중에만 '학습' 탭 자리) ----
+   여행지에서 바로 쓰는 화면: 문장을 크게 보여 주거나(점원에게 화면을 내민다) 들려주고, 상대의 예상 답변을 한국어 뜻과 함께 본다.
+   검수된 문장(공통·장소·참고 묶음)만 쓴다 — AI 호출·외부 전송 없음, 네트워크 없이도 된다.
+   내가 친 한국어를 AI 로 번역하는 기능은 개인정보 처리방침·국외 이전 결정 전이라 넣지 않는다(results.md 5절 11). */
+const navTabs = () => [['u-home', '홈', I.home], ['u-sched', '일정표', I.cal],
+  phase() === 'trip' ? ['u-interp', '통역', I.interp] : ['u-study', '학습', I.cards], ['u-coll', '문장 모음', I.book]];
+const interpPool = () => [...(S.sents || []), ...(S.refs || [])];
+function interpList() {
+  const st = S.interp, q = st.q.trim().toLowerCase(), pool = interpPool();
+  if (q) return pool.filter(s => [s.ko, s.en, slotText(s.en), s.situation, s.sitLabel].join(' ').toLowerCase().includes(q)).slice(0, 40);
+  if (st.sit === 'today') {
+    const row = S.sched.find(r => r.date === S.today && r.kind !== 'free');
+    return row ? row.ids.map(id => S.smap[id]).filter(Boolean) : [];
+  }
+  if (st.sit === 'help') return pool.filter(s => s.sit === 'emergency' || s.source === 'ref');
+  return pool.filter(s => s.sit === st.sit);
+}
+function interpItems() {
+  const list = interpList(), tts = ttsState() === 'ok';
+  if (!list.length) {
+    const msg = S.interp.q.trim() ? '찾는 문장이 없어요. 다른 낱말로 찾아보세요.' : S.interp.sit === 'today' ? '오늘은 배치된 장소가 없어요. 위에서 상황을 골라 보세요.' : '문장이 없어요.';
+    return `<div class="empty" style="padding:28px 0">${msg}</div>`;
+  }
+  return list.map(s => `<div class="interp-item">
+      <div class="interp-meta">${esc(s.source === 'place' ? (S.places.find(p => p.id === s.placeId) || {}).name || '' : s.sitLabel || '')} · ${esc(s.situation || '')}</div>
+      <div class="interp-ko">${phHtml(s.ko)}</div>
+      <div class="interp-en" lang="en" data-read>${enHtml(s.en)}</div>
+      <div class="interp-acts">${tts ? `<button class="talk-say" data-act="interp-say" data-id="${s.id}">${I.speaker}들려주기</button>` : ''}
+        <button class="talk-say" data-act="interp-show" data-id="${s.id}">크게 보여주기</button></div>
+    </div>`).join('');
+}
+function scrInterp() {
+  const st = S.interp, t = S.trip, day = S.days.find(d => d.date === S.today);
+  const chips = [['today', '오늘 장소'], ['help', '도움 요청'],
+    ...S.commons.filter(g => g.countsTowardPlan && g.key !== 'emergency').map(g => [g.key, g.label])];
+  const inner = `<div class="app-pad interp">
+    <div class="small">${day ? `${esc(day.city)} · ${Dt.full(S.today)}` : t ? esc(tripTitle(t)) : ''}</div>
+    <div class="title-lg">통역</div>
+    <p class="sub" style="margin-bottom:12px">필요한 문장을 찾아 <b>크게 보여주거나 들려주세요</b>. 상대가 할 수 있는 대답도 한국어로 볼 수 있어요. 인터넷 없이도 돼요.</p>
+    <input class="input" type="search" data-interp="q" placeholder="찾기 — 예: 영수증, 화장실, receipt" value="${esc(st.q)}" autocomplete="off" aria-label="문장 찾기">
+    <div class="chips interp-chips" role="group" aria-label="상황">${chips.map(([k, l]) => `<button class="chip ${!st.q.trim() && st.sit === k ? 'on' : ''}" data-act="interp-sit" data-v="${k}">${esc(l)}</button>`).join('')}</div>
+    <div data-live="interp-list">${interpItems()}</div>
+    <p class="small" style="margin-top:14px">검수된 문장만 보여 줘요. 내가 쓴 한국어를 AI 로 번역하는 기능은 아직 없어요.</p>
+  </div>`;
+  return frame(inner, { tabbar: true, tab: 'u-interp' });
+}
+/* 크게 보여주기: 화면 가득 영어 문장(점원에게 내민다) + 들려주기 + 상대의 예상 답변(한국어 뜻) */
+function interpShowHtml() {
+  const s = S.interp && S.interp.show && S.smap[S.interp.show];
+  if (!s || S.screen !== 'u-interp') return '';
+  const tts = ttsState() === 'ok', t = s.talk;
+  const reply = (r, j) => `<div class="talk-line">${r.label ? `<span class="talk-pill">${esc(r.label)}</span>` : ''}<b lang="en" data-read>${enHtml(r.en)}</b><p>${esc(r.ko)}</p>
+      ${tts ? `<button class="talk-say" data-act="interp-say-reply" data-i="${j}">${I.speaker}듣기</button>` : ''}</div>`;
+  return `<div class="interp-show" role="dialog" aria-modal="true" aria-label="크게 보여주기">
+    <div class="interp-show-card" data-act="noop">
+      <div class="interp-show-en" lang="en" data-read>${enHtml(s.en)}</div>
+      <div class="interp-show-ko">${phHtml(s.ko)}</div>
+      <div class="interp-acts">${tts ? `<button class="tts-btn" data-act="interp-say" data-id="${s.id}">${I.speaker}들려주기</button>` : ''}
+        <button class="btn soft" data-act="interp-close">닫기</button></div>
+      ${t && (t.replies || []).length ? `<h4>상대가 이렇게 답할 수 있어요</h4>${t.replies.map(reply).join('')}` : ''}
+    </div>
+  </div>`;
+}
+
 /* ================= 렌더링: 사용자 화면 ================= */
 function frame(inner, o = {}) {
   if (!LEGACY) return pframe(inner, o);
-  const tabs = [['u-home', '홈', I.home], ['u-sched', '일정표', I.cal], ['u-study', '학습', I.cards], ['u-coll', '문장 모음', I.book]];
+  const tabs = navTabs();   // 여행 중에는 '학습' 자리에 '통역'
   const tabActive = o.tab || S.screen;
   return `<div class="device"><div class="screen">
     <div class="statusbar"><span>9:41</span><span class="sim">${Dt.full(S.today)}</span></div>
@@ -1350,19 +1418,19 @@ function frame(inner, o = {}) {
     <div class="app">${inner}</div>
     ${o.bottom ? `<div class="bottombar">${o.bottom}</div>` : ''}
     ${o.tabbar ? `<nav class="tabbar">${tabs.map(([id, l, ic]) => `<button class="${tabActive === id ? 'on' : ''}" data-act="tab" data-id="${id}">${ic}${l}</button>`).join('')}</nav>` : ''}
-    ${sheetHtml()}${modalHtml()}
+    ${sheetHtml()}${interpShowHtml()}${modalHtml()}
   </div></div>`;
 }
 /* 제품 셸: 폰 프레임·상태바 없이 뷰포트 전체를 쓴다. 내비는 CSS 가 탭바 → 레일 → 사이드로 바꾼다(docs/RESPONSIVE_STRATEGY.md §3). */
 function pframe(inner, o = {}) {
-  const tabs = [['u-home', '홈', I.home], ['u-sched', '일정표', I.cal], ['u-study', '학습', I.cards], ['u-coll', '문장 모음', I.book]];
+  const tabs = navTabs();   // 여행 중에는 '학습' 자리에 '통역'
   const tabActive = o.tab || S.screen;
   const nav = o.tabbar ? `<nav class="pnav" aria-label="주 메뉴">${tabs.map(([id, l, ic]) => `<button class="${tabActive === id ? 'on' : ''}" data-act="tab" data-id="${id}" ${tabActive === id ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></button>`).join('')}</nav>` : '';
   return `<div class="pframe ${o.tabbar ? 'has-nav' : ''}">${nav}<div class="pmain"><div class="pcol ${o.wide ? 'wide' : ''}">
     ${o.appbar || ''}
     <div class="app">${inner}</div>
     ${o.bottom ? `<div class="bottombar">${o.bottom}</div>` : ''}
-  </div></div>${sheetHtml()}${modalHtml()}</div>`;
+  </div></div>${sheetHtml()}${interpShowHtml()}${modalHtml()}</div>`;
 }
 const appbar = (title, o = {}) => `<div class="appbar">${o.back ? `<button class="back" data-act="tab" data-id="${o.back}">${I.back}</button>` : ''}<h2>${title}</h2>${o.step ? `<span class="step">${o.step}</span>` : ''}</div>`;
 const notice = (html, kind = '') => `<div class="notice ${kind}">${kind === 'warn' || kind === 'bad' ? I.alert : I.info}<div>${html}</div></div>`;
@@ -1391,6 +1459,7 @@ function userScreen() {
     case 'u-sched': return scrSched();
     case 'u-study': return scrStudy();
     case 'u-coll': return scrColl();
+    case 'u-interp': return scrInterp();
     case 'u-edit': return scrEdit();
     case 'u-end': return frame(`<div class="app-pad">${endBody()}</div>`, { tabbar: true, tab: 'u-home' });
   }
@@ -2159,7 +2228,7 @@ function endDrill() { if (S.drill) { S.card = S.drill.savedCard; S.drill = null;
 function go(id) {
   skipStateWrite = false;
   cancelSpeak(); S.card.back = null; if (id !== 'u-study') endDrill();
-  S.screen = id; S.modal = null; S.sheet = false; pushScreen(id); render();
+  S.screen = id; S.modal = null; S.sheet = false; if (S.interp) S.interp.show = null; pushScreen(id); render();
 }
 
 /* ================= 화면 히스토리 (안드로이드 하단 뒤로가기) =================
@@ -2201,7 +2270,8 @@ function onPop(state) {
   // 열려 있는 것부터 닫는다. 사용자가 '취소'를 기대하는 순서다.
   if (S.modal) { navQuiet = true; try { closeModal(); } finally { navQuiet = false; } return; }   // 창의 onCancel 이동이 기록을 더 쌓지 않게
   if (S.screen === 'u-auth' && S.authMode) { S.authMode = null; render(); return; }   // 이메일 폼 → 두 갈래 고르기
-  if (S.sheet) { closeSheet(); return; }                             // 회화 연습 시트
+  if (S.sheet) { closeSheet(); return; }
+  if (S.interp && S.interp.show) { S.interp.show = null; render(); return; }   // 통역: 크게 보여주기                             // 회화 연습 시트
   if (sideOpen()) { closeSide(); return; }
   const target = (state && typeof state.screen === 'string') ? state.screen : null;
   if (!target || target === S.screen) return;         // 같은 화면이면 히스토리만 되감는다
@@ -2223,7 +2293,8 @@ function navFromMenu(id) {
   if (id === 'u-edit') { ensure('plan'); openTripEdit(); return; }   // 여행 설정 수정: 현재 여행 입력을 초안으로 채운다
   if (id === 'u-input' || id === 'u-gen') did = ensure('user');
   if (id === 'u-report') did = ensure('report');
-  if (['u-route', 'u-home', 'u-sched', 'u-study', 'u-coll', 'u-end'].includes(id)) did = ensure('plan');
+  if (['u-route', 'u-home', 'u-sched', 'u-study', 'u-coll', 'u-end', 'u-interp'].includes(id)) did = ensure('plan');
+  if (id === 'u-interp' && phase() !== 'trip') { S.today = S.trip.tripStart; toast(`데모: 오늘을 여행 첫날(${Dt.md(S.today)})로 바꿨어요.`); }
   if (id === 'u-end' && phase() !== 'ended') { S.today = Dt.add(S.trip.tripEnd, 1); toast(`오늘을 여행 종료 다음 날(${Dt.md(S.today)})로 바꿨어요.`); }
   else if (did) toast('이 화면에 필요한 데이터를 자동으로 준비했어요.');
   if (id === 'u-study') { S.studyDate = null; endDrill(); }
@@ -3224,6 +3295,11 @@ const ACT = {
   'card-next': () => { cancelSpeak(); S.sheet = false; const r = pickRow(); S.card.i = Math.min(r.ids.length - 1, S.card.i + 1); render(); },
   'speak-card': el => { const r = pickRow(); speak(S.smap[r.ids[S.card.i]].en, el, readTarget(el)); },
   speak: el => speak(S.smap[el.dataset.id].en, el, readTarget(el)),
+  'interp-sit': el => { S.interp.sit = el.dataset.v; S.interp.q = ''; render(); },
+  'interp-say': el => { const x = S.smap[el.dataset.id]; if (x) speak(x.en, el, readTarget(el)); },
+  'interp-show': el => { S.interp.show = el.dataset.id; pushOverlay('interp-show'); render(); },
+  'interp-close': () => { S.interp.show = null; render(); },
+  'interp-say-reply': el => { const x = S.smap[S.interp.show]; const r = x && x.talk && x.talk.replies[+el.dataset.i]; if (r) speak(r.en, el, readTarget(el)); },
   'sheet-open': () => { S.sheet = true; pushOverlay('sheet'); render(); },
   'sheet-close': () => closeSheet(),
   'talk-start': () => startTalk(),
@@ -3303,6 +3379,11 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('input', e => {
   const el = e.target;
+  if (el.dataset.interp === 'q') {
+    S.interp.q = el.value;
+    const box = $('[data-live=interp-list]'); if (box) box.innerHTML = interpItems();
+    document.querySelectorAll('.interp-chips .chip').forEach(c => c.classList.toggle('on', !el.value.trim() && c.dataset.v === S.interp.sit));
+  }
   if (el.dataset.bind) {
     const k = el.dataset.bind.split('.');
     if (k[0] === 'city') S.draft.cities[+k[1]][k[2]] = el.value; else S.draft[k[0]] = el.value;
