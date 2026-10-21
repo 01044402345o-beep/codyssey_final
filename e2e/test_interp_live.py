@@ -91,12 +91,15 @@ with sync_playwright() as p:
     page.locator('[data-act="live-terms"]').click(); page.wait_for_timeout(300)
     terms = page.locator(".modal").inner_text()
     check("면책 전문에 책임·응급·민감정보·국외 이전", all(k in terms for k in ["책임", "응급", "민감정보", "국외"]), terms[:80])
+    check("면책 v2: 참여한 대화에서만·고의·중대한 과실 예외·업체 이름", all(k in terms for k in ["내가 참여한 대화", "중대한 과실", "Soniox"]) and "v2" in terms, terms[-60:])
     page.locator('[data-act="modal-ok"]').click(); page.wait_for_timeout(200)
 
     # 상대에게 크게 보여주기
     page.locator('[data-act="live-start"]').click(); page.wait_for_timeout(2500)
     page.locator('[data-act="live-partner"]').click(); page.wait_for_timeout(300)
     check("상대 보기: 화면 가득 큰 글씨", page.locator(".partner-view .partner-big").count() == 1)
+    check("상대 보기에 상대 언어로 'AI 번역' 표시(인공지능 기본법 제31조)", "AI translation" in page.locator(".partner-view .partner-ai").inner_text()
+          and "AI translation" in page.locator(".conv-partner .conv-ai").inner_text())
     page.locator('[data-act="live-partner-close"]').click(); page.wait_for_timeout(200)
     check("상대 보기 닫기", page.locator(".partner-view").count() == 0)
     page.locator('[data-act="live-stop"]').click(); page.wait_for_timeout(300)
