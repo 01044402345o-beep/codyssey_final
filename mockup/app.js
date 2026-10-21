@@ -1382,7 +1382,8 @@ function interpItems() {
 const INTERP_CONSENT_KEY = 'cd_interp_consent';
 const INTERP_PROVIDER_KEY = 'cd_interp_provider';
 const INTERP_DISCLAIMER_VERSION = 3;   // v3(10/21): 운영에서 Azure·Gemini 를 켬 — 받는 곳에 네 회사를 모두 적음(기존 동의자 다시 동의). v2: 법률 검토 반영      // docs/legal/interp-disclaimer.md 와 함께 올린다
-const INTERP_NOTICE = 'AI 통역이라 틀릴 수 있어요. \n여권·카드번호 같은 민감한 정보는 말하지 마세요.';
+const INTERP_NOTICE = `ai 통역이라 틀릴 수 있어요. 
+여권·카드번호 같은 민감한 정보는 말하지 마세요.`;
 const INTERP_TERMS = [
   ['성격', '여행 중 의사소통을 돕는 참고 도구예요. 공증·법정·의료 통역을 대신하지 않고, 통역 결과에는 법적 효력이 없어요.'],
   ['정확성', '음성 인식·기계 번역 과정에서 오역·누락이 생길 수 있어요. 숫자·금액·날짜·약 이름은 상대에게 화면으로 확인받으세요.'],
@@ -1456,7 +1457,7 @@ function askInterpConsent(after) {
      <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요. 제공자의 처리·보관은 그 회사 약관을 따라요.<br>
      <b>국외 이전</b> · 음성이 미국 등(위 업체)으로, 통역하는 동안 실시간 암호화 전송돼요. 업체의 보관·학습 이용 여부는 그 회사 정책과 요금제를 따라요.<br>
      <b>대화 상대</b> · 내가 참여한 대화에서만 쓰고, 상대에게 AI 통역을 쓴다고 알려 주세요.<br>
-     <b>주의</b> · 통역은 AI 가 만든 결과라 틀릴 수 있어요. 여권번호·카드번호 같은 민감한 정보는 말하지 마세요.<br><br>
+     <b>주의</b> · 통역은 AI 가 만든 결과라 틀릴 수 있어요.<br><br> 여권번호·카드번호 같은 민감한 정보는 말하지 마세요.<br><br>
      동의하지 않아도 통역 화면의 문장 보기·들려주기는 그대로 쓸 수 있어요.<br><br>
      <b>${esc(INTERP_NOTICE)}</b>`,
     '동의하고 시작', () => {
