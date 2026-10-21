@@ -84,6 +84,11 @@ with sync_playwright() as p:
     ctx, page, errors, sockets = open_interp(b)
     c = chips(page)
     check("기기 안에서 되면 '이 기기(브라우저)'가 맨 앞이고 기본 선택", bool(c) and c[0] == ["이 기기(브라우저)", True], str(c))
+    sty = page.evaluate("""[...document.querySelectorAll('.live-engines .chip')].map(c => { const s = getComputedStyle(c);
+      return [c.classList.contains('on'), s.backgroundColor, parseFloat(s.borderTopWidth), parseFloat(s.borderTopLeftRadius)]; })""")
+    on = [x for x in sty if x[0]]; off = [x for x in sty if not x[0]]
+    check("엔진 단추가 칩 모양(테두리·둥근 모서리)이고 고른 엔진은 배경이 다르다", len(on) == 1 and off and all(x[2] >= 1 and x[3] >= 12 for x in sty)
+          and all(o[1] != on[0][1] for o in off), str(sty))
     start(page)
     for _ in range(20):
         page.wait_for_timeout(200)

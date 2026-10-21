@@ -1483,6 +1483,9 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
 
 /* ---- 대화 통역: 상대 중심 ---- */
 .live-engines { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+/* 엔진 단추: .chips 안이 아니라서 칩 모양이 안 붙던 것(글자만 보였다) — 칩과 같은 모양, 고른 엔진은 채움 */
+.live-engines button { flex: none; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); font-size: 0.78125rem; }
+.live-engines button.on { background: var(--fill-strong); color: var(--on-fill); border-color: var(--text); }
 .live-notice { margin: 8px 0 0; font-size: 0.75rem; color: var(--text-soft); line-height: 1.5; white-space: pre-line; }
 .linkish { padding: 0; border: 0; background: none; color: var(--accent-text); font: inherit; font-weight: 700; text-decoration: underline; min-height: 44px; }
 .conv { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
