@@ -137,7 +137,9 @@ with sync_playwright() as p:
     page.locator('[data-act="nav"][data-id="u-login"]').click(); page.wait_for_timeout(500)
     login_txt = page.locator(".screen").first.inner_text()
     check("로그인 고지 'AI 생성' 표시 안내", "'AI 생성' 표시" in login_txt)
-    check("로그인 고지 문장 생성 시 Gemini 전송", "Google Gemini API로 전송" in login_txt)
+    # 고지는 받는 곳과 보내는 것을 함께 적어야 한다(사용자 이름을 보내는 것처럼 읽히지 않게 — 실제로 보내는 건 도시·장소명과 복습 상황 이름)
+    check("로그인 고지: 문장 생성 시 Google Gemini 로 보내는 것(도시·장소명·복습 상황 이름)", "Google Gemini API" in login_txt and "전송" in login_txt
+          and "도시·장소명" in login_txt and "복습 상황 이름" in login_txt)
     check("로그인 화면에 필수 동의 체크박스 없음", page.locator('.screen input[type="checkbox"]').count() == 0)
     check("로그인 버튼 활성 (동의 없이 이용 가능)", page.locator('[data-act="login"], [data-act="after-login"]').first.is_enabled())
     page.locator('[data-act="nav"][data-id="u-coll"]').click(); page.wait_for_timeout(800)
