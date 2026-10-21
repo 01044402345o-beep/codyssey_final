@@ -396,6 +396,8 @@ git push origin main
 
 로그인 계정 기록은 Firestore `(default)` 의 `users/{uid}` 하나다. 규칙은 `firestore.rules`, 대상은 `firebase.json`(`(default)` 만) 이다.
 
+**10/22 통역 기록(`ilog` 필드):** 규칙에 선택 필드 `ilog` 를 더하고 문서 크기 상한을 200000 으로 올렸다. **규칙을 먼저 배포**한다(옛 서버는 `ilog` 를 쓰지 않아 안전). 규칙 없이 새 서버만 올라가면 '통역 기록 계정 저장'이 `503 store_unavailable` 로 실패하고(화면은 '계정에 저장하지 못했어요'), 진도 저장은 그대로 된다.
+
 ```bash
 firebase deploy --only firestore:rules     # 프로젝트: .firebaserc 의 com-example-myapplicatio-3bb36
 ```

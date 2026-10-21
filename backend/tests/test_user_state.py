@@ -311,6 +311,7 @@ class T(unittest.TestCase):
         self.assertIsNotNone(found, "firestore.rules 에서 hasOnly 목록을 찾지 못했습니다")
         allowed = [k.strip().strip("'\"") for k in found.group(1).split(",") if k.strip()]
         doc = user_state.encode_document(user_state.parse_state({**BODY, "trip": TRIP}))
+        doc["fields"]["ilog"] = {"stringValue": "{}"}   # 통역 기록은 따로 쓰는 필드다(write_ilog)
         self.assertEqual(set(doc["fields"]), set(allowed), "쓰는 필드와 보안 규칙 허용 목록이 다릅니다")
         # 규칙은 각 필드가 문자열(JSON)이기를 요구한다 — 인코딩도 그렇게 해야 한다.
         for name in allowed:

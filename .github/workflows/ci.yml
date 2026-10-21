@@ -120,6 +120,8 @@ jobs:
           python ../e2e/test_interp_browser.py http://localhost:8768   # 통역 브라우저 엔진(기기 안 인식·번역): 기본 선택·서버로 안 보냄·차례 바꾸기·실패 시 서버 엔진·모바일/클라우드 인식이면 숨김
           python ../e2e/test_interp_responsive.py http://localhost:8768   # 통역 전체화면 반응형: 버튼 동그라미·번역문 겹침 회귀, 좁은 폰·가로·데스크톱 배치
           python ../e2e/test_desktop_visible.py http://localhost:8768   # 큰 화면에서 앱이 보이는지: 화면을 덮는 불투명 고정 요소 없음(10/22 데스크톱 빈 화면 회귀)
+          python ../e2e/test_calendar_past.py http://localhost:8768   # 일정표 달력·오른쪽 위 '이전 여행'(탭은 4개 유지)
+          python ../e2e/test_interp_log.py http://localhost:8768   # 문장 모음 '통역 기록' 탭 + 동의한 계정만 서버 저장·다른 기기에서 꺼내 보기·저장 끄기(DELETE)
       - uses: actions/upload-artifact@v4
         if: always()
         with:
