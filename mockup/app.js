@@ -3025,7 +3025,7 @@ function privacyCard() {
       · 여행 설정(나라·도시·날짜): ${accountUid() ? '이 계정에 저장돼요' : '이 브라우저에만 저장돼요'}<br>
       · 실시간 통역 동의: <b>${ic ? `동의함 (${Dt.full(new Date(ic.at).toISOString().slice(0, 10))})` : '동의하지 않음'}</b> — 통역하는 동안 음성이 통역 업체(Soniox·Microsoft Azure·OpenAI·Google Gemini 중 지금 쓰는 곳, 미국 등)로 전송되고, 이 서비스는 저장하지 않아요</p>
     ${c.voice || n || ic ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
-      ${c.voice ? '<button class="btn soft" style="flex:1" data-act="consent-withdraw">동의 철회</button>' : ''}
+      ${c.voice ? '<button class="btn soft" style="flex:1" data-act="consent-withdraw">전사 동의 철회</button>' : ''}
       ${n ? '<button class="btn soft" style="flex:1" data-act="weak-delete">복습 목록 삭제</button>' : ''}
       ${ic ? '<button class="btn soft" style="flex:1" data-act="interp-consent-withdraw">통역 동의 철회</button>' : ''}</div>` : ''}
   </div>`;
