@@ -571,6 +571,8 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   background: var(--inv-bg);
 }
 .hero::after { content: ''; position: absolute; right: -50px; bottom: -70px; width: 200px; height: 200px; border-radius: 50%; border: 2px dashed var(--inv-a14); }
+/* hero 는 버튼이라 안에 div 를 둘 수 없다(HTML: 버튼은 phrasing content 만) — span 을 블록으로 그린다 */
+.hero .route, .hero .big, .hero .dates { display: block; }
 .hero .route { font-size: 0.8125rem; color: var(--inv-text-2); }
 .hero .big { font-family: var(--display); font-size: 2.875rem; font-weight: 600; letter-spacing: -0.04em; line-height: 1; margin: 10px 0 4px; }
 .hero .big small { font-size: 1.125rem; font-family: var(--font); font-weight: 600; letter-spacing: -0.02em; margin-left: 4px; color: var(--inv-text-1); }
@@ -1009,6 +1011,18 @@ html[data-mode=demo] .side .note-card { box-shadow: none; }
   .pnav button.on { background: var(--surface-2); }
 }
 
+/* 통역(여행 중): 문장 찾기 · 크게 보여주기 */
+.interp-chips { margin: 10px 0 6px; }
+.interp-item { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px; margin-top: 10px; }
+.interp-meta { font-size: 0.75rem; color: var(--text-3); }
+.interp-ko { margin: 4px 0 2px; color: var(--text-soft); font-size: 0.875rem; }
+.interp-en { font-size: 1.125rem; font-weight: 700; line-height: 1.4; }
+.interp-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.interp-show { position: fixed; inset: 0; z-index: 280; background: var(--bg); overflow-y: auto; display: flex; justify-content: center; padding: max(24px, env(safe-area-inset-top, 0px)) var(--gutter, 16px) calc(24px + env(safe-area-inset-bottom, 0px)); }
+.interp-show-card { width: min(100%, 640px); }
+.interp-show-en { font-size: clamp(2rem, 9vw, 3.25rem); font-weight: 800; line-height: 1.2; letter-spacing: -0.01em; margin-top: 8vh; }
+.interp-show-ko { margin: 14px 0 20px; font-size: 1.125rem; color: var(--text-soft); }
+.interp-show h4 { margin: 26px 0 6px; font-size: 0.875rem; color: var(--text-soft); }
 /* 학습 화면 '회화 연습' 시트(목업 #97): 아래에서 올라온다. 완료 안내는 제목 아래로 옮겼다. */
 .study-status { margin: 10px 0 12px; display: flex; flex-direction: column; gap: 4px; }
 .study-status .btn { height: 44px; font-size: 0.8125rem; }
