@@ -1608,3 +1608,66 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .il-divider span { width: 64px; height: 0; border-top: 1px solid var(--border-strong); background: none; border-radius: 0; }
 .il-divider svg { display: none; }
 .conv-hist-label { border-left: 0; padding-left: 0; font-size: 0.6875rem; font-weight: 700; color: var(--text-3); }
+
+/* ==== 통역 화면 반응형 보정 (10/21) =========================================
+   깨진 원인 두 가지:
+   ① .il-act 안의 스피커 SVG 에 크기 규칙이 없어 기본 크기(300×150)로 부풀었다 →
+      버튼이 74×72 로 커지고 border-radius:999px 과 만나 '동그라미'가 되며 글자가 밖으로 나갔다.
+   ② 상대 칸이 높이 고정(grid 1fr)인데 번역문이 그보다 길면 가운데 정렬이라 위아래로 넘쳐
+      'AI 번역' 표시와 겹쳤다.
+   그래서 ①은 아이콘·버튼 높이를 고정하고, ②는 칸을 grid 3단으로 나눠 번역문만 스크롤시키고
+   JS(liveFit)가 글자를 줄인다. 폭·높이에 따라 배치가 바뀐다. */
+.il-act { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 44px; min-height: 44px;
+  padding: 0 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+  font: inherit; font-size: 0.8125rem; font-weight: 700; white-space: nowrap; }
+.il-act svg { flex: none; width: 18px; height: 18px; }
+.il-act .il-act-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.il-acts { min-width: 0; }
+/* 바닥: 기본은 '조작 줄 → 마이크 → 고지' 3단. 낮은 화면에서는 한 줄로 접는다(아래 미디어쿼리). */
+.il-dock { grid-template-areas: "acts" "mic" "notice"; align-content: center; row-gap: 8px; }
+.il-acts { grid-area: acts; }
+.il-mic { grid-area: mic; justify-self: center; }
+.il-notice { grid-area: notice; }
+.il-mic { width: 68px; height: 68px; }
+.il-mic svg { width: 28px; height: 28px; }
+/* 상대 칸: 제목(고정) · 번역문(늘어남/스크롤) · AI 표시(고정) — 겹침이 구조적으로 불가능하게 */
+.conv-partner { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 2px; overflow: hidden; }
+.conv-big { min-height: 0; margin: 0; display: flex; align-items: center; overflow-y: auto; overscroll-behavior: contain;
+  word-break: keep-all; overflow-wrap: anywhere; }
+.conv-big.fitted { align-items: flex-start; }
+.il-card-mode .conv-big { display: block; }
+.il-split .conv-partner { grid-template-rows: minmax(0, 1fr) auto; }
+.il-split .il-side-far .conv-who, .il-split .il-side-far .conv-tap { display: none; }  /* 상대에게는 번역문과 AI 표시만 */
+.il-split .il-side { padding: 8px 12px; }
+.il-side-near .conv-me { align-self: stretch; }
+.partner-big { max-height: 68vh; overflow-y: auto; word-break: keep-all; overflow-wrap: anywhere; }
+/* 가로가 넓으면(태블릿·데스크톱) 앱 컬럼 폭에 맞춰 가운데로 모은다 — 1920 화면에서 닫기 버튼이 구석에 있지 않게 */
+@media (min-width: 900px) {
+  .il-slot { background: var(--bg-canvas); }
+  .interp-live { left: 50%; right: auto; width: min(820px, 100%); transform: translateX(-50%);
+    border-inline: 1px solid var(--border); }
+  .il-sheet-wrap { align-items: center; }
+  .il-sheet { border-radius: 20px; margin: auto; }
+}
+/* 낮은 화면(가로 폰·작은 폰): 마이크와 조작을 한 줄에 두고 라벨은 아이콘으로 바꾼다 */
+@media (max-height: 620px), (orientation: landscape) and (max-height: 560px) {
+  .il-dock { grid-template-areas: "mic acts" "notice notice"; grid-template-columns: auto minmax(0, 1fr); justify-items: start;
+    column-gap: 12px; row-gap: 6px; padding-top: 6px; }
+  .il-mic { width: 52px; height: 52px; justify-self: start; }
+  .il-mic svg { width: 24px; height: 24px; }
+  .il-acts { justify-content: flex-end; width: 100%; }
+  .il-act { width: 44px; padding: 0; }
+  .il-act .il-act-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .il-act svg { width: 20px; height: 20px; }
+  .il-notice { justify-self: center; }
+  .il-head { padding-top: 6px; padding-bottom: 6px; }
+  .il-icon { width: 40px; height: 40px; }
+}
+@media (max-width: 340px) {   /* 아주 좁은 폰: 조작 줄도 아이콘만 */
+  .il-act { width: 44px; padding: 0; }
+  .il-act .il-act-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+/* 마주 보기는 탁자 건너편에서 읽는다 — 카드보다 크게 시작하고, 길면 liveFit 이 줄인다 */
+.il-split .conv-big { font-size: clamp(1.75rem, 8.6vw, 2.625rem); }
+@media (orientation: landscape) and (min-width: 700px) { .il-split .conv-big { font-size: clamp(1.75rem, 6.2vh + .6rem, 3rem); } }
+.conv-big { font-size: clamp(1.375rem, 5.4vw, 2rem); }
