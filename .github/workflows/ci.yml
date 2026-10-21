@@ -112,6 +112,7 @@ jobs:
           python ../e2e/test_alt_expressions.py http://localhost:8768   # 다른 표현: 시트의 같은 뜻 다른 표현·듣기
           python ../e2e/test_streak.py http://localhost:8768   # 연속 학습·오늘의 목표(카드 10장)
           python ../e2e/test_talk_mode.py http://localhost:8768   # 대화하기(스크립트 회화 1a): 상대가 먼저·힌트·Sorry?·대화 중 점수 없음
+          python ../e2e/test_interpret.py http://localhost:8768   # 여행 중 통역 탭: 크게 보여주기·들려주기·예상 답변·찾기(AI 호출 없음)
       - uses: actions/upload-artifact@v4
         if: always()
         with:
