@@ -1567,21 +1567,28 @@ async function browserEngineOk() {
   return ok;
 }
 async function startBrowserLive() {
-  const SR = SR_CTOR();
+  const SR = SR_CTOR(), tok = LIVE.bgen = (LIVE.bgen || 0) + 1;
+  const tr = {};
+  const gone = () => tok !== LIVE.bgen || !LIVE.on;   // 준비하는 사이 끝냈거나 다시 시작했다
+  const drop = () => { Object.values(tr).forEach(t => { try { t.destroy && t.destroy(); } catch (e) { /* 없음 */ } }); };
   const langs = [liveLoc(LIVE.src), liveLoc(LIVE.dst)];
   const st = await SR.available({ langs, processLocally: true });
+  if (gone()) return;
   if (st === 'unavailable') throw new Error('sr-unavailable');
   if (st !== 'available') {   // 언어 팩을 이 기기에 받는다(한 번)
     LIVE.note = '이 기기에 음성 인식 언어 팩을 받는 중…'; updateLiveUi();
     if (!await SR.install({ langs, processLocally: true })) throw new Error('sr-install');
+    if (gone()) return;
   }
-  LIVE.tr = {};
-  for (const [a, b] of [[LIVE.src, LIVE.dst], [LIVE.dst, LIVE.src]]) {
-    LIVE.tr[a + b] = await Translator.create({ sourceLanguage: a, targetLanguage: b, monitor(m) {
-      m.addEventListener('downloadprogress', e => { LIVE.note = `번역 모델 받는 중 ${Math.round((e.loaded || 0) * 100)}%`; updateLiveUi(); });
-    } });
-  }
-  if (!LIVE.on) return;
+  try {
+    for (const [a, b] of [[LIVE.src, LIVE.dst], [LIVE.dst, LIVE.src]]) {
+      tr[a + b] = await Translator.create({ sourceLanguage: a, targetLanguage: b, monitor(m) {
+        m.addEventListener('downloadprogress', e => { if (!gone()) { LIVE.note = `번역 모델 받는 중 ${Math.round((e.loaded || 0) * 100)}%`; updateLiveUi(); } });
+      } });
+      if (gone()) { drop(); return; }
+    }
+  } catch (e) { drop(); throw e; }
+  LIVE.tr = tr;
   LIVE.provider = 'browser'; LIVE.status = 'live'; LIVE.note = ''; LIVE.speaker = 'me';
   browserListen();
   updateLiveUi();
@@ -1615,6 +1622,7 @@ function browserListen() {
   r.start();
 }
 function browserStop() {
+  LIVE.gen++; LIVE.bgen = (LIVE.bgen || 0) + 1;   // 기다리던 번역·준비 결과가 끝난 화면을 덮지 않게
   try { if (LIVE.rec) { LIVE.rec.onend = null; LIVE.rec.onresult = null; LIVE.rec.abort(); } } catch (e) { /* 이미 끝남 */ }
   LIVE.rec = null;
   try { Object.values(LIVE.tr || {}).forEach(t => t.destroy && t.destroy()); } catch (e) { /* 없음 */ }
@@ -1631,8 +1639,10 @@ async function startLive(opt) {
   if (LIVE.on) return;
   if (!interpConsent()) { askInterpConsent(() => startLive(opt)); return; }
   if (!(opt && opt.keep)) { LIVE.exclude = []; LIVE.fallback = false; }   // 사용자가 새로 시작하면 실패 기록을 지운다
-  await loadLiveProviders();
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { LIVE.note = '이 브라우저에서는 마이크를 쓸 수 없어요.'; updateLiveUi(); return; }
+  LIVE.on = true; LIVE.status = 'connecting';   // 첫 await 전에 — 시작을 두 번 눌러도 한 번만 돈다
+  await loadLiveProviders();
+  if (!LIVE.on) return;   // 목록을 받는 사이 끝내기
   LIVE.on = true; LIVE.status = 'connecting'; if (!(opt && opt.keep)) LIVE.note = '';   // 자동 전환 때는 '왜 바뀌었는지' 안내를 남긴다
   LIVE.test = false; LIVE.provider = '';
   LIVE.src = LIVE.src || 'ko'; LIVE.dst = LIVE.dst || 'en';   // 내 말=한국어, 상대=영어(여행지 기본)
