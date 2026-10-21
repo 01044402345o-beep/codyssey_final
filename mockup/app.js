@@ -1536,7 +1536,7 @@ function interpLiveHtml() {
     <div class="live-head"><b>대화 통역</b>${l.test ? '<span class="live-badge test">시험 모드</span>' : ''}</div>
     <p class="small">마이크를 켜고 말하면 상대 언어로 바꿔 <b>크게 보여 주고</b> 들려줄 수 있어요. 두 사람이 번갈아 말해도 됩니다.</p>
     <div class="il-pick-wrap"><span class="il-pick-label">화면 방식</span>${interpUiChipsHtml(l.ui || interpUi())}</div>
-    ${picker}
+    <div class="il-pick-wrap"><span class="il-pick-label">현재 이용 가능한 외부 서비스</span>${picker}</div>
     <button class="btn accent block" data-act="live-start">통역 시작</button>
     <p class="live-notice">${esc(INTERP_NOTICE)}
       <button class="linkish" data-act="live-terms"><strong>약관 전문 보기</strong></button>
