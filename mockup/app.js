@@ -1415,7 +1415,7 @@ async function loadLiveProviders() {
   if (await browserEngineOk()) LIVE.providers = [BROWSER_ENGINE, ...LIVE.providers];
   if (S.screen === 'u-interp') updateLiveUi();
 }
-function liveTermsHtml() {   // 전문 보기(모달) — 동의 창과 같은 내용을 다시 볼 수 있게
+function liveTermsHtml() {   // 약관 전문 보기(모달) — 동의 창과 같은 내용을 다시 볼 수 있게
   return INTERP_TERMS.map(([k, v]) => `<p style="margin:0 0 8px"><b>${esc(k)}</b> · ${esc(v)}</p>`).join('')
     + `<p class="small" style="margin:8px 0 0">v${INTERP_DISCLAIMER_VERSION} · 2026-10-21 시행. 문구가 바뀌면 다시 동의를 받아요.</p>`;
 }
@@ -1450,7 +1450,7 @@ function interpLiveHtml() {
       <p class="small">마이크를 켜고 말하면 상대 언어로 바꿔 <b>크게 보여 주고</b> 들려줄 수 있어요. 두 사람이 번갈아 말해도 됩니다.</p>
       ${picker}
       <button class="btn accent block" data-act="live-start">통역 시작</button>
-      <p class="live-notice">${esc(INTERP_NOTICE)} <button class="linkish" data-act="live-terms">전문 보기</button></p>
+      <p class="live-notice">${esc(INTERP_NOTICE)} <button class="linkish" data-act="live-terms">약관 전문 보기</button></p>
       ${l.note ? `<p class="live-note">${esc(l.note)}</p>` : ''}
       ${l.fallback ? '<button class="btn soft block" data-act="live-fallback">검수 문장으로 통역하기</button>' : ''}
       ${l.providers && !engines.length ? `<p class="live-note">지금은 쓸 수 있는 통역 엔진이 없어요(서버 키 미설정).</p>` : ''}</div>`;
