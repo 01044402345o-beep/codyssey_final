@@ -46,7 +46,9 @@
 | OpenAI, L.L.C. (미국) | 말하기 녹음 음성 | 1차 전사 예비(Groq 실패 시) | 위와 같음 | **[확인 필요]** API 데이터 정책(기본 학습 미사용, 남용 감시 보관) |
 | AssemblyAI, Inc. (미국) | 말하기 녹음 음성 | 교차검증 전사 | 위와 같음 | **[확인 필요]** |
 | Soniox, Inc. (미국) | **실시간 통역 음성**(통역을 켠 동안 계속, 한 번 최대 3분) | 받아쓰기와 한국어↔영어 번역(기본 통역 제공자) | 우리 서버를 거쳐 WebSocket(TLS). 로그인 토큰 확인 뒤에만, 계정·IP 마다 10분에 6번까지 | **[확인 필요]** Soniox 데이터 보관·학습 사용 정책 |
-| OpenAI, L.L.C. (미국) | 실시간 통역 음성 | 운영자가 통역 제공자로 OpenAI 를 고른 경우에만(`INTERP_PROVIDER=openai`) — 번역 자막·번역 음성 | 위와 같음 | **[확인 필요]** API 데이터 정책 |
+| OpenAI, L.L.C. (미국) | 실시간 통역 음성 | 운영자가 켜고(`INTERP_PROVIDERS` 기본값에 포함) 키를 넣은 경우, 사용자가 통역 엔진으로 고르면 — 번역 자막·번역 음성 | 위와 같음 | **[확인 필요]** API 데이터 정책 |
+
+> 통역 엔진은 코드상 Google Gemini Live·DeepL Voice·Microsoft Azure Speech 도 지원하지만 **기본으로 꺼져 있다**(`INTERP_PROVIDERS` 기본 `soniox,openai`). 키가 있어도 켜지지 않는다 — 특히 Gemini 는 문장 생성 키를 같이 쓰므로 저절로 켜지면 음성이 Google 로 간다. 켜려면 **먼저 이 표에 그 회사·국가·보관 정책 행을 추가**하고 동의 문구 버전을 올린다.
 | Google LLC — Places API (미국) | 도시 이름·장소 종류(개인정보 아님) | 장소 찾기 | HTTPS | — |
 | Kakao Corp. — 로컬 검색 (대한민국) | 도시·장소 검색어(개인정보 아님) | 장소 찾기 | HTTPS | — |
 | OpenStreetMap Overpass (독일 등) | 지역 검색어(개인정보 아님) | 장소 찾기 | HTTPS | — |
