@@ -119,6 +119,7 @@ jobs:
           python ../e2e/test_interp_live.py http://localhost:8768   # 실시간 통역: 동의 → 마이크 → 서버 WebSocket → 자막 → 종료 시 마이크 해제(시험 모드)
           python ../e2e/test_interp_browser.py http://localhost:8768   # 통역 브라우저 엔진(기기 안 인식·번역): 기본 선택·서버로 안 보냄·차례 바꾸기·실패 시 서버 엔진·모바일/클라우드 인식이면 숨김
           python ../e2e/test_interp_responsive.py http://localhost:8768   # 통역 전체화면 반응형: 버튼 동그라미·번역문 겹침 회귀, 좁은 폰·가로·데스크톱 배치
+          python ../e2e/test_desktop_visible.py http://localhost:8768   # 큰 화면에서 앱이 보이는지: 화면을 덮는 불투명 고정 요소 없음(10/22 데스크톱 빈 화면 회귀)
       - uses: actions/upload-artifact@v4
         if: always()
         with:

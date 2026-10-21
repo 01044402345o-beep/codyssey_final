@@ -1646,7 +1646,8 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .partner-big { max-height: 68vh; overflow-y: auto; word-break: keep-all; overflow-wrap: anywhere; }
 /* 가로가 넓으면(태블릿·데스크톱) 앱 컬럼 폭에 맞춰 가운데로 모은다 — 1920 화면에서 닫기 버튼이 구석에 있지 않게 */
 @media (min-width: 900px) {
-  .il-slot { background: var(--bg-canvas); }
+  /* 캔버스 배경은 전체화면이 열려 있을 때만 — 빈 슬롯(통역 안 함)에도 칠하면 화면 전체를 덮어 앱이 안 보인다(10/22 데스크톱 빈 화면) */
+  .il-slot:not(:empty) { background: var(--bg-canvas); }
   .interp-live { left: 50%; right: auto; width: min(820px, 100%); transform: translateX(-50%);
     border-inline: 1px solid var(--border); }
   .il-sheet-wrap { align-items: center; }
