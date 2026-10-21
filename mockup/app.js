@@ -500,6 +500,8 @@ async function adoptAccount(account, opts) {
   SESS_READY = false;
   if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; }
   S.user = account || null;
+  S.ilog = null; ilogPulledFor = ''; ILOG_UI.err = '';   // 통역 기록도 계정 칸에서 다시 읽는다
+  if (ilogTimer) { clearTimeout(ilogTimer); ilogTimer = null; }
   S.trip = null; resetDerived();          // 계정을 갈아 끼우면 이전 계정의 여행·계획을 들고 가지 않는다
   PROG.done = {}; PROG.pre = {}; PROG.act = {};
   RESTORE.screen = null;
@@ -1645,7 +1647,7 @@ function liveCommit() {
   if (last && last.dst === c.target && last.src === c.source) return;   // 같은 줄을 두 번 쌓지 않는다
   LIVE.hist.push({ target: c.target });
   LIVE.log.push({ src: c.source, dst: c.target });
-  ilogPush(c.source, c.target);   // 문장 모음 '통역 기록' 탭에 남긴다(이 브라우저에만)
+  ilogPush(c.source, c.target);   // 문장 모음 '통역 기록' 탭에 남긴다(동의했으면 계정에도)
   if (LIVE.log.length > 60) LIVE.log.shift();   // 오래 두면 메모리만 먹는다
   if (LIVE.hist.length > 20) LIVE.hist.shift();
   updateLiveUi();
@@ -2846,26 +2848,46 @@ function scrColl() {
 }
 
 /* ================= 통역 기록 (문장 모음 안의 탭) =================
-   통역 화면에서 확정된 문장만 남긴다. 음성은 저장하지 않고(통역 화면과 같은 원칙), 서버로 보내지 않는다.
-   계정 동기화 대상도 아니다 — 이 브라우저에만 남고, 사용자가 화면에서 지울 수 있다. */
+   통역 화면에서 확정된 문장만 남긴다. 음성은 저장하지 않는다(통역 화면과 같은 원칙).
+   기본은 이 기기(계정 칸)에만 둔다. 로그인한 사용자가 '사용자의 통역 기록을 서버에 저장'에 동의하면
+   계정 문서(users/{uid}.ilog)에도 올려, 다른 기기에서 꺼내 볼 수 있다. 저장을 끄면 서버 사본을 지운다. */
 const ILOG_KEY = 'cd_ilog';
-const ILOG_LINES = 300;   // 줄 수 상한 — 넘으면 오래된 세션부터 버린다
+const ILOG_SYNC_KEY = 'cd_ilog_sync';          // 계정 저장 동의 {v, at, syncedAt, gone:[지운 대화 id]}
+const ILOG_CONSENT_VERSION = '2026-10-22';     // 문구가 바뀌면 올린다 — 옛 동의로는 올리지 않는다
+const ILOG_LINES = 300;   // 줄 수 상한 — 넘으면 오래된 세션부터 버린다(서버 상한과 같다)
 const ILOG_SESS = 30;
-const hangul = t => /[\uac00-\ud7a3]/.test(t || '');
+const ILOG_TEXT = 500;    // 한 줄 글자 상한(서버와 같다)
+const ILOG_BYTES = 58000; // 서버 상한(60KB)보다 조금 작게 — 넘으면 오래된 대화부터 버린다
+const ILOG_ID = /^s[a-z0-9]{1,20}$/;
+const hangul = t => /[가-힣]/.test(t || '');
+const ILOG_UI = { busy: false, err: '' };
+let ilogTimer = null, ilogInflight = null, ilogPulledFor = '';
+function ilogBox() { return personalStore() || null; }
 function ilogLoad() {
   if (S.ilog) return S.ilog;
-  try { const j = JSON.parse(localStorage.getItem(ILOG_KEY) || 'null'); S.ilog = j && Array.isArray(j.list) ? j.list : []; } catch (e) { S.ilog = []; }
+  const box = ilogBox();
+  try {
+    const j = JSON.parse((box && box.getItem(ILOG_KEY)) || 'null');
+    S.ilog = j && Array.isArray(j.list) ? j.list.filter(x => x && typeof x.id === 'string' && Array.isArray(x.lines)) : [];
+  } catch (e) { S.ilog = []; }
   return S.ilog;
 }
-function ilogSave() {
+function ilogBytes(list) {
+  const t = JSON.stringify({ v: 1, consent: { version: ILOG_CONSENT_VERSION, at: Date.now() }, list: ilogWire(list) });
+  try { return new TextEncoder().encode(t).length; } catch (e) { return t.length * 3; }
+}
+function ilogSave(noSync) {
   const all = (S.ilog || []).filter(x => x.lines && x.lines.length);
   const keep = []; let n = 0;   // 최근 것부터 세어 상한 안의 세션만 남긴다
   for (let i = all.length - 1; i >= 0 && keep.length < ILOG_SESS; i--) {
     if (n + all[i].lines.length > ILOG_LINES && keep.length) break;
     n += all[i].lines.length; keep.unshift(all[i]);
   }
+  while (keep.length > 1 && ilogBytes(keep) > ILOG_BYTES) keep.shift();
   S.ilog = keep;
-  try { localStorage.setItem(ILOG_KEY, JSON.stringify({ v: 1, list: keep })); } catch (e) { /* 저장소 막힘: 이번 접속에서만 */ }
+  const box = ilogBox();
+  try { if (box) box.setItem(ILOG_KEY, JSON.stringify({ v: 1, list: keep })); } catch (e) { /* 저장소 막힘: 이번 접속에서만 */ }
+  if (!noSync) ilogSyncSoon();
 }
 function ilogStart() {
   LIVE.sess = { id: 's' + Date.now().toString(36), at: Date.now(), a: LIVE.src || 'ko', b: LIVE.dst || 'en',
@@ -2875,11 +2897,162 @@ function ilogStart() {
 /* 방향은 글자로 판단한다(한글 → 한국어, 그 밖 → 영어). 앱이 다루는 쌍이 ko↔en 뿐이라 이걸로 충분하다. */
 function ilogPush(src, dst) {
   const ses = LIVE.sess; if (!ses || (!src && !dst)) return;
-  ses.lines.push({ src: src || '', dst: dst || '', s: hangul(src) ? 'ko' : 'en', t: hangul(dst) ? 'ko' : 'en', at: Date.now() });
-  if (!(S.ilog || []).some(x => x.id === ses.id)) S.ilog = ilogLoad().concat([ses]);
+  src = String(src || '').slice(0, ILOG_TEXT); dst = String(dst || '').slice(0, ILOG_TEXT);
+  ses.lines.push({ src, dst, s: hangul(src) ? 'ko' : 'en', t: hangul(dst) ? 'ko' : 'en', at: Date.now() });
+  S.ilog = ilogLoad();
+  const i = S.ilog.findIndex(x => x.id === ses.id);   // 동기화로 같은 대화가 새 객체가 됐어도 지금 대화를 이어 쓴다
+  if (i < 0) S.ilog = S.ilog.concat([ses]); else S.ilog[i] = ses;
   ilogSave();
 }
+
+/* ---- 계정 저장(동의한 로그인 사용자만) ---- */
+function ilogSync() {
+  const box = ilogBox(); if (!accountUid() || !box) return null;
+  try {
+    const j = JSON.parse(box.getItem(ILOG_SYNC_KEY) || 'null');
+    return j && j.v === ILOG_CONSENT_VERSION && typeof j.at === 'number' ? j : null;
+  } catch (e) { return null; }
+}
+function ilogSyncWrite(j) {
+  const box = ilogBox(); if (!box || !accountUid()) return;
+  try { if (j) box.setItem(ILOG_SYNC_KEY, JSON.stringify(j)); else box.removeItem(ILOG_SYNC_KEY); } catch (e) { /* 저장소 막힘 */ }
+}
+/* 서버로 보내는 모양 — 서버 parse_ilog 와 같다. 여행 id 는 보내지 않는다. */
+function ilogWire(list) {
+  const lang = v => (v === 'en' ? 'en' : 'ko');
+  return list.filter(x => x.lines && x.lines.length && ILOG_ID.test(x.id)).map(x => ({
+    id: x.id, at: Math.round(x.at), a: lang(x.a), b: x.b === 'ko' ? 'ko' : 'en',
+    trip: x.trip && x.trip.route ? { route: String(x.trip.route).slice(0, 120) } : null,
+    lines: x.lines.map(l => ({ src: String(l.src || '').slice(0, ILOG_TEXT), dst: String(l.dst || '').slice(0, ILOG_TEXT),
+      s: lang(l.s), t: lang(l.t), at: Math.round(l.at) })),
+  }));
+}
+async function ilogApi(method, body) {
+  const uid = accountUid();
+  if (!uid || API.base === null || !window.FirebaseAuth || !FirebaseAuth.idToken) return { ok: false, status: 0 };
+  let token = '';
+  try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
+  if (!token || accountUid() !== uid) return { ok: false, status: 0 };
+  try {
+    const headers = { Authorization: 'Bearer ' + token, Accept: 'application/json' };
+    if (body) headers['Content-Type'] = 'application/json';
+    const res = await fetch((API.base || '') + '/user/interp-log', { method, headers, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
+    let data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (accountUid() !== uid) return { ok: false, status: 0 };   // 그사이 계정이 바뀌었다
+    if (res.status === 403 && data && data.detail === 'account_deleted') handleAccountDeleted(uid, accountEpoch).catch(() => {});
+    return { ok: res.ok, status: res.status, data };
+  } catch (e) { return { ok: false, status: 0 }; }
+}
+/* 합치기: 서버 목록을 기준으로, 이 기기에서 마지막 동기화 뒤에 생긴 대화를 더한다.
+   같은 대화는 줄이 많은 쪽(진행 중인 쪽)을 쓴다. 이 기기에서 지운 대화(gone)는 되살리지 않고,
+   마지막 동기화 전부터 있었는데 서버에 없는 대화는 다른 기기에서 지운 것으로 본다. */
+function ilogMerge(local, remote, sync) {
+  const gone = new Set(sync.gone || []), since = sync.syncedAt || 0, by = new Map();
+  remote.forEach(x => { if (!gone.has(x.id)) by.set(x.id, x); });
+  local.forEach(x => {
+    const r = by.get(x.id), last = x.lines.length ? x.lines[x.lines.length - 1].at : x.at;
+    if (r) { if (x.lines.length >= r.lines.length) by.set(x.id, x); }
+    else if (!gone.has(x.id) && last >= since) by.set(x.id, x);
+  });
+  return [...by.values()].sort((a, b) => a.at - b.at);
+}
+const ilogSig = list => JSON.stringify(list.map(x => [x.id, x.lines.length]).sort());
+async function ilogPull() {
+  const uid = accountUid(); if (!uid) return false;
+  const r = await ilogApi('GET');
+  if (!r.ok || accountUid() !== uid) return false;
+  ilogPulledFor = uid;
+  const remote = r.data && r.data.ilog;
+  let sync = ilogSync();
+  if (!remote) {
+    if (sync && sync.syncedAt) {   // 올린 적이 있는데 서버에 없다 = 다른 기기에서 저장을 껐다 → 이 기기도 끈다(다시 올리지 않는다)
+      ilogSyncWrite(null); render();
+      toast('다른 기기에서 통역 기록 계정 저장을 꺼서 이 기기도 껐어요. 이 기기의 기록은 남아 있어요.');
+    } else if (sync) ilogSyncSoon(0);
+    return true;
+  }
+  if (!sync) {   // 같은 계정이 다른 기기에서 동의했다 — 계정 단위 동의라 이 기기에서도 그대로 쓴다
+    const c = remote.consent || {};
+    if (c.version !== ILOG_CONSENT_VERSION) return true;   // 문구가 바뀐 옛 동의 — 다시 물을 때까지 합치지 않는다
+    sync = { v: c.version, at: c.at, syncedAt: 0, gone: [] };
+    ilogSyncWrite(sync);
+  }
+  const before = ilogSig(ilogLoad());
+  const list = Array.isArray(remote.list) ? remote.list : [];
+  S.ilog = ilogMerge(ilogLoad(), list, sync);
+  ilogSave(true);
+  if (ilogSig(list) !== ilogSig(S.ilog)) ilogSyncSoon(0);   // 이 기기에만 있는 것을 올린다
+  else ilogSyncWrite({ ...sync, syncedAt: Date.now() });
+  if (before !== ilogSig(S.ilog) && S.screen === 'u-coll') render();
+  return true;
+}
+function ilogSyncSoon(ms) {
+  if (!ilogSync()) return;
+  if (ilogTimer) clearTimeout(ilogTimer);
+  ilogTimer = setTimeout(() => { ilogTimer = null; ilogPushNow(); }, ms === undefined ? 1500 : ms);
+}
+async function ilogPushNow() {
+  if (ilogInflight) await ilogInflight.catch(() => {});
+  const uid = accountUid();
+  if (!ilogSync()) return false;
+  if (ilogPulledFor !== uid) {   // 이 접속에서 처음 올리기 전에 서버를 먼저 본다(다른 기기에서 끈 저장을 되살리지 않게)
+    await ilogPull();
+    if (!ilogSync() || accountUid() !== uid) return false;
+  }
+  const sync = ilogSync();
+  ilogInflight = ilogApi('PUT', { v: 1, consent: { version: sync.v, at: sync.at }, list: ilogWire(ilogLoad()) });
+  const r = await ilogInflight; ilogInflight = null;
+  const now = ilogSync();
+  if (r.ok && now && accountUid() === uid) { ilogSyncWrite({ ...now, syncedAt: Date.now() }); ILOG_UI.err = ''; }
+  else if (!r.ok) ILOG_UI.err = r.status === 413 ? '기록이 너무 커서 계정에 올리지 못했어요.' : '계정에 저장하지 못했어요. 인터넷이 연결되면 다시 시도해요.';
+  return r.ok;
+}
+function askIlogConsent() {
+  if (!accountUid()) { toast('로그인하면 통역 기록을 계정에 저장할 수 있어요.'); return; }
+  confirmBox('통역 기록을 계정에 저장할까요?',
+    `<b>사용자의 통역 기록을 서버에 저장</b>하는 데 동의를 받아요. 동의하면 다른 기기에서 로그인해도 기록을 꺼내 볼 수 있어요.<br><br>
+    <b>저장하는 것</b> · 통역 화면에서 확정된 문장(말한 원문과 번역), 시각, 여행 경로, 언어. <b>상대방이 한 말도 글자로 함께 저장돼요.</b> 음성은 저장하지 않아요.<br>
+    <b>저장하는 곳</b> · 마디 서버를 거쳐 Google Cloud Firestore(서울 리전)의 내 계정 문서<br>
+    <b>보관 기간</b> · 내가 지우거나, 계정 저장을 끄거나, 탈퇴할 때까지(최근 30개 대화·300문장까지만)<br>
+    <b>철회</b> · 문장 모음 › 통역 기록의 '계정 저장 끄기'를 누르면 서버의 기록이 바로 지워져요.<br><br>
+    동의하지 않아도 통역과 이 기기 안의 기록은 그대로 쓸 수 있어요. 비밀번호·카드 번호 같은 민감한 정보가 기록에 남지 않게 주의해 주세요.`,
+    '동의하고 저장', async () => {
+      S.modal = null;
+      ilogSyncWrite({ v: ILOG_CONSENT_VERSION, at: Date.now(), syncedAt: 0, gone: [] });
+      ILOG_UI.busy = true; render();
+      await ilogPull();
+      if (ilogTimer) { clearTimeout(ilogTimer); ilogTimer = null; }   // 합친 결과는 바로 아래에서 한 번만 올린다
+      const ok = await ilogPushNow();
+      ILOG_UI.busy = false; render();
+      toast(ok ? '통역 기록을 계정에 저장했어요. 다른 기기에서도 볼 수 있어요.' : '동의는 저장했어요. 인터넷이 연결되면 계정에 올려요.');
+    });
+}
+async function ilogRevoke() {
+  if (ilogTimer) { clearTimeout(ilogTimer); ilogTimer = null; }
+  if (ilogInflight) await ilogInflight.catch(() => {});   // 올리는 중인 요청이 삭제 뒤에 도착해 되살리지 않게
+  ILOG_UI.busy = true; render();
+  const r = await ilogApi('DELETE');
+  ILOG_UI.busy = false;
+  if (r.ok) { ilogSyncWrite(null); ILOG_UI.err = ''; toast('계정에 저장된 통역 기록을 지우고 저장을 껐어요. 이 기기의 기록은 남아 있어요.'); }
+  else toast('지금은 끌 수 없어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+  render();
+}
+/* 지운 대화를 서버에도 반영한다(동의한 경우). 다른 기기와 합칠 때 되살아나지 않게 id 를 기억한다. */
+function ilogForget(ids) {
+  const sync = ilogSync(); if (!sync) return;
+  ilogSyncWrite({ ...sync, gone: [...new Set([...(sync.gone || []), ...ids])].slice(-100) });
+}
+function ilogSyncCard() {
+  if (!accountUid()) return `<div class="ilog-sync"><p class="small">로그인하면 통역 기록을 계정에 저장해 다른 기기에서도 꺼내 볼 수 있어요.</p></div>`;
+  const sync = ilogSync();
+  if (!sync) return `<div class="ilog-sync"><p class="small"><b>이 기기에만 저장돼요.</b> 계정에 저장하면 다른 기기에서도 꺼내 볼 수 있어요(동의 필요).</p>
+    <button class="btn soft" data-act="ilog-consent" ${ILOG_UI.busy ? 'disabled' : ''}>계정에 저장하기</button></div>`;
+  return `<div class="ilog-sync on"><p class="small"><b>계정에 저장 중</b> · ${Dt.full(ilogDay(sync.at))} 동의${ILOG_UI.busy ? ' · 저장하는 중…' : ''}${ILOG_UI.err ? `<br>${esc(ILOG_UI.err)}` : ''}</p>
+    <button class="btn soft" data-act="ilog-revoke" ${ILOG_UI.busy ? 'disabled' : ''}>계정 저장 끄기</button></div>`;
+}
 const ilogSessions = () => ilogLoad().filter(x => x.lines && x.lines.length).slice().sort((a, b) => b.at - a.at);
+const ilogDay = ms => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };   // 기기 시간대의 날짜(UTC 날짜와 시각이 어긋나지 않게)
 const ilogTime = ms => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const LANG_NAME = { ko: '한국어', en: '영어' };
 function ilogCard(x, open) {
@@ -2892,7 +3065,7 @@ function ilogCard(x, open) {
     </div>`).join('');
   return `<article class="ilog-card" data-live="ilog-${esc(x.id)}">
     <button class="ilog-head" data-act="ilog-open" data-id="${esc(x.id)}" aria-expanded="${open ? 'true' : 'false'}">
-      <span class="t"><b>${Dt.full(new Date(x.at).toISOString().slice(0, 10))} · ${ilogTime(x.at)}</b>
+      <span class="t"><b>${Dt.full(ilogDay(x.at))} · ${ilogTime(x.at)}</b>
         <span class="small">${esc(route)} · ${LANG_NAME[x.a] || x.a} ↔ ${LANG_NAME[x.b] || x.b}</span></span>
       <span class="ilog-count">${n}문장</span></button>
     ${open ? `<div class="ilog-body">${lines}
@@ -2908,14 +3081,15 @@ function scrCollLog() {
       <div class="empty" style="padding:40px 0"><div class="ico">${I.past}</div>
         <b style="color:var(--text);font-size:1.0625rem">아직 통역 기록이 없어요</b>
         <p>통역 화면에서 마이크를 켜고 이야기하면<br>주고받은 문장이 여기에 차례로 쌓여요.</p></div>
-      <p class="small">기록은 이 브라우저에만 남아요. 음성은 저장하지 않고 확정된 글자만 남기며, 계정 동기화 대상이 아니에요.</p></div>`,
+      ${ilogSyncCard()}
+      <p class="small">음성은 저장하지 않고 확정된 글자만 남겨요.</p></div>`,
       { appbar: appbar('문장 모음'), tabbar: true, tab: 'u-coll' });
   }
   const total = list.reduce((a, x) => a + x.lines.length, 0);
-  const foot = `<p class="small">이 브라우저에만 남아요 · 음성은 저장하지 않고 확정된 글자만 남겨요 · ${total}문장</p>`;
+  const foot = `${ilogSyncCard()}<p class="small">음성은 저장하지 않고 확정된 글자만 남겨요 · ${total}문장</p>`;
   if (isWide()) {
     const btns = list.map(x => `<button class="ilog-pick ${open === x.id ? 'on' : ''}" data-act="ilog-open" data-id="${esc(x.id)}">
-        <b>${Dt.full(new Date(x.at).toISOString().slice(0, 10))} ${ilogTime(x.at)}</b>
+        <b>${Dt.full(ilogDay(x.at))} ${ilogTime(x.at)}</b>
         <span class="small">${esc(x.trip && x.trip.route ? x.trip.route : '여행 없이')} · ${x.lines.length}문장</span></button>`).join('');
     return frame(`<div class="split coll"><div class="split-list">${seg}<div class="ilog-picks">${btns}</div>
         <button class="ilog-clear" data-act="ilog-clear">기록 모두 지우기</button></div>
@@ -3263,7 +3437,7 @@ function askVoiceConsent(after) {
     }, { cancel: '동의하지 않기' });
 }
 function privacyCard() {
-  const c = voiceConsent(), n = weakList().length, ic = interpConsent();
+  const c = voiceConsent(), n = weakList().length, ic = interpConsent(), ls = ilogSync();
   const when = c.at ? Dt.full(c.at.slice(0, 10)) : '이번 접속';
   return `<div class="sec-title"><h4>AI · 개인정보</h4></div><div class="card">
     <p class="small" style="line-height:1.7">· 'AI 생성' 표시가 붙은 문장과 말하기 채점은 AI가 만든 결과예요. 틀릴 수 있어요.<br>
@@ -3271,11 +3445,13 @@ function privacyCard() {
       · 말하기 연습 동의: <b>${c.voice ? `동의함 (${when})` : '동의하지 않음'}</b>${c.voice ? '' : ' — 처음 녹음할 때 물어봐요'}<br>
       · 복습 목록: <b>${n}개</b> · ${accountUid() ? '이 계정에 저장돼요' : '이 브라우저에만 저장돼요'}<br>
       · 여행 설정(나라·도시·날짜): ${accountUid() ? '이 계정에 저장돼요' : '이 브라우저에만 저장돼요'}<br>
-      · 실시간 통역 동의: <b>${ic ? `동의함 (${Dt.full(new Date(ic.at).toISOString().slice(0, 10))})` : '동의하지 않음'}</b> — 통역하는 동안 음성이 통역 업체(Soniox·Microsoft Azure·OpenAI·Google Gemini 중 지금 쓰는 곳, 미국 등)로 전송되고, 이 서비스는 저장하지 않아요</p>
-    ${c.voice || n || ic ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+      · 실시간 통역 동의: <b>${ic ? `동의함 (${Dt.full(new Date(ic.at).toISOString().slice(0, 10))})` : '동의하지 않음'}</b> — 통역하는 동안 음성이 통역 업체(Soniox·Microsoft Azure·OpenAI·Google Gemini 중 지금 쓰는 곳, 미국 등)로 전송되고, 이 서비스는 음성을 저장하지 않아요<br>
+      · 통역 기록 계정 저장: <b>${ls ? `동의함 (${Dt.full(ilogDay(ls.at))})` : '동의하지 않음'}</b> — ${ls ? '확정된 문장(상대방 말 포함)이 계정에 저장돼요' : '기록은 이 기기에만 남아요'}</p>
+    ${c.voice || n || ic || ls ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
       ${c.voice ? '<button class="btn soft" style="flex:1" data-act="consent-withdraw">전사 동의 철회</button>' : ''}
       ${n ? '<button class="btn soft" style="flex:1" data-act="weak-delete">복습 목록 삭제</button>' : ''}
-      ${ic ? '<button class="btn soft" style="flex:1" data-act="interp-consent-withdraw">통역 동의 철회</button>' : ''}</div>` : ''}
+      ${ic ? '<button class="btn soft" style="flex:1" data-act="interp-consent-withdraw">통역 동의 철회</button>' : ''}
+      ${ls ? '<button class="btn soft" style="flex:1" data-act="ilog-revoke">통역 기록 저장 끄기</button>' : ''}</div>` : ''}
   </div>`;
 }
 /* 홈 맨 아래 계정 블록. 로그아웃 버튼과 안내를 하나의 카드(.card = 패딩 한 곳)에 담는다.
@@ -3584,7 +3760,7 @@ function updateTalkUi() {
 /* 이 계정의 브라우저 기록을 모두 지운다. 계정 칸(:uid)과, 로그인 전에 이 브라우저에 남은
    같은 이름의 공용 칸(uid 없음)을 함께 지운다 — 안내 문구("이 브라우저에 저장된 같은 기록")와 맞춘다. */
 function clearAccountStorage() {
-  const keys = [SESSION_KEY, AI.WEAK_KEY, AI.CONSENT_KEY, AI.TRIP_KEY];
+  const keys = [SESSION_KEY, AI.WEAK_KEY, AI.CONSENT_KEY, AI.TRIP_KEY, ILOG_KEY, ILOG_SYNC_KEY];
   const box = personalStore();
   if (box) keys.forEach(k => { try { box.removeItem(k); } catch (e) { /* 저장소 막힘 */ } });
   if (STORE && box !== STORE) keys.forEach(k => { try { STORE.removeItem(k); } catch (e) { /* 저장소 막힘 */ } });
@@ -4189,14 +4365,16 @@ const ACT = {
   },
   'ilog-del': el => { const id = el.dataset.id;
     confirmBox('이 대화 기록을 지울까요?', '이 대화에서 주고받은 문장이 모두 지워져요. 되돌릴 수 없어요.', '지우기', () => {
-      S.ilog = ilogLoad().filter(v => v.id !== id); ilogSave();
+      ilogForget([id]); S.ilog = ilogLoad().filter(v => v.id !== id); ilogSave();
       if (S.coll.logOpen === id) S.coll.logOpen = null;
       S.modal = null; render(); toast('통역 기록을 지웠어요.');
     }, { danger: true }); },
-  'ilog-clear': () => { confirmBox('통역 기록을 모두 지울까요?', '이 브라우저에 남은 통역 기록이 모두 지워져요. 되돌릴 수 없어요.', '모두 지우기', () => {
-      S.ilog = []; try { localStorage.removeItem(ILOG_KEY); } catch (e) { /* 저장소 막힘 */ }
+  'ilog-clear': () => { confirmBox('통역 기록을 모두 지울까요?', ilogSync() ? '이 기기와 계정에 저장된 통역 기록이 모두 지워져요. 되돌릴 수 없어요.' : '이 기기에 남은 통역 기록이 모두 지워져요. 되돌릴 수 없어요.', '모두 지우기', () => {
+      ilogForget(ilogLoad().map(v => v.id)); S.ilog = []; ilogSave();
       S.coll.logOpen = null; S.modal = null; render(); toast('통역 기록을 모두 지웠어요.');
     }, { danger: true }); },
+  'ilog-consent': () => askIlogConsent(),
+  'ilog-revoke': () => confirmBox('통역 기록 계정 저장을 끌까요?', '서버(계정)에 저장된 통역 기록을 바로 지워요. 이 기기의 기록은 남고, 언제든 다시 켤 수 있어요.', '끄고 지우기', () => { S.modal = null; ilogRevoke(); }, { danger: true }),
   'past-go': () => { S.past.open = null; go('u-past'); },
   'past-open': el => { S.past.open = S.past.open === el.dataset.id ? null : el.dataset.id; render(); },
   'live-turn': () => { LIVE.speaker = LIVE.speaker === 'me' ? 'partner' : 'me'; LIVE.cap = { ...LIVE.cap, sp: '' }; browserListen(); updateLiveUi(); },
@@ -4243,7 +4421,7 @@ const ACT = {
     S.sched.forEach((r, i) => { if (r.date < S.today && r.kind !== 'free' && !r.completed && i % 3 !== 2) { r.completed = true; r.completedAt = Date.now(); PROG.done[r.date] = r.completedAt; n++; } });
     render(); toast(n ? `지난 날 ${n}일을 완료로 채웠어요. 나머지는 미완료로 남아요.` : '채울 지난 날이 없어요. 사이드바에서 오늘 날짜를 뒤로 옮겨 보세요.');
   },
-  'coll-tab': el => { S.coll = { tab: el.dataset.v, filter: 'all' }; render(); },
+  'coll-tab': el => { S.coll = { tab: el.dataset.v, filter: 'all' }; render(); if (el.dataset.v === 'log' && accountUid()) ilogPull(); },
   'coll-filter': el => { S.coll.filter = el.dataset.v; render(); },
   drill: el => {
     const by = el.dataset.by, v = el.dataset.v;

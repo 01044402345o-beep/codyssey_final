@@ -1773,6 +1773,10 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .ilog-del, .ilog-clear { display: block; width: 100%; margin-top: 10px; min-height: 40px; padding: 8px; border-radius: 12px;
   border: 1px solid var(--border); background: transparent; color: var(--bad-text); font-size: var(--fs-caption); font-weight: 600; }
 .ilog-clear { color: var(--text-3); }
+.ilog-sync { margin-top: 14px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); }
+.ilog-sync.on { border-color: var(--accent-text); }
+.ilog-sync p { margin: 0 0 8px; line-height: 1.6; }
+.ilog-sync .btn { width: 100%; min-height: 40px; }
 .ilog-picks { display: grid; gap: 6px; }
 .ilog-pick { display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); }
 .ilog-pick.on { border-color: var(--accent-text); background: var(--surface-2); }

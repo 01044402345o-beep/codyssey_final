@@ -996,6 +996,47 @@ async def user_state_put(request: Request) -> dict[str, Any]:
     return state
 
 
+@app.get("/user/interp-log")
+async def user_interp_log_get(request: Request) -> dict[str, Any]:
+    """이 계정에 저장된 통역 기록(사용자가 '계정에 저장'에 동의했을 때만 있다). 없으면 null."""
+    account, token = await _account_token(request)
+    await _reject_if_erased(account["uid"])
+    try:
+        found = await run_in_threadpool(user_state.read_ilog_for, account["uid"], token)
+    except user_state.StoreError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+    return {"ilog": found}
+
+
+@app.put("/user/interp-log")
+async def user_interp_log_put(request: Request) -> dict[str, Any]:
+    """통역 기록을 이 계정에 저장한다. 본문에 동의(consent: 버전·시각)가 없으면 거부한다. 음성은 받지 않는다."""
+    account, token = await _account_token(request)
+    await _reject_if_erased(account["uid"])
+    raw = await request.body()
+    if len(raw) > user_state.ILOG_MAX_BYTES + 10_000:
+        raise HTTPException(status_code=413, detail="ilog_too_large")
+    try:
+        ilog = user_state.parse_ilog(json.loads(raw))
+        await run_in_threadpool(user_state.write_ilog_for, account["uid"], token, ilog)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="invalid_ilog") from exc
+    except user_state.StoreError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+    return {"saved": True, "sessions": len(ilog["list"]), "lines": sum(len(x["lines"]) for x in ilog["list"])}
+
+
+@app.delete("/user/interp-log")
+async def user_interp_log_delete(request: Request) -> dict[str, Any]:
+    """동의 철회·기록 지우기: 이 계정의 통역 기록 필드만 지운다(진도는 그대로). 탈퇴하면 문서째 지워진다."""
+    account, token = await _account_token(request)
+    try:
+        await run_in_threadpool(user_state.delete_ilog_for, account["uid"], token)
+    except user_state.StoreError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+    return {"deleted": True}
+
+
 @app.delete("/user/state")
 async def user_state_delete(request: Request) -> dict[str, Any]:
     """탈퇴: 이 계정의 기록 문서를 지운다. uid 는 토큰에서 나온다. 없는 문서도 성공이다.

@@ -4,7 +4,8 @@ Render 디스크는 재시작되면 지워지므로 쓰지 않는다. 이 모듈
 (탈퇴 관리자 경로 `app/firebase_admin.py` 만 서비스 계정을 쓴다).
 확인된 Firebase ID 토큰을 Firestore 보안 규칙에 그대로 넘긴다.
 문서는 users/{uid} 하나다. 담는 것은 진도, 복습 목록, 말하기 동의, 그리고
-여행 입력(나라·도시별 체류 날짜·학습 시작일)뿐이다.
+여행 입력(나라·도시별 체류 날짜·학습 시작일), 그리고 사용자가 동의했을 때만 통역 기록(ilog)이다.
+통역 기록은 진도와 **따로** 읽고 쓴다(PUT /user/state 의 updateMask 에 ilog 가 없어 진도 저장이 기록을 지우지 않는다).
 장소·문장 본문은 담지 않는다. 화면이 그 입력으로 규칙을 다시 돌려 만든다.
 
 저장소는 테스트가 set_store 로 갈아 끼운다. 기본 구현은 Firestore REST 다.
@@ -28,6 +29,15 @@ _AT = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$")
 _UID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _MASK = ("updateMask.fieldPaths=session&updateMask.fieldPaths=weak"
          "&updateMask.fieldPaths=consent&updateMask.fieldPaths=trip")
+_ILOG_MASK = "updateMask.fieldPaths=ilog"   # 이 필드만 바꾸거나(값 있음) 지운다(값 없음)
+
+# 통역 기록(사용자 동의 시에만 서버 저장). 화면의 상한(30대화·300문장)과 같다. 음성은 담지 않는다.
+ILOG_MAX_BYTES = 60_000
+ILOG_SESSIONS = 30
+ILOG_LINES = 300
+ILOG_TEXT = 500
+_ILOG_ID = re.compile(r"^s[a-z0-9]{1,20}$")
+_LANGS = {"ko", "en"}
 
 Opener = Callable[..., Any]
 _store: Any = None
@@ -274,6 +284,70 @@ def parse_state(body: Any) -> dict[str, Any]:
     return state
 
 
+def _ms(value: Any) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not 1_600_000_000_000 <= value <= 4_100_000_000_000:
+        raise StoreError(400, "invalid_ilog")
+    return value
+
+
+def _text(value: Any) -> str:
+    if not isinstance(value, str) or len(value) > ILOG_TEXT:
+        raise StoreError(400, "invalid_ilog")
+    return value
+
+
+def _lang(value: Any) -> str:
+    if value not in _LANGS:
+        raise StoreError(400, "invalid_ilog")
+    return value
+
+
+def parse_ilog(body: Any) -> dict[str, Any]:
+    """통역 기록: {v:1, consent:{version, at}, list:[대화…]}. 동의(consent)가 없으면 받지 않는다.
+
+    대화 = {id, at, a, b, trip:{route}|null, lines:[{src, dst, s, t, at}]}. 모르는 키·긴 글·많은 줄은 거절한다.
+    """
+    if not isinstance(body, dict) or set(body) - {"v", "consent", "list"} or body.get("v") != 1:
+        raise StoreError(400, "invalid_ilog")
+    consent = body.get("consent")
+    if (not isinstance(consent, dict) or set(consent) - {"version", "at"}
+            or not isinstance(consent.get("version"), str) or not 1 <= len(consent["version"]) <= 40):
+        raise StoreError(400, "ilog_consent_required")
+    out_list: list[dict[str, Any]] = []
+    raw_list = body.get("list")
+    if not isinstance(raw_list, list) or len(raw_list) > ILOG_SESSIONS:
+        raise StoreError(400, "invalid_ilog")
+    lines_total = 0
+    for x in raw_list:
+        if not isinstance(x, dict) or set(x) - {"id", "at", "a", "b", "trip", "lines"}:
+            raise StoreError(400, "invalid_ilog")
+        if not isinstance(x.get("id"), str) or not _ILOG_ID.fullmatch(x["id"]):
+            raise StoreError(400, "invalid_ilog")
+        trip = x.get("trip")
+        if trip is not None:
+            if not isinstance(trip, dict) or set(trip) - {"id", "route"}:
+                raise StoreError(400, "invalid_ilog")
+            trip = {"route": _text(trip.get("route", ""))[:120]}
+        lines = x.get("lines")
+        if not isinstance(lines, list) or not lines:
+            raise StoreError(400, "invalid_ilog")
+        lines_total += len(lines)
+        if lines_total > ILOG_LINES:
+            raise StoreError(413, "ilog_too_large")
+        clean = []
+        for ln in lines:
+            if not isinstance(ln, dict) or set(ln) - {"src", "dst", "s", "t", "at"}:
+                raise StoreError(400, "invalid_ilog")
+            clean.append({"src": _text(ln.get("src", "")), "dst": _text(ln.get("dst", "")),
+                          "s": _lang(ln.get("s")), "t": _lang(ln.get("t")), "at": _ms(ln.get("at"))})
+        out_list.append({"id": x["id"], "at": _ms(x.get("at")), "a": _lang(x.get("a")), "b": _lang(x.get("b")),
+                         "trip": trip, "lines": clean})
+    ilog = {"v": 1, "consent": {"version": consent["version"], "at": _ms(consent.get("at"))}, "list": out_list}
+    if len(json.dumps(ilog, ensure_ascii=False, separators=(",", ":")).encode()) > ILOG_MAX_BYTES:
+        raise StoreError(413, "ilog_too_large")
+    return ilog
+
+
 def encode_document(state: dict[str, Any]) -> dict[str, Any]:
     def as_string(value: Any) -> dict[str, str]:
         return {"stringValue": json.dumps(value, ensure_ascii=False, separators=(",", ":"))}
@@ -332,6 +406,7 @@ class MemoryUserStore:
 
     def __init__(self) -> None:
         self.docs: dict[str, dict[str, Any]] = {}
+        self.ilogs: dict[str, Any] = {}   # 통역 기록: 같은 문서의 다른 필드라 진도 쓰기와 서로 덮지 않는다
 
     def read(self, uid: str, token: str) -> dict[str, Any] | None:
         doc = self.docs.get(uid)
@@ -342,6 +417,18 @@ class MemoryUserStore:
 
     def delete(self, uid: str, token: str) -> None:
         self.docs.pop(uid, None)
+        self.ilogs.pop(uid, None)
+
+    def read_ilog(self, uid: str, token: str) -> dict[str, Any] | None:
+        v = self.ilogs.get(uid)
+        return None if v is None else json.loads(json.dumps(v))
+
+    def write_ilog(self, uid: str, token: str, ilog: dict[str, Any]) -> None:
+        self.docs.setdefault(uid, json.loads(json.dumps(EMPTY_STATE)))
+        self.ilogs[uid] = json.loads(json.dumps(ilog))
+
+    def delete_ilog(self, uid: str, token: str) -> None:
+        self.ilogs.pop(uid, None)
 
 
 class FirestoreUserStore:
@@ -418,6 +505,36 @@ class FirestoreUserStore:
         self._check_uid(uid)
         self._call("DELETE", self._doc_url(uid), token)
 
+    def read_ilog(self, uid: str, token: str) -> dict[str, Any] | None:
+        self._check_uid(uid)
+        doc = self._call("GET", self._doc_url(uid) + "?mask.fieldPaths=ilog", token)
+        raw = ((doc or {}).get("fields") or {}).get("ilog")
+        if not isinstance(raw, dict) or not isinstance(raw.get("stringValue"), str):
+            return None
+        try:
+            return parse_ilog(json.loads(raw["stringValue"]))
+        except (json.JSONDecodeError, StoreError) as exc:
+            raise StoreError(503, "store_unavailable") from exc
+
+    def write_ilog(self, uid: str, token: str, ilog: dict[str, Any]) -> None:
+        self._check_uid(uid)
+        field = {"ilog": {"stringValue": json.dumps(ilog, ensure_ascii=False, separators=(",", ":"))}}
+        # Firestore PATCH 는 문서가 없으면 만든다(upsert). 그러면 ilog 하나뿐인 문서가 되어 보안 규칙(session·weak·consent 필수)에
+        # 막힌다. 그래서 먼저 문서가 있는지 보고, 없으면 빈 진도와 함께 만든다.
+        if self._call("GET", self._doc_url(uid) + "?mask.fieldPaths=consent", token) is None:
+            doc = encode_document(EMPTY_STATE)
+            doc["fields"].update(field)
+            self._call("POST", self._create_url(uid), token, doc)
+            return
+        self._call("PATCH", self._doc_url(uid) + "?" + _ILOG_MASK, token, {"fields": field})
+
+    def delete_ilog(self, uid: str, token: str) -> None:
+        """기록 필드만 지운다(진도는 그대로). 문서가 없으면 지울 것도 없다(빈 PATCH 가 빈 문서를 만들지 않게 먼저 확인)."""
+        self._check_uid(uid)
+        if self._call("GET", self._doc_url(uid) + "?mask.fieldPaths=consent", token) is None:
+            return
+        self._call("PATCH", self._doc_url(uid) + "?" + _ILOG_MASK, token, {"fields": {}})
+
 
 def read_for(uid: str, token: str) -> dict[str, Any] | None:
     return get_store().read(uid, token)
@@ -425,6 +542,18 @@ def read_for(uid: str, token: str) -> dict[str, Any] | None:
 
 def write_for(uid: str, token: str, state: dict[str, Any]) -> None:
     get_store().write(uid, token, state)
+
+
+def read_ilog_for(uid: str, token: str) -> dict[str, Any] | None:
+    return get_store().read_ilog(uid, token)
+
+
+def write_ilog_for(uid: str, token: str, ilog: dict[str, Any]) -> None:
+    get_store().write_ilog(uid, token, ilog)
+
+
+def delete_ilog_for(uid: str, token: str) -> None:
+    get_store().delete_ilog(uid, token)
 
 
 def delete_for(uid: str, token: str) -> None:
