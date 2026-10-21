@@ -69,6 +69,14 @@ with sync_playwright() as p:
     page.locator('[data-act="live-start"]').click(); page.wait_for_timeout(1200)
     page.evaluate("go('u-home')"); page.wait_for_timeout(400)
     check("화면을 옮기면 통역이 멈춘다", page.evaluate("!LIVE.on"))
+
+    # 처리방침: 홈 'AI · 개인정보' 카드에 통역 동의 상태·받는 곳, 따로 철회
+    card = page.locator(".card", has_text="실시간 통역 동의")
+    check("개인정보 카드에 통역 동의 상태와 받는 곳(Soniox)", card.count() == 1 and "동의함" in card.inner_text() and "Soniox" in card.inner_text())
+    card.locator('[data-act="interp-consent-withdraw"]').click(); page.wait_for_timeout(300)
+    check("통역 동의 철회 → 동의 기록이 지워진다", page.evaluate("interpConsent()") is None and "동의하지 않음" in page.locator(".card", has_text="실시간 통역 동의").inner_text())
+    page.evaluate("localStorage.setItem(INTERP_CONSENT_KEY, JSON.stringify({voice: true, at: Date.now()}))")
+    check("동의 문구 버전이 다르면(옛 동의) 다시 묻는다", page.evaluate("interpConsent()") is None)
     check("페이지 오류 없음", not errors, str(errors)[:200])
     b.close()
 
