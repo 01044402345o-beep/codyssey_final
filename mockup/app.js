@@ -1793,14 +1793,14 @@ function scrHome() {
   let hero;
   if (ph === 'trip') {
     const day = S.days.find(d => d.date === S.today);
-    hero = `<button type="button" class="hero trip" data-act="edit-trip" aria-label="여행 설정 수정"><div class="route">${esc(tripTitle(t))}</div><div class="big">${Dt.diff(S.today, t.tripStart) + 1}<small>일차</small></div>
-      <div class="dates">오늘 도시 · ${esc(day?.city || '')} ${day ? day.types.map(ty => DAYTYPE[ty].label).join('·') : ''}</div><span class="hero-edit">여행 설정 수정 ›</span></button>`;
+    hero = `<button type="button" class="hero trip" data-act="edit-trip" aria-label="여행 설정 수정"><span class="route">${esc(tripTitle(t))}</span><span class="big">${Dt.diff(S.today, t.tripStart) + 1}<small>일차</small></span>
+      <span class="dates">오늘 도시 · ${esc(day?.city || '')} ${day ? day.types.map(ty => DAYTYPE[ty].label).join('·') : ''}</span><span class="hero-edit">여행 설정 수정 ›</span></button>`;
   } else if (ph === 'before') {
-    hero = `<button type="button" class="hero" data-act="edit-trip" aria-label="여행 설정 수정"><div class="route">${esc(tripTitle(t))}</div><div class="big">D-${Dt.diff(t.studyStart, S.today)}<small>학습 시작까지</small></div>
-      <div class="dates">학습 ${Dt.md(t.studyStart)} → 여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)}</div><span class="hero-edit">여행 설정 수정 ›</span></button>`;
+    hero = `<button type="button" class="hero" data-act="edit-trip" aria-label="여행 설정 수정"><span class="route">${esc(tripTitle(t))}</span><span class="big">D-${Dt.diff(t.studyStart, S.today)}<small>학습 시작까지</small></span>
+      <span class="dates">학습 ${Dt.md(t.studyStart)} → 여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)}</span><span class="hero-edit">여행 설정 수정 ›</span></button>`;
   } else {
-    hero = `<button type="button" class="hero" data-act="edit-trip" aria-label="여행 설정 수정"><div class="route">${esc(tripTitle(t))}</div><div class="big">D-${Dt.diff(t.tripStart, S.today)}<small>여행까지</small></div>
-      <div class="dates">여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)} · 학습 종료 ${Dt.md(t.tripEnd)}</div><span class="hero-edit">여행 설정 수정 ›</span></button>`;
+    hero = `<button type="button" class="hero" data-act="edit-trip" aria-label="여행 설정 수정"><span class="route">${esc(tripTitle(t))}</span><span class="big">D-${Dt.diff(t.tripStart, S.today)}<small>여행까지</small></span>
+      <span class="dates">여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)} · 학습 종료 ${Dt.md(t.tripEnd)}</span><span class="hero-edit">여행 설정 수정 ›</span></button>`;
   }
   const r = S.sched.find(x => x.date === S.today);
   let today;
@@ -1860,7 +1860,7 @@ function streakCard() {
   const msg = n >= DAY_GOAL ? '오늘 목표 달성! 내일도 이어 가요.' : n ? `카드 ${DAY_GOAL - n}장만 더 뒤집으면 오늘 목표예요.` : s ? '오늘 카드를 뒤집으면 연속이 이어져요.' : `오늘 카드 ${DAY_GOAL}장을 뒤집어 보세요.`;
   return `<div class="sec-title"><h4>오늘의 목표</h4></div>
     <div class="card streak-card" data-live="streak"><div class="goal-ring${n >= DAY_GOAL ? ' done' : ''}" style="--p:${pct}" role="img" aria-label="오늘 카드 ${n}장 / 목표 ${DAY_GOAL}장"><b>${n}</b><span>/${DAY_GOAL}장</span></div>
-      <div class="streak"><b class="streak-n">🔥 연속 ${s}일</b><p class="small">${msg}</p><div class="week" aria-label="최근 7일">${week}</div></div></div>`;
+      <div class="streak"><b class="streak-n">🔥 연속 ${s}일</b><p class="small">${msg}</p><div class="week" role="group" aria-label="최근 7일">${week}</div></div></div>`;
 }
 function ring(rate) {
   const r = 40, c = 2 * Math.PI * r;
@@ -2690,7 +2690,7 @@ function talkProgHtml() {
   const mine = TALK.turns.map((x, k) => x.who === 'me' ? k : -1).filter(k => k >= 0);
   const cur = talkCur();
   const pos = cur ? mine.filter(k => k < TALK.i).length + 1 : mine.length;
-  return `<div class="talk-prog" aria-label="내 차례 ${pos} / ${mine.length}">${mine.map(k => `<i class="${k < TALK.i ? 'done' : k === TALK.i ? 'now' : ''}"></i>`).join('')}<span class="small">내 차례 ${pos} / ${mine.length}</span></div>`;
+  return `<div class="talk-prog">${mine.map(k => `<i class="${k < TALK.i ? 'done' : k === TALK.i ? 'now' : ''}"></i>`).join('')}<span class="small">내 차례 ${pos} / ${mine.length}</span></div>`;
 }
 function talkBodyHtml() {
   const t = talkCur(), shown = TALK.turns.slice(0, Math.min(TALK.i + 1, TALK.turns.length));
