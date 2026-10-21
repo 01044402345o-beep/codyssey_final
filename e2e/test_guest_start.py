@@ -47,7 +47,7 @@ with sync_playwright() as p:
           page.locator('[data-act="auth-open"]').count() == 1 and page.locator('[data-auth="email"]').count() == 0
           and ly < gy and gy + 44 < 844, f"google y={ly:.0f}, guest y={gy:.0f}")
     check("안내 문구: 로그인하지 않아도 쓸 수 있다", "로그인하지 않아도 쓸 수 있어요" in page.locator(".ticket").inner_text()
-          and "들어갈 수 없어요" not in page.locator(".ticket").inner_text())
+          and "다른 화면에 들어가기 어려워요" not in page.locator(".ticket").inner_text())
 
     g.click(); page.wait_for_timeout(400)
     st = page.evaluate("({ scr: S.screen, guest: !!(S.user && S.user.guest), uid: accountUid() })")
@@ -84,7 +84,7 @@ with sync_playwright() as p:
     page.goto(BASE + "/"); page.wait_for_timeout(900)
     check("Firebase 꺼짐: 손님 버튼 없음, 기존 문구·Google 버튼 그대로",
           page.locator('[data-act="guest"]').count() == 0 and page.locator('[data-act="login"]').count() == 1
-          and "들어갈 수 없어요" in page.locator(".ticket").inner_text())
+          and "다른 화면에 들어가기 어려워요" in page.locator(".ticket").inner_text())
     ctx.close()
 
     check("페이지 JS 오류 없음", not errors, "; ".join(errors[:3]))
