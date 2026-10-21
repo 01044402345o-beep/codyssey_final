@@ -114,6 +114,53 @@ class T(unittest.TestCase):
                 ws.send_json({"type": "start", "a": "ko", "b": "en"})
                 self.assertEqual(ws.receive_json()["code"], "login_required")
 
+    def test_in_band_provider_error_is_provider_lost(self):
+        """엔진이 ready 뒤 스스로 오류(키 만료 등)를 보내면 화면이 다음 엔진으로 다시 붙도록 provider_lost(리뷰 #1)."""
+        class Up:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *a): return False
+            async def send(self, raw): pass
+            def __aiter__(self): return self._g()
+            async def _g(self):
+                yield '{"error_code": 401, "error_message": "Invalid API key"}'
+
+        async def conn(url, headers):
+            return Up()
+
+        with self.env(SONIOX_API_KEY="s", INTERP_ALLOW_FAKE="1"), mock.patch.object(interp, "_connect", conn):
+            ev = self.run_ws({}, until=())
+        self.assertEqual(ev[0]["provider"], "soniox")
+        self.assertEqual(ev[1]["code"], "provider_lost")
+        self.assertEqual(ev[1]["failed"], "soniox")
+
+    def test_connect_timeout_switches_not_too_long(self):
+        """엔진 접속 시간 초과(TimeoutError)는 세션 상한이 아니라 엔진 실패 — 다음 엔진으로(리뷰 #2)."""
+        with self.env(SONIOX_API_KEY="s", INTERP_ALLOW_FAKE="1"),              mock.patch.object(interp, "_connect", side_effect=TimeoutError("open_timeout")):
+            ev = self.run_ws({})
+        self.assertEqual(ev[0]["type"], "switch")
+        self.assertEqual(ev[1]["provider"], "fake")
+
+    def test_session_cap_still_too_long(self):
+        with self.env(INTERP_ALLOW_FAKE="1", INTERP_PROVIDERS="fake"), mock.patch.object(interp, "MAX_SECONDS", -4):
+            ev = self.run_ws({}, until=())
+        self.assertEqual(ev[0]["type"], "ready")
+        self.assertEqual(ev[1]["code"], "too_long")
+
+    def test_closed_sent_once(self):
+        with self.env(INTERP_ALLOW_FAKE="1", INTERP_PROVIDERS="fake"):
+            with mock.patch.object(firebase_auth, "verify_bearer", return_value=LOGIN):
+                with self.http.websocket_connect("/interp/stream") as ws:
+                    ws.send_json({"type": "start", "a": "ko", "b": "en"})
+                    ws.receive_json()
+                    ws.send_json({"type": "stop"})
+                    kinds = []
+                    try:
+                        while True:
+                            kinds.append(ws.receive_json()["type"])
+                    except Exception:      # noqa: BLE001 — 서버가 닫음
+                        pass
+        self.assertEqual(kinds.count("closed"), 1, kinds)
+
     # ---- 자체 엔진 ----
     def test_local_engine_transcribes_and_translates_each_utterance(self):
         seen = []

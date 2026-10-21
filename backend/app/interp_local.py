@@ -14,11 +14,14 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import shutil
 import os
 import threading
 import time
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +36,12 @@ _lock = threading.Lock()          # 불러오기 한 번만
 _infer = threading.Lock()         # CPU 를 나눠 쓰지 않게 추론은 한 번에 하나
 _state: dict[str, Any] = {"status": "idle", "error": "", "seconds": None}
 _models: dict[str, Any] = {}
+# 추론 전용 스레드 하나. 세션이 몰려도 공용 스레드 풀(로그인 확인 등)을 막지 않는다.
+_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="interp-local")
+
+
+async def run_in_pool(fn, *args):
+    return await asyncio.get_running_loop().run_in_executor(_pool, fn, *args)
 
 # 테스트에서 바꿔 끼운다: (pcm16 bytes, langs) → (text, lang) / (text, src, dst) → text
 transcribe_fn = None
@@ -118,19 +127,24 @@ def _argos_dir(pair: tuple[str, str]) -> Path:
     import httpx
 
     base = model_dir() / "argos" / f"{pair[0]}_{pair[1]}"
-    found = [p.parent for p in base.rglob("sentencepiece.model")] if base.exists() else []
-    if not found:
-        base.mkdir(parents=True, exist_ok=True)
-        part = base / "download.part"
+    done = base / "READY"   # 다 풀린 뒤에만 생긴다 — 중간에 깨진 폴더는 지우고 다시 받는다
+    if not done.exists():
+        shutil.rmtree(base, ignore_errors=True)
+        tmp = base.with_name(base.name + ".tmp")
+        shutil.rmtree(tmp, ignore_errors=True)
+        tmp.mkdir(parents=True)
+        part = tmp / "download.part"
         with httpx.stream("GET", ARGOS_URLS[pair], timeout=120, follow_redirects=True) as r:
             r.raise_for_status()
             with open(part, "wb") as f:
                 for chunk in r.iter_bytes():
                     f.write(chunk)
         with zipfile.ZipFile(part) as zf:
-            _safe_extract(zf, base)
+            _safe_extract(zf, tmp)
         part.unlink(missing_ok=True)
-        found = [p.parent for p in base.rglob("sentencepiece.model")]
+        tmp.rename(base)
+        done.write_text("ok", encoding="utf-8")
+    found = [p.parent for p in base.rglob("sentencepiece.model")]
     for d in found:
         if (d / "model").is_dir():
             return d

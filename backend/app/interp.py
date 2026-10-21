@@ -217,6 +217,10 @@ class ProviderSetupError(RuntimeError):
     """엔진이 통역을 시작하기 전에 실패(키·요금제·패키지·준비 안 됨). 다음 엔진으로 넘어간다."""
 
 
+class ProviderStreamError(RuntimeError):
+    """엔진이 통역 도중(또는 ready 직후) 스스로 오류를 알려 왔다 — 키 만료·잔액 부족 등. serve 가 다음 엔진으로 넘긴다."""
+
+
 class _Session:
     def __init__(self, ws: WebSocket, provider: str, a: str, b: str):
         self.ws = ws
@@ -278,9 +282,7 @@ class _Session:
                 async for raw in up:
                     evt = json.loads(raw)
                     if evt.get("error_code"):
-                        await _send(self.ws, {"type": "error", "code": str(evt.get("error_code")),
-                                              "message": str(evt.get("error_message") or "통역 서비스 오류")})
-                        break
+                        raise ProviderStreamError(f"soniox {evt.get('error_code')}: {str(evt.get('error_message') or '')[:120]}")
                     sf, sp, tf, tp = render_tokens(evt.get("tokens") or [])
                     if sf or sp or tf or tp:
                         await _send(self.ws, {"type": "caption", "source": sf, "source_partial": sp,
@@ -323,8 +325,7 @@ class _Session:
                         await _send(self.ws, {"type": "audio", "pcm": evt.get("delta") or "", "rate": 24000})
                     elif t in ("error", "session.error"):
                         err = evt.get("error") or evt
-                        await _send(self.ws, {"type": "error", "code": str(err.get("code") or "error"),
-                                              "message": str(err.get("message") or "통역 서비스 오류")})
+                        raise ProviderStreamError(f"openai {err.get('code') or 'error'}: {str(err.get('message') or '')[:120]}")
                     if client.done():
                         await up.send(json.dumps({"type": "session.close"}))   # 남은 출력을 흘려보낸다
                         client.cancel()
@@ -352,10 +353,7 @@ class _Session:
             await _send(self.ws, {"type": "caption", "source": src, "source_partial": "",
                                   "target": tgt, "target_partial": ""})
 
-        try:
-            await self.pump_client(to_provider)
-        finally:
-            await _send(self.ws, {"type": "closed"})
+        await self.pump_client(to_provider)   # 'closed' 는 serve 가 한 번만 보낸다
 
     async def run_local(self) -> None:
         """자체 엔진(interp_local): 말이 끝날 때마다 받아쓰고 번역한다. 외부로 음성을 보내지 않는다."""
@@ -382,15 +380,19 @@ class _Session:
                 if pcm is None:
                     return
                 try:
-                    text, lang = await asyncio.to_thread(interp_local.transcribe, pcm, langs)
+                    text, lang = await interp_local.run_in_pool(interp_local.transcribe, pcm, langs)
                     if not text:
                         continue
                     other = self.b if lang == self.a else self.a
-                    out = await asyncio.to_thread(interp_local.translate, text, lang, other)
-                    await _send(self.ws, {"type": "caption", "source": text, "source_partial": "",
-                                          "target": out, "target_partial": ""})
+                    out = await interp_local.run_in_pool(interp_local.translate, text, lang, other)
                 except Exception as exc:      # noqa: BLE001 — 한 문장 실패는 그 문장만 버린다
                     log.warning("local interp utterance failed: %s", type(exc).__name__)
+                    continue
+                try:
+                    await _send(self.ws, {"type": "caption", "source": text, "source_partial": "",
+                                          "target": out, "target_partial": ""})
+                except Exception:      # noqa: BLE001 — 화면이 이미 끊겼으면 남은 문장은 버린다
+                    return
 
         async def to_provider(data: bytes) -> None:
             n = len(data) // 2
@@ -416,12 +418,13 @@ class _Session:
             await self.pump_client(to_provider)
             if buf:
                 await queue.put(bytes(buf))
-        finally:
             await queue.put(None)
-            try:
-                await asyncio.wait_for(task, timeout=30)   # 마지막 문장까지 보낸다
-            except Exception:      # noqa: BLE001
-                task.cancel()
+            await asyncio.wait_for(asyncio.shield(task), timeout=30)   # 정상 종료: 마지막 문장까지 보낸다
+        except asyncio.CancelledError:   # 세션 상한 등으로 취소 — 기다리지 않고 바로 정리
+            task.cancel()
+            raise
+        except Exception:      # noqa: BLE001
+            task.cancel()
 
     async def run_deepl(self) -> None:
         """DeepL Voice (2026-10-21 API 참조 대조: request-session · voice.asyncapi.yaml).
@@ -467,9 +470,7 @@ class _Session:
                         tgt_done += texts(u.get("concluded")); tgt_tent = texts(u.get("tentative"))
                     elif "error" in evt:
                         e = evt["error"] or {}
-                        await _send(self.ws, {"type": "error", "code": f"deepl_{e.get('error_code', '')}",
-                                              "message": str(e.get("error_message") or "DeepL Voice 오류")})
-                        break
+                        raise ProviderStreamError(f"deepl {e.get('error_code', '')}: {str(e.get('error_message') or '')[:120]}")
                     elif "end_of_stream" in evt:
                         break
                     if "source_transcript_update" in evt or "target_transcript_update" in evt:
@@ -552,6 +553,7 @@ class _Session:
         await self.announce({"type": "ready", "provider": "azure", "pair": [self.a, self.b], "audio_out": False})
         done = asyncio.Event()
         state = {"src": "", "tgt": ""}
+        failed: dict[str, str] = {}
 
         def emit(payload: dict) -> None:
             asyncio.run_coroutine_threadsafe(_send(self.ws, payload), loop)
@@ -581,7 +583,7 @@ class _Session:
             d = evt.cancellation_details if hasattr(evt, "cancellation_details") else evt
             if getattr(d, "reason", None) == speechsdk.CancellationReason.Error:
                 log.warning("azure canceled: %s", _redact(str(getattr(d, "error_details", ""))))
-                emit({"type": "error", "code": "provider", "message": "Azure Speech 연결이 끊겼어요. 키·지역을 확인해 주세요."})
+                failed["error"] = "azure canceled"
             loop.call_soon_threadsafe(done.set)
 
         recognizer.recognizing.connect(on_recognizing)
@@ -597,6 +599,8 @@ class _Session:
         waiter = asyncio.create_task(done.wait())
         try:
             await asyncio.wait({client, waiter}, return_when=asyncio.FIRST_COMPLETED)
+            if failed:
+                raise ProviderStreamError(failed["error"])
         finally:
             client.cancel(); waiter.cancel()
             try:
@@ -674,11 +678,20 @@ async def serve(ws: WebSocket, ip: str = "unknown", verify: Callable[[str], dict
                    "deepl": sess.run_deepl, "azure": sess.run_azure, "local": sess.run_local,
                    "fake": sess.run_fake}[provider]
             try:
-                await asyncio.wait_for(run(), timeout=max(1.0, deadline - time.monotonic()))   # 입력이 멈춰도 열린 채 남지 않게
-                break
-            except asyncio.TimeoutError:
-                await _send(ws, {"type": "error", "code": "too_long",
-                                 "message": f"한 번에 {MAX_SECONDS}초까지 통역할 수 있어요. 다시 시작해 주세요."})
+                # 세션 상한(입력이 멈춰도 열린 채 남지 않게)은 직접 잰다. asyncio.wait_for 를 쓰면 엔진 접속의
+                # TimeoutError(websockets open_timeout 등)와 구분되지 않아 전환 대신 'too_long' 이 나간다.
+                task = asyncio.ensure_future(run())
+                finished, _ = await asyncio.wait({task}, timeout=max(1.0, deadline - time.monotonic()))
+                if not finished:
+                    task.cancel()
+                    try:
+                        await task
+                    except BaseException:      # noqa: BLE001 — 취소 정리
+                        pass
+                    await _send(ws, {"type": "error", "code": "too_long",
+                                     "message": f"한 번에 {MAX_SECONDS}초까지 통역할 수 있어요. 다시 시작해 주세요."})
+                    break
+                task.result()   # 엔진이 실패했으면 여기서 예외 → 아래에서 전환
                 break
             except WebSocketDisconnect:
                 break

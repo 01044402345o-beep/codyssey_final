@@ -115,7 +115,7 @@ INTERP_PROVIDER(고정)가 있나? ── 예 → 그 엔진 하나(실패하면
 
 1. Render 에서 인스턴스 종류를 올린다. 권장(추정, 올린 뒤 확인): **메모리 2 GB 이상, CPU 1개 이상** — Whisper small + 번역 모델 둘을 메모리에 올리고, 앱이 쓰는 말소리 검출 모델도 함께 돈다.
 2. Environment → `INTERP_PROVIDERS` = **`local,soniox,openai`** → Save Changes. (자체 엔진을 먼저, 안 되면 Soniox, 그다음 OpenAI)
-3. 서버가 다시 뜨면 모델을 내려받는다(처음 한 번 1~2분). 6절의 `/health` 에서 `interp_local.status` 가 `ready` 가 되면 끝.
+3. 서버가 다시 뜨면 모델을 내려받는다(처음 한 번 **2~11분** — 10/21 두 번 재어 114초·647초. 번역 모델 서버(argos-net.com) 속도에 따라 다르다. Render 는 영구 디스크(Persistent Disk)를 붙이지 않으면 배포할 때마다 파일이 비워져 다시 받는다. 디스크를 붙였다면 `INTERP_LOCAL_DIR` 를 그 경로로). 6절의 `/health` 에서 `interp_local.status` 가 `ready` 가 되면 끝.
    준비되기 전에 들어온 통역은 자동으로 Soniox 로 넘어가므로 사용자는 기다리지 않는다.
 
 알아 둘 것(10/21 개발자 PC 실측, CPU 만 사용):
