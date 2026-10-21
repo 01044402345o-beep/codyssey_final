@@ -1483,7 +1483,7 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
 
 /* ---- 대화 통역: 상대 중심 ---- */
 .live-engines { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
-.live-notice { margin: 8px 0 0; font-size: 0.75rem; color: var(--text-soft); line-height: 1.5; }
+.live-notice { margin: 8px 0 0; font-size: 0.75rem; color: var(--text-soft); line-height: 1.5; white-space: pre-line; }
 .linkish { padding: 0; border: 0; background: none; color: var(--accent-text); font: inherit; font-weight: 700; text-decoration: underline; min-height: 44px; }
 .conv { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
 .conv-partner { border: 1px solid var(--border-strong); border-radius: 16px; padding: 12px 14px; background: var(--surface); cursor: pointer; }
