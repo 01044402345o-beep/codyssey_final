@@ -66,6 +66,25 @@ class T(unittest.TestCase):
         with self.env(SONIOX_API_KEY="s", INTERP_PROVIDERS=""):
             self.assertTrue(interp.provider_available("soniox"))
 
+    def test_allowlist_order_is_priority(self):
+        with self.env(OPENAI_API_KEY="o", GEMINI_API_KEY="g", INTERP_PROVIDERS="gemini,openai"):
+            self.assertEqual(interp.provider_choice(None), "gemini")          # 앞에 쓴 엔진이 먼저
+            self.assertEqual(interp.provider_choice("openai"), "openai")      # 사용자가 고르면 그것
+            rows = [p["id"] for p in interp.provider_list()]
+            self.assertEqual(rows[:2], ["gemini", "openai"])
+            self.assertEqual([p["priority"] for p in interp.provider_list()][:2], [1, 2])
+        with self.env(OPENAI_API_KEY="o", GEMINI_API_KEY="g", INTERP_PROVIDERS=" Gemini , openai, gemini "):
+            self.assertEqual(interp.enabled_providers(), ["gemini", "openai"])   # 공백·대소문자·중복 정리
+
+    def test_priority_skips_engine_without_key(self):
+        with self.env(OPENAI_API_KEY="o", INTERP_PROVIDERS="gemini,openai"):   # gemini 키 없음
+            self.assertEqual(interp.provider_choice(None), "openai")
+
+    def test_forced_shows_single_engine(self):
+        with self.env(SONIOX_API_KEY="s", OPENAI_API_KEY="o", INTERP_PROVIDER="openai"):
+            avail = [p["id"] for p in interp.provider_list() if p["available"]]
+            self.assertEqual(avail, ["openai"])
+
     def test_requested_provider_and_default_order(self):
         with self.env(SONIOX_API_KEY="s", OPENAI_API_KEY="o"):
             self.assertEqual(interp.provider_choice(None), "soniox")
