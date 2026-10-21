@@ -1097,25 +1097,40 @@ function readMark(target, at) {   // at = 읽는 문장 안 글자 위치. 그 �
   if (cur) cur.classList.add('now');
 }
 function readClear() { clearTimeout(readTimer); readTimer = null; document.querySelectorAll('.w.now').forEach(w => w.classList.remove('now')); }
-/* 브라우저가 단어 경계(boundary) 이벤트를 주지 않으면(Android 의 일부 음성) 글자 수로 시간을 어림해 따라간다.
-   진짜 경계 이벤트가 한 번이라도 오면 어림은 멈춘다. */
-function readEstimate(target, spoken, rate) {
+/* 따라 읽기 시간표. 브라우저마다 단어 경계(boundary) 이벤트가 다르다:
+   - Android 의 일부 음성: 경계 이벤트가 아예 없다 → 글자 수로 시간을 어림해 따라간다.
+   - iOS Safari: 경계 이벤트가 오다가 고유명사("Brooklyn Bridge", "Statue of Liberty")에서 멈추는 일이 있다(10/21 실기기).
+   그래서 진짜 이벤트가 오면 위치만 맞추고 어림은 계속 돌린다. 이벤트가 끊겨도 다음 단어로 넘어간다. */
+function readTimeline(target, spoken, rate) {
   const words = [...target.querySelectorAll('.w')].map(w => +w.dataset.c);
   const msPerChar = 62 / (rate || 1);
-  let k = 0;
+  const gap = k => Math.max(160, ((k + 1 < words.length ? words[k + 1] : spoken.length) - words[k]) * msPerChar);
+  let k = -1;
   const step = () => {
-    if (k >= words.length) return;
-    readMark(target, words[k]);
-    const next = k + 1 < words.length ? words[k + 1] : spoken.length;
-    const wait = Math.max(160, (next - words[k]) * msPerChar);
-    k++; readTimer = setTimeout(step, wait);
+    if (k + 1 >= words.length) return;   // 마지막 단어는 끝날 때까지 칠해 둔다
+    k++; readMark(target, words[k]);
+    clearTimeout(readTimer); readTimer = setTimeout(step, gap(k));
   };
-  step();
+  return {
+    start() { step(); },
+    // 진짜 경계 이벤트: 그 단어로 맞추고, 다음 이벤트가 올 만한 시간의 두 배를 기다린 뒤에야 어림으로 넘어간다
+    sync(at) {
+      let i = 0; words.forEach((c, j) => { if (c <= at) i = j; });
+      k = i; readMark(target, words[k]);
+      clearTimeout(readTimer); readTimer = setTimeout(step, gap(k) * 2);
+    },
+    total: spoken.length * msPerChar,
+  };
 }
+/* iOS(WebKit)는 참조가 없는 발화 객체를 말하는 도중에 버려 onend 가 오지 않을 수 있다 → 전역에 붙잡아 둔다.
+   그래도 onend 가 안 오면 '말하는 중' 상태를 직접 확인해 끝을 처리한다(버튼·강조가 멈춘 채 남지 않게, 대화하기가 멈추지 않게). */
+let curUtter = null, endPoll = null;
 const readTarget = el => { const box = el && el.closest('.talk-line, .talk-me, .face, .sent'); return box ? box.querySelector('[data-read]') : null; };
 function speak(text, btn, target, o = {}) {   // o = { rate, onend } — 대화하기가 쓴다
   if (ttsState() !== 'ok') { toast(ttsOffMsg()); return; }
+  if (curUtter) curUtter.__cancelled = true;   // 앞 발화의 늦은 onend 가 새 발화를 지우지 않게
   speechSynthesis.cancel();
+  clearInterval(endPoll); endPoll = null;
   if (mineAudio) { try { mineAudio.pause(); } catch (e) { /* 이미 멈춤 */ } }   // 내 발음과 겹치지 않게
   document.querySelectorAll('.playing').forEach(e => e.classList.remove('playing'));
   // 호출부는 저장 문장(.en, 편집 input)을 넘긴다. 화면과 같으려면 여기서 slotText 를 먼저 거친다.
@@ -1125,17 +1140,36 @@ function speak(text, btn, target, o = {}) {   // o = { rate, onend } — 대화�
   u.rate = o.rate || S.ttsRate;
   readClear();
   const tgt = target && target.querySelector('.w') ? target : null;
-  let gotBoundary = false;
+  const tl = tgt ? readTimeline(tgt, u.text, u.rate) : null;
+  const est = (tl ? tl.total : u.text.length * 62 / (u.rate || 1)) + 800;
+  let done = false;
+  const finish = () => {
+    if (done) return; done = true;
+    clearInterval(endPoll); endPoll = null;
+    if (curUtter === u) curUtter = null;
+    if (u.__cancelled) return;
+    if (btn) btn.classList.remove('playing');
+    readClear();
+    if (o.onend) o.onend();
+  };
   u.onstart = () => {
     if (btn) btn.classList.add('playing');
-    if (tgt) readTimer = setTimeout(() => { if (!gotBoundary) readEstimate(tgt, u.text, u.rate); }, 350);
+    if (tl) readTimer = setTimeout(() => tl.start(), 350);
+    // 예상 시간이 지나면 '아직 말하는 중'인지 직접 본다. onend 가 오면 그쪽이 먼저 끝낸다.
+    const startedAt = Date.now();
+    endPoll = setInterval(() => {
+      if (done || u.__cancelled) { clearInterval(endPoll); return; }
+      const over = Date.now() - startedAt > est;
+      if (over && !speechSynthesis.speaking && !speechSynthesis.pending) finish();
+      else if (Date.now() - startedAt > est * 4 + 8000) finish();   // 끝없이 '말하는 중'이라고 하는 경우의 상한
+    }, 400);
   };
   u.onboundary = e => {
-    if (!tgt || (e.name && e.name !== 'word')) return;
-    if (!gotBoundary) { gotBoundary = true; clearTimeout(readTimer); readTimer = null; }
-    readMark(tgt, e.charIndex);
+    if (!tl || (e.name && e.name !== 'word')) return;
+    tl.sync(e.charIndex);
   };
-  u.onend = u.onerror = () => { if (btn) btn.classList.remove('playing'); readClear(); if (o.onend) o.onend(); };
+  u.onend = u.onerror = finish;
+  curUtter = u;
   speechSynthesis.speak(u);
 }
 if (ttsSupported()) {
