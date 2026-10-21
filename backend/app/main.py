@@ -851,6 +851,12 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
     }
 
 
+@app.get("/interp/providers")
+def interp_providers() -> dict[str, Any]:
+    """실시간 통역 제공자 목록 — 화면의 '통역 엔진' 선택이 쓴다. 키 이름·값은 내려보내지 않는다."""
+    return {"providers": interp.provider_list()}
+
+
 @app.websocket("/interp/stream")
 async def interp_stream(ws: WebSocket) -> None:
     """실시간 통역: 브라우저 마이크 PCM 을 제공자에게 중계하고 자막·음성을 돌려준다(서버는 저장하지 않는다)."""

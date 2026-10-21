@@ -11,10 +11,16 @@
   https://developers.openai.com/api/docs/guides/realtime-translation
 - fake: 키 없이 파이프(마이크→서버→자막)만 검사할 때. INTERP_ALLOW_FAKE=1 일 때만 켠다.
 
-환경 변수: INTERP_PROVIDER(soniox|openai|fake), SONIOX_API_KEY, OPENAI_API_KEY, INTERP_ALLOW_FAKE, INTERP_MAX_SECONDS,
+제공자 5개 + 시험 모드(2026-10-21 공식 문서 대조, 실제 호출은 아직 없음):
+- gemini: Live API BidiGenerateContent, models/gemini-3.5-live-translate-preview, translationConfig. https://ai.google.dev/gemini-api/docs/live-api/live-translate
+- deepl: POST /v3/voice/realtime → streaming_url?token=, 최상위 키 메시지(source_media_chunk 등). run_deepl 참고
+- azure: Speech SDK 번역(자동 언어 감지). 패키지가 없으면 '사용 불가'
+켜는 제공자는 INTERP_PROVIDERS(기본 soniox,openai,fake)로 정한다 — 키가 있다고 저절로 켜지지 않는다.
+환경 변수: INTERP_PROVIDERS, INTERP_PROVIDER(고정), SONIOX_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, DEEPL_API_KEY,
+          AZURE_SPEECH_KEY/AZURE_SPEECH_REGION, INTERP_ALLOW_FAKE, INTERP_MAX_SECONDS,
           INTERP_STARTS(창당 시작 수, 기본 6), INTERP_WINDOW(초, 기본 600)
 
-유료 제공자(soniox·openai)는 키가 서버에 있으면 누구나 과금을 일으킬 수 있으므로:
+유료 제공자(fake 를 뺀 전부)는 키가 서버에 있으면 누구나 과금을 일으킬 수 있으므로:
 - 첫 메시지의 Firebase ID 토큰을 확인한다(브라우저 WebSocket 은 헤더를 못 붙인다). 익명 로그인·로그인 없이 시작은 거절.
 - IP 와 계정마다 시작 횟수를 제한하고, 세션은 MAX_SECONDS 가 지나면 입력이 없어도 끊는다.
 시험 모드(fake)는 외부 호출이 없어 토큰을 요구하지 않는다.
@@ -66,23 +72,68 @@ def allow_start(*keys: str) -> bool:
     return True
 
 
-def provider_choice() -> str:
-    """쓸 수 있는 제공자를 고른다. 키가 없으면 'none' — 화면은 그대로 '지금은 못 쓴다'고 말한다."""
-    want = (os.getenv("INTERP_PROVIDER") or "").strip().lower()
-    if want in ("soniox", "openai", "fake"):
-        if want == "soniox" and not (os.getenv("SONIOX_API_KEY") or "").strip():
-            return "none"
-        if want == "openai" and not (os.getenv("OPENAI_API_KEY") or "").strip():
-            return "none"
-        if want == "fake" and os.getenv("INTERP_ALLOW_FAKE") != "1":
-            return "none"
-        return want
-    if (os.getenv("SONIOX_API_KEY") or "").strip():
-        return "soniox"
-    if (os.getenv("OPENAI_API_KEY") or "").strip():
-        return "openai"
-    if os.getenv("INTERP_ALLOW_FAKE") == "1":
-        return "fake"
+# 제공자 표 — 화면의 '통역 엔진' 선택과 /interp/providers 가 쓴다. 키 이름·값은 내려보내지 않는다.
+# verified: 공식 문서와 코드를 대조한 범위(실제 호출 확인은 아님). False 면 화면에 '확인 필요'.
+PROVIDERS = {
+    "soniox": {"label": "Soniox", "key": "SONIOX_API_KEY", "audio_out": False, "two_way": True,
+               "verified": True, "note": "한 세션 양방향(ko↔en), 자막만"},
+    "openai": {"label": "OpenAI Realtime", "key": "OPENAI_API_KEY", "audio_out": True, "two_way": False,
+               "verified": True, "note": "번역 음성까지, 출력 언어 1개(한국어 출력은 문서 미확인)"},
+    "gemini": {"label": "Gemini Live", "key": "GEMINI_API_KEY", "audio_out": True, "two_way": False,
+               "verified": True, "note": "번역 음성까지, 출력 언어 1개(미리보기 모델)"},
+    "deepl": {"label": "DeepL Voice", "key": "DEEPL_API_KEY", "audio_out": False, "two_way": False,
+              "verified": False, "note": "자막만, PCM 입력 형식 확인 필요"},
+    "azure": {"label": "Azure Speech", "key": "AZURE_SPEECH_KEY", "audio_out": False, "two_way": True,
+              "verified": False, "note": "자동 언어 감지, Speech SDK 필요"},
+    "fake": {"label": "시험 모드", "key": "", "audio_out": False, "two_way": True,
+             "verified": True, "note": "키 없이 배관만 검사(번역 아님)"},
+}
+# 운영자가 켠 제공자만 쓴다. 키가 있다는 이유만으로 켜지지 않게 — 특히 gemini 는 앱의 문장 생성 키(GEMINI_API_KEY)를
+# 같이 쓰므로 자동으로 켜지면 음성이 처리방침에 없는 곳(Google)으로 간다. 처리방침 3절에 적은 제공자만 기본으로 둔다.
+DEFAULT_ENABLED = "soniox,openai,fake"
+
+
+def _key(name: str) -> str:
+    return (os.getenv(name) or "").strip()
+
+
+def enabled_providers() -> list[str]:
+    raw = os.getenv("INTERP_PROVIDERS")
+    names = [x.strip().lower() for x in (DEFAULT_ENABLED if raw is None else raw).split(",")]
+    return [x for x in names if x in PROVIDERS]
+
+
+def provider_available(pid: str) -> bool:
+    info = PROVIDERS.get(pid)
+    if not info or pid not in enabled_providers():
+        return False
+    if pid == "fake":
+        return os.getenv("INTERP_ALLOW_FAKE") == "1"
+    if pid == "azure":
+        if not (_key("AZURE_SPEECH_KEY") and _key("AZURE_SPEECH_REGION")):
+            return False
+        try:
+            import azure.cognitiveservices.speech  # noqa: F401
+        except Exception:      # noqa: BLE001 — 미설치면 '사용 불가'
+            return False
+        return True
+    return bool(_key(info["key"]))
+
+
+def provider_list() -> list[dict]:
+    return [{"id": pid, **{k: v for k, v in info.items() if k != "key"}, "available": provider_available(pid)}
+            for pid, info in PROVIDERS.items()]
+
+
+def provider_choice(requested: str | None = None) -> str:
+    """INTERP_PROVIDER 고정 → 브라우저가 고른 것 → 켜진 제공자 순서. 쓸 수 있는 게 없으면 'none'."""
+    forced = _key("INTERP_PROVIDER").lower()
+    if forced:
+        return forced if provider_available(forced) else "none"
+    order = ([requested] if requested else []) + ["soniox", "openai", "gemini", "deepl", "azure", "fake"]
+    for pid in order:
+        if pid and provider_available(pid):
+            return pid
     return "none"
 
 
@@ -254,6 +305,186 @@ class _Session:
         finally:
             await _send(self.ws, {"type": "closed"})
 
+    async def run_deepl(self) -> None:
+        """DeepL Voice (2026-10-21 API 참조 대조: request-session · voice.asyncapi.yaml).
+        POST /v3/voice/realtime → {streaming_url, token} → WebSocket `{streaming_url}?token=`.
+        메시지는 type 필드가 아니라 최상위 키 하나로 구분한다:
+          보냄  {"source_media_chunk": {"data": base64}} · {"end_of_source_media": {}}
+          받음  source_transcript_update / target_transcript_update {concluded[], tentative[]} ·
+                end_of_stream · error {error_code, error_message}
+        번역 음성(target_media_chunk)은 요청하지 않는다 — 음성 형식이 opus·webm 등이라 화면의 PCM 재생과 맞지 않는다.
+        확인 못 한 것: PCM 입력의 정확한 content type 문자열(DEEPL_VOICE_CONTENT_TYPE 로 바꿀 수 있다), 실제 호출."""
+        key = _key("DEEPL_API_KEY")
+        url = (os.getenv("DEEPL_VOICE_SESSION_URL") or "https://api.deepl.com/v3/voice/realtime").strip()
+        body = {"source_media_content_type": (os.getenv("DEEPL_VOICE_CONTENT_TYPE") or "audio/pcm;encoding=s16le;rate=16000").strip(),
+                "message_format": "json", "source_language": self.a, "source_language_mode": "fixed",
+                "target_languages": [self.b]}
+        import httpx
+
+        async with httpx.AsyncClient(timeout=20) as cli:
+            r = await cli.post(url, json=body, headers={"Authorization": f"DeepL-Auth-Key {key}"})
+        if r.status_code >= 400:
+            await _send(self.ws, {"type": "error", "code": f"deepl_{r.status_code}",
+                                  "message": "DeepL Voice 세션을 만들지 못했어요. 키·요금제를 확인해 주세요."})
+            return
+        info = r.json()
+        async with await _connect(f"{info['streaming_url']}?token={info['token']}", {}) as up:
+            await _send(self.ws, {"type": "ready", "provider": "deepl", "pair": [self.a, self.b], "audio_out": False})
+
+            async def to_provider(data: bytes) -> None:
+                await up.send(json.dumps({"source_media_chunk": {"data": base64.b64encode(data).decode()}}))
+
+            def texts(segs) -> str:
+                return "".join(str((x or {}).get("text") or "") for x in (segs or []))
+
+            client = asyncio.create_task(self.pump_client(to_provider))
+            src_done = tgt_done = ""
+            src_tent = tgt_tent = ""
+            try:
+                async for raw in up:
+                    evt = json.loads(raw)
+                    if "source_transcript_update" in evt:
+                        u = evt["source_transcript_update"] or {}
+                        src_done += texts(u.get("concluded")); src_tent = texts(u.get("tentative"))
+                    elif "target_transcript_update" in evt:
+                        u = evt["target_transcript_update"] or {}
+                        tgt_done += texts(u.get("concluded")); tgt_tent = texts(u.get("tentative"))
+                    elif "error" in evt:
+                        e = evt["error"] or {}
+                        await _send(self.ws, {"type": "error", "code": f"deepl_{e.get('error_code', '')}",
+                                              "message": str(e.get("error_message") or "DeepL Voice 오류")})
+                        break
+                    elif "end_of_stream" in evt:
+                        break
+                    if "source_transcript_update" in evt or "target_transcript_update" in evt:
+                        await _send(self.ws, {"type": "caption", "source": src_done, "source_partial": src_tent,
+                                              "target": tgt_done, "target_partial": tgt_tent})
+                    if client.done():
+                        await up.send(json.dumps({"end_of_source_media": {}}))   # 남은 결과를 받고 end_of_stream 으로 끝난다
+                        client.cancel()
+            finally:
+                client.cancel()
+
+    async def run_gemini(self) -> None:
+        """Gemini Live Translation — 문서의 setup/realtimeInput 형식 그대로."""
+        key = (os.getenv("GEMINI_API_KEY") or "").strip()
+        model = (os.getenv("GEMINI_LIVE_MODEL") or "gemini-3.5-live-translate-preview").strip()
+        url = ("wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta"
+               f".GenerativeService.BidiGenerateContent?key={key}")
+        async with await _connect(url, {}) as up:
+            await up.send(json.dumps({"setup": {
+                "model": f"models/{model}",
+                "generationConfig": {
+                    "responseModalities": ["AUDIO"],
+                    "inputAudioTranscription": {},
+                    "outputAudioTranscription": {},
+                    "translationConfig": {"targetLanguageCode": self.b, "echoTargetLanguage": True},
+                }}}))
+            await _send(self.ws, {"type": "ready", "provider": "gemini", "pair": [self.a, self.b], "audio_out": True})
+
+            async def to_provider(data: bytes) -> None:
+                await up.send(json.dumps({"realtimeInput": {"audio": {
+                    "data": base64.b64encode(data).decode(), "mimeType": "audio/pcm;rate=16000"}}}))
+
+            client = asyncio.create_task(self.pump_client(to_provider))
+            src = tgt = ""
+            try:
+                async for raw in up:
+                    evt = json.loads(raw)
+                    sc = evt.get("serverContent") or {}
+                    if sc.get("inputTranscription"):
+                        src += str(sc["inputTranscription"].get("text") or "")
+                        await _send(self.ws, {"type": "caption", "source": src, "source_partial": "",
+                                              "target": tgt, "target_partial": ""})
+                    if sc.get("outputTranscription"):
+                        tgt += str(sc["outputTranscription"].get("text") or "")
+                        await _send(self.ws, {"type": "caption", "source": src, "source_partial": "",
+                                              "target": tgt, "target_partial": ""})
+                    for part in ((sc.get("modelTurn") or {}).get("parts") or []):
+                        inline = part.get("inlineData") or part.get("inline_data") or {}
+                        if inline.get("data"):
+                            await _send(self.ws, {"type": "audio", "pcm": inline["data"], "rate": 24000})
+                    if client.done():
+                        client.cancel()
+            finally:
+                client.cancel()
+
+    async def run_azure(self) -> None:
+        """Azure Speech 번역(SDK). 자동 언어 감지 + 두 대상 언어(ko·en)로 번역해 방향을 가리지 않는다.
+        SDK 는 블로킹 콜백이라 스레드에서 돌리고, 이벤트 루프로 넘긴다."""
+        try:
+            import azure.cognitiveservices.speech as speechsdk
+        except Exception:      # noqa: BLE001
+            await _send(self.ws, {"type": "error", "code": "provider",
+                                  "message": "서버에 Azure Speech SDK 가 없어 쓸 수 없어요."})
+            return
+        key = (os.getenv("AZURE_SPEECH_KEY") or "").strip()
+        region = (os.getenv("AZURE_SPEECH_REGION") or "").strip()
+        loop = asyncio.get_running_loop()
+        cfg = speechsdk.translation.SpeechTranslationConfig(subscription=key, region=region)
+        cfg.speech_recognition_language = self.a
+        for lang in {self.a, self.b}:
+            cfg.add_target_language(lang)
+        auto = speechsdk.languageconfig.AutoDetectSourceLanguageConfig(languages=[self.a, self.b])
+        audio = speechsdk.audio.AudioStreamFormat(samples_per_second=16000, bits_per_sample=16, channels=1)
+        stream = speechsdk.audio.PushAudioInputStream(stream_format=audio)
+        recognizer = speechsdk.translation.TranslationRecognizer(
+            translation_config=cfg, audio_config=speechsdk.audio.AudioConfig(stream=stream),
+            auto_detect_source_language_config=auto)
+        await _send(self.ws, {"type": "ready", "provider": "azure", "pair": [self.a, self.b], "audio_out": False})
+
+        def emit(payload: dict) -> None:
+            asyncio.run_coroutine_threadsafe(_send(self.ws, payload), loop)
+
+        def on_recognized(evt) -> None:
+            if evt.result.reason != speechsdk.ResultReason.TranslatedSpeech:
+                return
+            src = evt.result.text or ""
+            for lang, text in (evt.result.translations or {}).items():
+                if lang == self.b:
+                    emit({"type": "caption", "source": src, "source_partial": "", "target": text, "target_partial": ""})
+            if not (evt.result.translations or {}):
+                emit({"type": "caption", "source": src, "source_partial": "", "target": "", "target_partial": ""})
+
+        recognizer.recognized.connect(on_recognized)
+        recognizer.start_continuous_recognition()
+        try:
+            while True:
+                msg = await self.ws.receive()
+                if msg.get("type") == "websocket.disconnect":
+                    break
+                data = msg.get("bytes")
+                if data:
+                    self.bytes_in += len(data)
+                    if self.bytes_in > MAX_BYTES or time.monotonic() - self.started > MAX_SECONDS:
+                        await _send(self.ws, {"type": "error", "code": "too_long",
+                                              "message": f"한 번에 {MAX_SECONDS}초까지 통역할 수 있어요."})
+                        break
+                    stream.write(data)
+                    continue
+                text = msg.get("text")
+                if text:
+                    try:
+                        if json.loads(text).get("type") == "stop":
+                            break
+                    except ValueError:
+                        pass
+        finally:
+            try:
+                stream.close()
+                recognizer.stop_continuous_recognition()
+            except Exception:      # noqa: BLE001 — 이미 종료
+                pass
+
+
+def _redact(text: str) -> str:
+    """오류 문구에서 키 값을 지운다(gemini 는 키를 접속 주소의 ?key= 로 보내 오류에 주소가 섞일 수 있다)."""
+    for name in ("SONIOX_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "DEEPL_API_KEY", "AZURE_SPEECH_KEY"):
+        v = _key(name)
+        if v:
+            text = text.replace(v, "***")
+    return text[:300]
+
 
 async def _refuse(ws: WebSocket, code: str, message: str) -> None:
     await _send(ws, {"type": "error", "code": code, "message": message})
@@ -273,7 +504,7 @@ async def serve(ws: WebSocket, ip: str = "unknown", verify: Callable[[str], dict
         await ws.close()
         return
 
-    provider = provider_choice()
+    provider = provider_choice(str(first.get("provider") or "").lower() or None)
     if provider == "none":
         await _send(ws, {"type": "error", "code": "no_key",
                          "message": "서버에 통역 서비스 키가 없어 지금은 실시간 통역을 쓸 수 없어요. 운영자에게 문의해 주세요."})
@@ -303,7 +534,8 @@ async def serve(ws: WebSocket, ip: str = "unknown", verify: Callable[[str], dict
         return
     sess = _Session(ws, provider, a, b)
     log.info("interp start provider=%s pair=%s", provider, (a, b))
-    run = sess.run_soniox if provider == "soniox" else sess.run_openai if provider == "openai" else sess.run_fake
+    run = {"soniox": sess.run_soniox, "openai": sess.run_openai, "gemini": sess.run_gemini,
+           "deepl": sess.run_deepl, "azure": sess.run_azure, "fake": sess.run_fake}[provider]
     try:
         await asyncio.wait_for(run(), timeout=MAX_SECONDS + 5)   # 입력이 멈춰도 세션이 열린 채 남지 않게
     except asyncio.TimeoutError:
@@ -315,7 +547,7 @@ async def serve(ws: WebSocket, ip: str = "unknown", verify: Callable[[str], dict
     except WebSocketDisconnect:
         pass
     except Exception as exc:      # noqa: BLE001 — 제공자 연결 실패는 사용자에게 상태로 알린다
-        log.warning("interp failed: %s", exc)
+        log.warning("interp failed provider=%s: %s", provider, _redact(f"{type(exc).__name__}: {exc}"))
         try:
             await _send(ws, {"type": "error", "code": "provider",
                              "message": "통역 서비스에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요."})
