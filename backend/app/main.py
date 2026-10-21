@@ -284,6 +284,30 @@ def situation_index() -> dict[str, list[str]]:
     return out
 
 
+def security_review() -> dict[str, Any]:
+    """요청 정책 점검(docs/ops/API_KEY_AND_REQUEST_POLICY.md) 결과를 숨기지 않는다.
+
+    동작을 바꾸지 않고 '지금 무엇이 열려 있는지'만 알린다. 키 이름·값은 여기에도 넣지 않는다.
+    """
+    origins = (os.getenv("ALLOW_ORIGINS") or "").strip()
+    open_cors = origins in ("", "*")
+    managed = bool(os.getenv("RENDER") or os.getenv("K_SERVICE"))   # 관리형 플랫폼(프록시 뒤)인가
+    warns: list[str] = []
+    if open_cors:
+        warns.append("ALLOW_ORIGINS 가 열려 있습니다 — 브라우저에서 아무 사이트나 API 를 부를 수 있습니다.")
+    if managed and TRUSTED_PROXY_HOPS == 0:
+        warns.append("TRUSTED_PROXY_HOPS=0 — 프록시 뒤에서는 모든 사용자가 한 IP 로 묶여 속도 제한이 전체 제한이 됩니다.")
+    warns.append("/generate 는 로그인 없이 호출할 수 있습니다 — 비용이 나가는 경로입니다.")
+    return {
+        "warnings": warns,
+        "cors": "open" if open_cors else "allowlist",
+        "trusted_proxy_hops": TRUSTED_PROXY_HOPS,
+        "rate_limit_scope": "process",      # 인스턴스가 늘면 실효 제한이 늘어난다
+        "key_cooldown_scope": "process",    # 백엔드가 둘이면 쿨다운이 서로 다르다
+        "generate_auth": "none",
+    }
+
+
 def config_problems() -> list[str]:
     """설정 누락을 조용히 넘기지 않는다. 구조 검증이 꺼진 채 돌면 '검증했다'고 말할 수 없다."""
     problems: list[str] = []
@@ -453,6 +477,8 @@ def health() -> dict[str, Any]:
         "categories": list_categories(),
         "situations": situation_index(),
         "rate_limit": f"{RATE_LIMIT}/{RATE_WINDOW}s",
+        # 요청 정책 점검: 경고만. 상태(status)에는 영향이 없다.
+        "security_review": security_review(),
     }
 
 

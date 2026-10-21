@@ -1,0 +1,10 @@
+INFO:     Started server process [10891]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8791 (Press CTRL+C to quit)
+2026-10-21 21:58:46,306 WARNING interp: azure speech sdk import failed: ModuleNotFoundError: No module named 'azure'
+INFO:     127.0.0.1:37938 - "GET /health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [10891]
