@@ -1398,9 +1398,34 @@ const INTERP_TERMS = [
 const INTERP_CONSENT_VERSION = `2026-10-21+d${INTERP_DISCLAIMER_VERSION}`;
 const partnerAiLabel = dst => dst === 'ko' ? 'AI 번역이에요 · 틀릴 수 있어요' : 'AI translation · may contain errors';
 const interpConsent = () => { try { const c = JSON.parse(localStorage.getItem(INTERP_CONSENT_KEY) || 'null'); return c && c.voice && c.v === INTERP_CONSENT_VERSION ? c : null; } catch (e) { return null; } };
+/* 화면 방식 — 사용자가 고른다. 통역을 멈추지 않고 바꿀 수 있고, 고른 값은 이 브라우저에 남는다.
+   split=마주 보기(상대 쪽 180°), card=카드, listen=듣기(원문·번역 누적). */
+const INTERP_UI_KEY = 'cd_interp_ui';
+const INTERP_UI = [
+  ['split', '마주 보기', '위아래로 나누고 상대 쪽 글자를 돌려 놓아요. 폰을 탁자에 눕히고 마주 볼 때'],
+  ['card', '카드', '상대에게 보여 줄 큰 카드와 내 말 자막. 한 손으로 들고 쓸 때'],
+  ['listen', '듣기', '이어지는 말을 원문과 번역으로 쌓아요. 안내 방송·설명을 들을 때'],
+];
+const interpUi = () => { try { const v = localStorage.getItem(INTERP_UI_KEY); return INTERP_UI.some(u => u[0] === v) ? v : 'card'; } catch (e) { return 'card'; } };
+const interpUiLabel = v => (INTERP_UI.find(u => u[0] === (v || interpUi())) || INTERP_UI[1])[1];
+function setInterpUi(v) {
+  if (!INTERP_UI.some(u => u[0] === v)) return;
+  LIVE.ui = v; LIVE.logStay = false;
+  try { localStorage.setItem(INTERP_UI_KEY, v); } catch (e) { /* 저장소 막힘 */ }
+}
+const IL_ICON = {
+  mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M4.5 11a7.5 7.5 0 0 0 15 0"/><path d="M12 18.5V21"/></svg>',
+  micOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a3 3 0 0 1 3 3v3M15 12.5a3 3 0 0 1-6 0V6"/><path d="M4.5 11a7.5 7.5 0 0 0 11.4 6.4M19.5 11v.8"/><path d="M12 18.5V21"/><path d="M4 4l16 16"/></svg>',
+  grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>',
+  expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 15v5h-5M20 9V4h-5M4 15v5h5"/></svg>',
+  close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 4v13M8 17l-3-3M8 17l3-3M16 20V7M16 7l-3 3M16 7l3 3"/></svg>',
+};
+const interpUiThumb = id => `<span class="il-thumb t-${id}" aria-hidden="true"><i></i><i></i></span>`;
 const LIVE = { on: false, ws: null, stream: null, ctx: null, proc: null, src: null, dst: null,
   status: '', note: '', test: false, provider: '', cap: { source: '', target: '', sp: '', tp: '' }, q: [], playing: false,
   providers: null, pick: null, paused: false, partner: false, hist: [],
+  ui: '', uiOpen: false, log: [], logStay: false,
   level: 0, muted: false, mode: '', worklet: null, srcNode: null, raf: 0, gen: 0, bargeUntil: 0, speech: false,
   exclude: [], restart: '', fallback: false,             // 자동 전환: 실패한 엔진은 빼고 다음 엔진, 다 실패하면 검수 문장으로
   browserOk: null, rec: null, tr: null, speaker: 'me' };  // 브라우저 엔진(데스크톱 Chrome·Edge, 기기 안 처리일 때만)
@@ -1438,48 +1463,127 @@ function askInterpConsent(after) {
       S.modal = null; render(); if (after) after();
     });
 }
+function interpUiChipsHtml(ui) {
+  return `<div class="il-pick" role="group" aria-label="화면 방식">
+    ${INTERP_UI.map(([id, name]) => `<button class="il-chip ${id === ui ? 'on' : ''}" data-act="live-ui" data-v="${id}" aria-pressed="${id === ui}">${interpUiThumb(id)}<span>${name}</span></button>`).join('')}</div>`;
+}
+/* 상대에게 보이는 면 — 세 방식이 같은 부품을 쓴다(문구·AI 표시가 한 곳에서만 바뀌게). */
+function liveFarHtml(l) {
+  const c = l.cap;
+  return `<div class="conv-partner" data-act="live-partner">
+    <span class="conv-who">상대에게 보여주기 · ${esc(l.dst === 'ko' ? '한국어' : '영어')}</span>
+    <p class="conv-big" lang="${esc(l.dst)}">${esc(c.target) || '<span class="conv-empty">말하면 여기에 상대 언어로 나와요</span>'}<span class="live-partial">${esc(liveTail(c))}</span></p>
+    <span class="conv-ai" lang="${esc(l.dst)}">${esc(partnerAiLabel(l.dst))}</span><span class="conv-tap">눌러서 크게 ›</span>
+  </div>`;
+}
+/* partial 은 지금 문장의 연장일 때만 붙인다 — 제공자가 다음 문장 조각을 미리 보내면 두 문장이 겹쳐 보인다. */
+const liveTail = c => (c.tp && (!c.target || c.tp.startsWith(c.target))) ? c.tp.slice(c.target.length) : (c.target ? '' : c.tp);
+function liveNearHtml(l) {
+  const c = l.cap;
+  return `<div class="conv-me">
+    <span class="conv-who">내가 한 말 · ${esc(l.src === 'ko' ? '한국어' : '영어')}<span class="live-meter" data-live="meter" aria-hidden="true"><i></i></span>${l.mode ? `<span class="live-mode">${l.mode === 'worklet' ? '오디오 스레드' : '기본'}</span>` : ''}${l.muted ? '<span class="live-muted">음소거</span>' : ''}</span>
+    <p class="conv-small" lang="${esc(l.src)}">${esc(c.source)}<span class="live-partial">${esc(c.sp)}</span></p>
+  </div>`;
+}
+function liveBodyHtml(l) {
+  const ui = l.ui || interpUi();
+  if (ui === 'split') {   // 마주 보기: 상대 쪽을 180° 돌려 폰을 탁자에 눕혀도 읽히게
+    return `<div class="il-split">
+      <div class="il-side il-side-far">${liveFarHtml(l)}</div>
+      <div class="il-divider" aria-hidden="true"><span></span></div>
+      <div class="il-side il-side-near">${liveNearHtml(l)}</div>
+    </div>`;
+  }
+  if (ui === 'listen') {   // 듣기: 이어지는 말을 원문·번역으로 쌓는다
+    const shown = l.log.filter((g, i) => !(i === l.log.length - 1 && g.dst === l.cap.target && g.src === l.cap.source));
+    const rows = shown.map(g => `<li><p class="il-log-src" lang="${esc(l.src)}">${esc(g.src)}</p><p class="il-log-dst" lang="${esc(l.dst)}">${esc(g.dst)}</p></li>`);
+    const cur = (l.cap.source || l.cap.target)
+      ? `<li class="il-log-now"><p class="il-log-src" lang="${esc(l.src)}">${esc(l.cap.source)}<span class="live-partial">${esc(l.cap.sp)}</span></p>
+        <p class="il-log-dst" lang="${esc(l.dst)}">${esc(l.cap.target)}<span class="live-partial">${esc(l.cap.tp)}</span></p></li>` : '';
+    const empty = !rows.length && !cur ? '<li class="il-log-empty">마이크를 켜고 말하면 원문과 번역이 차례로 쌓여요.</li>' : '';
+    return `<div class="il-listen">
+      <div class="il-pair"><span>${esc(l.src === 'ko' ? '한국어' : '영어')}</span><span class="il-arrow" aria-hidden="true">→</span><span>${esc(l.dst === 'ko' ? '한국어' : '영어')}</span></div>
+      <ul class="il-log" data-live="log">${empty}${rows.join('')}${cur}</ul>
+    </div>`;
+  }
+  const hist = l.hist.slice(-3).reverse();
+  return `<div class="il-card-mode">
+    ${liveFarHtml(l)}${liveNearHtml(l)}
+    ${hist.length ? `<ul class="conv-hist"><li class="conv-hist-label">지난 줄</li>${hist.map(h => `<li><span>${esc(h.target)}</span></li>`).join('')}</ul>` : ''}
+  </div>`;
+}
+function interpUiSheetHtml(ui) {
+  return `<div class="il-sheet-wrap" data-act="live-ui-close">
+    <div class="il-sheet" role="dialog" aria-modal="true" aria-label="화면 방식" data-act="noop">
+      <div class="il-sheet-head"><b>화면 방식</b><button class="il-icon" data-act="live-ui-close" aria-label="닫기">${IL_ICON.close}</button></div>
+      <p class="small">통역을 멈추지 않고 바꿀 수 있어요. 고른 방식은 이 브라우저에 기억해요.</p>
+      ${INTERP_UI.map(([id, name, desc]) => `<button class="il-opt ${id === ui ? 'on' : ''}" data-act="live-ui" data-v="${id}" aria-pressed="${id === ui}">
+        ${interpUiThumb(id)}<span class="il-opt-txt"><b>${name}</b><span>${desc}</span></span>${id === ui ? '<span class="il-check" aria-hidden="true">✓</span>' : ''}</button>`).join('')}
+      <p class="small" style="margin:12px 0 0">마주 보기는 상대 쪽 글자를 180° 돌려 놓아요. 폰을 탁자에 눕히고 서로 마주 볼 때 씁니다. 언어를 바꾸려면 통역을 끝내고 다시 시작해야 해요(시작 횟수 제한에 포함).</p>
+    </div></div>`;
+}
+/* 시작 전 카드. 진행 중 화면은 interpLiveFullHtml() 이 전체화면으로 맡는다. */
 function interpLiveHtml() {
-  const l = LIVE, c = l.cap;
-  const badge = l.test ? '<span class="live-badge test">시험 모드</span>'
-    : l.provider ? `<span class="live-badge">${esc((l.providers || []).find(p => p.id === l.provider)?.label || l.provider)}</span>` : '';
+  const l = LIVE;
+  if (l.on) return '';
   const engines = (l.providers || []).filter(p => p.available);
   const picker = engines.length > 1 ? `<div class="live-engines" role="group" aria-label="통역 엔진">
       ${engines.map(p => `<button class="chip ${liveEngine(engines) === p.id ? 'on' : ''}" data-act="live-engine" data-v="${esc(p.id)}">${esc(p.label)}</button>`).join('')}
     </div>` : '';
-  if (!l.on) {
-    return `<div class="live-card">
-      <div class="live-head"><b>대화 통역</b>${badge}</div>
-      <p class="small">마이크를 켜고 말하면 상대 언어로 바꿔 <b>크게 보여 주고</b> 들려줄 수 있어요. 두 사람이 번갈아 말해도 됩니다.</p>
-      ${picker}
-      <button class="btn accent block" data-act="live-start">통역 시작</button>
-      <p class="live-notice">${esc(INTERP_NOTICE)} <button class="linkish" data-act="live-terms">약관 전문 보기</button></p>
-      ${l.note ? `<p class="live-note">${esc(l.note)}</p>` : ''}
-      ${l.fallback ? '<button class="btn soft block" data-act="live-fallback">검수 문장으로 통역하기</button>' : ''}
-      ${l.providers && !engines.length ? `<p class="live-note">지금은 쓸 수 있는 통역 엔진이 없어요(서버 키 미설정).</p>` : ''}</div>`;
+  return `<div class="live-card">
+    <div class="live-head"><b>대화 통역</b>${l.test ? '<span class="live-badge test">시험 모드</span>' : ''}</div>
+    <p class="small">마이크를 켜고 말하면 상대 언어로 바꿔 <b>크게 보여 주고</b> 들려줄 수 있어요. 두 사람이 번갈아 말해도 됩니다.</p>
+    <div class="il-pick-wrap"><span class="il-pick-label">화면 방식</span>${interpUiChipsHtml(l.ui || interpUi())}</div>
+    ${picker}
+    <button class="btn accent block" data-act="live-start">통역 시작</button>
+    <p class="live-notice">${esc(INTERP_NOTICE)} <button class="linkish" data-act="live-terms">약관 전문 보기</button></p>
+    ${l.note ? `<p class="live-note">${esc(l.note)}</p>` : ''}
+    ${l.fallback ? '<button class="btn soft block" data-act="live-fallback">검수 문장으로 통역하기</button>' : ''}
+    ${l.providers && !engines.length ? `<p class="live-note">지금은 쓸 수 있는 통역 엔진이 없어요(서버 키 미설정).</p>` : ''}</div>`;
+}
+/* 진행 중 = 전체화면. 헤더(닫기·엔진·방식·크게) + 방식별 본문 + 바닥 마이크. */
+function interpLiveFullHtml() {
+  const l = LIVE;
+  if (!l.on) return '';
+  const ui = l.ui || interpUi();
+  const badge = l.test ? '<span class="live-badge test">시험 모드</span>'
+    : l.provider ? `<span class="live-badge">${esc((l.providers || []).find(p => p.id === l.provider)?.label || l.provider)}</span>` : '';
+  return `<div class="interp-live" id="interp-live" data-ui="${esc(ui)}" role="dialog" aria-modal="true" aria-label="실시간 통역">
+    <div class="il-head">
+      <button class="il-icon" data-act="live-stop" aria-label="통역 끝내기">${IL_ICON.close}</button>
+      <div class="il-title"><b>통역</b><span class="il-sub">${esc(interpUiLabel(ui))}</span></div>
+      ${badge}
+      <span class="live-state ${l.paused ? '' : l.status}">${esc(liveStateText())}</span>
+      <button class="il-icon" data-act="live-ui-open" aria-expanded="${l.uiOpen ? 'true' : 'false'}" aria-label="화면 방식 바꾸기">${IL_ICON.grid}</button>
+      <button class="il-icon" data-act="live-expand" aria-label="상대에게 크게 보여주기">${IL_ICON.expand}</button>
+    </div>
+    <div class="il-body">${liveBodyHtml(l)}</div>
+    <div class="il-dock">
+      <button class="il-mic ${l.muted ? 'off' : ''}" data-act="live-mute" aria-pressed="${l.muted ? 'true' : 'false'}" aria-label="${l.muted ? '마이크 켜기' : '마이크 끄기'}">${l.muted ? IL_ICON.micOff : IL_ICON.mic}</button>
+      <div class="il-acts">
+        <button class="il-act" data-act="live-play" ${l.cap.target ? '' : 'disabled'}>${I.speaker}들려주기</button>
+        <button class="il-act" data-act="live-pause">${l.paused ? '다시 듣기' : '잠시 멈춤'}</button>
+        <button class="il-act" data-act="live-stop">끝내기</button>
+      </div>
+      ${l.provider === 'browser' ? `<button class="il-act il-turn" data-act="live-turn">${l.speaker === 'me' ? '지금: 내가 말해요 → 상대 차례로' : '지금: 상대가 말해요 → 내 차례로'}</button>` : ''}
+      <p class="il-notice">AI 번역 · 정확도 보장 안 함 · 긴급 상황은 사람에게 · <button class="linkish" data-act="live-terms">고지 전문</button></p>
+    </div>
+    ${l.uiOpen ? interpUiSheetHtml(ui) : ''}
+  </div>`;
+}
+const liveSlotHtml = () => `<div class="il-slot" data-live="full">${interpLiveFullHtml()}</div>`;
+/* 파생 상태(자막·음소거·방식)만 다시 그린다. 상대 보기는 자막만 갱신한다. */
+function updateLiveUi() {
+  const el = $('[data-live="live"]'); if (el) el.innerHTML = interpLiveHtml();
+  const fl = $('[data-live="full"]'); if (fl) fl.innerHTML = interpLiveFullHtml();
+  const pv = $('[data-live="partner"]'); if (pv) pv.innerHTML = interpPartnerHtml();
+  const box = $('[data-live="log"]');
+  if (box) {
+    if (!LIVE.logStay) box.scrollTop = box.scrollHeight;   // 사용자가 위로 올려 읽는 중이면 붙잡지 않는다
+    box.addEventListener('scroll', () => {
+      LIVE.logStay = box.scrollTop + box.clientHeight < box.scrollHeight - 24;
+    }, { passive: true });
   }
-  const hist = l.hist.slice(-3).reverse();
-  return `<div class="live-card on">
-    <div class="live-head"><b>대화 통역</b>${badge}<span class="live-state ${l.paused ? '' : l.status}">${esc(liveStateText())}</span></div>
-    <div class="conv">
-      <div class="conv-partner" data-act="live-partner">
-        <span class="conv-who">상대에게 보여주기 · ${esc(l.dst === 'ko' ? '한국어' : '영어')}</span>
-        <p class="conv-big" lang="${esc(l.dst)}">${esc(c.target) || '<span class="conv-empty">말하면 여기에 상대 언어로 나와요</span>'}<span class="live-partial">${esc(c.tp)}</span></p>
-        <span class="conv-ai" lang="${esc(l.dst)}">${esc(partnerAiLabel(l.dst))}</span><span class="conv-tap">눌러서 크게 ›</span>
-      </div>
-      <div class="conv-me">
-        <span class="conv-who">내가 한 말 · ${esc(l.src === 'ko' ? '한국어' : '영어')}<span class="live-meter" data-live="meter" aria-hidden="true"><i></i></span>${l.mode ? `<span class="live-mode">${l.mode === 'worklet' ? '오디오 스레드' : '기본'}</span>` : ''}${l.muted ? '<span class="live-muted">음소거</span>' : ''}</span>
-        <p class="conv-small" lang="${esc(l.src)}">${esc(c.source)}<span class="live-partial">${esc(c.sp)}</span></p>
-      </div>
-    </div>
-    ${hist.length ? `<ul class="conv-hist">${hist.map(h => `<li><span>${esc(h.target)}</span></li>`).join('')}</ul>` : ''}
-    <div class="live-acts">
-      <button class="btn soft" data-act="live-play" ${c.target ? '' : 'disabled'}>${I.speaker}들려주기</button>
-      <button class="btn ${l.muted ? 'accent' : 'soft'}" data-act="live-mute" aria-pressed="${l.muted}">${l.muted ? '마이크 켜기' : '음소거'}</button>
-      <button class="btn ${l.paused ? 'primary' : 'soft'}" data-act="live-pause">${l.paused ? '다시 듣기' : '잠시 멈춤'}</button>
-      <button class="btn primary" data-act="live-stop">끝내기</button>
-    </div>
-    ${l.provider === 'browser' ? `<button class="btn soft block live-turn" data-act="live-turn">${l.speaker === 'me' ? '지금: 내가 말해요 → 상대 차례로' : '지금: 상대가 말해요 → 내 차례로'}</button>` : ''}
-    <p class="live-notice">AI 번역 · 정확도 보장 안 함 · 긴급 상황은 사람에게</p></div>`;
 }
 function interpPartnerHtml() {
   const l = LIVE;
@@ -1491,6 +1595,31 @@ function interpPartnerHtml() {
       <span class="partner-hint">화면을 누르면 돌아가요</span>
     </div></div>`;
 }
+/* 한 문장 확정: 제공자에 따라 partial 만 계속 오거나 문장이 통째로 바뀐다.
+   '자막이 1.2초 멈추면 한 줄' 이라는 한 가지 규칙으로 두 경우를 모두 받는다. */
+/* 문장이 바뀌면 바로 확정한다 — 제공자가 같은 문장을 반복해서 보내도 한 번만 쌓인다. */
+function liveConsider() {
+  const c = LIVE.cap, last = LIVE.log[LIVE.log.length - 1];
+  if (!c.target && !c.source) return;
+  if (last && last.dst === c.target && last.src === c.source) return;          // 이미 확정한 줄
+  if (last && last.dst && c.target && c.target.startsWith(last.dst)) return;   // 같은 문장이 길어지는 중
+  liveCommit();
+}
+function liveFlushSoon() {
+  clearTimeout(LIVE.flushT);
+  LIVE.flushT = setTimeout(liveCommit, 1200);
+}
+function liveCommit() {
+  clearTimeout(LIVE.flushT); LIVE.flushT = 0;
+  const c = LIVE.cap, last = LIVE.log[LIVE.log.length - 1];
+  if (!c.target && !c.source) return;
+  if (last && last.dst === c.target && last.src === c.source) return;   // 같은 줄을 두 번 쌓지 않는다
+  LIVE.hist.push({ target: c.target });
+  LIVE.log.push({ src: c.source, dst: c.target });
+  if (LIVE.log.length > 60) LIVE.log.shift();   // 오래 두면 메모리만 먹는다
+  if (LIVE.hist.length > 20) LIVE.hist.shift();
+  updateLiveUi();
+}
 function liveStateText() {
   if (LIVE.paused) return '멈춤';
   const st = LIVE.status;
@@ -1498,10 +1627,6 @@ function liveStateText() {
   if (st === 'live') return '듣는 중';
   if (st === 'error') return LIVE.note || '연결 실패';
   return '대기';
-}
-function updateLiveUi() {
-  const el = $('[data-live="live"]'); if (el) el.innerHTML = interpLiveHtml();
-  const pv = $('[data-live="partner"]'); if (pv) pv.innerHTML = interpPartnerHtml();   // 상대 보기는 자막만 다시 그린다
 }
 /* 16 kHz · mono · PCM16 으로 줄인다(제공자 공통 입력 형식). */
 function toPcm16(input, inRate) {
@@ -1613,8 +1738,8 @@ function browserListen() {
     try {
       const out = await LIVE.tr[from + to].translate(fin.trim());
       if (gen !== LIVE.gen) return;
-      if (LIVE.cap.target) LIVE.hist.push({ target: LIVE.cap.target });
       LIVE.cap = { source: fin.trim(), target: out, sp: '', tp: '' };
+      liveConsider(); liveFlushSoon();   // 서버 자막과 같은 확정 규칙 — '듣기'·지난 줄에 쌓인다
       updateLiveUi();
     } catch (err) { browserFail('translate'); }
   };
@@ -1650,6 +1775,8 @@ async function startLive(opt) {
   LIVE.src = LIVE.src || 'ko'; LIVE.dst = LIVE.dst || 'en';   // 내 말=한국어, 상대=영어(여행지 기본)
   LIVE.cap = { source: '', target: '', sp: '', tp: '' }; LIVE.q = []; LIVE.playing = false;
   LIVE.paused = false; LIVE.partner = false; LIVE.hist = []; LIVE.restart = '';
+  LIVE.ui = LIVE.ui || interpUi(); LIVE.uiOpen = false; LIVE.log = []; LIVE.logStay = false;
+  document.body.classList.add('il-on');   // 뒤 화면이 손가락에 밀려 스크롤되지 않게
   updateLiveUi();
   const engines = (LIVE.providers || []).filter(p => p.available && !LIVE.exclude.includes(p.id));
   if (liveEngine(engines) === 'browser') {
@@ -1675,9 +1802,9 @@ async function startLive(opt) {
     let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
     if (m.type === 'ready') { LIVE.status = 'live'; LIVE.provider = m.provider || ''; LIVE.test = !!m.test; updateLiveUi(); }
     else if (m.type === 'caption') {
-      const prev = LIVE.cap;
-      if (m.target && prev.target && m.target !== prev.target && !m.target.startsWith(prev.target)) LIVE.hist.push({ target: prev.target });
       LIVE.cap = { source: m.source || '', target: m.target || '', sp: m.source_partial || '', tp: m.target_partial || '' };
+      liveConsider();    // 문장이 바뀌면 그 자리에서 확정
+      liveFlushSoon();   // 1.2초 동안 자막이 안 바뀌면 한 문장이 끝난 것으로 본다
       updateLiveUi();
     } else if (m.type === 'audio') livePlayPcm(m.pcm, m.rate);
     else if (m.type === 'switch') {   // 서버가 다음 엔진으로 자동 전환했다(시작 전 실패)
@@ -1785,6 +1912,9 @@ function stopLive(note) {
   try { if (LIVE.stream) LIVE.stream.getTracks().forEach(t => t.stop()); } catch (e) { /* 이미 종료 */ }
   LIVE.stream = null;
   LIVE.q = []; LIVE.playing = false;
+  LIVE.uiOpen = false; LIVE.log = []; LIVE.logStay = false;
+  clearTimeout(LIVE.flushT); LIVE.flushT = 0;
+  document.body.classList.remove('il-on');
   if (had) updateLiveUi();
 }
 
@@ -1835,7 +1965,7 @@ function frame(inner, o = {}) {
     <div class="app">${inner}</div>
     ${o.bottom ? `<div class="bottombar">${o.bottom}</div>` : ''}
     ${o.tabbar ? `<nav class="tabbar">${tabs.map(([id, l, ic]) => `<button class="${tabActive === id ? 'on' : ''}" data-act="tab" data-id="${id}">${ic}${l}</button>`).join('')}</nav>` : ''}
-    ${sheetHtml()}${interpShowHtml()}${modalHtml()}
+    ${sheetHtml()}${interpShowHtml()}${liveSlotHtml()}${modalHtml()}
   </div></div>`;
 }
 /* 제품 셸: 폰 프레임·상태바 없이 뷰포트 전체를 쓴다. 내비는 CSS 가 탭바 → 레일 → 사이드로 바꾼다(docs/RESPONSIVE_STRATEGY.md §3). */
@@ -1847,7 +1977,7 @@ function pframe(inner, o = {}) {
     ${o.appbar || ''}
     <div class="app">${inner}</div>
     ${o.bottom ? `<div class="bottombar">${o.bottom}</div>` : ''}
-  </div></div>${sheetHtml()}${interpShowHtml()}${modalHtml()}</div>`;
+  </div></div>${sheetHtml()}${interpShowHtml()}${liveSlotHtml()}${modalHtml()}</div>`;
 }
 const appbar = (title, o = {}) => `<div class="appbar">${o.back ? `<button class="back" data-act="tab" data-id="${o.back}">${I.back}</button>` : ''}<h2>${title}</h2>${o.step ? `<span class="step">${o.step}</span>` : ''}</div>`;
 const notice = (html, kind = '') => `<div class="notice ${kind}">${kind === 'warn' || kind === 'bad' ? I.alert : I.info}<div>${html}</div></div>`;
@@ -3762,6 +3892,10 @@ const ACT = {
   },
   'live-pause': () => { LIVE.paused = !LIVE.paused; if (LIVE.paused && ttsSupported()) speechSynthesis.cancel(); updateLiveUi(); },
   'live-partner': () => { LIVE.partner = true; updateLiveUi(); },
+  'live-expand': () => { LIVE.partner = true; updateLiveUi(); },
+  'live-ui-open': () => { LIVE.uiOpen = true; updateLiveUi(); },
+  'live-ui-close': () => { LIVE.uiOpen = false; updateLiveUi(); },
+  'live-ui': el => { setInterpUi(el.dataset.v); LIVE.uiOpen = false; updateLiveUi(); },
   'live-partner-close': () => { LIVE.partner = false; updateLiveUi(); },
   'live-terms': () => confirmBox('실시간 통역 고지·면책', liveTermsHtml(), '확인', () => { S.modal = null; render(); }),
   'interp-consent-withdraw': () => { stopLive(); try { localStorage.removeItem(INTERP_CONSENT_KEY); } catch (e) { /* 저장소 막힘 */ } render(); toast('실시간 통역 동의를 철회했어요. 다음에 통역을 켤 때 다시 물어봐요.'); },

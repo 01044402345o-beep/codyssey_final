@@ -72,7 +72,7 @@ with sync_playwright() as p:
 
     page.locator('[data-act="live-mute"]').click(); page.wait_for_timeout(200)
     check("음소거: 트랙 꺼짐 + 표시", page.evaluate("LIVE.muted && !LIVE.stream.getAudioTracks()[0].enabled")
-          and "음소거" in page.locator(".live-card").inner_text())
+          and page.locator('.il-mic[aria-pressed="true"]').count() == 1)
     before = page.evaluate("LIVE.sent || 0"); page.wait_for_timeout(700)
     check("음소거 중에는 서버로 오디오가 안 간다", (page.evaluate("LIVE.sent || 0") - before) < 2000, str(page.evaluate("LIVE.sent || 0") - before))
     page.locator('[data-act="live-mute"]').click(); page.wait_for_timeout(700)
@@ -82,7 +82,7 @@ with sync_playwright() as p:
     check("끼어들기: 재생 큐를 비우고 세대를 올린다", page.evaluate("LIVE.q.length") == 0 and page.evaluate("LIVE.playing") is False)
     check("끼어들기 직후 늦은 조각은 버린다", page.evaluate("(LIVE.bargeUntil > performance.now())"))
 
-    page.locator('[data-act="live-stop"]').click(); page.wait_for_timeout(400)
+    page.locator('[data-act="live-stop"]').first.click(); page.wait_for_timeout(400)
     check("끝내면 마이크·연결이 닫힌다", page.evaluate("!LIVE.on && !LIVE.ws && !LIVE.stream"))
     check("끝낸 뒤 시작 버튼으로 돌아온다", page.locator('[data-act="live-start"]').count() == 1)
     check("끝내면 미터 루프·워클릿도 정리", page.evaluate("!LIVE.raf && !LIVE.worklet && !LIVE.srcNode"))
@@ -102,13 +102,58 @@ with sync_playwright() as p:
           and "AI translation" in page.locator(".conv-partner .conv-ai").inner_text())
     page.locator('[data-act="live-partner-close"]').click(); page.wait_for_timeout(200)
     check("상대 보기 닫기", page.locator(".partner-view").count() == 0)
-    page.locator('[data-act="live-stop"]').click(); page.wait_for_timeout(300)
+    page.locator('[data-act="live-stop"]').first.click(); page.wait_for_timeout(300)
 
     # 다른 화면으로 가면 통역도 멈춘다
     page.locator('[data-act="live-start"]').click(); page.wait_for_timeout(1200)
     page.evaluate("go('u-home')"); page.wait_for_timeout(400)
     check("화면을 옮기면 통역이 멈춘다", page.evaluate("!LIVE.on"))
 
+    # --- 전체화면 + 화면 방식(사용자가 고른다) ---
+    page.evaluate("go('u-interp')"); page.wait_for_timeout(500)
+    check("시작 전 카드에서 화면 방식을 고른다(3가지)", page.locator(".live-card .il-pick .il-chip").count() == 3)
+    page.locator('[data-act="live-start"]').click()
+    for _ in range(30):                      # 연결 대기(첫 요청이 느릴 수 있다)
+        page.wait_for_timeout(300)
+        if page.evaluate("LIVE.status") == "live":
+            break
+    ov = page.locator("#interp-live")
+    check("통역을 시작하면 전체화면", ov.count() == 1)
+    vp = page.viewport_size; bb = ov.bounding_box()
+    check("전체화면이 뷰포트를 덮는다", bool(bb) and bb["y"] <= 1 and bb["height"] >= vp["height"] - 2 and bb["width"] >= vp["width"] - 2, str(bb))
+    check("전체화면이 화면 맨 아래(탭바 자리)까지 덮는다",
+          page.evaluate("(() => { const el = document.elementFromPoint(innerWidth / 2, innerHeight - 6); return !!(el && el.closest('#interp-live')); })()"))
+    check("기본 화면 방식은 카드", ov.get_attribute("data-ui") == "card")
+    page.locator('[data-act="live-ui-open"]').click(); page.wait_for_timeout(250)
+    check("화면 방식 창에 3가지", page.locator(".il-sheet .il-opt").count() == 3)
+    page.locator('.il-opt[data-v="split"]').click(); page.wait_for_timeout(400)
+    check("마주 보기로 바뀐다", page.locator("#interp-live").get_attribute("data-ui") == "split")
+    check("마주 보기는 상대 쪽을 180° 돌린다",
+          page.evaluate("(() => { const m = new DOMMatrix(getComputedStyle(document.querySelector('.il-side-far')).transform); return m.a < -0.99 && m.d < -0.99; })()"))
+    check("방식을 바꿔도 통역은 멈추지 않는다", page.evaluate("LIVE.on && LIVE.status") == "live")
+    check("고른 방식은 이 브라우저에 남는다", page.evaluate("localStorage.getItem('cd_interp_ui')") == "split")
+    page.locator('[data-act="live-ui-open"]').click(); page.wait_for_timeout(200)
+    page.locator('.il-opt[data-v="listen"]').click()
+    for _ in range(45):
+        page.wait_for_timeout(200)
+        if page.evaluate("(LIVE.log || []).length") >= 2:
+            break
+    check("듣기: 말한 문장이 쌓인다", page.evaluate("(LIVE.log || []).length") >= 2, str(page.evaluate("(LIVE.log || []).length")))
+    logtxt = page.locator('[data-live="log"]').inner_text()
+    check("듣기: 원문과 번역이 함께 쌓인다",
+          any(k in logtxt for k in ("기차역", "걸어서 5분")) and any(k in logtxt for k in ("train station", "five minutes")), logtxt[:60])
+    check("듣기: 새 문장이 오면 맨 아래로 따라간다",
+          page.evaluate("(() => { const b = document.querySelector('[data-live=\"log\"]'); return b.scrollHeight - b.scrollTop - b.clientHeight < 48; })()"))
+    check("자막이 갱신돼도 방식이 유지된다", page.locator("#interp-live").get_attribute("data-ui") == "listen")
+    page.locator('[data-act="live-ui-open"]').click(); page.wait_for_timeout(200)
+    page.locator('.il-opt[data-v="card"]').click(); page.wait_for_timeout(300)
+    check("카드 방식에 상대 칸·내 칸", page.locator(".conv-partner").count() == 1 and page.locator(".conv-me").count() == 1)
+    page.locator('#interp-live [data-act="live-stop"]').first.click(); page.wait_for_timeout(400)
+    check("끝내면 전체화면이 닫히고 카드로 돌아온다",
+          page.locator("#interp-live").count() == 0 and page.locator('[data-act="live-start"]').count() == 1)
+    check("끝내면 뒤 화면 스크롤이 풀린다", page.evaluate("!document.body.classList.contains('il-on')"))
+
+    page.evaluate("go('u-home')"); page.wait_for_timeout(400)   # 동의 카드는 홈에 있다
     # 처리방침: 홈 'AI · 개인정보' 카드에 통역 동의 상태·받는 곳, 따로 철회
     card = page.locator(".card", has_text="실시간 통역 동의")
     check("개인정보 카드에 통역 동의 상태와 받는 곳(Soniox)", card.count() == 1 and "동의함" in card.inner_text() and "Soniox" in card.inner_text())
