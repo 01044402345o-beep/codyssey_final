@@ -233,13 +233,15 @@ class _Session:
         await _send(self.ws, {"type": "ready", "provider": "fake", "pair": [self.a, self.b], "audio_out": False, "test": True})
         lines = [("Where is the train station?", "기차역이 어디예요?"),
                  ("It's about five minutes on foot.", "걸어서 5분쯤 걸려요.")]
-        frames = [0]
+        got = [0, 0]   # [받은 바이트, 보낸 줄 수]
+        per_line = 16_000 * 2   # 오디오 1초(16 kHz 16-bit)마다 한 줄. 프레임 수로 세면 브라우저 샘플레이트(48k·192k)에 따라 빨라진다
 
         async def to_provider(data: bytes) -> None:
-            frames[0] += 1
-            if frames[0] % 12:            # 100 ms 프레임 12개마다 한 줄
+            got[0] += len(data)
+            if got[0] // per_line <= got[1]:
                 return
-            i = (frames[0] // 12 - 1) % len(lines)
+            got[1] += 1
+            i = (got[1] - 1) % len(lines)
             en, ko = lines[i]
             src, tgt = (en, ko) if self.a == "en" else (ko, en)
             await _send(self.ws, {"type": "caption", "source": "", "source_partial": "",
