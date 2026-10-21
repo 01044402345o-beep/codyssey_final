@@ -1382,7 +1382,7 @@ function interpItems() {
 const INTERP_CONSENT_KEY = 'cd_interp_consent';
 const INTERP_PROVIDER_KEY = 'cd_interp_provider';
 const INTERP_DISCLAIMER_VERSION = 3;   // v3(10/21): 운영에서 Azure·Gemini 를 켬 — 받는 곳에 네 회사를 모두 적음(기존 동의자 다시 동의). v2: 법률 검토 반영      // docs/legal/interp-disclaimer.md 와 함께 올린다
-const INTERP_NOTICE = `ai 통역이라 틀릴 수 있어요.여권·카드번호 같은 민감한 정보는 말하지 마세요.`;
+const INTERP_NOTICE = `ai 통역이라 틀릴 수 있어요.\n여권·카드번호 같은 민감한 정보는 말하지 마세요.`;
 const INTERP_TERMS = [
   ['성격', '여행 중 의사소통을 돕는 참고 도구예요. 공증·법정·의료 통역을 대신하지 않고, 통역 결과에는 법적 효력이 없어요.'],
   ['정확성', '음성 인식·기계 번역 과정에서 오역·누락이 생길 수 있어요. 숫자·금액·날짜·약 이름은 상대에게 화면으로 확인받으세요.'],
@@ -1539,7 +1539,7 @@ function interpLiveHtml() {
     ${picker}
     <button class="btn accent block" data-act="live-start">통역 시작</button>
     <p class="live-notice">${esc(INTERP_NOTICE)}
-      <button class="linkish" data-act="live-terms">약관 전문 보기</button>
+      <button class="linkish" data-act="live-terms"><strong>약관 전문 보기</strong></button>
     </p>
     ${l.note ? `<p class="live-note">${esc(l.note)}</p>` : ''}
     ${l.fallback ? '<button class="btn soft block" data-act="live-fallback">검수 문장으로 통역하기</button>' : ''}
