@@ -1927,7 +1927,7 @@ function sheetHtml() {
   const line = (k, label) => {
     const L = talkLine(s, k);
     return L ? `<div class="talk-line">${label ? `<span class="talk-pill">${esc(label)}</span>` : ''}<b lang="en" data-read>${enHtml(L.en)}</b><p>${esc(L.ko)}</p>
-      ${tts ? `<button class="talk-say" data-act="say-line" data-k="${k}">${I.speaker}듣기</button>` : ''}</div>` : '';
+      ${lineActsHtml(s, k, tts ? `<button class="talk-say" data-act="say-line" data-k="${k}">${I.speaker}듣기</button>` : '')}</div>` : '';
   };
   const body = t
     ? `<h4>상대방의 예상 답변</h4>${(t.replies || []).map((r, j) => line('r' + j, r.label)).join('')}<h4>내가 이어서</h4>${line('next')}`
@@ -1936,8 +1936,9 @@ function sheetHtml() {
     <div class="sheet-handle"></div><h3>회화 연습</h3>
     ${AI.talkTurns(t, s).length ? `<button class="talk-start" data-act="talk-start"><span class="talk-start-ic">${TALK_SVG.mic}</span><span class="talk-start-tx"><b>${AI.talkTurns(t, s).filter(x => x.who === 'me').length}번 주고받으며 대화하기</b><span>상대가 영어로 물으면 말로 답해요</span></span>${I.next}</button>` : ''}
     ${t && t.ask ? `<h4>상대가 먼저</h4>${line('ask')}<h4>내가 대답하기</h4>` : ''}
-    <div class="talk-me"><b lang="en" data-read>${enHtml(s.en)}</b><div>${phHtml(s.ko)}</div>${tts ? `<button class="talk-say" data-act="speak-card">${I.speaker}듣기</button>` : ''}</div>
-    <div class="speak" data-live="speak">${speakHtml(s)}</div>
+    <div class="talk-me"><b lang="en" data-read>${enHtml(s.en)}</b><div>${phHtml(s.ko)}</div>
+      ${lineActsHtml(s, 'me', tts ? `<button class="talk-say" data-act="speak-card">${I.speaker}듣기</button>` : '')}</div>
+    <div class="speak">${speakNoteHtml()}</div>
     ${(s.alt || []).length ? `<h4>같은 뜻, 다른 표현</h4>${s.alt.map((x, j) => line('a' + j, x.label)).join('')}` : ''}
     ${body}
     <button class="btn primary block" data-act="sheet-close">↓ 회화 연습 닫기</button>
@@ -2279,7 +2280,8 @@ function preset(kind) {
 
 /* ================= 말하기 연습 (녹음 → /speak-check) =================
    작업 토큰(SPK.tok)으로 취소·늦은 응답을 구분한다. 카드 이동·화면 전환·재진입 시 cancelSpeak(). */
-const SPK = { state: 'idle', tok: 0, rec: null, stream: null, ctl: null, timer: null, sid: null, result: null, clip: null };
+const SPK = { state: 'idle', tok: 0, rec: null, stream: null, ctl: null, timer: null, sid: null, line: 'me', result: null, clip: null };
+/* line = 회화 연습 시트에서 지금 말해보는 줄: 'me'(내 문장) · 'ask' · 'r0'… · 'next'. 줄마다 '듣기' 옆에 '말해보기'가 있고, 결과는 그 줄 아래에 보인다. */
 /* 내 발음 다시 듣기(설문 Q14 "내가 연습한 발음을 들어볼 수 있으면"). 녹음은 이 탭 메모리에만 둔다 —
    서버에 따로 저장하지 않고, 다시 녹음하거나 카드를 넘기면(cancelSpeak) 재생 주소를 해제한다. */
 let mineAudio = null;
@@ -2300,18 +2302,25 @@ function aiBadges(s) {
   if (w) h += `<span class="badge b-weak">복습 목록 상황${w.demo ? ' · 데모 학습 기록' : ''}</span>`;
   return h;
 }
-function speakHtml(s) {
-  if (API.base !== null && !canRecord()) return `<div class="tts-off">이 브라우저에서는 녹음이 안 돼요. ${betterBrowser()}에서 열면 말하기 연습을 쓸 수 있어요. 카드 학습은 계속할 수 있어요.</div>`;
+/* 회화 연습 시트의 줄마다 붙는 '말해보기' 버튼. 내 문장(me)은 기존 data-act="speak-rec"(복습 목록 규칙 포함),
+   상대 예상 답변·이어서 할 말은 data-act="speak-line"(그 줄 문장이 채점 목표, 복습 목록에는 넣지 않음). */
+function speakBtnHtml(s, k) {
   if (!speakAvailable()) return '';
-  const mine = SPK.sid === s.id;
+  const mine = SPK.sid === s.id && SPK.line === k;
   const st = mine ? SPK.state : 'idle';
-  const label = st === 'requesting' ? '마이크 확인 중…' : st === 'recording' ? '■ 녹음 끝내기' : st === 'uploading' ? '채점 중…' : '🎤 말해보기';
-  const host = API.host || location.host;
+  const other = !mine && SPK.state !== 'idle';   // 다른 줄을 녹음·채점하는 동안에는 막는다(녹음이 엉뚱한 줄로 가지 않게)
+  const label = st === 'requesting' ? '확인 중…' : st === 'recording' ? '녹음 끝내기' : st === 'uploading' ? '채점 중…' : '말해보기';
+  const act = k === 'me' ? 'data-act="speak-rec"' : `data-act="speak-line" data-k="${k}"`;
+  return `<button class="speak-btn ${st === 'recording' ? 'rec' : ''}" ${act} ${st === 'requesting' || st === 'uploading' || other ? 'disabled' : ''} aria-label="${st === 'recording' ? '녹음 끝내기' : '이 문장 말해보기'}">${st === 'recording' ? TALK_SVG.stop : TALK_SVG.mic}${label}</button>`;
+}
+function speakResHtml(s, k) {
+  const mine = SPK.sid === s.id && SPK.line === k;
+  const st = mine ? SPK.state : 'idle';
   let res = '';
   if (mine && SPK.result) {
     const r = SPK.result;
     const parts = r.error ? [r.error]
-      : r.usable !== true ? [r.mock ? '샘플 응답이에요(채점 안 됨).' : (r.reason || '평가하지 못했어요. 다시 시도해 주세요.'), '복습 목록에 저장하지 않았어요.']
+      : r.usable !== true ? [r.mock ? '샘플 응답이에요(채점 안 됨).' : (r.reason || '평가하지 못했어요. 다시 시도해 주세요.'), k === 'me' ? '복습 목록에 저장하지 않았어요.' : '']
       : r.limited ? [r.heard ? `들린 문장: ${r.heard}` : '', r.reason || '음성 확인이 제한되어 점수와 자동 복습 저장을 제공하지 않습니다.',
          r.saved ? '복습 목록에 저장했어요(직접 선택)' : '']   // 제한 모드: 검증 못 한 전사라 점수·일치율을 보이지 않는다
       : [typeof r.score === 'number' ? (r.score_kind === 'word_match' ? `단어 일치 ${r.score}% (발음 점수 아님)` : `점수 ${r.score}`) : '', r.heard ? `들린 문장: ${r.heard}` : '', r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '',
@@ -2320,9 +2329,20 @@ function speakHtml(s) {
     if (r.offer) res += `<button class="speak-btn" data-act="weak-save">이 상황을 복습 목록에 저장</button>`;
   }
   // 결과가 나온 뒤(오류·말소리 없음 포함) 방금 녹음을 다시 들을 수 있다 — 원어민 '듣기'와 비교하라고
-  if (mine && SPK.clip && SPK.clip.sid === s.id && st === 'idle') res += `<button class="speak-btn" data-act="play-mine">▶ 내 발음 듣기</button>`;
-  return `<button class="speak-btn ${st === 'recording' ? 'rec' : ''}" data-act="speak-rec" ${st === 'requesting' || st === 'uploading' ? 'disabled' : ''}>${label}</button>${res}
-    <div class="speak-note">녹음은 ${esc(host)} 서버로 가고, 말소리가 있을 때만 전사·교차검증 AI(Groq·AssemblyAI)로 전송돼요. 다시 듣기용 녹음은 이 화면에만 있어요.${voiceConsent().voice ? ' (동의함 · 홈에서 철회)' : ' 처음 녹음할 때 동의를 받아요.'}</div>`;
+  if (mine && SPK.clip && SPK.clip.sid === s.id && SPK.clip.line === k && st === 'idle') res += `<button class="speak-btn" data-act="play-mine">▶ 내 발음 듣기</button>`;
+  return res;
+}
+/* 녹음 고지·브라우저 안내는 시트에 한 번만(내 문장 아래). */
+function speakNoteHtml() {
+  if (API.base !== null && !canRecord()) return `<div class="tts-off">이 브라우저에서는 녹음이 안 돼요. ${betterBrowser()}에서 열면 말하기 연습을 쓸 수 있어요. 카드 학습은 계속할 수 있어요.</div>`;
+  if (!speakAvailable()) return '';
+  const host = API.host || location.host;
+  return `<div class="speak-note">녹음은 ${esc(host)} 서버로 가고, 말소리가 있을 때만 전사·교차검증 AI(Groq·AssemblyAI)로 전송돼요. 다시 듣기용 녹음은 이 화면에만 있어요.${voiceConsent().voice ? ' (동의함 · 홈에서 철회)' : ' 처음 녹음할 때 동의를 받아요.'}</div>`;
+}
+/* 듣기 + 말해보기 한 줄. 듣기는 다시 그리지 않고(재생 중 표시 유지), 말해보기·결과 칸만 updateSpeakUi 가 갈아 끼운다. */
+function lineActsHtml(s, k, listen) {
+  return `<div class="line-acts">${listen}<span class="spk-slot" data-live="speak-btn" data-k="${k}">${speakBtnHtml(s, k)}</span></div>
+    <div class="spk-res" data-live="speak-res" data-k="${k}">${speakResHtml(s, k)}</div>`;
 }
 /* 말하기 연습 동의 — 녹음이 서버와 Google 로 나가고 복습 목록이 쌓이므로 첫 녹음 전에 받는다.
    저장소가 막힌 브라우저에서는 이번 접속 동안만 기억한다(consentMem). */
@@ -2379,10 +2399,14 @@ function accountCard() {
 const weakItem = s => ({ category_id: s.categoryId, id: s.situationId, situation: s.situation, en: s.en, ko: s.ko });
 function updateSpeakUi() {
   if (TALK.on) updateTalkUi();
-  const el = $('[data-live=speak]'); const r = studyShown() && pickRow();
-  if (!el || !r) return;
+  const r = studyShown() && pickRow();
+  if (!r) return;
   const s = S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]];
-  if (s) el.innerHTML = speakHtml(s);
+  if (!s) return;
+  const f = document.activeElement && document.activeElement.closest && document.activeElement.closest('[data-live="speak-btn"]') ? document.activeElement.closest('[data-live="speak-btn"]').dataset.k : null;
+  document.querySelectorAll('[data-live="speak-btn"]').forEach(el => { el.innerHTML = speakBtnHtml(s, el.dataset.k); });
+  document.querySelectorAll('[data-live="speak-res"]').forEach(el => { el.innerHTML = speakResHtml(s, el.dataset.k); });
+  if (f) { const b = $(`[data-live="speak-btn"][data-k="${f}"] button`); if (b) b.focus(); }   // 다시 그린 뒤 포커스를 같은 줄로
 }
 function cancelSpeak() {
   SPK.tok++;
@@ -2401,7 +2425,8 @@ async function toggleSpeak(opt) {
   if (!voiceConsent().voice) { askVoiceConsent(opt ? () => toggleSpeak(opt) : null); return; }   // 동의 전에는 마이크도 열지 않는다
   const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]]; if (!s) return;
   cancelSpeak();
-  const tok = SPK.tok; SPK.sid = s.id; SPK.state = 'requesting'; updateSpeakUi();
+  if (ttsSupported()) { try { speechSynthesis.cancel(); } catch (e) { /* 이미 멈춤 */ } }   // 원어민 듣기가 녹음에 섞이지 않게
+  const tok = SPK.tok; SPK.sid = s.id; SPK.line = (opt && opt.line) || 'me'; SPK.state = 'requesting'; updateSpeakUi();
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch (e) {
@@ -2432,7 +2457,7 @@ async function toggleSpeak(opt) {
     // 말소리 여부는 서버의 Silero 신경망 VAD 가 판정한다(음량·데시벨 기준이 아님). 말이 없으면 외부 AI 로 보내지 않는다.
     const blob = new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' });
     dropClip();
-    try { SPK.clip = { sid: s.id, url: URL.createObjectURL(blob) }; } catch (e) { SPK.clip = null; }   // 다시 듣기용(메모리)
+    try { SPK.clip = { sid: s.id, line: SPK.line, url: URL.createObjectURL(blob) }; } catch (e) { SPK.clip = null; }   // 다시 듣기용(메모리)
     uploadSpeech(tok, blob, s, opt);
   };
   rec.start();
@@ -2456,6 +2481,10 @@ async function uploadSpeech(tok, blob, s, opt) {
   if (tok !== SPK.tok) return;                                               // 늦은 응답: 표시도 저장도 하지 않는다
   SPK.state = 'idle'; SPK.ctl = null;
   if (opt && opt.onResult) { opt.onResult(res); updateSpeakUi(); return; }   // 대화 중에는 점수·자동 저장 없음(끝난 뒤 요약)
+  if (opt && opt.line && opt.line !== 'me') {   // 상대 답변·이어서 할 말 연습: 결과만 보이고 복습 목록(내 문장 기준 규칙)은 건드리지 않는다
+    SPK.result = { ...res, saved: false, savedBy: null, offer: false, coverage: typeof res.heard === 'string' ? AI.heardCoverage(opt.target, res.heard) : null };
+    updateSpeakUi(); return;
+  }
   const decision = AI.weakDecision(s, res);
   const save = decision === 'auto';
   if (save) saveWeakList(AI.upsertWeak(weakList(), weakItem(s)));
@@ -2963,6 +2992,11 @@ const ACT = {
   'weak-demo': () => { saveWeakList(DEMO_WEAK.reduce((l, w) => AI.upsertWeak(l, w), weakList())); renderDemo(); toast('데모 학습 기록을 불러왔어요. 실제 학습에서 생긴 기록이 아니에요.'); },
   'weak-clear': () => { saveWeakList([]); renderDemo(); toast('복습 목록을 비웠어요.'); },
   'speak-rec': () => toggleSpeak(),
+  'speak-line': el => {   // 회화 연습 시트: 상대 예상 답변·이어서 할 말을 그 문장 그대로 말해본다
+    const s = curSent(); const L = s && talkLine(s, el.dataset.k); if (!L) return;
+    if (SPK.state === 'recording' && SPK.line === el.dataset.k) { stopSpeak(); return; }
+    toggleSpeak({ target: ttsText(slotText(L.en)), line: el.dataset.k });
+  },
   'consent-withdraw': () => confirmBox('동의를 철회할까요?',
     `말하기 연습을 다시 쓰려면 새로 동의해야 해요. ${accountUid() ? '이 계정' : '이 브라우저'}에 저장된 복습 목록 ${weakList().length}개도 함께 지워요.`,
     '철회하고 지우기', () => {

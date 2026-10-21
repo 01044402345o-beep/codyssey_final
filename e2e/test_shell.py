@@ -308,11 +308,11 @@ with sync_playwright() as p:
     check("상황별 연습: 왼쪽 스와이프 1회 = 카드 1장(1/5 → 2/5)", page.evaluate("S.card.i") == 1 and "2 / 5" in page.locator('[data-live="flipcount"]').inner_text(), page.locator('[data-live="flipcount"]').inner_text())
     page.locator(".flip").click(); page.wait_for_timeout(200)
     check("상황별 연습: 뒷면에는 말해보기가 없고 하단에 '회화 연습 열기'",
-          page.locator('[data-live="speak"]').count() == 0 and page.locator('[data-act="sheet-open"]').count() == 1)
+          page.locator('.face [data-live^="speak"], .face .speak-btn').count() == 0 and page.locator('[data-act="sheet-open"]').count() == 1)
     page.locator('[data-act="sheet-open"]').click(); page.wait_for_timeout(300)
     has_talk = page.evaluate("!!(curSent() && curSent().talk)")
     check("회화 연습 시트: 말해보기 영역 + (공통 문장이면) 예상 답변",
-          page.locator('.sheet [data-live="speak"]').count() == 1
+          page.locator('.sheet .talk-me [data-live="speak-btn"]').count() == 1   # 말해보기는 줄마다(듣기 옆) — 내 문장 줄은 반드시
           and (page.locator('.sheet .talk-line').count() >= 2 if has_talk else page.locator('.sheet .talk-line').count() == 0), f"talk={has_talk}")
     page.locator('[data-act="sheet-close"]').click(); page.wait_for_timeout(300)
     check("회화 연습 시트 닫기", page.locator('.sheet').count() == 0 and not page.evaluate("S.sheet"))

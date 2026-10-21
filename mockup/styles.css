@@ -1020,7 +1020,16 @@ html[data-mode=demo] .side .note-card { box-shadow: none; }
 .sheet h4 { margin: 16px 0 6px; font-size: 0.875rem; color: var(--text-soft); }
 .talk-me { background: var(--surface-3); border-radius: 14px; padding: 14px; line-height: 1.6; }
 .talk-me b { display: block; font-size: 1rem; }
-.talk-me .talk-say { margin-top: 8px; }
+.talk-me .line-acts { margin-top: 8px; }
+/* 듣기 + 말해보기 한 줄(회화 연습 시트의 모든 문장). 같은 높이·같은 모양, 말해보기는 마이크 아이콘으로 구분 */
+.line-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.spk-slot { display: contents; }
+.sheet .line-acts .speak-btn { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px; align-self: auto; font-size: 0.8125rem; }
+.sheet .line-acts .speak-btn svg { width: 16px; height: 16px; }
+.sheet .line-acts .speak-btn:disabled { opacity: .45; }
+.spk-res { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.spk-res:not(:empty) { margin-top: 8px; }
+.sheet .spk-res .speak-btn { height: 40px; }
 .talk-line { border-top: 1px solid var(--border); padding: 12px 0; }
 .talk-line b { display: block; margin: 4px 0; }
 .talk-line p { margin: 0 0 8px; font-size: 0.8125rem; color: var(--text-soft); }
