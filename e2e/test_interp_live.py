@@ -161,6 +161,12 @@ with sync_playwright() as p:
     check("통역 동의 철회 → 동의 기록이 지워진다", page.evaluate("interpConsent()") is None and "동의하지 않음" in page.locator(".card", has_text="실시간 통역 동의").inner_text())
     page.evaluate("localStorage.setItem(INTERP_CONSENT_KEY, JSON.stringify({voice: true, at: Date.now()}))")
     check("동의 문구 버전이 다르면(옛 동의) 다시 묻는다", page.evaluate("interpConsent()") is None)
+    # 카드 방식의 지난 줄에 지금 상대 칸 문장이 또 나오지 않는다(10/21 통합 확인에서 발견)
+    dup = page.evaluate("""() => { LIVE.ui = 'card'; LIVE.cap = { source: 'a', target: 'B now', sp: '', tp: '' };
+      LIVE.hist = [{ target: 'A old' }, { target: 'B now' }]; const h = liveBodyHtml(LIVE);
+      const d = document.createElement('div'); d.innerHTML = h;
+      return [...d.querySelectorAll('.conv-hist li:not(.conv-hist-label)')].map(x => x.textContent.trim()); }""")
+    check("카드 지난 줄: 지금 보이는 문장은 빼고 이전 문장만", dup == ["A old"], str(dup))
     check("페이지 오류 없음", not errors, str(errors)[:200])
     b.close()
 

@@ -1507,7 +1507,8 @@ function liveBodyHtml(l) {
       <ul class="il-log" data-live="log">${empty}${rows.join('')}${cur}</ul>
     </div>`;
   }
-  const hist = l.hist.slice(-3).reverse();
+  // 지난 줄: 지금 상대 칸에 떠 있는 문장(방금 확정된 줄)은 빼고 보여 준다 — 같은 문장이 두 번 보이지 않게
+  const hist = l.hist.filter((h, i) => !(i === l.hist.length - 1 && h.target === l.cap.target)).slice(-3).reverse();
   return `<div class="il-card-mode">
     ${liveFarHtml(l)}${liveNearHtml(l)}
     ${hist.length ? `<ul class="conv-hist"><li class="conv-hist-label">지난 줄</li>${hist.map(h => `<li><span>${esc(h.target)}</span></li>`).join('')}</ul>` : ''}

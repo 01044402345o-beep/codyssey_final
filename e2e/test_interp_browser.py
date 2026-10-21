@@ -102,7 +102,7 @@ with sync_playwright() as p:
             break
     check("상대 차례로 바꾸면 en-US 로 듣고 한국어로 번역", page.evaluate("LIVE.speaker") == "partner"
           and page.evaluate("LIVE.cap.target") == "[en->ko] It is five minutes on foot.", page.evaluate("LIVE.cap.target"))
-    page.locator('[data-act="live-stop"]').click(); page.wait_for_timeout(300)
+    page.locator('.il-acts [data-act=\"live-stop\"]').click(); page.wait_for_timeout(300)   # 전체화면은 위 닫기(X)와 아래 '끝내기' 두 개 — 아래 것
     check("끝내면 인식·번역기를 정리", page.evaluate("!LIVE.on && LIVE.rec === null && LIVE.tr === null"))
     check("페이지 오류 없음", not errors, str(errors)[:200])
     ctx.close()
@@ -117,7 +117,7 @@ with sync_playwright() as p:
     check("브라우저 엔진 실패 → 자동으로 서버 엔진(시험 모드)으로 연결", page.evaluate("LIVE.provider") == "fake"
           and page.evaluate("LIVE.exclude.includes('browser')") and len(sockets) >= 1 and "서버 통역" in page.evaluate("LIVE.note"),
           f"{page.evaluate('LIVE.provider')} / {page.evaluate('LIVE.note')} / {sockets}")
-    page.locator('[data-act="live-stop"]').click(); page.wait_for_timeout(200)
+    page.locator('.il-acts [data-act=\"live-stop\"]').click(); page.wait_for_timeout(200)   # 전체화면은 위 닫기(X)와 아래 '끝내기' 두 개 — 아래 것
     check("페이지 오류 없음(실패 전환)", not errors, str(errors)[:200])
     ctx.close()
 
