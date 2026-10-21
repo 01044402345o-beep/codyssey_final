@@ -8,15 +8,18 @@ from app.main import health
 
 class T(unittest.TestCase):
     def test_deploy_info_from_render_env(self):
-        env = {"RENDER_GIT_COMMIT": "abc1234", "RENDER_GIT_BRANCH": "main", "RENDER_GIT_REPO_SLUG": "owner/repo"}
+        env = {"RENDER": "true", "RENDER_GIT_COMMIT": "abc1234", "RENDER_GIT_BRANCH": "main", "RENDER_GIT_REPO_SLUG": "owner/repo",
+               "K_SERVICE": "", "K_REVISION": ""}
         with mock.patch.dict(os.environ, env):
-            self.assertEqual(health()["deploy"], {"commit": "abc1234", "branch": "main", "repo": "owner/repo"})
+            self.assertEqual(health()["deploy"], {"commit": "abc1234", "platform": "render", "revision": None,
+                                                  "branch": "main", "repo": "owner/repo"})
 
     def test_deploy_info_absent_is_null(self):
         with mock.patch.dict(os.environ, {}, clear=False):
-            for k in ("RENDER_GIT_COMMIT", "RENDER_GIT_BRANCH", "RENDER_GIT_REPO_SLUG"):
+            for k in ("RENDER_GIT_COMMIT", "RENDER_GIT_BRANCH", "RENDER_GIT_REPO_SLUG", "RENDER", "K_SERVICE", "K_REVISION", "GIT_COMMIT"):
                 os.environ.pop(k, None)
-            self.assertEqual(health()["deploy"], {"commit": None, "branch": None, "repo": None})
+            self.assertEqual(health()["deploy"], {"commit": None, "platform": None, "revision": None,
+                                                  "branch": None, "repo": None})
 
 
 if __name__ == "__main__":

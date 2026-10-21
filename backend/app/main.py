@@ -469,7 +469,9 @@ def health() -> dict[str, Any]:
         # 배포된 코드가 어느 커밋인지 응답 한 번으로 알 수 있게 한다. Render 가 빌드·런타임에 주는 기본 환경변수이고,
         # 로컬 실행처럼 값이 없으면 null 이다. (SHA 는 비밀이 아니다.)
         "deploy": {
-            "commit": os.getenv("RENDER_GIT_COMMIT") or None,
+            "commit": os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or None,   # Cloud Run 은 배포 때 GIT_COMMIT 을 넣는다
+            "platform": "render" if os.getenv("RENDER") else "cloud-run" if os.getenv("K_SERVICE") else None,
+            "revision": os.getenv("K_REVISION") or None,
             "branch": os.getenv("RENDER_GIT_BRANCH") or None,
             "repo": os.getenv("RENDER_GIT_REPO_SLUG") or None,
         },
@@ -887,8 +889,20 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
 
 @app.get("/interp/providers")
 def interp_providers() -> dict[str, Any]:
-    """실시간 통역 제공자 목록 — 화면의 '통역 엔진' 선택이 쓴다. 키 이름·값은 내려보내지 않는다."""
-    return {"providers": interp.provider_list()}
+    """실시간 통역 제공자 목록 — 화면의 '통역 엔진' 선택이 쓴다. 키 이름·값은 내려보내지 않는다.
+
+    ws_url: 통역 WebSocket 을 열 주소. Firebase Hosting 은 WebSocket 업그레이드를 중계하지 못하므로(404/400),
+    화면이 Hosting 도메인에서 열렸을 때는 이 값(Cloud Run 직접 URL 또는 Render)으로 붙는다. 없으면 화면과 같은 서버.
+    """
+    return {"providers": interp.provider_list(), "ws_url": interp_ws_url()}
+
+
+def interp_ws_url() -> str | None:
+    """INTERP_WS_URL(예: wss://codyssey-api-xxxx.a.run.app/interp/stream). wss://·ws:// 로 시작하고 /interp/stream 으로 끝날 때만."""
+    raw = (os.getenv("INTERP_WS_URL") or "").strip()
+    if raw.startswith(("wss://", "ws://")) and raw.rstrip("/").endswith("/interp/stream") and " " not in raw:
+        return raw.rstrip("/")
+    return None
 
 
 @app.websocket("/interp/stream")
