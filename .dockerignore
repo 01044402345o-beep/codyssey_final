@@ -1,0 +1,16 @@
+.git
+.gitignore
+**/__pycache__
+**/*.pyc
+.venv
+venv
+node_modules
+e2e
+docs
+tools
+.github
+**/*.md
+**/test_*.py
+**/tests
+**/.env
+**/.env.*
