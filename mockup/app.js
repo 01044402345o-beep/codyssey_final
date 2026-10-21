@@ -1381,21 +1381,22 @@ function interpItems() {
    키는 서버에만 있다 — 브라우저에는 내려보내지 않는다. */
 const INTERP_CONSENT_KEY = 'cd_interp_consent';
 const INTERP_PROVIDER_KEY = 'cd_interp_provider';
-const INTERP_DISCLAIMER_VERSION = 1;      // docs/legal/interp-disclaimer.md 와 함께 올린다
+const INTERP_DISCLAIMER_VERSION = 2;   // v2(10/21): 법률 검토 반영 — docs/legal/interp-disclaimer-review.md      // docs/legal/interp-disclaimer.md 와 함께 올린다
 const INTERP_NOTICE = 'AI 통역이라 틀릴 수 있어요. 여권·카드번호 같은 민감한 정보는 말하지 마세요.';
 const INTERP_TERMS = [
   ['성격', '여행 중 의사소통을 돕는 참고 도구예요. 공증·법정·의료 통역을 대신하지 않고, 통역 결과에는 법적 효력이 없어요.'],
   ['정확성', '음성 인식·기계 번역 과정에서 오역·누락이 생길 수 있어요. 숫자·금액·날짜·약 이름은 상대에게 화면으로 확인받으세요.'],
   ['응급·의료·법률', '응급 상황에서는 이 기능 대신 현지 긴급번호나 사람 통역을 쓰세요. 의료·법률 판단의 근거로 쓸 수 없어요.'],
-  ['민감정보', '여권번호·카드·계좌번호·비밀번호·건강정보는 말하지 마세요. 발화한 내용의 처리는 이용자 책임이에요.'],
-  ['데이터', '음성은 이 서비스 서버를 거쳐 통역 제공자로 전송돼요. 이 서버는 녹음을 저장하지 않고, 제공자의 보관·학습 이용은 그 회사 약관을 따라요.'],
-  ['국외 이전', '제공자 서버는 국외에 있을 수 있어요. 제공자 이름은 통역 화면에 표시해요.'],
-  ['상대방', '대화 상대가 이 기능과 녹음·전송 사실을 모를 수 있어요. 알리고 쓰는 것은 이용자 책임이에요.'],
-  ['중단', '네트워크·제공자 장애로 통역이 끊길 수 있고, 서비스는 예고 없이 바뀔 수 있어요.'],
-  ['책임', '사용 또는 사용 불가로 생긴 오해·손해에 대해 제공자는 책임을 지지 않아요(고의·중과실은 예외).'],
+  ['민감정보', '말한 내용은 통역을 위해 통역 업체로 전송돼요. 여권번호·카드·계좌번호·비밀번호·건강정보는 말하지 마세요.'],
+  ['데이터', '음성은 마디 서버를 거쳐 통역 업체로 통역하는 동안 실시간 암호화(TLS) 전송돼요. 마디 서버는 녹음을 저장하지 않아요. 업체의 보관·학습 이용은 그 회사 약관을 따라요.'],
+  ['국외 이전', '기본 통역 업체는 Soniox, Inc.(미국)예요. 다른 업체를 쓰면 통역 화면 위에 이름이 나오고, 개인정보 처리방침에 적힌 업체만 써요. 동의하지 않으면 실시간 통역만 못 쓰고 나머지 기능은 그대로예요.'],
+  ['대화 상대', '내가 참여한 대화에서만 쓰세요. 다른 사람들끼리 나누는 대화를 엿듣거나 녹음하는 데 쓰면 안 돼요. 상대에게 AI 통역을 쓴다고 알려 주세요 — 상대에게 보여 주는 화면에는 \'AI 번역\' 표시가 함께 나와요.'],
+  ['중단·변경', '네트워크·업체 장애로 통역이 끊길 수 있어요. 기능을 바꾸거나 끝낼 때는 앱에서 미리 알려요(보안·장애처럼 급한 경우는 예외).'],
+  ['책임', '기계 번역은 틀릴 수 있어서, 마디는 고의나 중대한 과실이 없는 한 오역·누락 자체로 생긴 손해를 배상하지 않아요. 마디의 고의·중대한 과실로 생긴 손해와 법이 정한 책임은 그렇지 않아요.'],
 ];
 // 동의 버전 = 처리방침 날짜 + 면책 버전. 둘 중 하나가 바뀌면 저장된 동의가 무효가 되어 다시 묻는다.
 const INTERP_CONSENT_VERSION = `2026-10-21+d${INTERP_DISCLAIMER_VERSION}`;
+const partnerAiLabel = dst => dst === 'ko' ? 'AI 번역이에요 · 틀릴 수 있어요' : 'AI translation · may contain errors';
 const interpConsent = () => { try { const c = JSON.parse(localStorage.getItem(INTERP_CONSENT_KEY) || 'null'); return c && c.voice && c.v === INTERP_CONSENT_VERSION ? c : null; } catch (e) { return null; } };
 const LIVE = { on: false, ws: null, stream: null, ctx: null, proc: null, src: null, dst: null,
   status: '', note: '', test: false, provider: '', cap: { source: '', target: '', sp: '', tp: '' }, q: [], playing: false,
@@ -1419,7 +1420,8 @@ function askInterpConsent(after) {
      <b>받는 곳</b> · ① 이 서비스 서버를 거쳐 ② 통역 제공자 Soniox, Inc.(미국)로 전송돼요. 운영자가 OpenAI(미국)를 고른 경우 OpenAI 로 가요. 제공자는 통역 화면 위에 표시해요.<br>
      <b>쓸 수 있는 사람·시간</b> · 로그인한 계정만, 한 번에 최대 3분이에요.<br>
      <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요. 제공자의 처리·보관은 그 회사 약관을 따라요.<br>
-     <b>국외 이전</b> · 제공자 서버는 국외에 있을 수 있어요.<br>
+     <b>국외 이전</b> · 음성이 미국(Soniox, Inc.)으로, 통역하는 동안 실시간 암호화 전송돼요. 업체의 보관 기간은 그 회사 정책을 따라요.<br>
+     <b>대화 상대</b> · 내가 참여한 대화에서만 쓰고, 상대에게 AI 통역을 쓴다고 알려 주세요.<br>
      <b>주의</b> · 통역은 AI 가 만든 결과라 틀릴 수 있어요. 여권번호·카드번호 같은 민감한 정보는 말하지 마세요.<br><br>
      동의하지 않아도 통역 화면의 문장 보기·들려주기는 그대로 쓸 수 있어요.<br><br>
      <b>${esc(INTERP_NOTICE)}</b>`,
@@ -1453,7 +1455,7 @@ function interpLiveHtml() {
       <div class="conv-partner" data-act="live-partner">
         <span class="conv-who">상대에게 보여주기 · ${esc(l.dst === 'ko' ? '한국어' : '영어')}</span>
         <p class="conv-big" lang="${esc(l.dst)}">${esc(c.target) || '<span class="conv-empty">말하면 여기에 상대 언어로 나와요</span>'}<span class="live-partial">${esc(c.tp)}</span></p>
-        <span class="conv-tap">눌러서 크게 ›</span>
+        <span class="conv-ai" lang="${esc(l.dst)}">${esc(partnerAiLabel(l.dst))}</span><span class="conv-tap">눌러서 크게 ›</span>
       </div>
       <div class="conv-me">
         <span class="conv-who">내가 한 말 · ${esc(l.src === 'ko' ? '한국어' : '영어')}<span class="live-meter" data-live="meter" aria-hidden="true"><i></i></span>${l.mode ? `<span class="live-mode">${l.mode === 'worklet' ? '오디오 스레드' : '기본'}</span>` : ''}${l.muted ? '<span class="live-muted">음소거</span>' : ''}</span>
@@ -1474,6 +1476,7 @@ function interpPartnerHtml() {
   if (!l.partner) return '';
   return `<div class="partner-view" data-act="live-partner-close" role="dialog" aria-modal="true" aria-label="상대에게 보여주기">
     <div class="partner-inner">
+      <span class="partner-ai" lang="${esc(l.dst)}">${esc(partnerAiLabel(l.dst))}</span>
       <p class="partner-big" lang="${esc(l.dst)}">${esc(l.cap.target) || '—'}</p>
       <span class="partner-hint">화면을 누르면 돌아가요</span>
     </div></div>`;

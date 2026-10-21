@@ -1489,6 +1489,8 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
 .conv-partner { border: 1px solid var(--border-strong); border-radius: 16px; padding: 12px 14px; background: var(--surface); cursor: pointer; }
 .conv-big { margin: 4px 0 0; font-size: 1.375rem; line-height: 1.35; font-weight: 700; letter-spacing: -0.01em; min-height: 3.2em; }
 .conv-empty { font-size: 1rem; font-weight: 400; color: var(--text-3); }
+/* 상대에게 보이는 'AI 번역' 표시(인공지능 기본법 제31조 결과물 표시) — 상대 언어로 */
+.conv-ai { display: block; margin-top: 6px; font-size: 0.6875rem; color: var(--text-3); }
 .conv-tap { display: block; margin-top: 4px; font-size: 0.6875rem; font-weight: 700; color: var(--accent-text); }
 .conv-me { border-radius: 14px; padding: 10px 12px; background: var(--surface-3); }
 .conv-me.speaking { box-shadow: 0 0 0 2px var(--accent-a40); }
@@ -1502,6 +1504,7 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
 .live-muted { background: var(--bad-soft); color: var(--on-bad-soft); }
 .partner-view { position: fixed; inset: 0; z-index: 300; background: var(--inv-bg); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .partner-inner { max-width: 720px; text-align: center; }
+.partner-ai { display: block; margin-bottom: 14px; font-size: 0.875rem; font-weight: 700; color: var(--inv-text-3); }
 .partner-big { margin: 0; font-size: clamp(1.75rem, 7vw, 3rem); line-height: 1.3; font-weight: 800; color: var(--inv-text); word-break: keep-all; }
 .partner-hint { display: block; margin-top: 20px; font-size: 0.8125rem; color: var(--inv-text-3); }
 @media (prefers-reduced-motion: reduce) { .live-meter i { transition: none; } }
