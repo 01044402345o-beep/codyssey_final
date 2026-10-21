@@ -62,6 +62,10 @@ class T(unittest.TestCase):
             self.assertTrue(interp.provider_available("gemini"))
             self.assertEqual(interp.provider_choice("gemini"), "gemini")
 
+    def test_empty_allowlist_means_default(self):
+        with self.env(SONIOX_API_KEY="s", INTERP_PROVIDERS=""):
+            self.assertTrue(interp.provider_available("soniox"))
+
     def test_requested_provider_and_default_order(self):
         with self.env(SONIOX_API_KEY="s", OPENAI_API_KEY="o"):
             self.assertEqual(interp.provider_choice(None), "soniox")

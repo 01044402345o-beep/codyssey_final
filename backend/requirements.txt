@@ -17,3 +17,6 @@ onnxruntime==1.23.2
 google-auth==2.61.0
 # 탈퇴 실패 증거 봉인(MFA1 컨테이너)과 관리자 CLI 가 쓴다. 전이 의존성에 기대지 않고 고정한다.
 cryptography==50.0.2
+# 실시간 통역 Azure Speech 엔진(app/interp.py run_azure). INTERP_PROVIDERS 에 azure 를 넣어야 켜진다.
+# 리눅스에서는 libssl·libasound2 가 있어야 불러올 수 있다 — 없으면 엔진 목록에 '사용 불가'로만 뜬다. 1.52.0(2026-09-28) 확인.
+azure-cognitiveservices-speech==1.52.0

@@ -91,6 +91,7 @@ PROVIDERS = {
 # 운영자가 켠 제공자만 쓴다. 키가 있다는 이유만으로 켜지지 않게 — 특히 gemini 는 앱의 문장 생성 키(GEMINI_API_KEY)를
 # 같이 쓰므로 자동으로 켜지면 음성이 처리방침에 없는 곳(Google)으로 간다. 처리방침 3절에 적은 제공자만 기본으로 둔다.
 DEFAULT_ENABLED = "soniox,openai,fake"
+AZURE_LOCALES = {"ko": "ko-KR", "en": "en-US"}   # Azure 언어 식별 후보는 로캘로 준다
 
 
 def _key(name: str) -> str:
@@ -98,8 +99,8 @@ def _key(name: str) -> str:
 
 
 def enabled_providers() -> list[str]:
-    raw = os.getenv("INTERP_PROVIDERS")
-    names = [x.strip().lower() for x in (DEFAULT_ENABLED if raw is None else raw).split(",")]
+    raw = (os.getenv("INTERP_PROVIDERS") or "").strip()   # 비어 있으면 기본값(빈 값으로 모든 엔진이 꺼지지 않게)
+    names = [x.strip().lower() for x in (raw or DEFAULT_ENABLED).split(",")]
     return [x for x in names if x in PROVIDERS]
 
 
@@ -112,12 +113,24 @@ def provider_available(pid: str) -> bool:
     if pid == "azure":
         if not (_key("AZURE_SPEECH_KEY") and _key("AZURE_SPEECH_REGION")):
             return False
+        return azure_sdk_ok()   # 미설치·리눅스 의존 라이브러리 없음이면 '사용 불가'
+    return bool(_key(info["key"]))
+
+
+_azure_sdk: bool | None = None
+
+
+def azure_sdk_ok() -> bool:
+    """/health 용 — Azure Speech SDK 를 불러올 수 있는지(리눅스 의존 라이브러리 포함). 한 번만 시도한다."""
+    global _azure_sdk
+    if _azure_sdk is None:
         try:
             import azure.cognitiveservices.speech  # noqa: F401
-        except Exception:      # noqa: BLE001 — 미설치면 '사용 불가'
-            return False
-        return True
-    return bool(_key(info["key"]))
+            _azure_sdk = True
+        except Exception as exc:      # noqa: BLE001
+            log.warning("azure speech sdk import failed: %s: %s", type(exc).__name__, str(exc)[:200])
+            _azure_sdk = False
+    return _azure_sdk
 
 
 def provider_list() -> list[dict]:
@@ -410,69 +423,85 @@ class _Session:
                 client.cancel()
 
     async def run_azure(self) -> None:
-        """Azure Speech 번역(SDK). 자동 언어 감지 + 두 대상 언어(ko·en)로 번역해 방향을 가리지 않는다.
-        SDK 는 블로킹 콜백이라 스레드에서 돌리고, 이벤트 루프로 넘긴다."""
+        """Azure Speech 번역(SDK, 2026-10-21 Microsoft Learn '언어 식별' 문서 대조).
+        - 연속 언어 식별: LanguageIdMode=Continuous + v2 엔드포인트(wss://{region}.stt.speech.microsoft.com/speech/universal/v2).
+        - 후보 언어는 로캘(ko-KR·en-US)로 준다. speech_recognition_language 는 '필요하지만 무시됨'이라 첫 로캘을 넣는다.
+        - 번역 대상은 ko·en 둘 다 — 감지된 말이 한국어면 en 을, 영어면 ko 를 자막으로 보낸다(두 사람이 번갈아 말해도 된다).
+        SDK 콜백은 SDK 스레드에서 오므로 이벤트 루프로 넘긴다."""
         try:
             import azure.cognitiveservices.speech as speechsdk
-        except Exception:      # noqa: BLE001
+        except Exception as exc:      # noqa: BLE001 — 미설치·리눅스 의존 라이브러리 없음
+            log.warning("azure speech sdk unavailable: %s", type(exc).__name__)
             await _send(self.ws, {"type": "error", "code": "provider",
-                                  "message": "서버에 Azure Speech SDK 가 없어 쓸 수 없어요."})
+                                  "message": "서버에서 Azure Speech 를 쓸 수 없어요."})
             return
-        key = (os.getenv("AZURE_SPEECH_KEY") or "").strip()
-        region = (os.getenv("AZURE_SPEECH_REGION") or "").strip()
+        key, region = _key("AZURE_SPEECH_KEY"), _key("AZURE_SPEECH_REGION")
+        endpoint = _key("AZURE_SPEECH_ENDPOINT") or f"wss://{region}.stt.speech.microsoft.com/speech/universal/v2"
+        locales = [AZURE_LOCALES[self.a], AZURE_LOCALES[self.b]]
         loop = asyncio.get_running_loop()
-        cfg = speechsdk.translation.SpeechTranslationConfig(subscription=key, region=region)
-        cfg.speech_recognition_language = self.a
-        for lang in {self.a, self.b}:
-            cfg.add_target_language(lang)
-        auto = speechsdk.languageconfig.AutoDetectSourceLanguageConfig(languages=[self.a, self.b])
-        audio = speechsdk.audio.AudioStreamFormat(samples_per_second=16000, bits_per_sample=16, channels=1)
-        stream = speechsdk.audio.PushAudioInputStream(stream_format=audio)
+        cfg = speechsdk.translation.SpeechTranslationConfig(
+            subscription=key, endpoint=endpoint, speech_recognition_language=locales[0],
+            target_languages=(self.a, self.b))
+        cfg.set_property(property_id=speechsdk.PropertyId.SpeechServiceConnection_LanguageIdMode, value="Continuous")
+        auto = speechsdk.languageconfig.AutoDetectSourceLanguageConfig(languages=locales)
+        fmt = speechsdk.audio.AudioStreamFormat(samples_per_second=16000, bits_per_sample=16, channels=1)
+        stream = speechsdk.audio.PushAudioInputStream(stream_format=fmt)
         recognizer = speechsdk.translation.TranslationRecognizer(
             translation_config=cfg, audio_config=speechsdk.audio.AudioConfig(stream=stream),
             auto_detect_source_language_config=auto)
         await _send(self.ws, {"type": "ready", "provider": "azure", "pair": [self.a, self.b], "audio_out": False})
+        done = asyncio.Event()
+        state = {"src": "", "tgt": ""}
 
         def emit(payload: dict) -> None:
             asyncio.run_coroutine_threadsafe(_send(self.ws, payload), loop)
 
+        def pick(result) -> str:
+            try:   # 문서 예제와 같은 방식(result.properties[PropertyId…])
+                detected = result.properties[speechsdk.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult] or ""
+            except Exception:      # noqa: BLE001
+                detected = ""
+            other = self.b if detected.lower().startswith(self.a) else self.a
+            return (result.translations or {}).get(other, "")
+
+        def on_recognizing(evt) -> None:
+            if evt.result.reason == speechsdk.ResultReason.TranslatingSpeech:
+                emit({"type": "caption", "source": state["src"], "source_partial": evt.result.text or "",
+                      "target": state["tgt"], "target_partial": pick(evt.result)})
+
         def on_recognized(evt) -> None:
             if evt.result.reason != speechsdk.ResultReason.TranslatedSpeech:
                 return
-            src = evt.result.text or ""
-            for lang, text in (evt.result.translations or {}).items():
-                if lang == self.b:
-                    emit({"type": "caption", "source": src, "source_partial": "", "target": text, "target_partial": ""})
-            if not (evt.result.translations or {}):
-                emit({"type": "caption", "source": src, "source_partial": "", "target": "", "target_partial": ""})
+            state["src"] = evt.result.text or ""            # 확정된 한 문장씩 보여 준다(화면이 지난 문장을 따로 남긴다)
+            state["tgt"] = pick(evt.result)
+            emit({"type": "caption", "source": state["src"], "source_partial": "",
+                  "target": state["tgt"], "target_partial": ""})
 
+        def on_canceled(evt) -> None:
+            d = evt.cancellation_details if hasattr(evt, "cancellation_details") else evt
+            if getattr(d, "reason", None) == speechsdk.CancellationReason.Error:
+                log.warning("azure canceled: %s", _redact(str(getattr(d, "error_details", ""))))
+                emit({"type": "error", "code": "provider", "message": "Azure Speech 연결이 끊겼어요. 키·지역을 확인해 주세요."})
+            loop.call_soon_threadsafe(done.set)
+
+        recognizer.recognizing.connect(on_recognizing)
         recognizer.recognized.connect(on_recognized)
-        recognizer.start_continuous_recognition()
+        recognizer.canceled.connect(on_canceled)
+        recognizer.session_stopped.connect(lambda _e: loop.call_soon_threadsafe(done.set))
+        await asyncio.to_thread(lambda: recognizer.start_continuous_recognition_async().get())
+
+        async def to_provider(data: bytes) -> None:
+            stream.write(data)
+
+        client = asyncio.create_task(self.pump_client(to_provider))
+        waiter = asyncio.create_task(done.wait())
         try:
-            while True:
-                msg = await self.ws.receive()
-                if msg.get("type") == "websocket.disconnect":
-                    break
-                data = msg.get("bytes")
-                if data:
-                    self.bytes_in += len(data)
-                    if self.bytes_in > MAX_BYTES or time.monotonic() - self.started > MAX_SECONDS:
-                        await _send(self.ws, {"type": "error", "code": "too_long",
-                                              "message": f"한 번에 {MAX_SECONDS}초까지 통역할 수 있어요."})
-                        break
-                    stream.write(data)
-                    continue
-                text = msg.get("text")
-                if text:
-                    try:
-                        if json.loads(text).get("type") == "stop":
-                            break
-                    except ValueError:
-                        pass
+            await asyncio.wait({client, waiter}, return_when=asyncio.FIRST_COMPLETED)
         finally:
+            client.cancel(); waiter.cancel()
             try:
                 stream.close()
-                recognizer.stop_continuous_recognition()
+                await asyncio.to_thread(lambda: recognizer.stop_continuous_recognition_async().get())
             except Exception:      # noqa: BLE001 — 이미 종료
                 pass
 

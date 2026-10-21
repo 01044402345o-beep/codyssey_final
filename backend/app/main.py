@@ -417,6 +417,8 @@ def health() -> dict[str, Any]:
         "has_api_key": bool(os.getenv("GEMINI_API_KEY")),
         # 키 여러 개(주 키 → 예비 키, 풀리면 롤백): 개수·지금 쓰는 키 번호·미뤄 둔 키. 키 값은 없다.
         "gemini_keys": ai.key_health(),
+        # 통역 Azure 엔진의 SDK 를 이 서버에서 불러올 수 있는지(키·켜짐과 별개). 리눅스 라이브러리 확인용.
+        "azure_speech_sdk": interp.azure_sdk_ok(),
         "firebase_auth": firebase_auth.configured(),
         # 탈퇴 관리자 경로(서비스 계정)를 쓸 수 있는지만 알린다. 키 값은 노출하지 않는다.
         "admin_erase": firebase_admin.configured(),
