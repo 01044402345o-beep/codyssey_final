@@ -588,7 +588,7 @@ function initState() {
     days: [], sents: [], smap: {}, sched: [], plan: null, aiPools: {}, aiBy: {},
     archived: [], gen: null, cityTab: null, showCand: {},
     studyDate: null, drill: null, card: { date: null, i: 0, flipped: new Set() }, justCompleted: null,
-    coll: { tab: 'common', filter: 'all' }, schedFilter: 'all', ttsRate: 0.95, calMonth: null, past: { open: null },
+    coll: { tab: 'common', filter: 'all', logOpen: null }, ilog: null, schedFilter: 'all', ttsRate: 0.95, calMonth: null, past: { open: null },
     commons: JSON.parse(JSON.stringify(COMMON_SITUATIONS)), commonsDraft: null,
     jobFilter: 'all', mockTrips: JSON.parse(JSON.stringify(MOCK_TRIPS)), modal: null, lastScreen: null,
     sheet: false,   // 학습 화면 하단 '회화 연습' 시트가 열려 있는지
@@ -1645,6 +1645,7 @@ function liveCommit() {
   if (last && last.dst === c.target && last.src === c.source) return;   // 같은 줄을 두 번 쌓지 않는다
   LIVE.hist.push({ target: c.target });
   LIVE.log.push({ src: c.source, dst: c.target });
+  ilogPush(c.source, c.target);   // 문장 모음 '통역 기록' 탭에 남긴다(이 브라우저에만)
   if (LIVE.log.length > 60) LIVE.log.shift();   // 오래 두면 메모리만 먹는다
   if (LIVE.hist.length > 20) LIVE.hist.shift();
   updateLiveUi();
@@ -1805,6 +1806,7 @@ async function startLive(opt) {
   LIVE.cap = { source: '', target: '', sp: '', tp: '' }; LIVE.q = []; LIVE.playing = false;
   LIVE.paused = false; LIVE.partner = false; LIVE.hist = []; LIVE.restart = '';
   LIVE.ui = LIVE.ui || interpUi(); LIVE.uiOpen = false; LIVE.log = []; LIVE.logStay = false;
+  if (!(opt && opt.keep)) ilogStart();   // 엔진 자동 전환(keep)은 같은 대화로 이어 본다
   document.body.classList.add('il-on');   // 뒤 화면이 손가락에 밀려 스크롤되지 않게
   updateLiveUi();
   const engines = (LIVE.providers || []).filter(p => p.available && !LIVE.exclude.includes(p.id));
@@ -2804,8 +2806,17 @@ function updateStudyLive() {
 }
 
 /* SCR-09 */
+/* 문장 모음 상단 탭. '통역 기록'은 통역 화면에서 확정된 문장(원문+번역)을 본다. */
+function collSegHtml(tab) {
+  const n = ilogSessions().reduce((a, x) => a + x.lines.length, 0);
+  return `<div class="seg coll-seg">
+    <button class="${tab === 'common' ? 'on' : ''}" data-act="coll-tab" data-v="common">공통 상황 ${30 + (S.refs || []).length}</button>
+    <button class="${tab === 'place' ? 'on' : ''}" data-act="coll-tab" data-v="place">장소별 ${S.sents.length - 30}</button>
+    <button class="${tab === 'log' ? 'on' : ''}" data-act="coll-tab" data-v="log">통역 기록${n ? ` ${n}` : ''}</button></div>`;
+}
 function scrColl() {
   const tab = S.coll.tab, f = S.coll.filter;
+  if (tab === 'log') return scrCollLog();
   const learnBadge = s => s.learnPhase === 'none' ? '<span class="badge b-only">문장 모음 전용</span>' : s.learnPhase === 'trip' ? '<span class="badge b-new">여행 중 새 문장</span>' : '';
   const item = s => `<div class="sent"><div><div class="tags">${learnBadge(s)}${aiBadges(s)}<span class="small">${esc(s.situation)}</span></div><div class="en" data-read>${enHtml(s.en)}</div><div class="ko">${phHtml(s.ko)}</div></div>
     <button class="play" data-act="speak" data-id="${s.id}">${I.speaker}</button></div>`;
@@ -2826,12 +2837,94 @@ function scrColl() {
     listHtml = `${places.map(p => { const g = S.sents.filter(s => s.placeId === p.id); return `<div class="phase-label">${esc(p.name)} · ${Dt.md(p.visitDate)} 방문${g.length ? drillBtn('place', p.id, g.length) : ''}</div>${g.map(item).join('')}`; }).join('')}`;
   }
   const ts = ttsState();
-  const segHtml = `<div class="seg" style="margin-bottom:12px"><button class="${tab === 'common' ? 'on' : ''}" data-act="coll-tab" data-v="common">공통 상황 ${30 + (S.refs || []).length}</button><button class="${tab === 'place' ? 'on' : ''}" data-act="coll-tab" data-v="place">장소별 ${S.sents.length - 30}</button></div>`;
+  const segHtml = collSegHtml(tab);
   const ttsNote = ts !== 'ok' ? notice(ttsOffMsg(), 'warn') + '<div style="height:10px"></div>' : '';
   if (isWide()) {   // P4: 왼쪽 = 탭·상황/도시 필터, 오른쪽 = 문장
     return frame(`<div class="split coll"><div class="split-list">${segHtml}${chipsHtml}</div><div class="split-detail">${ttsNote}${listHtml}</div></div>`, { appbar: appbar('문장 모음'), tabbar: true, wide: true });
   }
   return frame(`<div class="app-pad">${segHtml}${ttsNote}${chipsHtml}${listHtml}</div>`, { appbar: appbar('문장 모음'), tabbar: true });
+}
+
+/* ================= 통역 기록 (문장 모음 안의 탭) =================
+   통역 화면에서 확정된 문장만 남긴다. 음성은 저장하지 않고(통역 화면과 같은 원칙), 서버로 보내지 않는다.
+   계정 동기화 대상도 아니다 — 이 브라우저에만 남고, 사용자가 화면에서 지울 수 있다. */
+const ILOG_KEY = 'cd_ilog';
+const ILOG_LINES = 300;   // 줄 수 상한 — 넘으면 오래된 세션부터 버린다
+const ILOG_SESS = 30;
+const hangul = t => /[\uac00-\ud7a3]/.test(t || '');
+function ilogLoad() {
+  if (S.ilog) return S.ilog;
+  try { const j = JSON.parse(localStorage.getItem(ILOG_KEY) || 'null'); S.ilog = j && Array.isArray(j.list) ? j.list : []; } catch (e) { S.ilog = []; }
+  return S.ilog;
+}
+function ilogSave() {
+  const all = (S.ilog || []).filter(x => x.lines && x.lines.length);
+  const keep = []; let n = 0;   // 최근 것부터 세어 상한 안의 세션만 남긴다
+  for (let i = all.length - 1; i >= 0 && keep.length < ILOG_SESS; i--) {
+    if (n + all[i].lines.length > ILOG_LINES && keep.length) break;
+    n += all[i].lines.length; keep.unshift(all[i]);
+  }
+  S.ilog = keep;
+  try { localStorage.setItem(ILOG_KEY, JSON.stringify({ v: 1, list: keep })); } catch (e) { /* 저장소 막힘: 이번 접속에서만 */ }
+}
+function ilogStart() {
+  LIVE.sess = { id: 's' + Date.now().toString(36), at: Date.now(), a: LIVE.src || 'ko', b: LIVE.dst || 'en',
+    trip: S.trip ? { id: S.trip.id, route: tripTitle(S.trip) } : null, lines: [] };
+  S.ilog = ilogLoad();
+}
+/* 방향은 글자로 판단한다(한글 → 한국어, 그 밖 → 영어). 앱이 다루는 쌍이 ko↔en 뿐이라 이걸로 충분하다. */
+function ilogPush(src, dst) {
+  const ses = LIVE.sess; if (!ses || (!src && !dst)) return;
+  ses.lines.push({ src: src || '', dst: dst || '', s: hangul(src) ? 'ko' : 'en', t: hangul(dst) ? 'ko' : 'en', at: Date.now() });
+  if (!(S.ilog || []).some(x => x.id === ses.id)) S.ilog = ilogLoad().concat([ses]);
+  ilogSave();
+}
+const ilogSessions = () => ilogLoad().filter(x => x.lines && x.lines.length).slice().sort((a, b) => b.at - a.at);
+const ilogTime = ms => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+const LANG_NAME = { ko: '한국어', en: '영어' };
+function ilogCard(x, open) {
+  const n = x.lines.length, route = x.trip && x.trip.route ? x.trip.route : '여행 없이';
+  const lines = x.lines.map((l, i) => `<div class="ilog-line">
+      <div><span class="ilog-who ${l.s === 'ko' ? 'me' : 'other'}">${l.s === 'ko' ? '나' : '상대'} · ${LANG_NAME[l.s] || l.s}</span>
+        <p class="ilog-src" lang="${esc(l.s)}">${esc(l.src)}</p>
+        <p class="ilog-dst" lang="${esc(l.t)}">${esc(l.dst)}</p></div>
+      <button class="ilog-cp" data-act="ilog-copy" data-id="${esc(x.id)}:${i}" aria-label="이 줄 번역 복사">복사</button>
+    </div>`).join('');
+  return `<article class="ilog-card" data-live="ilog-${esc(x.id)}">
+    <button class="ilog-head" data-act="ilog-open" data-id="${esc(x.id)}" aria-expanded="${open ? 'true' : 'false'}">
+      <span class="t"><b>${Dt.full(new Date(x.at).toISOString().slice(0, 10))} · ${ilogTime(x.at)}</b>
+        <span class="small">${esc(route)} · ${LANG_NAME[x.a] || x.a} ↔ ${LANG_NAME[x.b] || x.b}</span></span>
+      <span class="ilog-count">${n}문장</span></button>
+    ${open ? `<div class="ilog-body">${lines}
+      <button class="ilog-del" data-act="ilog-del" data-id="${esc(x.id)}">이 대화 기록 지우기</button></div>` : ''}
+  </article>`;
+}
+function scrCollLog() {
+  const list = ilogSessions();
+  const open = S.coll.logOpen || (list[0] || {}).id;
+  const seg = collSegHtml('log');
+  if (!list.length) {
+    return frame(`<div class="app-pad">${seg}
+      <div class="empty" style="padding:40px 0"><div class="ico">${I.past}</div>
+        <b style="color:var(--text);font-size:1.0625rem">아직 통역 기록이 없어요</b>
+        <p>통역 화면에서 마이크를 켜고 이야기하면<br>주고받은 문장이 여기에 차례로 쌓여요.</p></div>
+      <p class="small">기록은 이 브라우저에만 남아요. 음성은 저장하지 않고 확정된 글자만 남기며, 계정 동기화 대상이 아니에요.</p></div>`,
+      { appbar: appbar('문장 모음'), tabbar: true, tab: 'u-coll' });
+  }
+  const total = list.reduce((a, x) => a + x.lines.length, 0);
+  const foot = `<p class="small">이 브라우저에만 남아요 · 음성은 저장하지 않고 확정된 글자만 남겨요 · ${total}문장</p>`;
+  if (isWide()) {
+    const btns = list.map(x => `<button class="ilog-pick ${open === x.id ? 'on' : ''}" data-act="ilog-open" data-id="${esc(x.id)}">
+        <b>${Dt.full(new Date(x.at).toISOString().slice(0, 10))} ${ilogTime(x.at)}</b>
+        <span class="small">${esc(x.trip && x.trip.route ? x.trip.route : '여행 없이')} · ${x.lines.length}문장</span></button>`).join('');
+    return frame(`<div class="split coll"><div class="split-list">${seg}<div class="ilog-picks">${btns}</div>
+        <button class="ilog-clear" data-act="ilog-clear">기록 모두 지우기</button></div>
+      <div class="split-detail">${ilogCard(list.find(x => x.id === open) || list[0], true)}${foot}</div></div>`,
+      { appbar: appbar('문장 모음'), tabbar: true, wide: true });
+  }
+  return frame(`<div class="app-pad">${seg}${list.map(x => ilogCard(x, open === x.id)).join('')}
+    <button class="ilog-clear" data-act="ilog-clear">기록 모두 지우기</button>${foot}</div>`,
+    { appbar: appbar('문장 모음'), tabbar: true, tab: 'u-coll' });
 }
 
 /* SCR-06 (종료) */
@@ -4085,6 +4178,25 @@ const ACT = {
   'cal-prev': () => calShift(-1),
   'cal-next': () => calShift(1),
   'cal-today': () => { S.calMonth = null; render(); },
+  'ilog-open': el => { S.coll.logOpen = S.coll.logOpen === el.dataset.id ? null : el.dataset.id; render(); },
+  'ilog-copy': el => {
+    const [sid, i] = el.dataset.id.split(':');
+    const x = ilogLoad().find(v => v.id === sid), ln = x && x.lines[+i];
+    if (!ln) return;
+    const ok = () => toast('번역을 복사했어요. 다른 앱에 붙여넣을 수 있어요.');
+    const bad = () => toast('복사하지 못했어요. 글자를 길게 눌러 선택해 주세요.');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ln.dst || ln.src).then(ok, bad); else bad();
+  },
+  'ilog-del': el => { const id = el.dataset.id;
+    confirmBox('이 대화 기록을 지울까요?', '이 대화에서 주고받은 문장이 모두 지워져요. 되돌릴 수 없어요.', '지우기', () => {
+      S.ilog = ilogLoad().filter(v => v.id !== id); ilogSave();
+      if (S.coll.logOpen === id) S.coll.logOpen = null;
+      S.modal = null; render(); toast('통역 기록을 지웠어요.');
+    }, { danger: true }); },
+  'ilog-clear': () => { confirmBox('통역 기록을 모두 지울까요?', '이 브라우저에 남은 통역 기록이 모두 지워져요. 되돌릴 수 없어요.', '모두 지우기', () => {
+      S.ilog = []; try { localStorage.removeItem(ILOG_KEY); } catch (e) { /* 저장소 막힘 */ }
+      S.coll.logOpen = null; S.modal = null; render(); toast('통역 기록을 모두 지웠어요.');
+    }, { danger: true }); },
   'past-go': () => { S.past.open = null; go('u-past'); },
   'past-open': el => { S.past.open = S.past.open === el.dataset.id ? null : el.dataset.id; render(); },
   'live-turn': () => { LIVE.speaker = LIVE.speaker === 'me' ? 'partner' : 'me'; LIVE.cap = { ...LIVE.cap, sp: '' }; browserListen(); updateLiveUi(); },
