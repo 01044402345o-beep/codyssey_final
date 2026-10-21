@@ -1380,19 +1380,21 @@ function interpItems() {
    오디오는 이 서버를 거쳐 제공자(Soniox 또는 OpenAI)로 가고, 서버는 저장하지 않는다.
    키는 서버에만 있다 — 브라우저에는 내려보내지 않는다. */
 const INTERP_CONSENT_KEY = 'cd_interp_consent';
-const interpConsent = () => { try { return JSON.parse(localStorage.getItem(INTERP_CONSENT_KEY) || 'null'); } catch (e) { return null; } };
+const INTERP_CONSENT_VERSION = '2026-10-21';   // 동의 문구·처리방침(docs/product/privacy-policy-draft.md)이 바뀌면 올린다 → 다시 묻는다
+const interpConsent = () => { try { const c = JSON.parse(localStorage.getItem(INTERP_CONSENT_KEY) || 'null'); return c && c.voice && c.v === INTERP_CONSENT_VERSION ? c : null; } catch (e) { return null; } };
 const LIVE = { on: false, ws: null, stream: null, ctx: null, proc: null, src: null, dst: null,
   status: '', note: '', test: false, provider: '', cap: { source: '', target: '', sp: '', tp: '' }, q: [], playing: false };
 function askInterpConsent(after) {
   confirmBox('실시간 통역 전에 확인해 주세요',
     `<b>보내는 것</b> · 마이크로 들어온 소리(통역하는 동안 계속)<br>
-     <b>받는 곳</b> · ① 이 서비스 서버를 거쳐 ② 통역 제공자(Soniox 또는 OpenAI)로 전송돼요. 제공자가 어디인지는 통역 화면 위에 표시해요.<br>
+     <b>받는 곳</b> · ① 이 서비스 서버를 거쳐 ② 통역 제공자 Soniox, Inc.(미국)로 전송돼요. 운영자가 OpenAI(미국)를 고른 경우 OpenAI 로 가요. 제공자는 통역 화면 위에 표시해요.<br>
+     <b>쓸 수 있는 사람·시간</b> · 로그인한 계정만, 한 번에 최대 3분이에요.<br>
      <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요. 제공자의 처리·보관은 그 회사 약관을 따라요.<br>
      <b>국외 이전</b> · 제공자 서버는 국외에 있을 수 있어요.<br>
      <b>주의</b> · 통역은 AI 가 만든 결과라 틀릴 수 있어요. 여권번호·카드번호 같은 민감한 정보는 말하지 마세요.<br><br>
      동의하지 않아도 통역 화면의 문장 보기·들려주기는 그대로 쓸 수 있어요.`,
     '동의하고 시작', () => {
-      try { localStorage.setItem(INTERP_CONSENT_KEY, JSON.stringify({ voice: true, at: Date.now() })); } catch (e) { /* 저장소 막힘 */ }
+      try { localStorage.setItem(INTERP_CONSENT_KEY, JSON.stringify({ voice: true, v: INTERP_CONSENT_VERSION, at: Date.now() })); } catch (e) { /* 저장소 막힘 */ }
       S.modal = null; render(); if (after) after();
     });
 }
@@ -2582,17 +2584,19 @@ function askVoiceConsent(after) {
     }, { cancel: '동의하지 않기' });
 }
 function privacyCard() {
-  const c = voiceConsent(), n = weakList().length;
+  const c = voiceConsent(), n = weakList().length, ic = interpConsent();
   const when = c.at ? Dt.full(c.at.slice(0, 10)) : '이번 접속';
   return `<div class="sec-title"><h4>AI · 개인정보</h4></div><div class="card">
     <p class="small" style="line-height:1.7">· 'AI 생성' 표시가 붙은 문장과 말하기 채점은 AI가 만든 결과예요. 틀릴 수 있어요.<br>
       · AI 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API로 전송돼요.<br>
       · 말하기 연습 동의: <b>${c.voice ? `동의함 (${when})` : '동의하지 않음'}</b>${c.voice ? '' : ' — 처음 녹음할 때 물어봐요'}<br>
       · 복습 목록: <b>${n}개</b> · ${accountUid() ? '이 계정에 저장돼요' : '이 브라우저에만 저장돼요'}<br>
-      · 여행 설정(나라·도시·날짜): ${accountUid() ? '이 계정에 저장돼요' : '이 브라우저에만 저장돼요'}</p>
-    ${c.voice || n ? `<div style="display:flex;gap:8px;margin-top:10px">
+      · 여행 설정(나라·도시·날짜): ${accountUid() ? '이 계정에 저장돼요' : '이 브라우저에만 저장돼요'}<br>
+      · 실시간 통역 동의: <b>${ic ? `동의함 (${Dt.full(new Date(ic.at).toISOString().slice(0, 10))})` : '동의하지 않음'}</b> — 통역하는 동안 음성이 Soniox(미국)로 전송되고, 이 서비스는 저장하지 않아요</p>
+    ${c.voice || n || ic ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
       ${c.voice ? '<button class="btn soft" style="flex:1" data-act="consent-withdraw">동의 철회</button>' : ''}
-      ${n ? '<button class="btn soft" style="flex:1" data-act="weak-delete">복습 목록 삭제</button>' : ''}</div>` : ''}
+      ${n ? '<button class="btn soft" style="flex:1" data-act="weak-delete">복습 목록 삭제</button>' : ''}
+      ${ic ? '<button class="btn soft" style="flex:1" data-act="interp-consent-withdraw">통역 동의 철회</button>' : ''}</div>` : ''}
   </div>`;
 }
 /* 홈 맨 아래 계정 블록. 로그아웃 버튼과 안내를 하나의 카드(.card = 패딩 한 곳)에 담는다.
@@ -3475,6 +3479,7 @@ const ACT = {
   'speak-card': el => { const r = pickRow(); speak(S.smap[r.ids[S.card.i]].en, el, readTarget(el)); },
   speak: el => speak(S.smap[el.dataset.id].en, el, readTarget(el)),
   'live-start': () => startLive(),
+  'interp-consent-withdraw': () => { stopLive(); try { localStorage.removeItem(INTERP_CONSENT_KEY); } catch (e) { /* 저장소 막힘 */ } render(); toast('실시간 통역 동의를 철회했어요. 다음에 통역을 켤 때 다시 물어봐요.'); },
   'live-stop': () => stopLive(),
   'live-play': () => {   // 번역된 문장을 상대에게 들려준다(제공자 음성이 없을 때)
     const t = LIVE.cap.target; if (!t || !ttsSupported()) return;
