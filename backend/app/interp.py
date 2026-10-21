@@ -39,6 +39,8 @@ from typing import Callable
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from . import interp_local
+
 log = logging.getLogger("interp")
 
 SONIOX_URL = "wss://stt-rt.soniox.com/transcribe-websocket"
@@ -85,6 +87,8 @@ PROVIDERS = {
               "verified": False, "note": "자막만, PCM 입력 형식 확인 필요"},
     "azure": {"label": "Azure Speech", "key": "AZURE_SPEECH_KEY", "audio_out": False, "two_way": True,
               "verified": False, "note": "자동 언어 감지, Speech SDK 필요"},
+    "local": {"label": "마디 서버(자체)", "key": "", "audio_out": False, "two_way": True,
+              "verified": True, "note": "외부 키 없이 우리 서버에서 Whisper+Argos. 말이 끝난 뒤 문장 단위, 유료 인스턴스 권장"},
     "fake": {"label": "시험 모드", "key": "", "audio_out": False, "two_way": True,
              "verified": True, "note": "키 없이 배관만 검사(번역 아님)"},
 }
@@ -115,6 +119,8 @@ def provider_available(pid: str) -> bool:
         return False
     if pid == "fake":
         return os.getenv("INTERP_ALLOW_FAKE") == "1"
+    if pid == "local":   # 키 대신 패키지·모델. 불러오다 실패했으면 쓰지 않는다(다음 엔진으로)
+        return interp_local.deps_ok() and interp_local.status()["status"] != "error"
     if pid == "azure":
         if not (_key("AZURE_SPEECH_KEY") and _key("AZURE_SPEECH_REGION")):
             return False
@@ -147,6 +153,19 @@ def provider_list() -> list[dict]:
     ids = on + [pid for pid in PROVIDERS if pid not in on]
     return [{"id": pid, **{k: v for k, v in PROVIDERS[pid].items() if k != "key"}, "available": pid in on and provider_available(pid),
              "priority": on.index(pid) + 1 if pid in on else None} for pid in ids]
+
+
+def provider_chain(requested: str | None = None, exclude: tuple[str, ...] = ()) -> list[str]:
+    """이번 통역에서 시도할 엔진 순서. 앞 엔진이 연결에 실패하면 다음 엔진으로 넘어간다(자동 전환).
+    INTERP_PROVIDER 로 고정하면 그 엔진 하나뿐이다(넘어갈 곳 없음)."""
+    forced = _key("INTERP_PROVIDER").lower()
+    if forced:
+        return [forced] if forced not in exclude and provider_available(forced) else []
+    out: list[str] = []
+    for pid in ([requested] if requested else []) + enabled_providers():
+        if pid and pid not in out and pid not in exclude and provider_available(pid):
+            out.append(pid)
+    return out
 
 
 def provider_choice(requested: str | None = None) -> str:
@@ -194,6 +213,10 @@ async def _send(ws: WebSocket, payload: dict) -> None:
     await ws.send_text(json.dumps(payload, ensure_ascii=False))
 
 
+class ProviderSetupError(RuntimeError):
+    """엔진이 통역을 시작하기 전에 실패(키·요금제·패키지·준비 안 됨). 다음 엔진으로 넘어간다."""
+
+
 class _Session:
     def __init__(self, ws: WebSocket, provider: str, a: str, b: str):
         self.ws = ws
@@ -202,6 +225,11 @@ class _Session:
         self.started = time.monotonic()
         self.bytes_in = 0
         self.closed = False
+        self.ready = False   # 'ready' 를 보낸 뒤에 실패하면 자동 전환하지 않는다(이미 말한 소리는 되돌릴 수 없다)
+
+    async def announce(self, payload: dict) -> None:
+        self.ready = True
+        await _send(self.ws, payload)
 
     async def pump_client(self, send_audio) -> None:
         """브라우저 → 제공자. 오디오는 바이너리 프레임, 제어는 JSON."""
@@ -240,7 +268,7 @@ class _Session:
         }
         async with await _connect(SONIOX_URL, {"Authorization": f"Bearer {key}"}) as up:
             await up.send(json.dumps(cfg))
-            await _send(self.ws, {"type": "ready", "provider": "soniox", "pair": [self.a, self.b], "audio_out": False})
+            await self.announce({"type": "ready", "provider": "soniox", "pair": [self.a, self.b], "audio_out": False})
 
             async def to_provider(data: bytes) -> None:
                 await up.send(data)
@@ -271,7 +299,7 @@ class _Session:
         async with await _connect(OPENAI_URL, headers) as up:
             await up.send(json.dumps({"type": "session.update",
                                       "session": {"audio": {"output": {"language": self.b}}}}))
-            await _send(self.ws, {"type": "ready", "provider": "openai", "pair": [self.a, self.b], "audio_out": True})
+            await self.announce({"type": "ready", "provider": "openai", "pair": [self.a, self.b], "audio_out": True})
             state = {"source": "", "target": ""}
 
             async def to_provider(data: bytes) -> None:
@@ -305,7 +333,7 @@ class _Session:
 
     async def run_fake(self) -> None:
         """키 없이 파이프만 검사한다. 실제 번역이 아니다 — 화면도 '시험 모드'라고 밝힌다."""
-        await _send(self.ws, {"type": "ready", "provider": "fake", "pair": [self.a, self.b], "audio_out": False, "test": True})
+        await self.announce({"type": "ready", "provider": "fake", "pair": [self.a, self.b], "audio_out": False, "test": True})
         lines = [("Where is the train station?", "기차역이 어디예요?"),
                  ("It's about five minutes on foot.", "걸어서 5분쯤 걸려요.")]
         got = [0, 0]   # [받은 바이트, 보낸 줄 수]
@@ -329,6 +357,72 @@ class _Session:
         finally:
             await _send(self.ws, {"type": "closed"})
 
+    async def run_local(self) -> None:
+        """자체 엔진(interp_local): 말이 끝날 때마다 받아쓰고 번역한다. 외부로 음성을 보내지 않는다."""
+        waited = 0.0
+        while not interp_local.ready():
+            st = interp_local.status()["status"]
+            if st in ("idle", "error") or waited >= float(os.getenv("INTERP_LOCAL_WAIT") or 15):
+                raise ProviderSetupError(f"local engine not ready ({st})")
+            await asyncio.sleep(0.5); waited += 0.5
+        await self.announce({"type": "ready", "provider": "local", "pair": [self.a, self.b], "audio_out": False})
+        import numpy as np
+
+        langs = (self.a, self.b)
+        silence_need = interp_local.silence_ms() / 1000.0
+        max_bytes = int(interp_local.max_speech_s() * 16000 * 2)
+        thr = interp_local.rms_threshold()
+        buf = bytearray()
+        state = {"speech": False, "quiet": 0.0}
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def worker() -> None:
+            while True:
+                pcm = await queue.get()
+                if pcm is None:
+                    return
+                try:
+                    text, lang = await asyncio.to_thread(interp_local.transcribe, pcm, langs)
+                    if not text:
+                        continue
+                    other = self.b if lang == self.a else self.a
+                    out = await asyncio.to_thread(interp_local.translate, text, lang, other)
+                    await _send(self.ws, {"type": "caption", "source": text, "source_partial": "",
+                                          "target": out, "target_partial": ""})
+                except Exception as exc:      # noqa: BLE001 — 한 문장 실패는 그 문장만 버린다
+                    log.warning("local interp utterance failed: %s", type(exc).__name__)
+
+        async def to_provider(data: bytes) -> None:
+            n = len(data) // 2
+            if not n:
+                return
+            a = np.frombuffer(data[: n * 2], dtype=np.int16).astype(np.float32) / 32768.0
+            loud = float(np.sqrt(np.mean(a * a))) > thr
+            if loud:
+                state["speech"] = True
+                state["quiet"] = 0.0
+            elif state["speech"]:
+                state["quiet"] += n / 16000.0
+            if state["speech"]:
+                buf.extend(data)
+            if state["speech"] and (state["quiet"] >= silence_need or len(buf) >= max_bytes):
+                await queue.put(bytes(buf))
+                buf.clear(); state["speech"] = False; state["quiet"] = 0.0
+                await _send(self.ws, {"type": "caption", "source": "", "source_partial": "…",
+                                      "target": "", "target_partial": ""})   # 받아쓰는 중 표시
+
+        task = asyncio.create_task(worker())
+        try:
+            await self.pump_client(to_provider)
+            if buf:
+                await queue.put(bytes(buf))
+        finally:
+            await queue.put(None)
+            try:
+                await asyncio.wait_for(task, timeout=30)   # 마지막 문장까지 보낸다
+            except Exception:      # noqa: BLE001
+                task.cancel()
+
     async def run_deepl(self) -> None:
         """DeepL Voice (2026-10-21 API 참조 대조: request-session · voice.asyncapi.yaml).
         POST /v3/voice/realtime → {streaming_url, token} → WebSocket `{streaming_url}?token=`.
@@ -348,12 +442,10 @@ class _Session:
         async with httpx.AsyncClient(timeout=20) as cli:
             r = await cli.post(url, json=body, headers={"Authorization": f"DeepL-Auth-Key {key}"})
         if r.status_code >= 400:
-            await _send(self.ws, {"type": "error", "code": f"deepl_{r.status_code}",
-                                  "message": "DeepL Voice 세션을 만들지 못했어요. 키·요금제를 확인해 주세요."})
-            return
+            raise ProviderSetupError(f"deepl session {r.status_code}")
         info = r.json()
         async with await _connect(f"{info['streaming_url']}?token={info['token']}", {}) as up:
-            await _send(self.ws, {"type": "ready", "provider": "deepl", "pair": [self.a, self.b], "audio_out": False})
+            await self.announce({"type": "ready", "provider": "deepl", "pair": [self.a, self.b], "audio_out": False})
 
             async def to_provider(data: bytes) -> None:
                 await up.send(json.dumps({"source_media_chunk": {"data": base64.b64encode(data).decode()}}))
@@ -404,7 +496,7 @@ class _Session:
                     "outputAudioTranscription": {},
                     "translationConfig": {"targetLanguageCode": self.b, "echoTargetLanguage": True},
                 }}}))
-            await _send(self.ws, {"type": "ready", "provider": "gemini", "pair": [self.a, self.b], "audio_out": True})
+            await self.announce({"type": "ready", "provider": "gemini", "pair": [self.a, self.b], "audio_out": True})
 
             async def to_provider(data: bytes) -> None:
                 await up.send(json.dumps({"realtimeInput": {"audio": {
@@ -442,10 +534,7 @@ class _Session:
         try:
             import azure.cognitiveservices.speech as speechsdk
         except Exception as exc:      # noqa: BLE001 — 미설치·리눅스 의존 라이브러리 없음
-            log.warning("azure speech sdk unavailable: %s", type(exc).__name__)
-            await _send(self.ws, {"type": "error", "code": "provider",
-                                  "message": "서버에서 Azure Speech 를 쓸 수 없어요."})
-            return
+            raise ProviderSetupError(f"azure speech sdk unavailable: {type(exc).__name__}") from exc
         key, region = _key("AZURE_SPEECH_KEY"), _key("AZURE_SPEECH_REGION")
         endpoint = _key("AZURE_SPEECH_ENDPOINT") or f"wss://{region}.stt.speech.microsoft.com/speech/universal/v2"
         locales = [AZURE_LOCALES[self.a], AZURE_LOCALES[self.b]]
@@ -460,7 +549,7 @@ class _Session:
         recognizer = speechsdk.translation.TranslationRecognizer(
             translation_config=cfg, audio_config=speechsdk.audio.AudioConfig(stream=stream),
             auto_detect_source_language_config=auto)
-        await _send(self.ws, {"type": "ready", "provider": "azure", "pair": [self.a, self.b], "audio_out": False})
+        await self.announce({"type": "ready", "provider": "azure", "pair": [self.a, self.b], "audio_out": False})
         done = asyncio.Event()
         state = {"src": "", "tgt": ""}
 
@@ -544,12 +633,16 @@ async def serve(ws: WebSocket, ip: str = "unknown", verify: Callable[[str], dict
         await ws.close()
         return
 
-    provider = provider_choice(str(first.get("provider") or "").lower() or None)
-    if provider == "none":
-        await _send(ws, {"type": "error", "code": "no_key",
-                         "message": "서버에 통역 서비스 키가 없어 지금은 실시간 통역을 쓸 수 없어요. 운영자에게 문의해 주세요."})
+    exclude = tuple(str(x).lower() for x in (first.get("exclude") or []) if isinstance(x, str))[:10]
+    chain = provider_chain(str(first.get("provider") or "").lower() or None, exclude)
+    if not chain:
+        code = "all_failed" if exclude else "no_key"
+        msg = ("쓸 수 있는 통역 엔진이 모두 실패했어요. 아래 '검수 문장'으로 통역할 수 있어요." if exclude else
+               "서버에 통역 서비스 키가 없어 지금은 실시간 통역을 쓸 수 없어요. 아래 '검수 문장'으로 통역할 수 있어요.")
+        await _send(ws, {"type": "error", "code": code, "message": msg})
         await ws.close()
         return
+    provider = chain[0]
 
     a = str(first.get("a") or "ko")
     b = str(first.get("b") or "en")
@@ -557,7 +650,7 @@ async def serve(ws: WebSocket, ip: str = "unknown", verify: Callable[[str], dict
         await _refuse(ws, "bad_pair", "지원하지 않는 언어 쌍이에요.")
         return
     keys = ["ip:" + ip]
-    if provider != "fake":   # 유료 제공자: 로그인한 계정만(익명·게스트 제외)
+    if any(p != "fake" for p in chain):   # 유료·자체 엔진: 로그인한 계정만(익명·게스트 제외)
         try:
             if verify is None:
                 raise ValueError("no verifier")
@@ -572,27 +665,36 @@ async def serve(ws: WebSocket, ip: str = "unknown", verify: Callable[[str], dict
     if not allow_start(*keys):
         await _refuse(ws, "rate_limited", f"잠시 뒤 다시 시도해 주세요({WINDOW // 60}분에 {STARTS}번까지).")
         return
-    sess = _Session(ws, provider, a, b)
-    log.info("interp start provider=%s pair=%s", provider, (a, b))
-    run = {"soniox": sess.run_soniox, "openai": sess.run_openai, "gemini": sess.run_gemini,
-           "deepl": sess.run_deepl, "azure": sess.run_azure, "fake": sess.run_fake}[provider]
+    deadline = time.monotonic() + MAX_SECONDS + 5
     try:
-        await asyncio.wait_for(run(), timeout=MAX_SECONDS + 5)   # 입력이 멈춰도 세션이 열린 채 남지 않게
-    except asyncio.TimeoutError:
-        try:
-            await _send(ws, {"type": "error", "code": "too_long",
-                             "message": f"한 번에 {MAX_SECONDS}초까지 통역할 수 있어요. 다시 시작해 주세요."})
-        except Exception:      # noqa: BLE001
-            pass
-    except WebSocketDisconnect:
+        for idx, provider in enumerate(chain):
+            sess = _Session(ws, provider, a, b)
+            log.info("interp start provider=%s pair=%s try=%d/%d", provider, (a, b), idx + 1, len(chain))
+            run = {"soniox": sess.run_soniox, "openai": sess.run_openai, "gemini": sess.run_gemini,
+                   "deepl": sess.run_deepl, "azure": sess.run_azure, "local": sess.run_local,
+                   "fake": sess.run_fake}[provider]
+            try:
+                await asyncio.wait_for(run(), timeout=max(1.0, deadline - time.monotonic()))   # 입력이 멈춰도 열린 채 남지 않게
+                break
+            except asyncio.TimeoutError:
+                await _send(ws, {"type": "error", "code": "too_long",
+                                 "message": f"한 번에 {MAX_SECONDS}초까지 통역할 수 있어요. 다시 시작해 주세요."})
+                break
+            except WebSocketDisconnect:
+                break
+            except Exception as exc:      # noqa: BLE001 — 엔진 실패: 시작 전이면 다음 엔진으로
+                log.warning("interp failed provider=%s: %s", provider, _redact(f"{type(exc).__name__}: {exc}"))
+                if sess.ready:   # 통역 중에 끊김 — 화면이 이 엔진을 빼고 다시 연결한다
+                    await _send(ws, {"type": "error", "code": "provider_lost", "failed": provider,
+                                     "message": "통역이 끊겼어요. 다른 엔진으로 다시 연결할게요."})
+                    break
+                if idx + 1 < len(chain):
+                    await _send(ws, {"type": "switch", "failed": provider, "next": chain[idx + 1]})
+                    continue
+                await _send(ws, {"type": "error", "code": "all_failed", "failed": provider,
+                                 "message": "쓸 수 있는 통역 엔진이 모두 실패했어요. 아래 '검수 문장'으로 통역할 수 있어요."})
+    except Exception:      # noqa: BLE001 — 이미 끊긴 연결에 보내다 실패
         pass
-    except Exception as exc:      # noqa: BLE001 — 제공자 연결 실패는 사용자에게 상태로 알린다
-        log.warning("interp failed provider=%s: %s", provider, _redact(f"{type(exc).__name__}: {exc}"))
-        try:
-            await _send(ws, {"type": "error", "code": "provider",
-                             "message": "통역 서비스에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요."})
-        except Exception:         # noqa: BLE001
-            pass
     finally:
         try:
             await _send(ws, {"type": "closed"})

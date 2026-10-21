@@ -1401,7 +1401,9 @@ const interpConsent = () => { try { const c = JSON.parse(localStorage.getItem(IN
 const LIVE = { on: false, ws: null, stream: null, ctx: null, proc: null, src: null, dst: null,
   status: '', note: '', test: false, provider: '', cap: { source: '', target: '', sp: '', tp: '' }, q: [], playing: false,
   providers: null, pick: null, paused: false, partner: false, hist: [],
-  level: 0, muted: false, mode: '', worklet: null, srcNode: null, raf: 0, gen: 0, bargeUntil: 0, speech: false };
+  level: 0, muted: false, mode: '', worklet: null, srcNode: null, raf: 0, gen: 0, bargeUntil: 0, speech: false,
+  exclude: [], restart: '', fallback: false,             // 자동 전환: 실패한 엔진은 빼고 다음 엔진, 다 실패하면 검수 문장으로
+  browserOk: null, rec: null, tr: null, speaker: 'me' };  // 브라우저 엔진(데스크톱 Chrome·Edge, 기기 안 처리일 때만)
 const livePick = () => LIVE.pick || (() => { try { return localStorage.getItem(INTERP_PROVIDER_KEY) || ''; } catch (e) { return ''; } })();
 // 지금 쓸 엔진: 사용자가 고른 것(켜져 있을 때) → 서버 우선순위의 첫 엔진. 서버도 같은 규칙으로 고른다.
 const liveEngine = engines => { const p = livePick(); return engines.some(e => e.id === p) ? p : (engines[0] || {}).id; };
@@ -1410,6 +1412,7 @@ async function loadLiveProviders() {
   if (API.base === null) { LIVE.providers = []; return; }
   try { const r = await fetch((API.base || '') + '/interp/providers'); const j = await r.json();   // 화면과 서버가 다른 주소일 수 있다
     LIVE.providers = j.providers || []; } catch (e) { LIVE.providers = []; }
+  if (await browserEngineOk()) LIVE.providers = [BROWSER_ENGINE, ...LIVE.providers];
   if (S.screen === 'u-interp') updateLiveUi();
 }
 function liveTermsHtml() {   // 전문 보기(모달) — 동의 창과 같은 내용을 다시 볼 수 있게
@@ -1421,6 +1424,7 @@ function askInterpConsent(after) {
     `<b>보내는 것</b> · 마이크로 들어온 소리(통역하는 동안 계속)<br>
      <b>받는 곳</b> · ① 이 서비스 서버를 거쳐 ② 통역 제공자 Soniox, Inc.(미국)로 전송돼요. 운영자가 OpenAI(미국)를 고른 경우 OpenAI 로 가요. 제공자는 통역 화면 위에 표시해요.<br>
      <b>쓸 수 있는 사람·시간</b> · 로그인한 계정만, 한 번에 최대 3분이에요.<br>
+     <b>외부로 안 보내는 경우</b> · '이 기기(브라우저)'·'마디 서버(자체)' 엔진은 음성을 외부 회사로 보내지 않아요. 엔진이 실패하면 다음 엔진으로 자동으로 넘어가요.<br>
      <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요. 제공자의 처리·보관은 그 회사 약관을 따라요.<br>
      <b>국외 이전</b> · 음성이 미국(Soniox, Inc.)으로, 통역하는 동안 실시간 암호화 전송돼요. 업체의 보관 기간은 그 회사 정책을 따라요.<br>
      <b>대화 상대</b> · 내가 참여한 대화에서만 쓰고, 상대에게 AI 통역을 쓴다고 알려 주세요.<br>
@@ -1448,6 +1452,7 @@ function interpLiveHtml() {
       <button class="btn accent block" data-act="live-start">통역 시작</button>
       <p class="live-notice">${esc(INTERP_NOTICE)} <button class="linkish" data-act="live-terms">전문 보기</button></p>
       ${l.note ? `<p class="live-note">${esc(l.note)}</p>` : ''}
+      ${l.fallback ? '<button class="btn soft block" data-act="live-fallback">검수 문장으로 통역하기</button>' : ''}
       ${l.providers && !engines.length ? `<p class="live-note">지금은 쓸 수 있는 통역 엔진이 없어요(서버 키 미설정).</p>` : ''}</div>`;
   }
   const hist = l.hist.slice(-3).reverse();
@@ -1471,6 +1476,7 @@ function interpLiveHtml() {
       <button class="btn ${l.paused ? 'primary' : 'soft'}" data-act="live-pause">${l.paused ? '다시 듣기' : '잠시 멈춤'}</button>
       <button class="btn primary" data-act="live-stop">끝내기</button>
     </div>
+    ${l.provider === 'browser' ? `<button class="btn soft block live-turn" data-act="live-turn">${l.speaker === 'me' ? '지금: 내가 말해요 → 상대 차례로' : '지금: 상대가 말해요 → 내 차례로'}</button>` : ''}
     <p class="live-notice">AI 번역 · 정확도 보장 안 함 · 긴급 상황은 사람에게</p></div>`;
 }
 function interpPartnerHtml() {
@@ -1527,15 +1533,118 @@ function liveDrain() {
   src.onended = () => { LIVE.playingNode = null; LIVE.playing = false; liveDrain(); };
   src.start();
 }
-async function startLive() {
+/* ---- 브라우저 엔진: 데스크톱 Chrome·Edge 의 기기 안 음성 인식 + 번역(Translator API) ----
+   음성·글이 서버나 외부 회사로 나가지 않는다. 그래서 쓸 수 있으면 맨 앞(기본)으로 둔다.
+   조건(하나라도 아니면 쓰지 않는다 — 서버 엔진으로):
+   - 모바일이 아님(Translator API 는 데스크톱 전용, developer.chrome.com/docs/ai/translator-api)
+   - SpeechRecognition 이 processLocally(기기 안 인식)를 지원하고, available() 이 'unavailable' 이 아님.
+     Chrome 기본 음성 인식은 소리를 Google 서버로 보낸다(MDN) — processLocally 없이 쓰면 처리방침과 어긋나므로 쓰지 않는다.
+   - Translator.availability() 가 ko↔en 양쪽 'unavailable' 이 아님 */
+const BROWSER_ENGINE = { id: 'browser', label: '이 기기(브라우저)', available: true, verified: true, audio_out: false,
+  note: '기기 안에서 인식·번역, 음성이 밖으로 나가지 않아요' };
+const SR_CTOR = () => window.SpeechRecognition || window.webkitSpeechRecognition;
+const liveLoc = l => l === 'ko' ? 'ko-KR' : 'en-US';
+async function browserEngineOk() {
+  if (LIVE.browserOk !== null) return LIVE.browserOk;
+  let ok = false;
+  // 자동화 브라우저(navigator.webdriver, 예: Playwright headless Chromium 153)에는 기기 안 모델이 없어,
+  // 아래 availability()/available() 를 부르기만 해도 페이지가 죽는다(10/21 확인). 사람이 쓰는 브라우저가 아니므로 건너뛴다.
+  // 브라우저 엔진 E2E 는 가짜 API 를 넣고 __browserEngineTest 로 켠다.
+  if (navigator.webdriver && !window.__browserEngineTest) { LIVE.browserOk = false; return false; }
+  const within = (pr, ms = 3000) => Promise.race([pr, new Promise(r => setTimeout(() => r('unavailable'), ms))]);   // 멈추면 '안 됨'으로
+  try {
+    const mobile = (navigator.userAgentData && navigator.userAgentData.mobile) || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    const SR = SR_CTOR();
+    if (!mobile && window.Translator && SR && typeof SR.available === 'function' && 'processLocally' in SR.prototype) {
+      const t1 = await within(Translator.availability({ sourceLanguage: 'ko', targetLanguage: 'en' }));
+      const t2 = await within(Translator.availability({ sourceLanguage: 'en', targetLanguage: 'ko' }));
+      const sr = t1 === 'unavailable' || t2 === 'unavailable' ? 'unavailable'
+        : await within(SR.available({ langs: ['ko-KR', 'en-US'], processLocally: true }));
+      ok = sr !== 'unavailable' && t1 !== 'unavailable' && t2 !== 'unavailable';
+    }
+  } catch (e) { ok = false; }
+  LIVE.browserOk = ok;
+  return ok;
+}
+async function startBrowserLive() {
+  const SR = SR_CTOR();
+  const langs = [liveLoc(LIVE.src), liveLoc(LIVE.dst)];
+  const st = await SR.available({ langs, processLocally: true });
+  if (st === 'unavailable') throw new Error('sr-unavailable');
+  if (st !== 'available') {   // 언어 팩을 이 기기에 받는다(한 번)
+    LIVE.note = '이 기기에 음성 인식 언어 팩을 받는 중…'; updateLiveUi();
+    if (!await SR.install({ langs, processLocally: true })) throw new Error('sr-install');
+  }
+  LIVE.tr = {};
+  for (const [a, b] of [[LIVE.src, LIVE.dst], [LIVE.dst, LIVE.src]]) {
+    LIVE.tr[a + b] = await Translator.create({ sourceLanguage: a, targetLanguage: b, monitor(m) {
+      m.addEventListener('downloadprogress', e => { LIVE.note = `번역 모델 받는 중 ${Math.round((e.loaded || 0) * 100)}%`; updateLiveUi(); });
+    } });
+  }
+  if (!LIVE.on) return;
+  LIVE.provider = 'browser'; LIVE.status = 'live'; LIVE.note = ''; LIVE.speaker = 'me';
+  browserListen();
+  updateLiveUi();
+}
+function browserListen() {
+  const SR = SR_CTOR();
+  try { if (LIVE.rec) { LIVE.rec.onend = null; LIVE.rec.abort(); } } catch (e) { /* 이미 끝남 */ }
+  const from = LIVE.speaker === 'me' ? LIVE.src : LIVE.dst, to = from === LIVE.src ? LIVE.dst : LIVE.src;
+  const r = new SR(), gen = ++LIVE.gen;
+  r.lang = liveLoc(from); r.processLocally = true; r.continuous = true; r.interimResults = true;
+  r.onresult = async e => {
+    if (gen !== LIVE.gen || LIVE.paused || LIVE.muted) return;
+    let fin = '', part = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) fin += t; else part += t;
+    }
+    if (part && !fin) { LIVE.cap = { ...LIVE.cap, sp: part }; updateLiveUi(); }
+    if (!fin.trim()) return;
+    try {
+      const out = await LIVE.tr[from + to].translate(fin.trim());
+      if (gen !== LIVE.gen) return;
+      if (LIVE.cap.target) LIVE.hist.push({ target: LIVE.cap.target });
+      LIVE.cap = { source: fin.trim(), target: out, sp: '', tp: '' };
+      updateLiveUi();
+    } catch (err) { browserFail('translate'); }
+  };
+  r.onerror = e => { if (gen === LIVE.gen && !['no-speech', 'aborted'].includes(e.error)) browserFail(e.error || 'error'); };
+  r.onend = () => { if (gen === LIVE.gen && LIVE.on && LIVE.provider === 'browser') setTimeout(() => { if (gen === LIVE.gen && LIVE.on) try { r.start(); } catch (e) { /* 이미 시작 */ } }, 250); };
+  LIVE.rec = r;
+  r.start();
+}
+function browserStop() {
+  try { if (LIVE.rec) { LIVE.rec.onend = null; LIVE.rec.onresult = null; LIVE.rec.abort(); } } catch (e) { /* 이미 끝남 */ }
+  LIVE.rec = null;
+  try { Object.values(LIVE.tr || {}).forEach(t => t.destroy && t.destroy()); } catch (e) { /* 없음 */ }
+  LIVE.tr = null;
+}
+function browserFail(why) {   // 브라우저 엔진이 안 되면 그 자리에서 서버 엔진으로 넘어간다
+  if (!LIVE.on || LIVE.provider !== 'browser') return;
+  browserStop();
+  LIVE.exclude.push('browser');
+  stopLive('이 기기 통역이 멈춰서 서버 통역으로 다시 연결해요.');
+  startLive({ keep: true });
+}
+async function startLive(opt) {
   if (LIVE.on) return;
-  if (!interpConsent()) { askInterpConsent(startLive); return; }
+  if (!interpConsent()) { askInterpConsent(() => startLive(opt)); return; }
+  if (!(opt && opt.keep)) { LIVE.exclude = []; LIVE.fallback = false; }   // 사용자가 새로 시작하면 실패 기록을 지운다
+  await loadLiveProviders();
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { LIVE.note = '이 브라우저에서는 마이크를 쓸 수 없어요.'; updateLiveUi(); return; }
-  LIVE.on = true; LIVE.status = 'connecting'; LIVE.note = ''; LIVE.test = false; LIVE.provider = '';
+  LIVE.on = true; LIVE.status = 'connecting'; if (!(opt && opt.keep)) LIVE.note = '';   // 자동 전환 때는 '왜 바뀌었는지' 안내를 남긴다
+  LIVE.test = false; LIVE.provider = '';
   LIVE.src = LIVE.src || 'ko'; LIVE.dst = LIVE.dst || 'en';   // 내 말=한국어, 상대=영어(여행지 기본)
   LIVE.cap = { source: '', target: '', sp: '', tp: '' }; LIVE.q = []; LIVE.playing = false;
-  LIVE.paused = false; LIVE.partner = false; LIVE.hist = [];
+  LIVE.paused = false; LIVE.partner = false; LIVE.hist = []; LIVE.restart = '';
   updateLiveUi();
+  const engines = (LIVE.providers || []).filter(p => p.available && !LIVE.exclude.includes(p.id));
+  if (liveEngine(engines) === 'browser') {
+    try { await startBrowserLive(); return; }
+    catch (e) { browserStop(); LIVE.exclude.push('browser'); LIVE.note = '이 기기 통역을 시작하지 못해 서버 통역으로 연결해요.'; updateLiveUi(); }
+    if (!LIVE.on) return;
+  }
   try { LIVE.stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } }); }
   catch (e) { LIVE.on = false; LIVE.note = '마이크를 사용할 수 없어요. 권한을 확인해 주세요.'; updateLiveUi(); return; }
   if (API.base === null) { stopLive('통역 서버가 없는 화면이에요.'); return; }
@@ -1547,7 +1656,9 @@ async function startLive() {
   let ws;
   try { ws = new WebSocket(url); } catch (e) { stopLive('통역 서버에 연결하지 못했어요.'); return; }
   LIVE.ws = ws;
-  ws.onopen = () => ws.send(JSON.stringify({ type: 'start', a: LIVE.src, b: LIVE.dst, token, provider: livePick() || undefined }));
+  const pick = livePick();
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'start', a: LIVE.src, b: LIVE.dst, token,
+    provider: pick && pick !== 'browser' ? pick : undefined, exclude: LIVE.exclude.filter(x => x !== 'browser') }));
   ws.onmessage = ev => {
     let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
     if (m.type === 'ready') { LIVE.status = 'live'; LIVE.provider = m.provider || ''; LIVE.test = !!m.test; updateLiveUi(); }
@@ -1557,8 +1668,20 @@ async function startLive() {
       LIVE.cap = { source: m.source || '', target: m.target || '', sp: m.source_partial || '', tp: m.target_partial || '' };
       updateLiveUi();
     } else if (m.type === 'audio') livePlayPcm(m.pcm, m.rate);
-    else if (m.type === 'error') { LIVE.status = 'error'; LIVE.note = m.message || '통역 오류'; updateLiveUi(); }
-    else if (m.type === 'closed') stopLive();
+    else if (m.type === 'switch') {   // 서버가 다음 엔진으로 자동 전환했다(시작 전 실패)
+      const name = id => ((LIVE.providers || []).find(p => p.id === id) || {}).label || id;
+      LIVE.note = `${name(m.failed)} 연결 실패 → ${name(m.next)}(으)로 전환했어요.`; updateLiveUi();
+    }
+    else if (m.type === 'error') {
+      if (m.code === 'provider_lost' && m.failed) LIVE.restart = m.failed;   // 통역 중 끊김 → 그 엔진을 빼고 다시
+      if (m.code === 'all_failed' || m.code === 'no_key') LIVE.fallback = true;   // 남은 길: 검수 문장 통역
+      LIVE.status = 'error'; LIVE.note = m.message || '통역 오류'; updateLiveUi();
+    }
+    else if (m.type === 'closed') {
+      const again = LIVE.restart;
+      stopLive();
+      if (again && !LIVE.exclude.includes(again)) { LIVE.exclude.push(again); startLive({ keep: true }); }
+    }
   };
   ws.onerror = () => { if (LIVE.on && LIVE.status === 'connecting') { LIVE.status = 'error'; LIVE.note = '통역 서버에 연결하지 못했어요.'; updateLiveUi(); } };
   ws.onclose = () => { if (LIVE.on) stopLive(); };
@@ -1631,6 +1754,7 @@ function liveBarge() {
 }
 function stopLive(note) {
   const had = LIVE.on;
+  browserStop();
   LIVE.on = false; LIVE.status = ''; LIVE.provider = '';
   if (LIVE.ws) LIVE.gen++;
   if (note) LIVE.note = note;
@@ -3630,6 +3754,11 @@ const ACT = {
   'live-terms': () => confirmBox('실시간 통역 고지·면책', liveTermsHtml(), '확인', () => { S.modal = null; render(); }),
   'interp-consent-withdraw': () => { stopLive(); try { localStorage.removeItem(INTERP_CONSENT_KEY); } catch (e) { /* 저장소 막힘 */ } render(); toast('실시간 통역 동의를 철회했어요. 다음에 통역을 켤 때 다시 물어봐요.'); },
   'live-stop': () => stopLive(),
+  'live-turn': () => { LIVE.speaker = LIVE.speaker === 'me' ? 'partner' : 'me'; LIVE.cap = { ...LIVE.cap, sp: '' }; browserListen(); updateLiveUi(); },
+  'live-fallback': () => {   // 실시간 엔진이 모두 안 될 때: 서버·인터넷 없이 되는 검수 문장 통역으로
+    LIVE.fallback = false; LIVE.note = ''; updateLiveUi();
+    const q = $('[data-interp="q"]'); if (q) { q.scrollIntoView({ block: 'center' }); q.focus(); }
+  },
   'live-play': () => {   // 번역된 문장을 상대에게 들려준다(제공자 음성이 없을 때)
     const t = LIVE.cap.target; if (!t || !ttsSupported()) return;
     speechSynthesis.cancel();

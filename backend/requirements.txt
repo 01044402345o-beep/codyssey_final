@@ -20,3 +20,6 @@ cryptography==50.0.2
 # 실시간 통역 Azure Speech 엔진(app/interp.py run_azure). INTERP_PROVIDERS 에 azure 를 넣어야 켜진다.
 # 리눅스에서는 libssl·libasound2 가 있어야 불러올 수 있다 — 없으면 엔진 목록에 '사용 불가'로만 뜬다. 1.52.0(2026-09-28) 확인.
 azure-cognitiveservices-speech==1.52.0
+# 자체 통역 엔진(app/interp_local.py)의 Argos 번역 모델 토크나이저. 번역 실행은 이미 있는 ctranslate2(faster-whisper 의존)를 쓴다.
+# argostranslate 패키지는 넣지 않는다 — 문장 분리용 stanza·torch 가 무거워 빌드를 깨뜨릴 수 있다. 0.2.2(2026-07-12) 확인.
+sentencepiece==0.2.2
