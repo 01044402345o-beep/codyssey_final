@@ -51,7 +51,7 @@ with sync_playwright() as p:
 
     # --- 상황별 연습(공항): 시트 열기 전후 ---
     open_drill(page, "airport")
-    check("카드 뒷면에는 말해보기가 없다", page.locator('.face [data-live="speak"]').count() == 0)
+    check("카드 뒷면에는 말해보기가 없다", page.locator('.face [data-live^="speak"], .face .speak-btn').count() == 0)
     check("하단에 '회화 연습 열기' 버튼", page.locator('.bottombar [data-act="sheet-open"]').count() == 1)
     check("완료 안내는 제목 아래로 옮겨졌다", page.locator('.app [data-live="status"]').count() == 1
           and page.locator('.bottombar [data-live="status"]').count() == 0)
