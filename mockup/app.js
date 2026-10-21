@@ -1419,6 +1419,7 @@ const IL_ICON = {
   grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>',
   expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 15v5h-5M20 9V4h-5M4 15v5h5"/></svg>',
   close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5v14M15 5v14"/></svg>',
   swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 4v13M8 17l-3-3M8 17l3-3M16 20V7M16 7l-3 3M16 7l3 3"/></svg>',
 };
 const interpUiThumb = id => `<span class="il-thumb t-${id}" aria-hidden="true"><i></i><i></i></span>`;
@@ -1561,9 +1562,9 @@ function interpLiveFullHtml() {
     <div class="il-dock">
       <button class="il-mic ${l.muted ? 'off' : ''}" data-act="live-mute" aria-pressed="${l.muted ? 'true' : 'false'}" aria-label="${l.muted ? '마이크 켜기' : '마이크 끄기'}">${l.muted ? IL_ICON.micOff : IL_ICON.mic}</button>
       <div class="il-acts">
-        <button class="il-act" data-act="live-play" ${l.cap.target ? '' : 'disabled'}>${I.speaker}들려주기</button>
-        <button class="il-act" data-act="live-pause">${l.paused ? '다시 듣기' : '잠시 멈춤'}</button>
-        <button class="il-act" data-act="live-stop">끝내기</button>
+        <button class="il-act" data-act="live-play" title="번역문을 들려주기" aria-label="번역문 들려주기" ${l.cap.target ? '' : 'disabled'}>${I.speaker}<span class="il-act-txt">들려주기</span></button>
+        <button class="il-act" data-act="live-pause" aria-label="${l.paused ? '다시 듣기' : '잠시 멈춤'}">${IL_ICON.pause}<span class="il-act-txt">${l.paused ? '다시 듣기' : '잠시 멈춤'}</span></button>
+        <button class="il-act" data-act="live-stop" aria-label="통역 끝내기">${IL_ICON.close}<span class="il-act-txt">끝내기</span></button>
       </div>
       ${l.provider === 'browser' ? `<button class="il-act il-turn" data-act="live-turn">${l.speaker === 'me' ? '지금: 내가 말해요 → 상대 차례로' : '지금: 상대가 말해요 → 내 차례로'}</button>` : ''}
       <p class="il-notice">AI 번역 · 정확도 보장 안 함 · 긴급 상황은 사람에게 · <button class="linkish" data-act="live-terms">고지 전문</button></p>
@@ -1572,11 +1573,30 @@ function interpLiveFullHtml() {
   </div>`;
 }
 const liveSlotHtml = () => `<div class="il-slot" data-live="full">${interpLiveFullHtml()}</div>`;
+/* 번역문이 칸보다 길면 글자를 줄인다. 폰 폭·높이·글자 길이가 달라도 넘치지 않게.
+   기준값은 CSS(clamp)이고, 여기서는 '안 들어가면 줄인다'만 한다 — 인라인 크기를 지우고 다시 잰다. */
+let fitRaf = 0;
+function liveFit() {
+  cancelAnimationFrame(fitRaf);
+  fitRaf = requestAnimationFrame(() => {
+    document.querySelectorAll('.conv-big, .partner-big').forEach(el => {
+      el.style.fontSize = '';
+      const base = parseFloat(getComputedStyle(el).fontSize) || 24;
+      const fits = () => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1;
+      let s = base, i = 0;
+      while (!fits() && s > 15 && i < 18) { s = Math.max(15, s * 0.93); el.style.fontSize = s + 'px'; i++; }
+      el.dataset.fit = String(Math.round(s));
+      el.dataset.base = String(Math.round(base));
+      el.classList.toggle('fitted', s < base - 0.5);
+    });
+  });
+}
 /* 파생 상태(자막·음소거·방식)만 다시 그린다. 상대 보기는 자막만 갱신한다. */
 function updateLiveUi() {
   const el = $('[data-live="live"]'); if (el) el.innerHTML = interpLiveHtml();
   const fl = $('[data-live="full"]'); if (fl) fl.innerHTML = interpLiveFullHtml();
   const pv = $('[data-live="partner"]'); if (pv) pv.innerHTML = interpPartnerHtml();
+  liveFit();
   const box = $('[data-live="log"]');
   if (box) {
     if (!LIVE.logStay) box.scrollTop = box.scrollHeight;   // 사용자가 위로 올려 읽는 중이면 붙잡지 않는다
@@ -1953,6 +1973,10 @@ function interpShowHtml() {
     </div>
   </div>`;
 }
+
+/* 창 크기·회전이 바뀌면 통역 글자 크기를 다시 맞춘다(폰을 눕히면 칸 높이가 달라진다). */
+addEventListener('resize', () => { if (LIVE.on || LIVE.partner) liveFit(); }, { passive: true });
+addEventListener('orientationchange', () => { if (LIVE.on || LIVE.partner) setTimeout(liveFit, 120); }, { passive: true });
 
 /* ================= 렌더링: 사용자 화면 ================= */
 function frame(inner, o = {}) {
