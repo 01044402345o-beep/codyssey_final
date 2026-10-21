@@ -80,6 +80,35 @@ with sync_playwright() as p:
     check("경계 이벤트가 없어도 단어를 차례로 따라간다(어림)", len(seen) >= 3 and seen[0] == texts[0], str(seen))
     page.evaluate("window.__end()"); page.wait_for_timeout(50)
 
+    # --- iOS Safari(10/21 실기기): 경계 이벤트가 오다가 고유명사에서 끊긴다 → 그래도 다음 단어로 넘어간다 ---
+    page.evaluate("speechSynthesis.speaking = true")   # 아직 말하는 중
+    page.locator('.face.back [data-act="speak-card"]').click(); page.wait_for_timeout(100)
+    page.evaluate(f"window.__boundary({starts[0]})"); page.wait_for_timeout(60)
+    page.evaluate(f"window.__boundary({starts[1]})"); page.wait_for_timeout(60)   # 여기서 이벤트가 끊긴다
+    stuck_at = page.evaluate(NOW)
+    later = []
+    for _ in range(30):
+        page.wait_for_timeout(120)
+        cur = page.evaluate(NOW)
+        if cur and cur[0] not in later:
+            later.append(cur[0])
+    check("경계 이벤트가 중간에 끊겨도 강조가 멈추지 않고 다음 단어로 넘어간다", stuck_at == [texts[1]] and len(later) >= 3 and later[-1] == texts[-1],
+          f"끊긴 곳 {stuck_at} → {later}")
+    check("아직 말하는 중이면 예상 시간이 지나도 끝내지 않는다(마지막 단어 유지, 버튼 재생 중)",
+          page.evaluate(NOW) == [texts[-1]] and page.locator('.face.back [data-act="speak-card"].playing').count() == 1)
+
+    # --- onend 가 오지 않아도(iOS 가 발화 객체를 버린 경우) 말이 끝나면 버튼·강조를 정리한다 ---
+    page.evaluate("speechSynthesis.speaking = false")   # 말은 끝났는데 onend 는 안 온다
+    page.wait_for_timeout(900)
+    check("onend 없이도 말이 끝나면 강조를 지우고 버튼을 되돌린다", page.evaluate(NOW) == []
+          and page.locator('.face.back .playing').count() == 0)
+    check("발화 객체를 전역에 붙잡아 둔다(말하는 동안)", page.evaluate("typeof curUtter") != "undefined")
+
+    # --- 대화하기 등 onend 를 기다리는 쪽은 정확히 한 번만 불린다 ---
+    calls = page.evaluate("""async () => { let n = 0; speak('Hello there.', null, null, { onend: () => n++ });
+      window.__end(); window.__end(); await new Promise(r => setTimeout(r, 2500)); return n; }""")
+    check("끝 처리(onend 콜백)는 한 번만 — onend 와 상태 확인이 겹쳐도", calls == 1, f"{calls}회")
+
     # --- 자리표시자: [your name] 은 대괄호 없이 읽으므로 위치를 당겨 센다 ---
     pos = page.evaluate("""(() => { const d = document.createElement('div'); d.innerHTML = enHtml('I have a reservation under [name].');
       return [...d.querySelectorAll('.w')].map(w => [w.textContent, +w.dataset.c, w.classList.contains('ph')]); })()""")
