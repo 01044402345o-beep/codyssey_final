@@ -1491,6 +1491,7 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
 .conv-empty { font-size: 1rem; font-weight: 400; color: var(--text-3); }
 /* 상대에게 보이는 'AI 번역' 표시(인공지능 기본법 제31조 결과물 표시) — 상대 언어로 */
 .conv-ai { display: block; margin-top: 6px; font-size: 0.6875rem; color: var(--text-3); }
+.live-turn { margin-top: 8px; }   /* 브라우저 엔진: 내 차례 ↔ 상대 차례 */
 .conv-tap { display: block; margin-top: 4px; font-size: 0.6875rem; font-weight: 700; color: var(--accent-text); }
 .conv-me { border-radius: 14px; padding: 10px 12px; background: var(--surface-3); }
 .conv-me.speaking { box-shadow: 0 0 0 2px var(--accent-a40); }

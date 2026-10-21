@@ -60,6 +60,7 @@ from . import speech_vad as vad
 from . import stt_providers as stt
 from . import stt_selftest as selftest
 from . import interp
+from . import interp_local
 from .agents.facts import (
     FACT_SOURCES_READY,
     collect_facts,
@@ -117,6 +118,8 @@ async def lifespan(_app: FastAPI):
     threading.Thread(target=warm, name="vad-warmup", daemon=True).start()
     selftest.start()
     evidence.install_log_ring()      # 탈퇴 실패 증거에 최근 로그를 담기 위해(설정이 있을 때만)
+    if "local" in interp.enabled_providers() and interp_local.deps_ok():
+        interp_local.warm_in_background()   # 자체 통역 엔진을 켰으면 모델을 미리 내려받고 불러 둔다(실패해도 서버는 뜬다)
     yield
 
 
@@ -419,6 +422,9 @@ def health() -> dict[str, Any]:
         "gemini_keys": ai.key_health(),
         # 통역 Azure 엔진의 SDK 를 이 서버에서 불러올 수 있는지(키·켜짐과 별개). 리눅스 라이브러리 확인용.
         "azure_speech_sdk": interp.azure_sdk_ok(),
+        # 자체 통역 엔진(local): 켜졌는지·패키지·모델 준비 상태(idle/loading/ready/error). docs/ops/INTERP_ENGINES.md
+        "interp_local": {"enabled": "local" in interp.enabled_providers(), "deps": interp_local.deps_ok(),
+                         **interp_local.status()},
         "firebase_auth": firebase_auth.configured(),
         # 탈퇴 관리자 경로(서비스 계정)를 쓸 수 있는지만 알린다. 키 값은 노출하지 않는다.
         "admin_erase": firebase_admin.configured(),

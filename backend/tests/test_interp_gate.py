@@ -61,13 +61,13 @@ class T(unittest.TestCase):
             ev = self.start(PAID, token="tok")
         vb.assert_called_once_with("Bearer tok")
         conn.assert_called_once()
-        self.assertEqual(ev[0]["code"], "provider")   # 문은 통과했고, 제공자 연결에서 실패
+        self.assertEqual(ev[0]["code"], "all_failed")   # 문은 통과했고, 제공자 연결에서 실패(넘어갈 엔진 없음)
 
     def test_starts_are_limited_per_account(self):
         with mock.patch.object(firebase_auth, "verify_bearer", return_value={"uid": "u1", "provider": "google.com"}), \
              mock.patch.object(interp, "_connect", side_effect=OSError("offline")):
             codes = [self.start(PAID, token="tok")[0]["code"] for _ in range(interp.STARTS + 1)]
-        self.assertEqual(codes[:-1], ["provider"] * interp.STARTS)
+        self.assertEqual(codes[:-1], ["all_failed"] * interp.STARTS)
         self.assertEqual(codes[-1], "rate_limited")
 
     def test_bad_language_pair(self):
