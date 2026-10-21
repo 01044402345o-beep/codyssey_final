@@ -45,11 +45,16 @@ with sync_playwright() as p:
     check("동의 뒤 연결되어 '듣는 중'", page.evaluate("LIVE.on && LIVE.status") == "live", page.evaluate("LIVE.status"))
     check("시험 모드 표시", page.locator(".live-badge.test").count() == 1)
     check("자막 두 칸이 보인다", page.locator(".live-cols .live-col").count() == 2)
-    page.wait_for_timeout(2200)
+    # 시험 제공자는 100 ms 프레임 12개(≈1초)마다 한 줄을 보낸다. CI 러너는 오디오 콜백이 느려 고정 대기 대신 최대 8초 기다린다.
+    for _ in range(40):
+        page.wait_for_timeout(200)
+        if page.evaluate("LIVE.cap.source && LIVE.cap.target && (LIVE.sent || 0) > 16000"):
+            break
     src = page.locator(".live-cols .live-col").nth(0).inner_text()
     tgt = page.locator(".live-cols .live-col").nth(1).inner_text()
-    check("마이크 소리가 올라가 자막이 붙는다", "Where is the train station?" in src or "기차역" in src, src[:60])
-    check("번역 자막이 상대 칸에 나온다", "기차역" in tgt or "train station" in tgt, tgt[:60])
+    # 시험 제공자는 오디오 1초마다 두 문장을 번갈아 보낸다 — 어느 쪽이 떠 있어도 된다
+    check("마이크 소리가 올라가 자막이 붙는다", any(k in src for k in ("기차역", "걸어서 5분")), src[:60])
+    check("번역 자막이 상대 칸에 나온다", any(k in tgt for k in ("train station", "five minutes")), tgt[:60])
     check("마이크 트랙이 살아 있다", page.evaluate("!!(LIVE.stream && LIVE.stream.getAudioTracks()[0].readyState === 'live')"))
     check("브라우저가 보낸 오디오 샘플이 있다", page.evaluate("LIVE.sent || 0") > 16000, str(page.evaluate("LIVE.sent")))
 
