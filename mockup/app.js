@@ -1374,6 +1374,143 @@ function interpItems() {
         <button class="talk-say" data-act="interp-show" data-id="${s.id}">크게 보여주기</button></div>
     </div>`).join('');
 }
+
+/* ---- 실시간 통역(양방향) ----
+   왼쪽 마이크(내 말, 한국어) ↔ 오른쪽 상대(영어)를 한 세션에서 서로의 언어로 바꾼다.
+   오디오는 이 서버를 거쳐 제공자(Soniox 또는 OpenAI)로 가고, 서버는 저장하지 않는다.
+   키는 서버에만 있다 — 브라우저에는 내려보내지 않는다. */
+const INTERP_CONSENT_KEY = 'cd_interp_consent';
+const interpConsent = () => { try { return JSON.parse(localStorage.getItem(INTERP_CONSENT_KEY) || 'null'); } catch (e) { return null; } };
+const LIVE = { on: false, ws: null, stream: null, ctx: null, proc: null, src: null, dst: null,
+  status: '', note: '', test: false, provider: '', cap: { source: '', target: '', sp: '', tp: '' }, q: [], playing: false };
+function askInterpConsent(after) {
+  confirmBox('실시간 통역 전에 확인해 주세요',
+    `<b>보내는 것</b> · 마이크로 들어온 소리(통역하는 동안 계속)<br>
+     <b>받는 곳</b> · ① 이 서비스 서버를 거쳐 ② 통역 제공자(Soniox 또는 OpenAI)로 전송돼요. 제공자가 어디인지는 통역 화면 위에 표시해요.<br>
+     <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요. 제공자의 처리·보관은 그 회사 약관을 따라요.<br>
+     <b>국외 이전</b> · 제공자 서버는 국외에 있을 수 있어요.<br>
+     <b>주의</b> · 통역은 AI 가 만든 결과라 틀릴 수 있어요. 여권번호·카드번호 같은 민감한 정보는 말하지 마세요.<br><br>
+     동의하지 않아도 통역 화면의 문장 보기·들려주기는 그대로 쓸 수 있어요.`,
+    '동의하고 시작', () => {
+      try { localStorage.setItem(INTERP_CONSENT_KEY, JSON.stringify({ voice: true, at: Date.now() })); } catch (e) { /* 저장소 막힘 */ }
+      S.modal = null; render(); if (after) after();
+    });
+}
+function interpLiveHtml() {
+  const l = LIVE, c = l.cap;
+  const pair = `${l.src || 'ko'} → ${l.dst || 'en'}`;
+  const badge = l.test ? '<span class="live-badge test">시험 모드</span>' : l.provider ? `<span class="live-badge">${esc(l.provider)}</span>` : '';
+  if (!l.on) {
+    return `<div class="live-card">
+      <div class="live-head"><b>실시간 통역</b>${badge}</div>
+      <p class="small">마이크를 켜면 내 말(한국어)과 상대 말(영어)을 서로의 언어로 바꿔 자막으로 보여 주고, 상대에게는 번역된 말을 들려줄 수 있어요.</p>
+      <button class="btn accent block" data-act="live-start">통역 시작</button>
+      ${l.note ? `<p class="live-note">${esc(l.note)}</p>` : ''}</div>`;
+  }
+  return `<div class="live-card on">
+    <div class="live-head"><b>실시간 통역</b>${badge}<span class="live-state ${l.status}">${esc(liveStateText())}</span></div>
+    <div class="live-cols">
+      <div class="live-col"><span class="live-who">내 말 · ${esc(l.src === 'ko' ? '한국어' : '영어')}</span>
+        <p class="live-txt" lang="${esc(l.src)}">${esc(c.source)}<span class="live-partial">${esc(c.sp)}</span></p></div>
+      <div class="live-col"><span class="live-who">상대 말 · ${esc(l.dst === 'ko' ? '한국어' : '영어')}</span>
+        <p class="live-txt" lang="${esc(l.dst)}">${esc(c.target)}<span class="live-partial">${esc(c.tp)}</span></p></div>
+    </div>
+    <div class="live-acts">
+      <button class="btn soft" data-act="live-play" ${c.target ? '' : 'disabled'}>${I.speaker}번역 들려주기</button>
+      <button class="btn primary" data-act="live-stop">통역 끝내기</button>
+    </div>
+    <p class="small live-foot">${esc(pair)} · 오디오는 서버를 거쳐 제공자로 전송되고 저장되지 않아요. AI 번역이라 틀릴 수 있어요.</p></div>`;
+}
+function liveStateText() {
+  const st = LIVE.status;
+  if (st === 'connecting') return '연결 중…';
+  if (st === 'live') return '듣는 중';
+  if (st === 'error') return LIVE.note || '연결 실패';
+  return '대기';
+}
+function updateLiveUi() { const el = $('[data-live="live"]'); if (el) el.innerHTML = interpLiveHtml(); }
+/* 16 kHz · mono · PCM16 으로 줄인다(제공자 공통 입력 형식). */
+function toPcm16(input, inRate) {
+  const ratio = inRate / 16000, n = Math.floor(input.length / ratio), out = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    const v = Math.max(-1, Math.min(1, input[Math.floor(i * ratio)] || 0));
+    out[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+  }
+  return out;
+}
+function livePlayPcm(b64, rate) {
+  try {
+    const bin = atob(b64), buf = new Int16Array(bin.length / 2);
+    for (let i = 0; i < buf.length; i++) buf[i] = (bin.charCodeAt(i * 2) | (bin.charCodeAt(i * 2 + 1) << 8)) << 16 >> 16;
+    const ctx = LIVE.ctx; if (!ctx) return;
+    const ab = ctx.createBuffer(1, buf.length, rate || 24000);
+    const ch = ab.getChannelData(0);
+    for (let i = 0; i < buf.length; i++) ch[i] = buf[i] / 0x8000;
+    LIVE.q.push(ab); liveDrain();
+  } catch (e) { /* 재생 실패는 조용히 넘긴다 */ }
+}
+function liveDrain() {
+  const ctx = LIVE.ctx; if (!ctx || LIVE.playing || !LIVE.q.length) return;
+  LIVE.playing = true;
+  const src = ctx.createBufferSource();
+  src.buffer = LIVE.q.shift(); src.connect(ctx.destination);
+  src.onended = () => { LIVE.playing = false; liveDrain(); };
+  src.start();
+}
+async function startLive() {
+  if (LIVE.on) return;
+  if (!interpConsent()) { askInterpConsent(startLive); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { LIVE.note = '이 브라우저에서는 마이크를 쓸 수 없어요.'; updateLiveUi(); return; }
+  LIVE.on = true; LIVE.status = 'connecting'; LIVE.note = ''; LIVE.test = false; LIVE.provider = '';
+  LIVE.src = LIVE.src || 'ko'; LIVE.dst = LIVE.dst || 'en';   // 내 말=한국어, 상대=영어(여행지 기본)
+  LIVE.cap = { source: '', target: '', sp: '', tp: '' }; LIVE.q = []; LIVE.playing = false;
+  updateLiveUi();
+  try { LIVE.stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } }); }
+  catch (e) { LIVE.on = false; LIVE.note = '마이크를 사용할 수 없어요. 권한을 확인해 주세요.'; updateLiveUi(); return; }
+  const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/interp/stream`;
+  let ws;
+  try { ws = new WebSocket(url); } catch (e) { stopLive('통역 서버에 연결하지 못했어요.'); return; }
+  LIVE.ws = ws;
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'start', a: LIVE.src, b: LIVE.dst }));
+  ws.onmessage = ev => {
+    let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.type === 'ready') { LIVE.status = 'live'; LIVE.provider = m.provider || ''; LIVE.test = !!m.test; updateLiveUi(); }
+    else if (m.type === 'caption') {
+      LIVE.cap = { source: m.source || '', target: m.target || '', sp: m.source_partial || '', tp: m.target_partial || '' };
+      updateLiveUi();
+    } else if (m.type === 'audio') livePlayPcm(m.pcm, m.rate);
+    else if (m.type === 'error') { LIVE.status = 'error'; LIVE.note = m.message || '통역 오류'; updateLiveUi(); }
+    else if (m.type === 'closed') stopLive();
+  };
+  ws.onerror = () => { if (LIVE.on && LIVE.status === 'connecting') { LIVE.status = 'error'; LIVE.note = '통역 서버에 연결하지 못했어요.'; updateLiveUi(); } };
+  ws.onclose = () => { if (LIVE.on) stopLive(); };
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  LIVE.ctx = new Ctx();
+  if (LIVE.ctx.state === 'suspended') LIVE.ctx.resume();   // 자동재생 정책으로 멈춰 있으면 마이크 콜백이 오지 않는다
+  const srcNode = LIVE.ctx.createMediaStreamSource(LIVE.stream);
+  const proc = LIVE.ctx.createScriptProcessor(4096, 1, 1);
+  proc.onaudioprocess = ev => {
+    if (!LIVE.on || !LIVE.ws || LIVE.ws.readyState !== 1) return;
+    const pcm = toPcm16(ev.inputBuffer.getChannelData(0), LIVE.ctx.sampleRate);
+    LIVE.sent = (LIVE.sent || 0) + pcm.length;
+    LIVE.ws.send(pcm);
+  };
+  srcNode.connect(proc); proc.connect(LIVE.ctx.destination); LIVE.proc = proc;
+}
+function stopLive(note) {
+  const had = LIVE.on;
+  LIVE.on = false; LIVE.status = ''; LIVE.provider = '';
+  if (note) LIVE.note = note;
+  try { if (LIVE.ws) { LIVE.ws.onclose = null; LIVE.ws.close(); } } catch (e) { /* 이미 닫힘 */ }
+  LIVE.ws = null;
+  try { if (LIVE.proc) { LIVE.proc.disconnect(); LIVE.proc.onaudioprocess = null; } } catch (e) { /* 이미 끊김 */ }
+  LIVE.proc = null;
+  try { if (LIVE.stream) LIVE.stream.getTracks().forEach(t => t.stop()); } catch (e) { /* 이미 종료 */ }
+  LIVE.stream = null;
+  LIVE.q = []; LIVE.playing = false;
+  if (had) updateLiveUi();
+}
+
 function scrInterp() {
   const st = S.interp, t = S.trip, day = S.days.find(d => d.date === S.today);
   const chips = [['today', '오늘 장소'], ['help', '도움 요청'],
@@ -1381,7 +1518,8 @@ function scrInterp() {
   const inner = `<div class="app-pad interp">
     <div class="small">${day ? `${esc(day.city)} · ${Dt.full(S.today)}` : t ? esc(tripTitle(t)) : ''}</div>
     <div class="title-lg">통역</div>
-    <p class="sub" style="margin-bottom:12px">필요한 문장을 찾아 <b>크게 보여주거나 들려주세요</b>. 상대가 할 수 있는 대답도 한국어로 볼 수 있어요. 인터넷 없이도 돼요.</p>
+    <p class="sub" style="margin-bottom:12px">필요한 문장을 찾아 <b>크게 보여주거나 들려주세요</b>. 상대가 할 수 있는 대답도 한국어로 볼 수 있어요.</p>
+    <div data-live="live">${interpLiveHtml()}</div>
     <input class="input" type="search" data-interp="q" placeholder="찾기 — 예: 영수증, 화장실, receipt" value="${esc(st.q)}" autocomplete="off" aria-label="문장 찾기">
     <div class="chips interp-chips" role="group" aria-label="상황">${chips.map(([k, l]) => `<button class="chip ${!st.q.trim() && st.sit === k ? 'on' : ''}" data-act="interp-sit" data-v="${k}">${esc(l)}</button>`).join('')}</div>
     <div data-live="interp-list">${interpItems()}</div>
@@ -2228,6 +2366,7 @@ function endDrill() { if (S.drill) { S.card = S.drill.savedCard; S.drill = null;
 function go(id) {
   skipStateWrite = false;
   cancelSpeak(); S.card.back = null; if (id !== 'u-study') endDrill();
+  if (id !== 'u-interp' && LIVE.on) stopLive();   // 다른 화면으로 가면 마이크도 끈다
   S.screen = id; S.modal = null; S.sheet = false; if (S.interp) S.interp.show = null; pushScreen(id); render();
 }
 
@@ -2294,6 +2433,7 @@ function navFromMenu(id) {
   if (id === 'u-input' || id === 'u-gen') did = ensure('user');
   if (id === 'u-report') did = ensure('report');
   if (['u-route', 'u-home', 'u-sched', 'u-study', 'u-coll', 'u-end', 'u-interp'].includes(id)) did = ensure('plan');
+  if (id !== 'u-interp' && LIVE.on) stopLive();   // 다른 화면으로 가면 마이크도 끈다
   if (id === 'u-interp' && phase() !== 'trip') { S.today = S.trip.tripStart; toast(`데모: 오늘을 여행 첫날(${Dt.md(S.today)})로 바꿨어요.`); }
   if (id === 'u-end' && phase() !== 'ended') { S.today = Dt.add(S.trip.tripEnd, 1); toast(`오늘을 여행 종료 다음 날(${Dt.md(S.today)})로 바꿨어요.`); }
   else if (did) toast('이 화면에 필요한 데이터를 자동으로 준비했어요.');
@@ -3295,6 +3435,16 @@ const ACT = {
   'card-next': () => { cancelSpeak(); S.sheet = false; const r = pickRow(); S.card.i = Math.min(r.ids.length - 1, S.card.i + 1); render(); },
   'speak-card': el => { const r = pickRow(); speak(S.smap[r.ids[S.card.i]].en, el, readTarget(el)); },
   speak: el => speak(S.smap[el.dataset.id].en, el, readTarget(el)),
+  'live-start': () => startLive(),
+  'live-stop': () => stopLive(),
+  'live-play': () => {   // 번역된 문장을 상대에게 들려준다(제공자 음성이 없을 때)
+    const t = LIVE.cap.target; if (!t || !ttsSupported()) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t);
+    u.lang = LIVE.dst === 'ko' ? 'ko-KR' : 'en-US';
+    const v = enVoice(); if (LIVE.dst !== 'ko' && v) u.voice = v;
+    speechSynthesis.speak(u);
+  },
   'interp-sit': el => { S.interp.sit = el.dataset.v; S.interp.q = ''; render(); },
   'interp-say': el => { const x = S.smap[el.dataset.id]; if (x) speak(x.en, el, readTarget(el)); },
   'interp-show': el => { S.interp.show = el.dataset.id; pushOverlay('interp-show'); render(); },

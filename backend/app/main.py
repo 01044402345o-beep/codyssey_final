@@ -44,7 +44,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
@@ -59,6 +59,7 @@ from . import speech_compare as compare
 from . import speech_vad as vad
 from . import stt_providers as stt
 from . import stt_selftest as selftest
+from . import interp
 from .agents.facts import (
     FACT_SOURCES_READY,
     collect_facts,
@@ -846,6 +847,12 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
         "feedback": feedback,
         **meta,
     }
+
+
+@app.websocket("/interp/stream")
+async def interp_stream(ws: WebSocket) -> None:
+    """실시간 통역: 브라우저 마이크 PCM 을 제공자에게 중계하고 자막·음성을 돌려준다(서버는 저장하지 않는다)."""
+    await interp.serve(ws)
 
 
 @app.get("/auth/config")
