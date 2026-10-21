@@ -1480,3 +1480,28 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
 .live-acts .btn { flex: 1; }
 .live-foot { margin: 8px 0 0; }
 @media (max-width: 360px) { .live-cols { grid-template-columns: 1fr; } }
+
+/* ---- 대화 통역: 상대 중심 ---- */
+.live-engines { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+.live-notice { margin: 8px 0 0; font-size: 0.75rem; color: var(--text-soft); line-height: 1.5; }
+.linkish { padding: 0; border: 0; background: none; color: var(--accent-text); font: inherit; font-weight: 700; text-decoration: underline; min-height: 44px; }
+.conv { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.conv-partner { border: 1px solid var(--border-strong); border-radius: 16px; padding: 12px 14px; background: var(--surface); cursor: pointer; }
+.conv-big { margin: 4px 0 0; font-size: 1.375rem; line-height: 1.35; font-weight: 700; letter-spacing: -0.01em; min-height: 3.2em; }
+.conv-empty { font-size: 1rem; font-weight: 400; color: var(--text-3); }
+.conv-tap { display: block; margin-top: 4px; font-size: 0.6875rem; font-weight: 700; color: var(--accent-text); }
+.conv-me { border-radius: 14px; padding: 10px 12px; background: var(--surface-3); }
+.conv-me.speaking { box-shadow: 0 0 0 2px var(--accent-a40); }
+.conv-small { margin: 4px 0 0; font-size: 0.9375rem; line-height: 1.45; }
+.conv-who { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; font-weight: 700; color: var(--text-3); }
+.conv-hist { list-style: none; padding: 0; margin: 0 0 8px; display: flex; flex-direction: column; gap: 4px; }
+.conv-hist li { font-size: 0.8125rem; color: var(--text-soft); border-left: 2px solid var(--border); padding-left: 8px; }
+.live-meter { display: inline-block; width: 42px; height: 4px; border-radius: 4px; background: var(--surface-seg); overflow: hidden; }
+.live-meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .08s linear; }
+.live-mode, .live-muted { font-size: 0.625rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--surface-2); color: var(--text-soft); }
+.live-muted { background: var(--bad-soft); color: var(--on-bad-soft); }
+.partner-view { position: fixed; inset: 0; z-index: 300; background: var(--inv-bg); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.partner-inner { max-width: 720px; text-align: center; }
+.partner-big { margin: 0; font-size: clamp(1.75rem, 7vw, 3rem); line-height: 1.3; font-weight: 800; color: var(--inv-text); word-break: keep-all; }
+.partner-hint { display: block; margin-top: 20px; font-size: 0.8125rem; color: var(--inv-text-3); }
+@media (prefers-reduced-motion: reduce) { .live-meter i { transition: none; } }
