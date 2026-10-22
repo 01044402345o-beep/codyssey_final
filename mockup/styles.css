@@ -591,7 +591,8 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .progress-row { display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: center; }
 .ring { width: 96px; height: 96px; position: relative; }
 /* 오늘의 목표·연속 학습(Duolingo 처럼) */
-.streak-card { display: flex; align-items: center; gap: 16px; }
+.streak-card { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.streak-top { display: flex; align-items: center; gap: 16px; }
 .goal-ring { --p: 0; flex: none; width: 84px; height: 84px; border-radius: 50%; display: grid; place-content: center; text-align: center;
   background: radial-gradient(closest-side, var(--surface) 76%, transparent 77%), conic-gradient(var(--accent) calc(var(--p) * 1%), var(--surface-seg) 0); }
 .goal-ring.done { background: radial-gradient(closest-side, var(--surface) 76%, transparent 77%), conic-gradient(var(--ok) 100%, var(--surface-seg) 0); }
@@ -1784,3 +1785,27 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 @media (pointer: coarse) {
   html:not([data-mode=legacy]) :is(.ilog-cp, .ilog-del, .ilog-clear, .ilog-pick, .ilog-head, .seg.coll-seg button) { min-height: 44px; }
 }
+
+/* 홈 학습 현황: iOS 알람 카드 — 한 카드 안에 행, 행 사이 얇은 구분선, 오른쪽 스위치 */
+.al-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+.al-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 8px 8px 0; }
+.al-row + .al-row { border-top: 1px solid var(--border-faint); }
+.al-main { flex: 1; min-width: 0; display: block; text-align: left; background: none; border: 0; padding: 4px 0 4px 16px; color: inherit; }
+.al-main b { font-family: var(--display); font-size: 1.75rem; font-weight: 400; line-height: 1.15; letter-spacing: -0.015em; font-variant-numeric: tabular-nums; }
+.al-main i { font-style: normal; font-size: 0.9375rem; color: var(--text-3); margin-left: 3px; }
+.al-t { display: block; font-size: var(--fs-caption); color: var(--text-3); margin-top: 1px; }
+.al-sub { display: block; font-size: 0.8125rem; color: var(--text-2); line-height: 1.45; margin-top: 3px; }
+.al-row.off .al-main b, .al-row.off .al-main i { color: var(--text-3); }
+.al-week { display: flex; gap: 5px; margin-top: 7px; }
+.al-week i { width: 100%; max-width: 26px; height: 5px; border-radius: 3px; background: var(--surface-seg); }
+.al-week i.on { background: var(--accent); }
+.al-week i.today { box-shadow: 0 0 0 1.5px var(--accent-soft); }
+.al-sw { flex: none; width: 50px; min-height: 44px; display: grid; place-items: center; background: none; border: 0; padding: 0; }
+.al-sw i { display: block; width: 46px; height: 28px; border-radius: 999px; background: var(--surface-seg); position: relative; transition: background .18s; }
+.al-sw i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.18); transition: transform .18s; }
+.al-sw[aria-checked="true"] i { background: var(--accent); }
+.al-sw[aria-checked="true"] i::after { transform: translateX(18px); }
+@media (hover: hover) { .al-main:hover b { color: var(--accent-text); } }
+@media (prefers-reduced-motion: reduce) { .al-sw i, .al-sw i::after { transition: none; } }
+@media (max-width: 359px) { .streak-top { gap: 12px; } .goal-ring { width: 72px; height: 72px; } }

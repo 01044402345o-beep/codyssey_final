@@ -2409,11 +2409,7 @@ function scrHome() {
     <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 12px"><div><div class="small">안녕하세요</div><b style="font-size:1.125rem">${esc(userName())}${isGuest() ? '' : '님'}</b></div><span class="badge t-norm">${STATUS_KO[t.status]}</span></div>
     ${hero}<div style="height:12px"></div>${today}
     ${pr.miss ? `<div style="height:10px"></div>${notice(`지난 학습 ${pr.miss}일이 미완료예요. 일정표에서 여행 종료일까지 언제든 채울 수 있어요.`, 'warn')}` : ''}
-    ${streakCard()}
-    <div class="sec-title"><h4>진도</h4><button data-act="tab" data-id="u-sched">일정표 ›</button></div>
-    <div class="card progress-row">${ring(pr.rate)}
-      <div class="mini-stats"><div><span>완료한 날</span><b>${pr.done}일</b></div><div><span>학습 날짜</span><b>${pr.den}일</b></div>
-      <div class="${pr.miss ? 'bad' : ''}"><span>미완료</span><b>${pr.miss}일</b></div><div><span>자유 일정 (제외)</span><b>${pr.free}일</b></div></div></div>
+    ${homeList(pr)}
     ${upcoming.length ? `<div class="sec-title"><h4>다가오는 일정</h4></div>${upcoming.map(srow).join('')}` : ''}
     ${themeCard()}
     ${privacyCard()}
@@ -2438,17 +2434,63 @@ function bumpAct() {
   Object.keys(PROG.act).forEach(d => { if (d < old) delete PROG.act[d]; });
   if (n === DAY_GOAL) toast(`오늘 목표 달성! 🔥 연속 ${streakDays()}일`);
 }
-function streakCard() {
-  const n = actToday(), s = streakDays(), pct = Math.min(100, Math.round(n / DAY_GOAL * 100));
-  const week = Array.from({ length: 7 }, (_, i) => Dt.add(S.today, i - 6)).map(d => {
-    const on = (PROG.act[d] || 0) > 0, dow = '일월화수목금토'[new Date(Dt.parse(d)).getUTCDay()];
-    return `<i class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}" title="${Dt.md(d)}${on ? ' · 학습함' : ''}"><b>${on ? '🔥' : ''}</b><span>${dow}</span></i>`;
-  }).join('');
-  const msg = n >= DAY_GOAL ? '오늘 목표 달성! 내일도 이어 가요.' : n ? `카드 ${DAY_GOAL - n}장만 더 뒤집으면 오늘 목표예요.` : s ? '오늘 카드를 뒤집으면 연속이 이어져요.' : `오늘 카드 ${DAY_GOAL}장을 뒤집어 보세요.`;
-  return `<div class="sec-title"><h4>오늘의 목표</h4></div>
-    <div class="card streak-card" data-live="streak"><div class="goal-ring${n >= DAY_GOAL ? ' done' : ''}" style="--p:${pct}" role="img" aria-label="오늘 카드 ${n}장 / 목표 ${DAY_GOAL}장"><b>${n}</b><span>/${DAY_GOAL}장</span></div>
-      <div class="streak"><b class="streak-n">🔥 연속 ${s}일</b><p class="small">${msg}</p><div class="week" role="group" aria-label="최근 7일">${week}</div></div></div>`;
+/* ================= 홈: 학습 현황 (iOS 알람 카드) =================
+   iOS 시계 앱의 알람 목록처럼 한 카드 안에 행을 세로로 쌓는다.
+   - 각 행: 왼쪽에 큰 숫자 + 작은 단위, 그 아래 회색 설명, 오른쪽에 스위치.
+   - 스위치는 '자세히 보기'다. 끄면 설명과 주간 막대를 접어 행이 한 줄로 줄어든다(행은 남는다).
+     알림 기능이 없으므로 알림 스위치인 척하지 않는다 — 껐는데 아무 일도 없는 스위치는 거짓 UI다.
+   - 넘김·점·멈춤 버튼이 없다. 세 값이 한 화면에 동시에 보이고 세로 공간도 적게 쓴다.
+   - 값은 cd_home(localStorage)에 남긴다. 기본은 모두 펼침. */
+const HOME_ROWS = ['goal', 'streak', 'prog'];
+function homePref() {
+  let v = null;
+  try { v = JSON.parse(localStorage.getItem('cd_home') || 'null'); } catch (e) { v = null; }
+  if (!v || typeof v !== 'object') v = {};
+  HOME_ROWS.forEach(k => { if (typeof v[k] !== 'boolean') v[k] = true; });
+  return v;
 }
+function homeSet(k, on) {
+  const v = homePref(); v[k] = !!on;
+  try { localStorage.setItem('cd_home', JSON.stringify(v)); } catch (e) { /* 저장 불가(사생활 모드) */ }
+}
+function homeRow(o, pref) {
+  const on = pref[o.key];
+  const val = `<b>${o.value}</b>${o.unit ? `<i>${o.unit}</i>` : ''}`;
+  const body = `${val}<span class="al-t">${o.title}</span>${on ? `<span class="al-sub">${o.sub}</span>` : ''}${on && o.extra ? o.extra : ''}`;
+  const main = o.act
+    ? `<button type="button" class="al-main" data-act="${o.act[0]}"${o.act[1] ? ` data-id="${o.act[1]}"` : ''}${o.act[2] ? ` data-date="${o.act[2]}"` : ''}>${body}</button>`
+    : `<div class="al-main">${body}</div>`;
+  return `<div class="al-row${on ? '' : ' off'}" data-k="${o.key}">${main}
+    <button type="button" class="al-sw" role="switch" aria-checked="${on}" data-act="home-toggle" data-k="${o.key}"
+      aria-label="${o.title} 자세히 보기"><i></i></button></div>`;
+}
+function homeList(pr) {
+  const n = actToday(), done = n >= DAY_GOAL, st = streakDays(), pref = homePref();
+  const days = Array.from({ length: 7 }, (_, i) => Dt.add(S.today, i - 6));
+  const weekOn = days.filter(d => (PROG.act[d] || 0) > 0).length;
+  const week = days.map(d => {
+    const on = (PROG.act[d] || 0) > 0;
+    return `<i class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}" title="${Dt.md(d)}${on ? ' · 학습함' : ''}"></i>`;
+  }).join('');
+  const r = S.sched.find(x => x.date === S.today);
+  const rows = [
+    { key: 'goal', value: n, unit: `/${DAY_GOAL}장`, title: '오늘의 목표',
+      sub: done ? '오늘 목표를 채웠어요. 내일도 이어 가요.'
+        : n ? `카드 ${DAY_GOAL - n}장만 더 뒤집으면 오늘 목표예요.`
+        : st ? '오늘 카드를 뒤집으면 연속이 이어져요.' : '오늘 카드를 뒤집어 시작해 보세요.',
+      extra: `<span class="al-week" role="group" aria-label="최근 7일">${week}</span>`,
+      act: r && rowStatus(r) !== 'done' ? ['study-date', '', r.date] : ['tab', 'u-sched'] },
+    { key: 'streak', value: st, unit: '일', title: '연속 학습',
+      sub: weekOn ? `이번 주 ${weekOn}일 학습했어요.` : '이번 주에는 아직 학습이 없어요.',
+      act: ['tab', 'u-sched'] },
+    { key: 'prog', value: Math.round(pr.rate * 100), unit: '%', title: '여행 전체',
+      sub: `완료 ${pr.done}일 · 학습 ${pr.den}일${pr.miss ? ` · 미완료 ${pr.miss}일` : ''}`,
+      act: ['tab', 'u-sched'] }
+  ];
+  return `<div class="sec-title"><h4>학습 현황</h4><button data-act="tab" data-id="u-sched">일정표 ›</button></div>
+    <div class="al-card">${rows.map(o => homeRow(o, pref)).join('')}</div>`;
+}
+
 function ring(rate) {
   const r = 40, c = 2 * Math.PI * r;
   return `<div class="ring"><svg width="96" height="96"><circle cx="48" cy="48" r="${r}" fill="none" stroke="var(--surface-seg)" stroke-width="9"/>
@@ -4034,6 +4076,7 @@ async function doWithdraw() {
 }
 
 const ACT = {
+  'home-toggle': el => { const k = el.dataset.k; homeSet(k, !homePref()[k]); render(); },
   nav: el => { navFromMenu(el.dataset.id); if (!LEGACY) $('#side').classList.remove('open'); },
   drawer: () => {
     const el = $('#side'), opening = !el.classList.contains('open');
