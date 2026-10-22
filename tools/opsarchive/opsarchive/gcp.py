@@ -28,6 +28,7 @@ class GcpError(Exception):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
+        self.status = 0
 
 
 def token(sa_path: str, scope: str = SCOPE) -> str:
@@ -39,6 +40,12 @@ def token(sa_path: str, scope: str = SCOPE) -> str:
     """
     if not sa_path:
         raise GcpError("no_sa_file")
+    if sa_path.startswith("env:"):
+        # CI(Workload Identity Federation)가 받아 둔 **단기 접근 토큰**. 키 파일이 없다.
+        value = os.environ.get(sa_path[4:], "").strip()
+        if not value:
+            raise GcpError("no_env_token")
+        return value
     if not os.path.exists(sa_path):
         raise GcpError("no_sa_file")
     try:
@@ -194,7 +201,9 @@ class Firestore:
             self._token = ""            # 만료·권한 문제는 다음 호출에서 다시 시도한다
             if exc.code == 404:
                 raise GcpError("not_found") from exc    # '없음' 과 '실패' 를 구분한다
-            raise GcpError("http_error") from exc
+            err = GcpError("http_error")
+            err.status = exc.code                       # 409(이미 있음)·403(권한)을 호출자가 구분한다
+            raise err from exc
         except Exception as exc:        # noqa: BLE001
             raise GcpError("http_error") from exc
         if not raw:

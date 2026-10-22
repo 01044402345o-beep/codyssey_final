@@ -1,0 +1,60 @@
+# 증거 봉인 자동 앵커 — 6시간마다 체크포인트를 검증하고, Cloud KMS 키로 새 체크포인트를 서명해 남긴다.
+#
+# 왜: 앵커 주기가 곧 사각지대다(관리자가 손으로 돌리지 않는 동안은 증명되지 않는다).
+# 키 파일을 CI 비밀로 두지 않는다 — 서명은 KMS 안에서만(키가 밖으로 나오지 않음), GCP 인증은
+# Workload Identity Federation 단기 토큰(15분)이다. 서드파티 액션 없이 표준 라이브러리 스크립트만 쓴다.
+#
+# 켜기 전까지는 아무것도 하지 않는다: 저장소 변수 EVIDENCE_AUTO_ANCHOR=on 일 때만 돈다(설정 전 빨간 크론 방지).
+# 필요한 변수: GCP_WIF_PROVIDER, GCP_ANCHOR_SA, EVIDENCE_KMS_KEY, EVIDENCE_PIN_SIGNING_KEYS(pin-publish)
+# 설정 방법: docs/ops/KMS_AUTO_ANCHOR.md
+name: evidence-anchor
+
+on:
+  schedule:
+    - cron: "41 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write      # GitHub OIDC 토큰 → GCP 단기 토큰
+  issues: write        # 실패하면 이슈 하나에 모아 알림
+
+concurrency:
+  group: evidence-anchor
+  cancel-in-progress: false
+
+jobs:
+  anchor:
+    if: vars.EVIDENCE_AUTO_ANCHOR == 'on'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 관리자 도구 의존성
+        run: pip install -r tools/opsarchive/requirements.txt
+
+      - name: GCP 단기 토큰(WIF, 키 파일 없음)
+        env:
+          GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          GCP_ANCHOR_SA: ${{ vars.GCP_ANCHOR_SA }}
+        run: python3 .github/scripts/gcp_wif_token.py
+
+      - name: 검증 → KMS 자동 앵커
+        working-directory: tools/opsarchive
+        env:
+          EVIDENCE_PIN_SIGNING_KEYS: ${{ vars.EVIDENCE_PIN_SIGNING_KEYS }}
+          PROJECT: ${{ vars.EVIDENCE_PROJECT_ID || 'com-example-myapplicatio-3bb36' }}
+          KMS_KEY: ${{ vars.EVIDENCE_KMS_KEY }}
+        run: |
+          set -o pipefail
+          python -m opsarchive auto-anchor --project "$PROJECT" --sa env:GCP_ACCESS_TOKEN \
+            --kms-key "$KMS_KEY" --max-age-hours 13 | tee "$GITHUB_WORKSPACE/anchor-result.json"
+
+      - name: 실패하면 이슈로 알림
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/anchor_issue.py anchor-result.json

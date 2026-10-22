@@ -202,6 +202,14 @@ def sign_checkpoint(seed: bytes, body: dict[str, Any]) -> dict[str, Any]:
             "signing_key_id": C.key_id(C.sign_public(seed)).hex()}
 
 
+def sign_checkpoint_with(sign, public: bytes, body: dict[str, Any]) -> dict[str, Any]:
+    """외부 서명기(KMS 등)로 서명한다. `sign(message) -> 64바이트 서명`, `public` 은 그 서명기의 공개키."""
+    signature = sign(checkpoint_message(body))
+    if not C.verify_signature(public, checkpoint_message(body), signature):
+        raise ChainError("bad_signature")
+    return {**body, "signature": signature.hex(), "signing_key_id": C.key_id(public).hex()}
+
+
 def verify_checkpoint(checkpoint: dict[str, Any], signing_public: bytes) -> dict[str, Any]:
     """서명과 본문 다이제스트를 검증한다(받은 그대로를 신뢰하지 않는다)."""
     body = {k: v for k, v in checkpoint.items() if k not in ("signature", "signing_key_id")}
@@ -215,7 +223,7 @@ def verify_checkpoint(checkpoint: dict[str, Any], signing_public: bytes) -> dict
             "key_id_matches": checkpoint.get("signing_key_id") == C.key_id(signing_public).hex()}
 
 
-def verify_chain(checkpoints: list[dict], signing_public: bytes,
+def verify_chain(checkpoints: list[dict], signing_public,
                  metas: list[dict[str, Any]]) -> dict[str, Any]:
     """체크포인트 시퀀스를 검증한다.
 
@@ -224,13 +232,24 @@ def verify_chain(checkpoints: list[dict], signing_public: bytes,
     3) 각 체크포인트의 head/count 가 그 시점 매니페스트와 맞는지(가능한 범위에서)
     4) 마지막 체크포인트 이후의 매니페스트를 **미앵커 구간**으로 보고
     """
+    # signing_public: 공개키 하나(bytes) 또는 {key_id_hex: (공개키, 역할)} — 관리자 키와 자동(KMS) 키를 함께 받는다.
+    keys = ({C.key_id(signing_public).hex(): (signing_public, "admin")}
+            if isinstance(signing_public, (bytes, bytearray)) else dict(signing_public))
     problems: list[dict[str, Any]] = []
+    signers: dict[str, int] = {}
     fingerprints = [c.get("archive_ids_sha256") for c in checkpoints]
     for index, checkpoint in enumerate(sorted(checkpoints, key=lambda c: int(c.get("seq", 0)))):
-        result = verify_checkpoint(checkpoint, signing_public)
-        if not result["ok"]:
-            problems.append({"seq": checkpoint.get("seq"), "issue": "bad_signature",
-                             "signature_ok": result["signature_ok"]})
+        found = keys.get(str(checkpoint.get("signing_key_id", "")))
+        if not found:
+            problems.append({"seq": checkpoint.get("seq"), "issue": "unknown_signing_key",
+                             "signing_key_id": checkpoint.get("signing_key_id")})
+        else:
+            result = verify_checkpoint(checkpoint, found[0])
+            if not result["ok"]:
+                problems.append({"seq": checkpoint.get("seq"), "issue": "bad_signature",
+                                 "signature_ok": result["signature_ok"]})
+            else:
+                signers[found[1]] = signers.get(found[1], 0) + 1
         if index == 0:
             continue
         previous = sorted(checkpoints, key=lambda c: int(c.get("seq", 0)))[index - 1]
@@ -245,7 +264,7 @@ def verify_chain(checkpoints: list[dict], signing_public: bytes,
     return {"ok": not problems, "problems": problems, "anchored_count": anchored_count,
             "chain_count": chain["count"], "unanchored": unanchored,
             "chain_ok": chain["ok"], "chain_problems": chain["problems"], "forks": chain["forks"],
-            "distinct_anchor_sets": len(set(fingerprints))}
+            "distinct_anchor_sets": len(set(fingerprints)), "signed_by": signers}
 
 
 def omission_check(metas: list[dict[str, Any]], checkpoint: dict[str, Any]) -> dict[str, Any]:
