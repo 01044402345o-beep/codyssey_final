@@ -190,6 +190,8 @@
     --al-bg: color-mix(in srgb, var(--accent) 7%, var(--surface));
     --al-glow: color-mix(in srgb, #fff 13%, transparent);
     --al-glow-2: color-mix(in srgb, #fff 10%, transparent);
+    --glass-spec-2: rgba(255, 255, 255, .08);   /* 다크: 밝은 스페큘러가 흰 줄로 튀지 않게 */
+    --al-spec: rgba(255, 255, 255, .1);
     --grid-dot: rgba(255, 255, 255, .06);
     --focus-ring: rgba(255, 255, 255, .15);
     --scrim: rgba(0, 0, 0, .6);
@@ -255,6 +257,8 @@
   --al-bg: color-mix(in srgb, var(--accent) 7%, var(--surface));
   --al-glow: color-mix(in srgb, #fff 13%, transparent);
   --al-glow-2: color-mix(in srgb, #fff 10%, transparent);
+  --glass-spec-2: rgba(255, 255, 255, .08);   /* 다크: 밝은 스페큘러가 흰 줄로 튀지 않게 */
+  --al-spec: rgba(255, 255, 255, .1);
   --grid-dot: rgba(255, 255, 255, .06);
   --focus-ring: rgba(255, 255, 255, .15);
   --scrim: rgba(0, 0, 0, .6);
@@ -1923,7 +1927,9 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 }
 
 /* iOS 27 재질 갱신 — 떠 있는 층(.pnav/.appbar)은 클리어 변형: 위로 밝은 스페큘러, 아래로 어두운 경계 */
-.pnav, .appbar { box-shadow: inset 0 1px 0 var(--glass-spec-2), inset 0 -1px 0 var(--glass-edge-2); }
+.pnav { box-shadow: inset 0 1px 0 var(--glass-spec-2), inset 0 -1px 0 var(--glass-edge-2); }
+/* 앱바는 화면 맨 위 — 위로 빛을 받을 것이 없으므로 위 스페큘러를 그리지 않는다(상태 표시줄 아래 흰 줄이 됐다). 아래 경계만. */
+.appbar { box-shadow: inset 0 -1px 0 var(--glass-edge-2); }
 @media (prefers-contrast: more) { .pnav, .appbar { box-shadow: none; } }
 
 /* ================= 재질 확장 (Material scope) =================

@@ -200,6 +200,27 @@ with sync_playwright() as p:
             const s = r.parentElement.getBoundingClientRect();
             return m.right <= s.left + 1; }))()"""))
     check("페이지 오류 없음", not errs, str(errs[:1]))
+
+    # ── 화면 맨 위 흰 줄 없음 (10/22 iPhone 다크 스크린샷) ──
+    # 앱바에 위 스페큘러(inset 0 1px 0 흰 92%)가 있어 상태 표시줄 바로 아래 흰 줄이 됐다. 실제 픽셀로 잰다.
+    import base64
+    for scheme in ("dark", "light"):
+        cx = b.new_context(viewport={"width": 390, "height": 844}, color_scheme=scheme)
+        px = cx.new_page()
+        pin_transparency(px, prefers_color_scheme=scheme)
+        ready(px)
+        for scr in ("u-coll", "u-sched"):
+            px.evaluate(f"go('{scr}')"); px.wait_for_timeout(300)
+            top = int(px.evaluate("document.querySelector('.appbar').getBoundingClientRect().top"))
+            url = "data:image/png;base64," + base64.b64encode(px.screenshot()).decode()
+            lum = cx.new_page().evaluate("""async ([url, top]) => { const im = new Image(); im.src = url; await im.decode();
+              const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+              const g = c.getContext('2d'); g.drawImage(im, 0, 0);
+              const L = y => { const d = g.getImageData(Math.floor(im.width * .75), y, 1, 1).data;
+                return Math.round(.2126 * d[0] + .7152 * d[1] + .0722 * d[2]); };
+              return [L(top), L(top + 1), L(top + 4)]; }""", [url, top])
+            check(f"{scheme} {scr}: 앱바 맨 위에 흰 줄 없음(맨 윗줄 밝기 ≈ 몸통)", max(abs(lum[0] - lum[2]), abs(lum[1] - lum[2])) <= 12, str(lum))
+        cx.close()
     b.close()
 
 print(f"\n{sum(res)}/{len(res)} passed")
