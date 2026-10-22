@@ -2381,13 +2381,16 @@ function scrHome() {
   if (ph === 'trip') {
     const day = S.days.find(d => d.date === S.today);
     hero = `<button type="button" class="hero trip" data-act="edit-trip" aria-label="여행 설정 수정"><span class="route">${esc(tripTitle(t))}</span><span class="big">${Dt.diff(S.today, t.tripStart) + 1}<small>일차</small></span>
-      <span class="dates">오늘 도시 · ${esc(day?.city || '')} ${day ? day.types.map(ty => DAYTYPE[ty].label).join('·') : ''}</span><span class="hero-edit">여행 설정 수정 ›</span></button>`;
+      <span class="dates">오늘 도시 · ${esc(day?.city || '')} ${day ? day.types.map(ty => DAYTYPE[ty].label).join('·') : ''}</span><span class="hero-edit">여행 설정 수정 ›</span></button>
+      <br>`;
   } else if (ph === 'before') {
     hero = `<button type="button" class="hero" data-act="edit-trip" aria-label="여행 설정 수정"><span class="route">${esc(tripTitle(t))}</span><span class="big">D-${Dt.diff(t.studyStart, S.today)}<small>학습 시작까지</small></span>
-      <span class="dates">학습 ${Dt.md(t.studyStart)} → 여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)}</span><span class="hero-edit">여행 설정 수정 ›</span></button>`;
+      <span class="dates">학습 ${Dt.md(t.studyStart)} → 여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)}</span><span class="hero-edit">여행 설정 수정 ›</span></button>
+      <br>`;
   } else {
     hero = `<button type="button" class="hero" data-act="edit-trip" aria-label="여행 설정 수정"><span class="route">${esc(tripTitle(t))}</span><span class="big">D-${Dt.diff(t.tripStart, S.today)}<small>여행까지</small></span>
-      <span class="dates">여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)} · 학습 종료 ${Dt.md(t.tripEnd)}</span><span class="hero-edit">여행 설정 수정 ›</span></button>`;
+      <span class="dates">여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)} · 학습 종료 ${Dt.md(t.tripEnd)}</span><span class="hero-edit">여행 설정 수정 ›</span></button>
+      <br>`;
   }
   const r = S.sched.find(x => x.date === S.today);
   let today;
