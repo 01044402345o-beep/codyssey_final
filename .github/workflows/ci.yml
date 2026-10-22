@@ -122,7 +122,9 @@ jobs:
           python ../e2e/test_desktop_visible.py http://localhost:8768   # 큰 화면에서 앱이 보이는지: 화면을 덮는 불투명 고정 요소 없음(10/22 데스크톱 빈 화면 회귀)
           python ../e2e/test_calendar_past.py http://localhost:8768   # 일정표 달력·오른쪽 위 '이전 여행'(탭은 4개 유지)
           python ../e2e/test_interp_log.py http://localhost:8768   # 문장 모음 '통역 기록' 탭 + 동의한 계정만 서버 저장·다른 기기에서 꺼내 보기·저장 끄기(DELETE)
-          python ../e2e/test_home_alarm.py http://localhost:8768   # 홈 '학습 현황' 알람 카드형: 행 3개·자세히 보기 스위치(저장)·세 값 동시 표시·넘침 없음
+          python ../e2e/test_home_alarm.py http://localhost:8768   # 홈 '오늘의 알람' 카드: 아이콘·큰 숫자·라벨·버튼 순서, 0/4/10장 문구, 학습/일정표 이동, 넘침 없음
+          python ../e2e/test_liquid_glass.py http://localhost:8768   # 재질: 탭바·앱바만 실제 blur, 카드는 blur 없음, 대비, 접근성 대체(투명도·대비)
+          python ../e2e/test_material_scope.py http://localhost:8768   # 재질 역할(raised·tinted·ink·glass)을 화면마다: 카드 blur 0, 경계 토큰, ink 면 1개 이하
       - uses: actions/upload-artifact@v4
         if: always()
         with:
