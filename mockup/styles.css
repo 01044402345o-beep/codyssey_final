@@ -93,6 +93,7 @@
   /* 그림자·덮개 */
   --shadow-ink-45: rgba(22, 27, 38, .45);
   --shadow-ink-35: rgba(22, 27, 38, .35);
+  --shadow-knob: 0 1px 3px rgba(22, 27, 38, .18);   /* 스위치 손잡이 그림자 */
   --grid-dot: rgba(22, 27, 38, .09);
   --focus-ring: rgba(22, 27, 38, .08);
   --focus: #161b26;         /* 키보드 포커스 링 */
@@ -160,6 +161,7 @@
     --focus: #8fb4ff;
     --shadow-ink-45: rgba(0, 0, 0, .6);
     --shadow-ink-35: rgba(0, 0, 0, .5);
+    --shadow-knob: 0 1px 3px rgba(0, 0, 0, .5);   /* 스위치 손잡이 그림자 */
     --grid-dot: rgba(255, 255, 255, .06);
     --focus-ring: rgba(255, 255, 255, .15);
     --scrim: rgba(0, 0, 0, .6);
@@ -216,6 +218,7 @@
   --focus: #8fb4ff;
   --shadow-ink-45: rgba(0, 0, 0, .6);
   --shadow-ink-35: rgba(0, 0, 0, .5);
+  --shadow-knob: 0 1px 3px rgba(0, 0, 0, .5);   /* 스위치 손잡이 그림자 */
   --grid-dot: rgba(255, 255, 255, .06);
   --focus-ring: rgba(255, 255, 255, .15);
   --scrim: rgba(0, 0, 0, .6);
@@ -1803,7 +1806,7 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .al-sw { flex: none; width: 50px; min-height: 44px; display: grid; place-items: center; background: none; border: 0; padding: 0; }
 .al-sw i { display: block; width: 46px; height: 28px; border-radius: 999px; background: var(--surface-seg); position: relative; transition: background .18s; }
 .al-sw i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
-  background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.18); transition: transform .18s; }
+  background: var(--surface); box-shadow: var(--shadow-knob); transition: transform .18s; }
 .al-sw[aria-checked="true"] i { background: var(--accent); }
 .al-sw[aria-checked="true"] i::after { transform: translateX(18px); }
 @media (hover: hover) { .al-main:hover b { color: var(--accent-text); } }
