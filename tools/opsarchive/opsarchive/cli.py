@@ -19,7 +19,7 @@ import json
 import os
 import sys
 
-from . import VERSION, commands
+from . import VERSION, commands, kms
 from . import chain, config, container as C, entropy, firebase, gcp, pins, render, witness
 
 
@@ -64,8 +64,26 @@ def build_parser() -> argparse.ArgumentParser:
     q = sub.add_parser("anchor", help="아카이브 체인을 확인하고 체크포인트를 서명해 앵커한다")
     q.add_argument("--project", required=True)
     q.add_argument("--sa", required=True)
-    q.add_argument("--sign-key", required=True, help="서명 키 파일 경로")
+    q.add_argument("--sign-key", default="", help="서명 키 파일 경로(--kms-key 를 쓰면 필요 없음)")
     q.add_argument("--out", default="checkpoints")
+    q.add_argument("--kms-key", default="", help="Cloud KMS 키 버전(projects/.../cryptoKeyVersions/N) — 이 키로 서명")
+    q.add_argument("--store", choices=["local", "firestore"], default="local",
+                   help="체크포인트를 둘 곳(firestore = evidence_checkpoints, 만들기만 가능)")
+
+    q = sub.add_parser("kms-check", help="Cloud KMS 서명 키 점검(알고리즘·공개키·시험 서명)")
+    q.add_argument("--kms-key", required=True)
+    q.add_argument("--sa", required=True, help="서비스 계정 JSON 또는 env:<토큰 변수>")
+
+    q = sub.add_parser("kms-pin-add", help="KMS 공개키를 핀의 자동 서명 키로 넣는다(관리자가 직접)")
+    q.add_argument("--kms-key", required=True)
+    q.add_argument("--sa", required=True)
+    q.add_argument("--pin", default=config.read_settings().get("pin_path") or "")
+
+    q = sub.add_parser("auto-anchor", help="(CI) 체크포인트 검증 → KMS 로 새 체크포인트(Firestore). 핀은 Actions 변수")
+    q.add_argument("--project", required=True)
+    q.add_argument("--sa", required=True, help="CI 는 env:GCP_ACCESS_TOKEN")
+    q.add_argument("--kms-key", required=True)
+    q.add_argument("--max-age-hours", type=float, default=13, help="마지막 체크포인트가 이보다 오래되면 실패")
 
     q = sub.add_parser("env-set", help="Render 환경변수 하나를 올린다(값은 파일/표준입력으로만 받는다)")
     q.add_argument("--service", required=True)
@@ -116,6 +134,9 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--out", default="checkpoints")
     q.add_argument("--challenge", default="",
                    help="사용자가 제시한 챌린지(영수증). 앵커 범위 안에 있는지 본다")
+    q.add_argument("--source", choices=["local", "firestore", "both"], default="local",
+                   help="체크포인트를 읽을 곳(firestore = 자동 앵커가 쌓은 것)")
+    q.add_argument("--max-age-hours", type=float, default=0, help="마지막 체크포인트가 이보다 오래되면 실패(0=검사 안 함)")
 
     q = sub.add_parser("pin-check", help="핀 파일과 배포된 /health 를 대조한다(CI 와 같은 검사)")
     q.add_argument("--pin", default=config.read_settings().get("pin_path") or "",
@@ -191,9 +212,27 @@ def main(argv: list[str] | None = None) -> int:
             _print(made)
             return 0
         if args.cmd == "anchor":
+            if args.kms_key:
+                _print(commands.anchor(args.project, args.sa, "", "", out_dir=args.out,
+                                       kms_key=args.kms_key, target=args.store))
+                return 0
+            if not args.sign_key:
+                print("--sign-key 또는 --kms-key 가 필요합니다.", file=sys.stderr)
+                return 2
             phrase = commands.ask_passphrase(prompt="서명키 패스프레이즈: ")
-            _print(commands.anchor(args.project, args.sa, args.sign_key, phrase, out_dir=args.out))
+            _print(commands.anchor(args.project, args.sa, args.sign_key, phrase, out_dir=args.out,
+                                   target=args.store))
             return 0
+        if args.cmd == "kms-check":
+            _print(commands.kms_check(args.kms_key, args.sa))
+            return 0
+        if args.cmd == "kms-pin-add":
+            _print(commands.kms_pin_add(args.pin, args.kms_key, args.sa))
+            return 0
+        if args.cmd == "auto-anchor":
+            result = commands.auto_anchor(args.project, args.sa, args.kms_key, max_age_hours=args.max_age_hours)
+            _print(result)
+            return 0 if result.get("anchored") else 1
         if args.cmd == "env-set":
             # 값은 **절대 명령줄 인자로 받지 않는다**(셸 히스토리·프로세스 목록에 남는다).
             value = ""
@@ -271,7 +310,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result.get("ok") else 1
         if args.cmd == "verify-chain":
             result = commands.verify_chain(args.project, args.sa, args.pin, out_dir=args.out,
-                                           challenge=args.challenge)
+                                           challenge=args.challenge, source=args.source,
+                                           max_age_hours=args.max_age_hours)
             _print(result)
             return 0 if result.get("ok") else 1
         if args.cmd == "pin-check":
@@ -317,7 +357,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "gui":
             from . import gui
             return gui.run()
-    except (commands.CommandError, render.RenderError, gcp.GcpError, firebase.FirebaseError,
+    except (commands.CommandError, render.RenderError, gcp.GcpError, firebase.FirebaseError, kms.KmsError,
             pins.PinError, chain.ChainError, C.ContainerError, witness.WitnessError) as exc:
         # 원인을 **코드로** 보여준다(RenderError 만 던지면 운영자가 원인을 알 수 없다 —
         # 실제로 그 때문에 막힌 사례가 있었다). 값에는 토큰·개인키가 담기지 않는다.

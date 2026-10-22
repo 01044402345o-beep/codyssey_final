@@ -40,6 +40,7 @@ SETTING_FIELDS = [
     ("checkpoints_dir", "체크포인트 폴더"),
     ("pin_path", "핀 파일 경로"),
     ("tsa_url", "TSA 주소(선택)"),
+    ("kms_key", "KMS 서명 키(선택, projects/.../cryptoKeyVersions/N)"),
 ]
 
 
@@ -1748,6 +1749,14 @@ class App:
         self._step(steps, 3, "④", "챌린지 대조(사용자 증명)",
                    "사용자가 보낸 챌린지가 앵커 범위 안에 있는지 봅니다 — 없으면 **누락 의심**입니다.",
                    "challenge", "챌린지로 검증", self.do_verify_challenge)
+        self._step(steps, 4, "⑤", "KMS 서명 키 점검·핀에 넣기",
+                   "설정의 KMS 키(Ed25519)로 시험 서명을 해 보고, 그 공개키를 핀의 **자동 서명 키**로 넣습니다. "
+                   "넣은 뒤 Render 탭 ⑨ 로 Actions 변수를 다시 올려야 자동 앵커(CI)가 검증할 수 있습니다.",
+                   "kms", "KMS 점검·핀 추가", self.do_kms_pin_add)
+        self._step(steps, 5, "⑥", "자동 앵커 검증(Firestore)",
+                   "자동 앵커(CI)가 Firestore 에 쌓은 체크포인트와 로컬 체크포인트를 함께 검증하고, "
+                   "마지막 체크포인트가 13시간보다 오래됐으면(자동 앵커가 멈춤) 실패로 알립니다.",
+                   "verify-auto", "자동 앵커 검증", self.do_verify_auto)
         self.verify_hint = self._hint(frame)
 
     def do_verify_status(self) -> None:
@@ -1793,6 +1802,22 @@ class App:
         self.run("verify-chain", lambda: commands.verify_chain(
             self.require("project_id"), self.require("sa_path"), self.settings.get("pin_path"),
             out_dir=self.settings.get("checkpoints_dir"), challenge=challenge))
+
+    def do_kms_pin_add(self) -> None:
+        kms_key = str(self.settings.get("kms_key") or "").strip()
+        if not kms_key:
+            messagebox.showerror("opsarchive", "설정 탭에서 'KMS 서명 키' 를 먼저 넣으세요.")
+            return
+        if not messagebox.askyesno("opsarchive", "KMS 키로 시험 서명을 하고, 그 공개키를 핀의 자동 서명 키로 넣습니다.\n\n%s\n\n계속할까요?" % kms_key,
+                                   parent=self.root):
+            return
+        self.run("KMS 핀 추가", lambda: commands.kms_pin_add(
+            self.settings.get("pin_path") or "", kms_key, self.require("sa_path")))
+
+    def do_verify_auto(self) -> None:
+        self.run("자동 앵커 검증", lambda: commands.verify_chain(
+            self.require("project_id"), self.require("sa_path"), self.settings.get("pin_path"),
+            out_dir=self.settings.get("checkpoints_dir"), source="both", max_age_hours=13))
 
     def do_verify_challenge(self) -> None:
         value = simpledialog.askstring("opsarchive", "사용자가 제시한 챌린지(16진수)", parent=self.root) or ""

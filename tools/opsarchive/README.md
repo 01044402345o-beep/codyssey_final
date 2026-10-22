@@ -140,6 +140,11 @@ GUI는 성공을 파란 `✔`, 실패를 빨간 `✘`, 경고를 노란색으로
 | `decrypt --project --sa --id --key [--out]` | 아카이브를 내려받아 개인키로 연다 | 주의(평문 개인정보가 디스크에 남음) |
 | `env-set --service --key [--from-file --stdin]` | Render 환경변수 하나를 올린다 | 주의(서버 환경변수 변경) |
 | `deploy --service [--timeout]` | Render 서비스를 재배포한다 | 주의(서비스 재시작) |
+| `kms-check --kms-key --sa` | Cloud KMS 서명 키(Ed25519) 점검 — 알고리즘·공개키·시험 서명 | 안전 |
+| `kms-pin-add --kms-key --sa [--pin]` | KMS 공개키를 핀의 **자동 서명 키**로 넣는다(그 뒤 `pin-publish`) | 핀 변경 |
+| `anchor --kms-key [--store firestore]` | 관리자 키 대신 KMS 키로 서명, 체크포인트를 Firestore `evidence_checkpoints` 에 만들기만 | 원장 추가 |
+| `auto-anchor --project --sa env:GCP_ACCESS_TOKEN --kms-key` | (CI) 검증 → 통과하면 KMS 체크포인트. 핀은 Actions 변수 `EVIDENCE_PIN_SIGNING_KEYS` | 원장 추가 |
+| `verify-chain --source local\|firestore\|both [--max-age-hours N]` | 자동 앵커 체크포인트까지 검증, 어느 키가 서명했는지·마지막 체크포인트 나이 보고 | 안전 |
 | `rules-status --project --sa` | 저장소 `firestore.rules` 와 배포된 규칙(Firebase Rules API, 읽기 전용)을 대조한다. 다르면 차이를 보여 준다 | 안전 |
 | `rules-deploy --project [--sa] [--dry-run] [--yes]` | 저장소 루트에서 `firebase deploy --only firestore:rules --project <id>` 를 실행하고, `--sa` 가 있으면 배포본을 다시 읽어 같은지 확인한다. `--yes` 가 없으면 프로젝트 ID 를 다시 입력해야 배포한다 | **되돌릴 수 없음**(지금 규칙을 덮어씀) |
 | `publish --service --key [--base-url --env-key --no-redeploy]` | 공개키를 발행하고 재배포 | 되돌릴 수 없음(운영 반영) |

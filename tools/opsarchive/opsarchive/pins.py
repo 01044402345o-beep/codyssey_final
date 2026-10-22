@@ -118,3 +118,28 @@ def compare(pin: dict, health: dict) -> dict:
                               else "generation_higher")
     out["ok"] = not out["reasons"]
     return out
+
+
+def signing_keys(pin: dict) -> dict:
+    """핀이 믿는 체크포인트 서명 키 — {key_id_hex: (공개키, 역할)}. 역할: admin(관리자 로컬) | auto(KMS 자동 앵커)."""
+    from . import container as C
+    out = {}
+    if pin.get("signing_public_key"):
+        public = C.unpack_public_key(pin["signing_public_key"])
+        out[C.key_id(public).hex()] = (public, "admin")
+    for item in pin.get("auto_signing_keys") or []:
+        if isinstance(item, dict) and item.get("public_key"):
+            public = C.unpack_public_key(item["public_key"])
+            out[C.key_id(public).hex()] = (public, "auto")
+    return out
+
+
+def add_auto_key(pin: dict, public: bytes, kms_key: str) -> dict:
+    """핀에 자동 앵커용 KMS 공개키를 넣는다(같은 키면 그대로). 세대는 바꾸지 않는다 — 봉투 키와 무관하다."""
+    from . import container as C
+    keys = [k for k in pin.get("auto_signing_keys") or [] if isinstance(k, dict)]
+    kid = C.key_id(public).hex()
+    if not any(k.get("key_id") == kid for k in keys):
+        keys.append({"public_key": C.pack_public_key(public), "key_id": kid,
+                     "fingerprint_sha256": C.fingerprint(public), "kms_key": kms_key})
+    return {**pin, "auto_signing_keys": keys}
