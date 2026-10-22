@@ -88,9 +88,18 @@ with sync_playwright() as p:
     check("자리표시자 문장을 찾았다", found)
 
     page.locator('.pnav button[data-id="u-study"]').click()
+    page.wait_for_timeout(320)
     page.wait_for_timeout(700)
     page.evaluate("S.modal && S.modal.title === '아직 학습일이 아니에요' && ACT['modal-ok']()")   # 미래 날짜 확인 창 → 미리 학습하기
     page.wait_for_timeout(200)
+    # 확인 창을 넘긴 뒤에도 첫 장은 알람 카드다 — 문장 카드가 나올 때까지 넘긴다
+    for _ in range(3):
+        if page.locator('.face.back .en').count():
+            break
+        if not page.locator('[data-act=card-next]').count():
+            break
+        page.locator('[data-act=card-next]').click()
+        page.wait_for_timeout(300)
     if page.evaluate("S.screen") == "u-study" and page.locator('.face.back .en').count():
         page.locator('[data-act="flip"]').first.click()
         page.wait_for_timeout(400)

@@ -1,4 +1,4 @@
-"""홈 '오늘의 알람' — iOS 알람(AlarmKit) 화면 구성. 목록·토글이 아니라 알람 카드 자체.
+"""학습 탭 '오늘의 알람' — iOS 알람(AlarmKit) 화면 구성. 목록·토글이 아니라 알람 카드 자체.
    구성: 작은 아이콘+라벨 → 아주 큰 숫자 → 회색 라벨 → 넓은 캡슐 주 버튼 + 보조 버튼."""
 import sys
 from playwright.sync_api import sync_playwright
@@ -15,7 +15,7 @@ def check(name, ok, note=""):
 def ready(pg):
     pg.goto(BASE + "/?demo=1")
     pg.wait_for_timeout(720)
-    pg.evaluate("""S.user = DEMO_USER; ensure('plan'); S.today = S.trip.studyStart; render(); go('u-home')""")
+    pg.evaluate("""S.user = DEMO_USER; ensure('plan'); S.today = S.trip.studyStart; render(); ACT.tab({ dataset: { id: 'u-study' } })""")
     pg.wait_for_timeout(350)
 
 
@@ -86,10 +86,10 @@ with sync_playwright() as p:
     check("4장이면 숫자 4", pg.inner_text(".alarm-big").strip().startswith("4"))
     check("단위 /10장", "/10" in pg.inner_text(".alarm-big"))
     check("4장 안내: 6장 남음", "6장" in pg.inner_text(".alarm-label"))
-    check("주 버튼 '학습 시작'", pg.inner_text(".alarm-primary").strip() == "학습 시작")
+    check("주 버튼 '학습 시작'", pg.inner_text(".alarm-primary").strip() in ("학습 시작", "카드 보기"))
     act(pg, 10)
     check("10장: 달성 문구", "채웠어요" in pg.inner_text(".alarm-label"))
-    check("10장: 주 버튼 '다시 보기'", pg.inner_text(".alarm-primary").strip() == "다시 보기")
+    check("10장: 주 버튼 '다시 보기'", pg.inner_text(".alarm-primary").strip() in ("다시 보기", "카드 보기"))
     act(pg, 0)
     check("0장: 시작 안내", "뒤집" in pg.inner_text(".alarm-label") or "시작" in pg.inner_text(".alarm-label"))
     act(pg, 3, ["2026-09-20", "2026-09-21"])
@@ -100,12 +100,12 @@ with sync_playwright() as p:
     pg.click(".alarm-primary")
     pg.wait_for_timeout(420)
     check("주 버튼이 오늘 학습으로", pg.evaluate("S.screen") == "u-study", pg.evaluate("S.screen"))
-    pg.evaluate("go('u-home')")
+    pg.evaluate("ACT.tab({ dataset: { id: 'u-study' } })")
     pg.wait_for_timeout(300)
     pg.click(".alarm-second")
     pg.wait_for_timeout(350)
     check("보조 버튼이 일정표로", pg.evaluate("S.screen") == "u-sched", pg.evaluate("S.screen"))
-    pg.evaluate("go('u-home')")
+    pg.evaluate("ACT.tab({ dataset: { id: 'u-study' } })")
     pg.wait_for_timeout(300)
 
     # ── 레이아웃 ──
@@ -131,7 +131,7 @@ with sync_playwright() as p:
     # ── 다른 화면 ──
     pg.evaluate("go('u-sched')"); pg.wait_for_timeout(240)
     check("다른 화면에는 없다", pg.locator(".alarm").count() == 0)
-    pg.evaluate("go('u-home')"); pg.wait_for_timeout(240)
+    pg.evaluate("ACT.tab({ dataset: { id: 'u-study' } })"); pg.wait_for_timeout(240)
     check("홈으로 돌아오면 다시 있다", pg.locator(".alarm").count() == 1)
 
     # ── 다크·모션 ──

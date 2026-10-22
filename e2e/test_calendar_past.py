@@ -57,8 +57,9 @@ with sync_playwright() as p:
     check("완료 칸이 색으로 구분된다(.done)", page.locator(".cal-d.done").count() >= 1, str(page.locator(".cal-d.done").count()))
     check("자유 일정 칸이 구분된다(.free)", page.locator(".cal-d.free").count() >= 0)
 
+    shown = page.locator("[data-live=cal-month]").inner_text()   # 누르기 직전의 달(처음 달과 비교하면 날짜에 따라 우연히 같아진다)
     page.locator('[data-act="cal-next"]').click(); page.wait_for_timeout(300)
-    check("다음 달로 이동", page.locator("[data-live=cal-month]").inner_text() != month, page.locator("[data-live=cal-month]").inner_text())
+    check("다음 달로 이동", page.locator("[data-live=cal-month]").inner_text() != shown, f'{shown} → {page.locator("[data-live=cal-month]").inner_text()}')
     page.locator('[data-act="cal-prev"]').click(); page.wait_for_timeout(250)
     page.locator('[data-act="cal-today"]').click(); page.wait_for_timeout(300)
     check("'오늘'이 이번 달로 돌아온다", page.evaluate("S.calMonth") is None)

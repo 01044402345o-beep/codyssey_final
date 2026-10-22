@@ -77,6 +77,23 @@ def ready(pg):
         S.today = (S.trip && S.trip.studyStart) || S.today; render(); go('u-home'); }""")
     pg.wait_for_timeout(300)
 
+RADIUS_OK = {"8px", "12px", "16px", "24px", "30px", "999px",
+             "24px 24px 0px 0px", "0px"}
+
+def audit_radius(pg, label):
+    vals = pg.evaluate("""() => {
+      const out = [];
+      document.querySelectorAll('.app *').forEach(el => {
+        const s = getComputedStyle(el), r = el.getBoundingClientRect();
+        if (r.width < 100 || r.height < 32) return;
+        if (s.backgroundColor === 'rgba(0, 0, 0, 0)' && s.backgroundImage === 'none') return;
+        if (s.borderTopWidth === '0px' && s.boxShadow === 'none') return;
+        out.push(s.borderTopLeftRadius + '|' + s.borderTopRightRadius + '|' + (el.className.toString().slice(0, 24)));
+      });
+      return out; }""")
+    bad = [v for v in vals if v.split('|')[0] not in RADIUS_OK or v.split('|')[1] not in RADIUS_OK]
+    check(f"{label}: 반경이 6단 스케일 안", not bad, str(bad[:4]))
+
 SCREENS = [("u-home", "홈"), ("u-sched", "일정표"), ("u-coll", "문장 모음"), ("u-study", "학습")]
 
 with sync_playwright() as p:
@@ -102,6 +119,7 @@ with sync_playwright() as p:
         check(f"{label}: 카드에 inset 스페큘러",
               all("inset" in c["shadow"] for c in cards),
               str([c["sel"] for c in cards if "inset" not in c["shadow"]])[:120])
+        audit_radius(pg, label)
         for c in cards:
             borders.add(c["border"])
         check(f"{label}: ink 면 1개 이하", len(probe["ink"]) <= 1, str(probe["ink"]))

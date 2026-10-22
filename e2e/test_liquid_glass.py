@@ -74,7 +74,7 @@ def ready(pg):
     pg.evaluate("""try{localStorage.removeItem('cd_home')}catch(e){}
       S.user = DEMO_USER; ensure('plan'); S.today = S.trip.studyStart;
       PROG.act = {}; ['2026-09-20','2026-09-21'].forEach(d => PROG.act[d] = 6); PROG.act[S.today] = 4;
-      render(); go('u-home')""")
+      render(); (S.studyEntry='tab', go('u-study'))""")
     pg.wait_for_timeout(400)
 
 
@@ -102,6 +102,7 @@ with sync_playwright() as p:
     check("카드 그림자가 있다", card["shadow"] not in ("none", ""))
 
     # ── 떠 있는 층: 실제 유리 ──
+    pg.evaluate("go('u-home')"); pg.wait_for_timeout(340)
     bars = pg.evaluate("""(() => {
         const out = {};
         for (const sel of ['.appbar', '.pnav']) {
@@ -115,7 +116,8 @@ with sync_playwright() as p:
     pg.evaluate("go('u-sched')"); pg.wait_for_timeout(320)
     ab = pg.evaluate("(() => { const s = getComputedStyle(document.querySelector('.appbar')); return s.backdropFilter || s.webkitBackdropFilter; })()")
     check("상단 앱바(.appbar)에 blur", (ab or "").startswith("blur"), str(ab))
-    pg.evaluate("go('u-home')"); pg.wait_for_timeout(300)
+    pg.evaluate("(S.studyEntry='tab', go('u-study'))"); pg.wait_for_timeout(340)
+    pg.evaluate("(S.studyEntry='tab', go('u-study'))"); pg.wait_for_timeout(300)
     nb = pg.evaluate("[...document.querySelectorAll('*')].filter(e => { const s = getComputedStyle(e); return (s.backdropFilter || '').startsWith('blur'); }).length")
     check("blur 요소는 6개 이하(성능)", nb <= 6, str(nb))
     check("글래스 위에 글래스를 겹치지 않는다(카드 내부 blur 없음)", pg.evaluate(
@@ -144,8 +146,8 @@ with sync_playwright() as p:
     for sel, label, want in ((".alarm-big", "큰 숫자", 4.5), (".alarm-label", "라벨", 4.5), (".alarm-meta", "메타", 4.5)):
         r = contrast(pg, sel)
         check(f"대비 {label} {r}:1 (>= {want})", r >= want, str(r))
-    check("탭바 글자 대비 4.5:1 이상", contrast(pg, ".pnav button") >= 4.5,
-          str(contrast(pg, ".pnav button")))
+    check("떠 있는 층 글자 대비 4.5:1 이상", contrast(pg, ".appbar h2") >= 4.5,
+          str(contrast(pg, ".appbar h2")))
     # 유리 위 글자: 토스트·데모 버튼이 진한 면용 흰 글자를 그대로 두면 밝은 유리 위에서 안 보인다
     pg.evaluate("toast('이 화면에 필요한 데이터를 자동으로 준비했어요.')"); pg.wait_for_timeout(250)
     for sel, label in ((".toast", "토스트"), (".demo-fab", "데모 버튼")):
@@ -157,7 +159,7 @@ with sync_playwright() as p:
     pc = cc.new_page()
     pin_transparency(pc, prefers_contrast="more")
     ready(pc)
-    st = pc.evaluate("""(() => { const t = document.querySelector('.pnav'); const s = getComputedStyle(t);
+    st = pc.evaluate("""(() => { const t = document.querySelector('.pnav') || document.querySelector('.appbar'); const s = getComputedStyle(t);
         const c = getComputedStyle(document.querySelector('.alarm'));
         return { blur: s.backdropFilter, bwa: c.borderTopWidth, bg: c.backgroundColor }; })()""")
     check("대비 증가: 탭바 blur 끔", st["blur"] in ("none", ""), str(st["blur"]))
@@ -178,7 +180,7 @@ with sync_playwright() as p:
     dk = pd.evaluate("""(() => {
         const c = document.querySelector('.alarm'); if (!c) return null; const s = getComputedStyle(c);
         const a = (s.backgroundColor.match(/[\\d.]+/g) || []).map(Number);
-        return { alpha: a.length > 3 ? a[3] : 1, bg: s.backgroundColor, blur: getComputedStyle(document.querySelector('.pnav')).backdropFilter }; })()""")
+        return { alpha: a.length > 3 ? a[3] : 1, bg: s.backgroundColor, blur: (document.querySelector('.pnav') ? getComputedStyle(document.querySelector('.pnav')).backdropFilter : getComputedStyle(document.querySelector('.appbar')).backdropFilter) }; })()""")
     check("다크: 알람 카드 유지", dk is not None, str(dk))
     check("다크: 탭바 blur 유지", dk["blur"].startswith("blur"), str(dk["blur"]))
     for sel, label in ((".alarm-big", "큰 숫자"), (".alarm-label", "라벨"), (".alarm-meta", "메타")):

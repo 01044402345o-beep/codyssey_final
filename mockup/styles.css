@@ -1843,7 +1843,10 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
   --al-t2: color-mix(in srgb, var(--text) 84%, var(--surface));
   --al-t3: color-mix(in srgb, var(--text) 66%, var(--surface));
   position: relative; overflow: hidden; text-align: center;
-  padding: 20px 18px 18px; border-radius: 30px; color: var(--text);
+  /* 위아래 패딩은 뷰포트 높이에 따라 유동(dvh). 좁은 폰에서는 낮아지고 큰 화면에서는 늘어난다.
+     --alarm-pad-y 하나만 바꾸면 위아래가 함께 움직인다(대칭 유지). */
+  --alarm-pad-y: clamp(14px, 2.1dvh, 24px);
+  padding: var(--alarm-pad-y) 18px; border-radius: 30px; color: var(--text);
   background-color: var(--al-bg);
   background-image: radial-gradient(125% 92% at 50% -12%, var(--al-glow) 0%, transparent 62%);
   border: 1px solid var(--al-edge);
@@ -1990,3 +1993,28 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
   .today-card { background: var(--surface); }
   .sheet, .il-sheet { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
+
+/* ================= 반경 스케일 (Radius scale) =================
+   측정 결과 109개 표면에 반경이 10종(8·10·12·14·16·18·22·24·30·999) 섞여 있었다.
+   재질을 확장할수록 반경이 제각각이면 카드가 같은 재질로 읽히지 않는다. 6단으로 고정한다:
+     8  chip   : 배지·작은 태그
+     12 row    : 목록 행·요약 칸·입력
+     16 card   : 일반 카드
+     24 layer  : 시트·모달·큰 패널
+     30 anchor : 히어로·알람(기기 곡률과 동심)
+     999 pill  : 캡슐 버튼·칩
+   여기 없는 값은 쓰지 않는다(e2e/test_material_scope.py 가 검사). */
+:root { --r-chip: 8px; --r-row: 12px; --r-card: 16px; --r-layer: 24px; --r-anchor: 30px; --r-pill: 999px; }
+.city-card, .past-card, .ilog-card, .today-card, .streak-card { border-radius: var(--r-card); }
+.btn { border-radius: var(--r-row); }
+.btn.primary, .btn.soft.block, .alarm-second { border-radius: var(--r-pill); }
+.interp-item { border-radius: var(--r-card); }
+.summary-strip > div { border-radius: var(--r-row); }
+.freebox, .tl-day .freebox { border-radius: var(--r-row); }
+.hero { border-radius: var(--r-layer); }
+.sheet, .il-sheet { border-radius: var(--r-layer) var(--r-layer) 0 0; }
+.il-sheet { border-radius: var(--r-layer); }
+.city-card .num { border-radius: var(--r-chip); }
+.notice { border-radius: var(--r-row); }
+.al-card { border-radius: var(--r-card); }
+@media (prefers-contrast: more) { .city-card .num { border-radius: var(--r-chip); } }
