@@ -2389,9 +2389,13 @@ function scrHome() {
     hero = `<button type="button" class="hero" data-act="edit-trip" aria-label="여행 설정 수정"><span class="route">${esc(tripTitle(t))}</span><span class="big">D-${Dt.diff(t.tripStart, S.today)}<small>여행까지</small></span>
       <span class="dates">여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)} · 학습 종료 ${Dt.md(t.tripEnd)}</span><span class="hero-edit">여행 설정 수정 ›</span></button>`;
   }
+
+  const spacer = `<br>`;
+  let final_spacer = spacer; 
+  console.log(final_spacer);
+
   const r = S.sched.find(x => x.date === S.today);
   let today;
-    today = `<br>`
   if (!r) {
     const first = S.sched[0];
     today = `<div class="today-card"><div class="top"><span class="badge k-free">학습 전</span></div><h3>학습은 ${Dt.full(first.date)}부터 시작해요</h3>
