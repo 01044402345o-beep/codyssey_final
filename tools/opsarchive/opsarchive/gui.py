@@ -1757,6 +1757,11 @@ class App:
                    "자동 앵커(CI)가 Firestore 에 쌓은 체크포인트와 로컬 체크포인트를 함께 검증하고, "
                    "마지막 체크포인트가 13시간보다 오래됐으면(자동 앵커가 멈춤) 실패로 알립니다.",
                    "verify-auto", "자동 앵커 검증", self.do_verify_auto)
+        self._step(steps, 6, "⑦", "KMS 서명 감사 대조(누가 서명했나)",
+                   "Cloud 감사 로그의 KMS 서명 기록(누가·언제)을 체크포인트와 맞춰 봅니다. 짝이 없는 서명은 **무단 서명 의심**, "
+                   "실패한 요청은 **누가 시도했는지** 보여 줍니다. KMS 데이터 액세스 로그가 켜져 있어야 하고, "
+                   "서비스 계정에 roles/logging.privateLogViewer 가 필요합니다.",
+                   "kms-audit", "감사 대조(7일)", self.do_kms_audit)
         self.verify_hint = self._hint(frame)
 
     def do_verify_status(self) -> None:
@@ -1818,6 +1823,15 @@ class App:
         self.run("자동 앵커 검증", lambda: commands.verify_chain(
             self.require("project_id"), self.require("sa_path"), self.settings.get("pin_path"),
             out_dir=self.settings.get("checkpoints_dir"), source="both", max_age_hours=13))
+
+    def do_kms_audit(self) -> None:
+        kms_key = str(self.settings.get("kms_key") or "").strip()
+        if not kms_key:
+            messagebox.showerror("opsarchive", "설정 탭에서 'KMS 서명 키' 를 먼저 넣으세요.")
+            return
+        self.run("KMS 감사 대조", lambda: commands.kms_audit_check(
+            self.require("project_id"), self.require("sa_path"), kms_key, days=7,
+            pin_path=self.settings.get("pin_path") or "", out_dir=self.settings.get("checkpoints_dir") or ""))
 
     def do_verify_challenge(self) -> None:
         value = simpledialog.askstring("opsarchive", "사용자가 제시한 챌린지(16진수)", parent=self.root) or ""

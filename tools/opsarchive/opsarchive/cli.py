@@ -79,6 +79,13 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--sa", required=True)
     q.add_argument("--pin", default=config.read_settings().get("pin_path") or "")
 
+    q = sub.add_parser("kms-audit", help="KMS 서명 감사 대조 — 감사 로그의 서명(누가·언제)과 체크포인트를 맞춰 짝 없는 서명을 찾는다")
+    q.add_argument("--project", required=True)
+    q.add_argument("--sa", required=True, help="roles/logging.privateLogViewer 가 있는 계정")
+    q.add_argument("--kms-key", required=True)
+    q.add_argument("--days", type=float, default=7)
+    q.add_argument("--pin", default=config.read_settings().get("pin_path") or "")
+
     q = sub.add_parser("auto-anchor", help="(CI) 체크포인트 검증 → KMS 로 새 체크포인트(Firestore). 핀은 Actions 변수")
     q.add_argument("--project", required=True)
     q.add_argument("--sa", required=True, help="CI 는 env:GCP_ACCESS_TOKEN")
@@ -229,6 +236,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "kms-pin-add":
             _print(commands.kms_pin_add(args.pin, args.kms_key, args.sa))
             return 0
+        if args.cmd == "kms-audit":
+            result = commands.kms_audit_check(args.project, args.sa, args.kms_key, days=args.days, pin_path=args.pin)
+            _print(result)
+            return 1 if result.get("error") else 0
         if args.cmd == "auto-anchor":
             result = commands.auto_anchor(args.project, args.sa, args.kms_key, max_age_hours=args.max_age_hours)
             _print(result)

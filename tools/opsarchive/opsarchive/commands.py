@@ -20,7 +20,7 @@ import urllib.request
 import uuid
 
 from . import container as C
-from . import chain, config, firebase, gcp, kms, pins, render, witness
+from . import chain, config, firebase, gcp, kms, kms_audit, pins, render, witness
 
 DEFAULT_ENV_KEY = "EVIDENCE_PUBKEY"
 DEFAULT_DIR = os.path.join(os.path.expanduser("~"), ".opsarchive")
@@ -970,3 +970,46 @@ def auto_anchor(project_id: str, sa_path: str, kms_key: str, *, max_age_hours: f
     report["anchor"] = anchor(project_id, sa_path, "", "", kms_key=kms_key, target="firestore", signer=signer)
     report["anchored"] = True
     return report
+
+
+def kms_audit_check(project_id: str, sa_path: str, kms_key: str, *, days: float = 7, pin_path: str = "",
+                    out_dir: str = "", token_fn=None, opener=None) -> dict:
+    """KMS 서명 감사 대조: 감사 로그의 서명 기록(누가·언제)과 체크포인트를 맞춰 **짝 없는 서명**을 찾는다.
+
+    읽기 계정에 `roles/logging.privateLogViewer`, 프로젝트에 KMS 데이터 액세스 로그(DATA_READ)가 켜져 있어야 한다.
+    """
+    kms.check_name(kms_key)
+    try:
+        pin = pins.read(config.resolve(pin_path or config.read_settings().get("pin_path") or ""))
+    except FileNotFoundError as exc:
+        raise CommandError("no_pin_file") from exc
+    entry = next((k for k in pin.get("auto_signing_keys") or [] if isinstance(k, dict) and k.get("kms_key") == kms_key), None)
+    if not entry:
+        raise CommandError("kms_key_not_in_pin — 검증 탭 ⑤ 'KMS 점검·핀 추가' 로 먼저 핀에 넣으세요")
+    since = time.time() - float(days) * 86400
+    access = (token_fn or gcp.token)(sa_path, kms_audit.LOGGING_SCOPE)
+    try:
+        events = kms_audit.sign_events(project_id, access, kms_key, since, opener=opener)
+    except kms_audit.AuditError as exc:
+        hint = " — 이 계정에 roles/logging.privateLogViewer 가 필요합니다" if exc.code == "forbidden" else ""
+        return {"error": "audit_" + exc.code + hint, "kms_key": kms_key}
+    checkpoints = [d["checkpoint"] for d in firestore_checkpoints(project_id, sa_path)]
+    local = config.resolve(out_dir or config.read_settings().get("checkpoints_dir") or "")
+    for name in sorted(os.listdir(local)) if local and os.path.isdir(local) else []:
+        if name.endswith(".json") and name[:-5].isdigit():
+            with open(os.path.join(local, name), encoding="utf-8") as fh:
+                checkpoints.append(json.load(fh))           # 관리자가 KMS 키로 손수 만든 로컬 체크포인트도 짝으로 인정
+    checkpoints = [c for c in checkpoints if int(c.get("created_at", 0) or 0) >= since - 300]
+    admins = set()
+    try:
+        with open(sa_path, encoding="utf-8-sig") as fh:
+            admins.add(str(json.load(fh).get("client_email", "")))
+    except (OSError, ValueError, TypeError):
+        pass
+    result = kms_audit.classify(events, checkpoints, key_id=str(entry.get("key_id", "")), admin_principals=admins)
+    result.update({"kms_key": kms_key, "days": days, "since": time.strftime("%Y-%m-%d %H:%M", time.localtime(since))})
+    if result["verdict"] == "violation":
+        result["error"] = "unexplained_signatures — 체크포인트와 짝이 없는 KMS 서명이 있습니다(누가: by_principal·unexplained)"
+    elif result["verdict"] == "logs_missing":
+        result["error"] = "logs_missing — KMS 데이터 액세스 로그(DATA_READ)가 꺼져 있거나 보존 기간 밖입니다"
+    return result
