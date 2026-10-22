@@ -2,8 +2,9 @@
 
 10/20 피드백(iPhone): 아래로 끝까지 스크롤하면 하단 탭이 내용과 함께 움직였다. 탭이 position: sticky 로
 문서 흐름 안에 있어서, iOS 의 끝 바운스(고무줄 스크롤) 때 내용과 함께 끌려 올라가고 아래에 빈 바탕이 드러났다.
-바운스 자체는 헤드리스로 재현되지 않으므로, 원인이 된 성질(문서 흐름 안의 sticky·루트 바운스 허용)과
+바운스 자체는 헤드리스로 재현되지 않으므로, 원인이 된 성질(문서 흐름 안의 sticky)과
 결과(어느 스크롤 위치에서도 탭이 화면 맨 아래, 마지막 내용이 탭에 가리지 않음)를 본다.
+10/22: 탭은 고정하되 화면 내부의 끝 바운스(반응형 움직임)는 허용한다 — 루트 바운스를 끄지 않는다.
 
     cd backend && uvicorn app.main:app --port 8768
     python ../e2e/test_bottom_nav.py http://localhost:8768
@@ -35,8 +36,11 @@ with sync_playwright() as p:
 
     n = page.evaluate(NAV)
     check("폰: 하단 탭은 화면에 고정(position: fixed) — 문서 흐름 안의 sticky 가 아니다", n["pos"] == "fixed", n["pos"])
-    check("폰: 루트 바운스 끔(overscroll-behavior-y: none)", page.evaluate("getComputedStyle(document.documentElement).overscrollBehaviorY") == "none",
-          page.evaluate("getComputedStyle(document.documentElement).overscrollBehaviorY"))
+    # 탭만 움직이지 않으면 된다 — 화면 내부의 끝 바운스(반응형 움직임)는 막지 않는다(10/22 피드백).
+    root = page.evaluate("""() => { const h = getComputedStyle(document.documentElement), b = getComputedStyle(document.body);
+      return { os: h.overscrollBehaviorY, hbg: h.backgroundColor, bbg: b.backgroundColor }; }""")
+    check("폰: 화면 내부 바운스 허용(루트 overscroll-behavior-y 를 끄지 않음)", root["os"] == "auto", root["os"])
+    check("바운스로 드러나는 문서 바깥도 같은 바탕색(빈 흰 띠 없음)", root["hbg"] == root["bbg"], f"{root['hbg']} / {root['bbg']}")
 
     for scr in ("u-home", "u-sched"):
         page.evaluate(f"go('{scr}')"); page.wait_for_timeout(400)
