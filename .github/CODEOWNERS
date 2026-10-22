@@ -1,0 +1,11 @@
+# 보안 경로 — 여기 적힌 파일을 바꾸는 PR 은 **코드 소유자 승인** 없이는 main 에 들어갈 수 없다
+# (main 브랜치 보호의 'Require review from Code Owners' 와 함께 동작한다. 설정: docs/ops/KMS_AUTO_ANCHOR.md §11).
+#
+# 왜: 자동 앵커는 main 의 워크플로가 KMS 로 서명한다. main 에 코드를 넣을 수 있으면 그 코드가 정당한 토큰으로
+# 아무 체크포인트나 서명하게 만들 수 있다 — 그래서 워크플로·스크립트·관리자 도구 변경에 사람 승인을 건다.
+# PR 작성자 본인의 승인은 세지 않으므로, 한 소유자가 낸 PR 은 다른 소유자가 승인해야 한다.
+
+/.github/workflows/      @01044402345o-beep @seongbin45
+/.github/scripts/        @01044402345o-beep @seongbin45
+/.github/CODEOWNERS      @01044402345o-beep @seongbin45
+/tools/opsarchive/       @01044402345o-beep @seongbin45

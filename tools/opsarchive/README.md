@@ -143,6 +143,7 @@ GUI는 성공을 파란 `✔`, 실패를 빨간 `✘`, 경고를 노란색으로
 | `kms-check --kms-key --sa` | Cloud KMS 서명 키(Ed25519) 점검 — 알고리즘·공개키·시험 서명 | 안전 |
 | `kms-pin-add --kms-key --sa [--pin]` | KMS 공개키를 핀의 **자동 서명 키**로 넣는다(그 뒤 `pin-publish`) | 핀 변경 |
 | `anchor --kms-key [--store firestore]` | 관리자 키 대신 KMS 키로 서명, 체크포인트를 Firestore `evidence_checkpoints` 에 만들기만 | 원장 추가 |
+| `kms-audit --project --sa --kms-key [--days 7]` | 감사 로그의 KMS 서명(누가·언제)과 체크포인트를 맞춰 **짝 없는 서명**·실패한 시도를 보고(데이터 액세스 로그·privateLogViewer 필요) | 안전 |
 | `auto-anchor --project --sa env:GCP_ACCESS_TOKEN --kms-key` | (CI) 검증 → 통과하면 KMS 체크포인트. 핀은 Actions 변수 `EVIDENCE_PIN_SIGNING_KEYS` | 원장 추가 |
 | `verify-chain --source local\|firestore\|both [--max-age-hours N]` | 자동 앵커 체크포인트까지 검증, 어느 키가 서명했는지·마지막 체크포인트 나이 보고 | 안전 |
 | `rules-status --project --sa` | 저장소 `firestore.rules` 와 배포된 규칙(Firebase Rules API, 읽기 전용)을 대조한다. 다르면 차이를 보여 준다 | 안전 |
