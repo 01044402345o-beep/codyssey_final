@@ -2387,7 +2387,8 @@ function scrHome() {
       <span class="dates">학습 ${Dt.md(t.studyStart)} → 여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)}</span><span class="hero-edit">여행 설정 수정 ›</span></button>`;
   } else {
     hero = `<button type="button" class="hero" data-act="edit-trip" aria-label="여행 설정 수정"><span class="route">${esc(tripTitle(t))}</span><span class="big">D-${Dt.diff(t.tripStart, S.today)}<small>여행까지</small></span>
-      <span class="dates">여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)} · 학습 종료 ${Dt.md(t.tripEnd)}</span><span class="hero-edit">여행 설정 수정 ›</span></button>`;
+      <span class="dates">여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)} · 학습 종료 ${Dt.md(t.tripEnd)}</span><span class="hero-edit">여행 설정 수정 ›</span></button>
+      <div class="sec-title"><h4>일정 종합 안내</h4></div>`;
   }
   const r = S.sched.find(x => x.date === S.today);
   let today;
@@ -2403,7 +2404,6 @@ function scrHome() {
       ${r.newIds.length ? `<div style="margin-top:8px"><span class="badge b-new">새 문장 ${r.newIds.length}개 포함</span></div>` : ''}
       ${r.kind === 'free' ? `<button class="btn soft block" style="margin-top:12px" data-act="tab" data-id="u-coll">문장 모음에서 복습하기</button>`
         : `<button class="btn ${st === 'done' ? 'soft' : 'accent'} block" style="margin-top:12px" data-act="study-date" data-date="${r.date}">${st === 'done' ? '완료했어요 · 다시 보기' : '오늘 학습 시작'}</button>`}</div>
-       <br>
        <div class="sec-title"><h4>학습 현황</h4></div>`;
   }
   const upcoming = S.sched.filter(x => x.date > S.today).slice(0, 3);
