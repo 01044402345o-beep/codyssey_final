@@ -2393,7 +2393,7 @@ function scrHome() {
   let today;
   if (!r) {
     const first = S.sched[0];
-    today = `<br><div class="today-card"><div class="top"><span class="badge k-free">학습 전</span></div><h3>학습은 ${Dt.full(first.date)}부터 시작해요</h3>
+    today = `<div class="today-card"><div class="top"><span class="badge k-free">학습 전</span></div><h3>학습은 ${Dt.full(first.date)}부터 시작해요</h3>
       <p class="sub" style="font-size:0.8125rem">첫날 학습 · ${describe(first)}문장</p><button class="btn soft block" style="margin-top:12px" data-act="study-date" data-date="${first.date}">첫날 카드 미리 보기</button></div>`;
   } else {
     const st = rowStatus(r), n = r.ids.length;
