@@ -93,7 +93,27 @@
   /* 그림자·덮개 */
   --shadow-ink-45: rgba(22, 27, 38, .45);
   --shadow-ink-35: rgba(22, 27, 38, .35);
-  --shadow-knob: 0 1px 3px rgba(22, 27, 38, .18);   /* 스위치 손잡이 그림자 */
+  /* 재질 (iOS 26/27 Liquid Glass) — L1 떠 있는 층은 실제 유리, L0 컨텐츠 카드는 재질만 */
+  --glass-blur: 26px;      /* iOS 27: 뒤를 더 세게 확산 */
+  --glass-sat: 1.85;
+  --glass-bg: color-mix(in srgb, var(--surface) 64%, transparent);
+  --glass-line: color-mix(in srgb, var(--surface) 62%, var(--border));
+  --glass-spec: color-mix(in srgb, #fff 72%, transparent);
+  --glass-spec-2: color-mix(in srgb, #fff 92%, transparent);        /* iOS 27 밝은 스페큘러 */
+  --glass-edge-2: color-mix(in srgb, var(--text) 15%, transparent);  /* iOS 27 어두워진 경계 */
+  --glass-shadow: 0 10px 28px color-mix(in srgb, var(--text) 11%, transparent), 0 1px 2px color-mix(in srgb, var(--text) 7%, transparent);
+  --mat-edge: color-mix(in srgb, var(--text) 12%, transparent);
+  --mat-spec: color-mix(in srgb, #fff 90%, transparent);
+  --mat-shadow: 0 10px 24px color-mix(in srgb, var(--text) 8%, transparent), 0 1px 2px color-mix(in srgb, var(--text) 5%, transparent);
+  --mat-tint: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  --mat-tint-edge: color-mix(in srgb, var(--text) 10%, transparent);
+  --ink-edge: color-mix(in srgb, #fff 12%, transparent);   /* 히어로(ink 면) 경계·스페큘러 */
+  --ink-spec: color-mix(in srgb, #fff 16%, transparent);
+  --al-bg: #fdf0e9;                                           /* 오늘의 알람: accent 8% 틴트 */
+  --al-spec: color-mix(in srgb, #fff 92%, transparent);
+  --al-glow: color-mix(in srgb, #fff 76%, transparent);
+  --al-glow-2: color-mix(in srgb, #fff 82%, transparent);
+  --btn-spec: color-mix(in srgb, #fff 30%, transparent);
   --grid-dot: rgba(22, 27, 38, .09);
   --focus-ring: rgba(22, 27, 38, .08);
   --focus: #161b26;         /* 키보드 포커스 링 */
@@ -161,7 +181,15 @@
     --focus: #8fb4ff;
     --shadow-ink-45: rgba(0, 0, 0, .6);
     --shadow-ink-35: rgba(0, 0, 0, .5);
-    --shadow-knob: 0 1px 3px rgba(0, 0, 0, .5);   /* 스위치 손잡이 그림자 */
+    --glass-spec: rgba(255, 255, 255, .18);
+    --glass-shadow: 0 12px 30px rgba(0, 0, 0, .5), 0 1px 2px rgba(0, 0, 0, .4);
+    --mat-edge: color-mix(in srgb, #fff 14%, transparent);
+    --mat-spec: color-mix(in srgb, #fff 10%, transparent);
+    --mat-shadow: 0 10px 24px rgba(0, 0, 0, .38), 0 1px 2px rgba(0, 0, 0, .3);
+    --mat-tint: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    --al-bg: color-mix(in srgb, var(--accent) 7%, var(--surface));
+    --al-glow: color-mix(in srgb, #fff 13%, transparent);
+    --al-glow-2: color-mix(in srgb, #fff 10%, transparent);
     --grid-dot: rgba(255, 255, 255, .06);
     --focus-ring: rgba(255, 255, 255, .15);
     --scrim: rgba(0, 0, 0, .6);
@@ -218,7 +246,15 @@
   --focus: #8fb4ff;
   --shadow-ink-45: rgba(0, 0, 0, .6);
   --shadow-ink-35: rgba(0, 0, 0, .5);
-  --shadow-knob: 0 1px 3px rgba(0, 0, 0, .5);   /* 스위치 손잡이 그림자 */
+  --glass-spec: rgba(255, 255, 255, .18);
+  --glass-shadow: 0 12px 30px rgba(0, 0, 0, .5), 0 1px 2px rgba(0, 0, 0, .4);
+  --mat-edge: color-mix(in srgb, #fff 14%, transparent);
+  --mat-spec: color-mix(in srgb, #fff 10%, transparent);
+  --mat-shadow: 0 10px 24px rgba(0, 0, 0, .38), 0 1px 2px rgba(0, 0, 0, .3);
+  --mat-tint: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  --al-bg: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  --al-glow: color-mix(in srgb, #fff 13%, transparent);
+  --al-glow-2: color-mix(in srgb, #fff 10%, transparent);
   --grid-dot: rgba(255, 255, 255, .06);
   --focus-ring: rgba(255, 255, 255, .15);
   --scrim: rgba(0, 0, 0, .6);
@@ -1789,26 +1825,157 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
   html:not([data-mode=legacy]) :is(.ilog-cp, .ilog-del, .ilog-clear, .ilog-pick, .ilog-head, .seg.coll-seg button) { min-height: 44px; }
 }
 
-/* 홈 학습 현황: iOS 알람 카드 — 한 카드 안에 행, 행 사이 얇은 구분선, 오른쪽 스위치 */
-.al-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
-.al-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 8px 8px 0; }
-.al-row + .al-row { border-top: 1px solid var(--border-faint); }
-.al-main { flex: 1; min-width: 0; display: block; text-align: left; background: none; border: 0; padding: 4px 0 4px 16px; color: inherit; }
-.al-main b { font-family: var(--display); font-size: 1.75rem; font-weight: 400; line-height: 1.15; letter-spacing: -0.015em; font-variant-numeric: tabular-nums; }
-.al-main i { font-style: normal; font-size: 0.9375rem; color: var(--text-3); margin-left: 3px; }
-.al-t { display: block; font-size: var(--fs-caption); color: var(--text-3); margin-top: 1px; }
-.al-sub { display: block; font-size: 0.8125rem; color: var(--text-2); line-height: 1.45; margin-top: 3px; }
-.al-row.off .al-main b, .al-row.off .al-main i { color: var(--text-3); }
-.al-week { display: flex; gap: 5px; margin-top: 7px; }
-.al-week i { width: 100%; max-width: 26px; height: 5px; border-radius: 3px; background: var(--surface-seg); }
-.al-week i.on { background: var(--accent); }
-.al-week i.today { box-shadow: 0 0 0 1.5px var(--accent-soft); }
-.al-sw { flex: none; width: 50px; min-height: 44px; display: grid; place-items: center; background: none; border: 0; padding: 0; }
-.al-sw i { display: block; width: 46px; height: 28px; border-radius: 999px; background: var(--surface-seg); position: relative; transition: background .18s; }
-.al-sw i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
-  background: var(--surface); box-shadow: var(--shadow-knob); transition: transform .18s; }
-.al-sw[aria-checked="true"] i { background: var(--accent); }
-.al-sw[aria-checked="true"] i::after { transform: translateX(18px); }
-@media (hover: hover) { .al-main:hover b { color: var(--accent-text); } }
-@media (prefers-reduced-motion: reduce) { .al-sw i, .al-sw i::after { transition: none; } }
-@media (max-width: 359px) { .streak-top { gap: 12px; } .goal-ring { width: 72px; height: 72px; } }
+/* 홈 '오늘의 알람' — iOS 알람(AlarmKit) 화면 구성 + iOS 27 '틴티드' 재질
+   iOS 27(WWDC26) Liquid Glass 변경점만 반영한다:
+   - Clear ↔ Tinted 를 슬라이더로 연속 조절. 판독성이 우선이라 권장 기본값은 더 불투명한 쪽.
+   - 모든 글래스 요소에 '어두워진 경계(darkened edge)' 추가, 스페큘러는 더 밝게.
+   - 뒤 컨텐츠를 더 세게 확산(diffuse) → 투명도에 덜 의존한다. (WWDC26 Platforms State of the Union)
+   => 컨텐츠 카드는 틴티드 변형(거의 불투명), 떠 있는 내비 층만 클리어 변형.
+   검정(OLED)을 걷어낸다: 카드 면은 accent 8% 를 섞은 밝은 틴트, 글자는 --text 계열. */
+.alarm {
+  --al-edge: color-mix(in srgb, var(--text) 13%, transparent);   /* 어두워진 경계 */
+  --al-t2: color-mix(in srgb, var(--text) 84%, var(--surface));
+  --al-t3: color-mix(in srgb, var(--text) 66%, var(--surface));
+  position: relative; overflow: hidden; text-align: center;
+  padding: 20px 18px 18px; border-radius: 30px; color: var(--text);
+  background-color: var(--al-bg);
+  background-image: radial-gradient(125% 92% at 50% -12%, var(--al-glow) 0%, transparent 62%);
+  border: 1px solid var(--al-edge);
+  box-shadow: inset 0 1px 0 var(--al-spec),
+              0 14px 32px color-mix(in srgb, var(--text) 10%, transparent),
+              0 1px 2px color-mix(in srgb, var(--text) 6%, transparent); }
+.alarm::after { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: radial-gradient(70% 42% at 50% -8%, var(--al-glow-2), transparent 72%); }
+.alarm > * { position: relative; z-index: 1; }
+.alarm-h { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--al-t3); }
+.alarm-ic { display: inline-grid; place-items: center; }
+.alarm-ic svg { width: 15px; height: 15px; }
+.alarm-big { display: block; margin: 8px 0 2px; font-family: var(--display); font-weight: 300;
+  font-size: clamp(3.25rem, 19vw, 4.25rem); line-height: 1; letter-spacing: -.045em;
+  font-variant-numeric: tabular-nums; color: var(--text); }
+.alarm-big i { font-style: normal; font-size: 0.36em; font-weight: 500; letter-spacing: -.01em;
+  color: var(--al-t3); margin-left: 4px; }
+.alarm-label { margin: 6px auto 0; max-width: 19em; font-size: 0.9375rem; line-height: 1.45; color: var(--al-t2); }
+.alarm-week { display: flex; justify-content: center; gap: 6px; margin-top: 14px; }
+.alarm-week i { width: 26px; height: 4px; border-radius: 2px;
+  background: color-mix(in srgb, var(--text) 15%, var(--al-bg)); }
+.alarm-week i.on { background: var(--accent); }
+.alarm-week i.today { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--text) 32%, var(--al-bg)); }
+.alarm-meta { display: flex; justify-content: center; align-items: center; gap: 7px; margin-top: 10px;
+  font-size: var(--fs-caption); color: var(--al-t3); }
+.alarm-acts { display: grid; gap: 8px; margin-top: 18px; }
+.alarm-primary { width: 100%; min-height: 54px; border: 0; border-radius: 999px; background: var(--accent);
+  color: var(--on-accent); font-size: 1.0625rem; font-weight: 700; letter-spacing: -.01em;
+  box-shadow: inset 0 1px 0 var(--btn-spec); }
+.alarm-primary:active { transform: scale(.985); }
+.alarm-second { width: 100%; min-height: 44px; border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 999px; background: color-mix(in srgb, var(--text) 6%, var(--al-bg)); color: var(--al-t2);
+  font-size: 0.9375rem; font-weight: 600; }
+@media (hover: hover) { .alarm-primary:hover { background: var(--accent-2); }
+  .alarm-second:hover { background: color-mix(in srgb, var(--text) 10%, var(--al-bg)); } }
+@media (prefers-contrast: more) { .alarm { background: var(--surface); border: 2px solid var(--text); }
+  .alarm-h, .alarm-label, .alarm-meta, .alarm-big i { color: var(--text); }
+  .alarm-second { border-color: var(--text); background: var(--surface); color: var(--text); } }
+@media (prefers-reduced-motion: reduce) { .alarm-primary:active { transform: none; } }
+/* ================= iOS 26 Liquid Glass =================
+   Apple WWDC25 'Meet Liquid Glass' (219) 기준:
+   - 글래스는 "컨텐츠 위에 떠 있는 내비게이션 층"에 쓴다. 표/카드 같은 컨텐츠 층에 쓰면
+     다른 요소와 경쟁해 위계가 흐려지고 가독성이 떨어진다.
+   - 글래스 위에 글래스를 겹치지 않는다.
+   - 굴절(lensing)은 뒤에 흐를 내용이 있어야 보인다. 그래서 고정·부유 층(탭바·앱바·토스트·시트)에는
+     실제 blur 를 쓰고, 배경이 고정된 컨텐츠 카드는 blur 없이 같은 재질감(반투명 + 상단 스페큘러 +
+     헤어라인 + 부드러운 그림자)만 입힌다. 평평한 배경 위의 blur 는 GPU 만 쓰고 보이는 게 없다.
+   - 접근성: 투명도 줄이기 → 불투명, 대비 증가 → 불투명 + 굵은 경계, 모션 줄이기 → 전환 없음. */
+/* 떠 있는 층: 실제 유리 (뒤로 내용이 흐르므로 굴절이 보인다) */
+.appbar, .pnav, .toast, .demo-fab, .sheet, .drawer {
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  background: var(--glass-bg);
+  border-color: var(--glass-line);
+}
+.appbar, .pnav { background-image: linear-gradient(180deg, var(--glass-spec) 0%, transparent 60%); }
+.demo-fab, .toast { box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-spec); }
+
+/* 접근성 대체: 투명도·대비·모션 */
+@media (prefers-reduced-transparency: reduce) {
+  .appbar, .pnav, .toast, .demo-fab, .sheet, .drawer {
+    background: var(--surface); background-image: none;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+}
+@media (prefers-contrast: more) {
+  .appbar, .pnav, .toast, .demo-fab, .sheet, .drawer {
+    background: var(--surface); background-image: none;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+    border-color: var(--text);
+  }
+}
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  .appbar, .pnav, .toast, .demo-fab, .sheet, .drawer { background: var(--surface); background-image: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .appbar, .pnav, .demo-fab { transition: none; }
+}
+
+/* iOS 27 재질 갱신 — 떠 있는 층(.pnav/.appbar)은 클리어 변형: 위로 밝은 스페큘러, 아래로 어두운 경계 */
+.pnav, .appbar { box-shadow: inset 0 1px 0 var(--glass-spec-2), inset 0 -1px 0 var(--glass-edge-2); }
+@media (prefers-contrast: more) { .pnav, .appbar { box-shadow: none; } }
+
+/* ================= 재질 확장 (Material scope) =================
+   홈 알람 카드에서 확정한 재질 규칙을 앱 전체로 넓힌다. 세 역할만 있다:
+     L0-a  raised   : 일반 목록 카드. 불투명 표면 + 어두운 경계 + 상단 스페큘러 + 2단 그림자
+     L0-b  tinted   : "오늘"의 상태를 담는 카드. accent 8% 틴트 (알람 카드와 같은 면)
+   토큰(--glass-* · --mat-* · --al-*)은 맨 위 :root 블록(라이트·다크)에 있다.
+     L0-c  ink      : 화면당 하나뿐인 앵커(히어로). 최상단에만
+     L1    glass    : 떠 있는 층(앱바·탭바·시트·토스트). 실제 blur
+   규칙: 컨텐츠 카드에 backdrop-filter 금지 · 한 화면에 ink 면 1개 · 경계는 전부 같은 토큰. */
+
+/* L0-a raised — 목록·요약·기록 카드 */
+:is(.card, .city-card, .summary-strip > div, .srow, .interp-item, .interp-item.sel,
+   .live-card, .past-card, .ilog-card, .account-card, .theme-card, .sent, .face.front) {
+  border-color: var(--mat-edge);
+  box-shadow: inset 0 1px 0 var(--mat-spec), var(--mat-shadow);
+}
+.srow:hover, .interp-item:hover, .past-card:hover, .ilog-card:hover, .sent:hover {
+  border-color: color-mix(in srgb, var(--text) 22%, transparent);
+}
+/* L0-b tinted — 오늘/연속처럼 "지금 내 상태"를 담는 카드 */
+.today-card {
+  background: var(--mat-tint);
+  border: 1px solid var(--mat-tint-edge);
+  box-shadow: inset 0 1px 0 var(--mat-spec), var(--mat-shadow);
+}
+.today-card .today-kicker,
+.today-card .small { color: color-mix(in srgb, var(--text) 68%, var(--mat-tint)); }
+
+/* L0-c ink — 히어로는 화면당 하나. 경계·스페큘러는 글래스와 같은 규칙을 어두운 면에 적용 */
+.hero {
+  border: 1px solid var(--ink-edge);
+  box-shadow: inset 0 1px 0 var(--ink-spec),
+              0 14px 32px color-mix(in srgb, var(--text) 18%, transparent);
+}
+
+/* L1 glass — 시트도 떠 있는 층이다. 아래에 깔린 화면이 비쳐야 경계가 읽힌다. */
+.sheet, .il-sheet {
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border: 1px solid var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-spec-2), inset 0 -1px 0 var(--glass-edge-2),
+              0 -12px 40px color-mix(in srgb, var(--text) 18%, transparent);
+}
+.sheet-wrap { background: color-mix(in srgb, var(--text) 22%, transparent); }
+
+/* 접근성: 투명도 줄이기 → L1도 불투명, 대비 증가 → 경계 2px */
+@media (prefers-reduced-transparency: reduce) {
+  .sheet, .il-sheet, .pnav, .appbar, .toast { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .pnav, .appbar { border-color: var(--border); box-shadow: none; }
+}
+@media (prefers-contrast: more) {
+  :is(.card, .city-card, .summary-strip > div, .srow, .interp-item, .live-card,
+      .past-card, .ilog-card, .account-card, .today-card) {
+    border-width: 2px; border-color: var(--text); box-shadow: none;
+  }
+  .today-card { background: var(--surface); }
+  .sheet, .il-sheet { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

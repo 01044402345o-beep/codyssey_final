@@ -2409,7 +2409,7 @@ function scrHome() {
     <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 12px"><div><div class="small">안녕하세요</div><b style="font-size:1.125rem">${esc(userName())}${isGuest() ? '' : '님'}</b></div><span class="badge t-norm">${STATUS_KO[t.status]}</span></div>
     ${hero}<div style="height:12px"></div>${today}
     ${pr.miss ? `<div style="height:10px"></div>${notice(`지난 학습 ${pr.miss}일이 미완료예요. 일정표에서 여행 종료일까지 언제든 채울 수 있어요.`, 'warn')}` : ''}
-    ${homeList(pr)}
+    ${alarmCard(pr)}
     ${upcoming.length ? `<div class="sec-title"><h4>다가오는 일정</h4></div>${upcoming.map(srow).join('')}` : ''}
     ${themeCard()}
     ${privacyCard()}
@@ -2434,61 +2434,37 @@ function bumpAct() {
   Object.keys(PROG.act).forEach(d => { if (d < old) delete PROG.act[d]; });
   if (n === DAY_GOAL) toast(`오늘 목표 달성! 🔥 연속 ${streakDays()}일`);
 }
-/* ================= 홈: 학습 현황 (iOS 알람 카드) =================
-   iOS 시계 앱의 알람 목록처럼 한 카드 안에 행을 세로로 쌓는다.
-   - 각 행: 왼쪽에 큰 숫자 + 작은 단위, 그 아래 회색 설명, 오른쪽에 스위치.
-   - 스위치는 '자세히 보기'다. 끄면 설명과 주간 막대를 접어 행이 한 줄로 줄어든다(행은 남는다).
-     알림 기능이 없으므로 알림 스위치인 척하지 않는다 — 껐는데 아무 일도 없는 스위치는 거짓 UI다.
-   - 넘김·점·멈춤 버튼이 없다. 세 값이 한 화면에 동시에 보이고 세로 공간도 적게 쓴다.
-   - 값은 cd_home(localStorage)에 남긴다. 기본은 모두 펼침. */
-const HOME_ROWS = ['goal', 'streak', 'prog'];
-function homePref() {
-  let v = null;
-  try { v = JSON.parse(localStorage.getItem('cd_home') || 'null'); } catch (e) { v = null; }
-  if (!v || typeof v !== 'object') v = {};
-  HOME_ROWS.forEach(k => { if (typeof v[k] !== 'boolean') v[k] = true; });
-  return v;
-}
-function homeSet(k, on) {
-  const v = homePref(); v[k] = !!on;
-  try { localStorage.setItem('cd_home', JSON.stringify(v)); } catch (e) { /* 저장 불가(사생활 모드) */ }
-}
-function homeRow(o, pref) {
-  const on = pref[o.key];
-  const val = `<b>${o.value}</b>${o.unit ? `<i>${o.unit}</i>` : ''}`;
-  const body = `${val}<span class="al-t">${o.title}</span>${on ? `<span class="al-sub">${o.sub}</span>` : ''}${on && o.extra ? o.extra : ''}`;
-  const main = o.act
-    ? `<button type="button" class="al-main" data-act="${o.act[0]}"${o.act[1] ? ` data-id="${o.act[1]}"` : ''}${o.act[2] ? ` data-date="${o.act[2]}"` : ''}>${body}</button>`
-    : `<div class="al-main">${body}</div>`;
-  return `<div class="al-row${on ? '' : ' off'}" data-k="${o.key}">${main}
-    <button type="button" class="al-sw" role="switch" aria-checked="${on}" data-act="home-toggle" data-k="${o.key}"
-      aria-label="${o.title} 자세히 보기"><i></i></button></div>`;
-}
-function homeList(pr) {
-  const n = actToday(), done = n >= DAY_GOAL, st = streakDays(), pref = homePref();
+/* ================= 홈: 오늘의 알람 (iOS 알람 화면 그대로) =================
+   iOS 알람(AlarmKit)이 울릴 때의 화면 구성을 따른다:
+     · 위쪽 작은 아이콘 + 회색 라벨('Alarm')
+     · 아주 큰 시간 숫자 · 그 아래 작은 회색 라벨(알람 이름)
+     · 화면 아래 넓은 캡슐 버튼(주 동작) + 보조 버튼
+   값은 알람의 '시간' 자리에 오늘 목표(n/10)를, 라벨 자리에 안내 문구를, 버튼 자리에
+   '학습 시작'을 둔다. 목록·토글이 아니라 알람 카드 자체다. 배경은 알람처럼 어두운 면을 쓴다. */
+const ALARM_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="13.5" r="7.2"/><path d="M12 10v3.8l2.4 1.6M4.6 4.2 7 2.4M19.4 4.2 17 2.4"/></svg>';
+function alarmCard(pr) {
+  const n = actToday(), done = n >= DAY_GOAL, st = streakDays();
+  const r = S.sched.find(x => x.date === S.today);
+  const date = r ? r.date : S.today;
+  const sub = done ? '오늘 목표를 채웠어요'
+    : n ? `카드 ${DAY_GOAL - n}장만 더 뒤집으면 오늘 목표`
+    : st ? '오늘 카드를 뒤집으면 연속이 이어져요' : '오늘 카드를 뒤집어 시작해 보세요';
   const days = Array.from({ length: 7 }, (_, i) => Dt.add(S.today, i - 6));
-  const weekOn = days.filter(d => (PROG.act[d] || 0) > 0).length;
   const week = days.map(d => {
     const on = (PROG.act[d] || 0) > 0;
     return `<i class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}" title="${Dt.md(d)}${on ? ' · 학습함' : ''}"></i>`;
   }).join('');
-  const r = S.sched.find(x => x.date === S.today);
-  const rows = [
-    { key: 'goal', value: n, unit: `/${DAY_GOAL}장`, title: '오늘의 목표',
-      sub: done ? '오늘 목표를 채웠어요. 내일도 이어 가요.'
-        : n ? `카드 ${DAY_GOAL - n}장만 더 뒤집으면 오늘 목표예요.`
-        : st ? '오늘 카드를 뒤집으면 연속이 이어져요.' : '오늘 카드를 뒤집어 시작해 보세요.',
-      extra: `<span class="al-week" role="group" aria-label="최근 7일">${week}</span>`,
-      act: r && rowStatus(r) !== 'done' ? ['study-date', '', r.date] : ['tab', 'u-sched'] },
-    { key: 'streak', value: st, unit: '일', title: '연속 학습',
-      sub: weekOn ? `이번 주 ${weekOn}일 학습했어요.` : '이번 주에는 아직 학습이 없어요.',
-      act: ['tab', 'u-sched'] },
-    { key: 'prog', value: Math.round(pr.rate * 100), unit: '%', title: '여행 전체',
-      sub: `완료 ${pr.done}일 · 학습 ${pr.den}일${pr.miss ? ` · 미완료 ${pr.miss}일` : ''}`,
-      act: ['tab', 'u-sched'] }
-  ];
-  return `<div class="sec-title"><h4>학습 현황</h4><button data-act="tab" data-id="u-sched">일정표 ›</button></div>
-    <div class="al-card">${rows.map(o => homeRow(o, pref)).join('')}</div>`;
+  return `<div class="alarm" data-live="alarm">
+    <div class="alarm-h"><span class="alarm-ic">${ALARM_IC}</span>오늘의 알람</div>
+    <b class="alarm-big">${n}<i>/${DAY_GOAL}장</i></b>
+    <p class="alarm-label">${sub}</p>
+    <div class="alarm-week" role="group" aria-label="최근 7일">${week}</div>
+    <div class="alarm-meta"><span>🔥 연속 ${st}일</span><span aria-hidden="true">·</span><span>여행 전체 ${Math.round(pr.rate * 100)}%</span></div>
+    <div class="alarm-acts">
+      <button class="alarm-primary" data-act="study-date" data-date="${date}">${done ? '다시 보기' : '학습 시작'}</button>
+      <button class="alarm-second" data-act="tab" data-id="u-sched">일정표 열기</button>
+    </div>
+  </div>`;
 }
 
 function ring(rate) {
@@ -4076,7 +4052,6 @@ async function doWithdraw() {
 }
 
 const ACT = {
-  'home-toggle': el => { const k = el.dataset.k; homeSet(k, !homePref()[k]); render(); },
   nav: el => { navFromMenu(el.dataset.id); if (!LEGACY) $('#side').classList.remove('open'); },
   drawer: () => {
     const el = $('#side'), opening = !el.classList.contains('open');
