@@ -733,3 +733,94 @@ def decrypt_archive(project_id: str, sa_path: str, archive_id: str, key_file: st
             json.dump(report, fh, ensure_ascii=False, indent=2)
         report["_written"] = path
     return report
+
+
+# ------------------------------------------------------------------ Firestore 보안 규칙
+def firebaserc_default(root: str | None = None) -> str:
+    """저장소 `.firebaserc` 의 기본 프로젝트(없으면 빈 문자열). 설정의 project_id 와 다르면 화면이 경고한다."""
+    try:
+        with open(os.path.join(root or config.repo_root(), ".firebaserc"), "r", encoding="utf-8-sig") as fh:
+            data = json.load(fh)
+        return str(((data or {}).get("projects") or {}).get("default") or "")
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def rules_status(project_id: str, sa_path: str, *, root: str | None = None, token_fn=None,
+                 access_token: str = "") -> dict:
+    """저장소 `firestore.rules` 와 **지금 배포된** 규칙을 대조한다(읽기 전용).
+
+    match 가 False 면: 저장소를 고치고 아직 배포하지 않았거나, 누군가 콘솔에서 규칙을 바꿨다(드리프트).
+    match 가 None 이면 배포본을 읽지 못한 것이다(reason 에 이유). 콘솔에서 고친 내용은 CLI 배포가 덮어쓴다.
+    """
+    root = root or config.repo_root()
+    out = {"project": project_id, "rules_file": "", "local_sha256": "",
+           "deployed_sha256": "", "deployed_at": "", "ruleset": "", "match": None, "diff": [], "reason": ""}
+    try:
+        local = firebase.local_rules(root)
+        out.update({"rules_file": local["rules_file"], "local_sha256": local["sha256"][:16]})
+        firebase.check_project(project_id)
+        access = access_token or (token_fn or gcp.token)(sa_path, firebase.RULES_SCOPE)
+        deployed = firebase.deployed_rules(project_id, access)
+    except (firebase.FirebaseError, gcp.GcpError) as exc:
+        out["reason"] = exc.code
+        if exc.code == "rules_forbidden":
+            out["reason"] += " — 서비스 계정에 'Firebase Rules 뷰어'(roles/firebaserules.viewer) 권한이 필요합니다. 콘솔 규칙 탭에서 눈으로 확인할 수도 있습니다"
+        return out
+    out.update({"deployed_sha256": deployed["sha256"][:16], "deployed_at": deployed["updated"],
+                "ruleset": deployed["ruleset"].rsplit("/", 1)[-1], "match": deployed["sha256"] == local["sha256"]})
+    if not out["match"]:
+        out["diff"] = firebase.rules_diff(deployed["text"], local["text"])
+    return out
+
+
+def rules_deploy(project_id: str, sa_path: str = "", *, root: str | None = None, dry_run: bool = False,
+                 verify_seconds: int = 30, token_fn=None, sleep=time.sleep) -> dict:
+    """`firestore.rules` 를 그 프로젝트에 배포하고(**되돌릴 수 없음** — 이전 규칙은 콘솔 기록에만 남는다),
+    배포된 규칙을 다시 읽어 저장소 파일과 같은지 확인한다(반영 확인). dry_run 은 문법 검사만 한다."""
+    root = root or config.repo_root()
+    try:
+        result = firebase.rules_deploy(project_id, root, dry_run=dry_run)
+    except firebase.FirebaseError as exc:
+        failed = {"error": exc.code, "detail": getattr(exc, "detail", "") or "", "project": project_id,
+                  "verified": None}
+        if exc.code == "cli_timeout" and not dry_run and sa_path:
+            failed.update(_verify_release(project_id, sa_path, root, verify_seconds, token_fn, sleep))
+        return failed
+    if dry_run:
+        result["verified"] = None
+        return result
+    result.update(_verify_release(project_id, sa_path, root, verify_seconds, token_fn, sleep) if sa_path else
+                  {"verified": None, "verify_reason": "sa_path 없음 — 반영 확인 생략", "deployed_sha256": ""})
+    if result["verified"] is False:
+        result["error"] = "deployed_rules_differ"
+    elif result["verified"] is None and not (result["released"] or result["unchanged"]):
+        result["error"] = "not_released"     # CLI 는 끝났다는데 release 문구도, 확인할 방법도 없다
+    result["note"] = ("배포본(release)이 저장소와 같습니다. 실제 적용은 새 요청에 약 1분, 열린 연결에는 최대 10분 걸릴 수 있습니다."
+                      if result["verified"] else "")
+    return result
+
+
+# 반영 확인에서 기다려도 바뀌지 않는 이유(권한·설정 문제)는 바로 멈춘다. 네트워크 오류는 다시 시도한다.
+_FINAL_REASONS = ("rules_forbidden", "rules_unauthorized", "rules_not_found", "bad_release", "bad_project",
+                  "no_sa_file", "bad_sa_file", "no_google_auth", "token_failed", "multiple_rules_targets",
+                  "no_rules_target", "no_rules_file", "no_firebase_json", "empty_ruleset")
+
+
+def _verify_release(project_id: str, sa_path: str, root: str, verify_seconds: int, token_fn, sleep) -> dict:
+    """배포 뒤 배포본(release)을 다시 읽어 저장소 파일과 같은지 본다. 토큰은 한 번만 받는다."""
+    status: dict = {}
+    access = ""
+    try:
+        access = (token_fn or gcp.token)(sa_path, firebase.RULES_SCOPE)
+    except gcp.GcpError as exc:
+        return {"verified": None, "verify_reason": exc.code, "deployed_sha256": ""}
+    for _ in range(max(1, verify_seconds // 3)):
+        status = rules_status(project_id, sa_path, root=root, access_token=access)
+        if status["match"]:
+            break
+        if status["match"] is None and status["reason"].split(" ")[0] in _FINAL_REASONS:
+            break
+        sleep(3)                             # release 반영이 늦거나 일시 오류일 수 있어 잠깐 기다렸다 다시 본다
+    return {"verified": status.get("match"), "verify_reason": status.get("reason", ""),
+            "deployed_sha256": status.get("deployed_sha256", ""), "diff": status.get("diff", [])}

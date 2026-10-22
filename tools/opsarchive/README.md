@@ -97,6 +97,7 @@ GUI는 표준 라이브러리(tkinter)만 써서 **설치 단계가 없다**. �
 | 설정 | `settings.json` 값과 `.env`(비밀)를 편집·저장한다 |
 | 키 | selftest → 봉투 키 → 서명 키 → 무작위 값 → 회전(선택) 순서 안내 |
 | Render | 공개키 발행, 지문 대조, 상태 확인, observe, 핀 만들기·검사, IAM 검사, 재배포 |
+| Firestore 규칙 | 저장소 `firestore.rules` 와 배포된 규칙 대조(콘솔에서 바뀐 것도 차이로 보임), 문법 검사(dry-run), 확인 창 뒤 배포 + 배포본을 다시 읽어 반영 확인 |
 | 보관소 | 봉인 아카이브 목록을 보고 개인키로 연다 |
 | 검증 | 서명 키·핀 상태 확인, anchor, verify-chain, 챌린지 대조 |
 
@@ -137,6 +138,8 @@ GUI는 성공을 파란 `✔`, 실패를 빨간 `✘`, 경고를 노란색으로
 | `decrypt --project --sa --id --key [--out]` | 아카이브를 내려받아 개인키로 연다 | 주의(평문 개인정보가 디스크에 남음) |
 | `env-set --service --key [--from-file --stdin]` | Render 환경변수 하나를 올린다 | 주의(서버 환경변수 변경) |
 | `deploy --service [--timeout]` | Render 서비스를 재배포한다 | 주의(서비스 재시작) |
+| `rules-status --project --sa` | 저장소 `firestore.rules` 와 배포된 규칙(Firebase Rules API, 읽기 전용)을 대조한다. 다르면 차이를 보여 준다 | 안전 |
+| `rules-deploy --project [--sa] [--dry-run] [--yes]` | 저장소 루트에서 `firebase deploy --only firestore:rules --project <id>` 를 실행하고, `--sa` 가 있으면 배포본을 다시 읽어 같은지 확인한다. `--yes` 가 없으면 프로젝트 ID 를 다시 입력해야 배포한다 | **되돌릴 수 없음**(지금 규칙을 덮어씀) |
 | `publish --service --key [--base-url --env-key --no-redeploy]` | 공개키를 발행하고 재배포 | 되돌릴 수 없음(운영 반영) |
 | `rotate --service --key [--base-url --no-redeploy]` | 새 키 생성·발행(옛 개인키는 보관) | 되돌릴 수 없음 |
 | `pin --key --health-url [--out --generation --commit --note --sign-key]` | 개인키 지문으로 핀 파일 생성 | 되돌릴 수 없음(세대는 올리기만) |
