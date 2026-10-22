@@ -81,6 +81,16 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--service", required=True, help="Render 서비스 이름(또는 ID)")
     q.add_argument("--timeout", type=int, default=300, help="배포 대기 시간(초)")
 
+    q = sub.add_parser("rules-status", help="저장소 firestore.rules 와 배포된 규칙을 대조한다(읽기 전용)")
+    q.add_argument("--project", required=True)
+    q.add_argument("--sa", required=True, help="서비스 계정 JSON(Firebase Rules 읽기 권한)")
+
+    q = sub.add_parser("rules-deploy", help="firestore.rules 를 그 프로젝트에 배포하고 반영을 확인한다(되돌릴 수 없음)")
+    q.add_argument("--project", required=True)
+    q.add_argument("--sa", default="", help="있으면 배포 뒤 배포본을 다시 읽어 저장소 파일과 대조한다")
+    q.add_argument("--dry-run", action="store_true", help="문법 검사만 하고 배포하지 않는다")
+    q.add_argument("--yes", action="store_true", help="확인 질문 없이 배포(자동화용)")
+
     q = sub.add_parser("pin-publish", help="핀의 공개값을 GitHub Actions 변수로 올린다(저장소 파일로는 올리지 않는다)")
     q.add_argument("--pin", default=config.read_settings().get("pin_path") or "")
     q.add_argument("--repo", default=os.environ.get("EVIDENCE_GH_REPO", "01044402345o-beep/codyssey_final"))
@@ -232,6 +242,20 @@ def main(argv: list[str] | None = None) -> int:
             result = commands.deploy(args.service, timeout=args.timeout)
             _print(result)
             return 0 if result.get("ok") else 1
+        if args.cmd == "rules-status":
+            result = commands.rules_status(args.project, args.sa)
+            _print(result)
+            return 0 if result.get("match") else 1
+        if args.cmd == "rules-deploy":
+            if not args.dry_run and not args.yes:
+                print("프로젝트 %s 에 firestore.rules 를 배포합니다. 계속하려면 프로젝트 ID 를 그대로 입력하세요: " % args.project,
+                      end="", file=sys.stderr)
+                if input().strip() != args.project:
+                    print("취소했습니다.", file=sys.stderr)
+                    return 1
+            result = commands.rules_deploy(args.project, args.sa, dry_run=args.dry_run)
+            _print(result)
+            return 1 if result.get("error") else 0
         if args.cmd == "pin-publish":
             _print(commands.pin_publish(args.pin, repo=args.repo, dry_run=args.dry_run))
             return 0

@@ -25,7 +25,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from . import commands, config, container as C, entropy, gcp, pins, render, workflow
+from . import commands, config, container as C, entropy, firebase, gcp, pins, render, workflow
 
 ENV_FIELDS = ["RENDER_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS", "EVIDENCE_GH_TOKEN",
               "EVIDENCE_GH_REPO"]
@@ -199,19 +199,24 @@ class App:
                 result = fn()
                 if isinstance(result, dict) and result.get("error"):
                     # rotate 처럼 "부분 성공 + error" 를 돌려주는 경우를 성공으로 보지 않는다.
-                    self.last[label] = "✘ " + str(result["error"])
+                    self.last[label] = "✘ " + str(result.get("_state") or result["error"])
                     self.log("✘ 실패: %s" % result["error"], "err")
                     for key, value in result.items():
-                        self.log("   %s: %s" % (key, value))
+                        if not key.startswith("_"):
+                            self.log("   %s: %s" % (key, value))
+                    self.log_queue.put(("status", "✘ %s: %s" % (label, result.get("_state") or result["error"])))
                     return
+                state = ""
                 if isinstance(result, dict):
+                    state = str(result.get("_state") or "")   # 성공이지만 덧붙일 상태(예: 배포됨·미확인)
                     for key, value in result.items():
-                        self.log("   %s: %s" % (key, value))
+                        if not key.startswith("_"):
+                            self.log("   %s: %s" % (key, value))
                 elif result:
                     self.log("   " + str(result))
-                self.last[label] = "✔ 완료"
+                self.last[label] = "✔ " + (state or "완료")
                 self.log("✔ 끝", "ok")
-                self.log_queue.put(("status", "✔ %s 완료" % label))
+                self.log_queue.put(("status", "✔ %s %s" % (label, state or "완료")))
             except Exception as exc:  # noqa: BLE001 — GUI 는 어떤 예외도 창을 닫지 않게
                 code = getattr(exc, "code", "")
                 if code == "no_pin_file":
@@ -312,6 +317,11 @@ class App:
         self.step_status.get("pin-check", tk.StringVar()).set(self.state("pin-check"))
         self.step_status.get("iam", tk.StringVar()).set(self.state("iam-check"))
         self.step_status.get("redeploy", tk.StringVar()).set(self.state("재배포"))
+        self.step_status.get("rules-status", tk.StringVar()).set(self.state("규칙 대조"))
+        self.step_status.get("rules-dry", tk.StringVar()).set(self.state("규칙 검사"))
+        self.step_status.get("rules-deploy", tk.StringVar()).set(self.state("규칙 배포"))
+        if getattr(self, "rules_info", None) is not None:
+            self.rules_info.set(self._rules_info_text())
         self._refresh_store_and_verify()
         self._update_hint()
 
@@ -372,6 +382,7 @@ class App:
         self._tab_settings(notebook)
         self._tab_keys(notebook)
         self._tab_render(notebook)
+        self._tab_rules(notebook)
         self._tab_store(notebook)
         self._tab_verify(notebook)
 
@@ -1253,6 +1264,119 @@ class App:
             return result
 
         self.run("재배포", work)
+
+    # ------------------------------------------------------------ 탭: Firestore 규칙
+    def _tab_rules(self, notebook) -> None:
+        frame = self._frame(notebook, "Firestore 규칙")
+        ttk.Label(frame, text="앱 계정 기록(users/{uid})의 보안 규칙입니다. 저장소의 firestore.rules 를 (default) 데이터베이스에 "
+                              "배포하고, 배포된 규칙을 다시 읽어 같은지 확인합니다.",
+                  wraplength=840).pack(anchor="w", padx=10, pady=(8, 0))
+        self.rules_info = tk.StringVar(value=self._rules_info_text())
+        info = ttk.Label(frame, textvariable=self.rules_info, justify="left", foreground="#444")
+        info.pack(anchor="w", padx=10, pady=(6, 0), fill="x")
+        self._wrap(info, frame)
+        steps = self._steps_frame(frame)
+        self._step(steps, 0, "①", "배포된 규칙과 대조",
+                   "지금 배포된 규칙을 읽어(읽기 전용) 저장소 파일과 비교합니다. 다르면 차이를 로그에 보여 줍니다 — "
+                   "누군가 콘솔에서 규칙을 고쳤거나, 저장소를 고치고 아직 배포하지 않은 상태입니다.",
+                   "rules-status", "대조 실행", self.do_rules_status)
+        self._step(steps, 1, "②", "문법 검사(dry-run)",
+                   "배포하지 않고 규칙 파일을 컴파일만 해 봅니다.",
+                   "rules-dry", "검사 실행", self.do_rules_dry)
+        self._step(steps, 2, "③", "규칙 배포",
+                   "확인 창에서 프로젝트를 한 번 더 확인한 뒤 배포합니다(되돌릴 수 없음 — 콘솔에서 고친 규칙은 덮어씁니다). "
+                   "배포가 끝나면 ① 대조를 자동으로 돌려 반영됐는지 확인합니다.",
+                   "rules-deploy", "규칙 배포", self.do_rules_deploy)
+
+    def _rules_info_text(self) -> str:
+        project = str(self.settings.get("project_id") or "(설정 탭에서 Firebase 프로젝트 ID 를 넣으세요)")
+        rc = commands.firebaserc_default()
+        try:
+            target = firebase.rules_target(config.repo_root())
+            where = target["rules_file"]
+        except firebase.FirebaseError as exc:
+            where = "규칙 파일을 찾지 못했습니다(%s)" % exc.code
+        warn = ""
+        if rc and self.settings.get("project_id") and rc != self.settings.get("project_id"):
+            warn = "\n⚠ 설정의 프로젝트(%s)가 저장소 .firebaserc 기본값(%s)과 다릅니다 — 맞는 프로젝트인지 확인하세요." % (
+                self.settings.get("project_id"), rc)
+        return "대상 프로젝트: %s · 데이터베이스: (default)\n규칙 파일: %s%s" % (project, where, warn)
+
+    def _log_rules(self, result: dict) -> None:
+        for line in result.get("diff") or []:
+            self.log("   " + line, "err" if line.startswith("-") else ("ok" if line.startswith("+") else "info"))
+        if result.get("detail"):
+            self.log("   firebase CLI: " + str(result["detail"]), "err")
+
+    def do_rules_status(self) -> None:
+        def work() -> dict:
+            result = commands.rules_status(self.require("project_id"), self.require("sa_path"))
+            self._log_rules(result)
+            out = {k: v for k, v in result.items() if k != "diff"}
+            if result["match"] is None:
+                out["error"] = "배포본을 읽지 못함: " + result["reason"]
+            elif not result["match"]:
+                # 드리프트는 '완료'가 아니다 — 콘솔에서 바뀌었거나 저장소를 고치고 아직 배포하지 않았다.
+                out["error"] = "rules_differ"
+                out["_state"] = "배포본이 저장소와 다름(콘솔 수정 또는 미배포) — 로그의 차이 확인"
+            else:
+                out["_state"] = "일치(배포본 = 저장소)"
+            return out
+
+        self.run("규칙 대조", work)
+
+    def do_rules_dry(self) -> None:
+        def work() -> dict:
+            result = commands.rules_deploy(self.require("project_id"), dry_run=True)
+            self._log_rules(result)
+            return result
+
+        self.run("규칙 검사", work)
+
+    def do_rules_deploy(self) -> None:
+        project = self.require_ui("project_id")
+        if not project:
+            return
+        try:
+            local = firebase.local_rules(config.repo_root())
+        except firebase.FirebaseError as exc:
+            messagebox.showerror("opsarchive", "규칙 파일을 찾지 못했습니다: %s" % exc.code)
+            return
+        rc = commands.firebaserc_default()
+        warn = ("\n\n⚠ 저장소 .firebaserc 기본값은 %s 입니다. 다른 프로젝트에 배포하려는 게 맞나요?" % rc) if rc and rc != project else ""
+        if not messagebox.askyesno(
+                "Firestore 규칙 배포",
+                "프로젝트: %s\n데이터베이스: (default)\n파일: %s\nsha256: %s…\n\n"
+                "배포하면 지금 규칙을 덮어씁니다(콘솔에서 고친 내용 포함). 되돌리려면 이전 파일로 다시 배포해야 합니다.%s\n\n배포할까요?"
+                % (project, local["rules_file"], local["sha256"][:16], warn), icon="warning", parent=self.root):
+            self.log("규칙 배포를 취소했습니다.")
+            return
+        sa = str(self.settings.get("sa_path") or "")
+
+        def work() -> dict:
+            result = commands.rules_deploy(project, sa)
+            self._log_rules(result)
+            out = {k: v for k, v in result.items() if k != "diff"}
+            verified = result.get("verified")
+            if result.get("error") == "deployed_rules_differ":
+                out["_state"] = "배포했지만 배포본이 저장소와 다름 — 로그의 차이 확인"
+            elif result.get("error") == "cli_timeout":
+                out["_state"] = "시간 초과 — 배포됐을 수 있음, ① 대조로 확인"
+            elif result.get("error"):
+                out["_state"] = "배포 안 됨: " + str(result["error"])
+            elif verified:
+                out["_state"] = "반영 확인(배포본 = 저장소) · 적용까지 최대 1~10분"
+            else:
+                out["_state"] = "배포됨 · 반영은 확인 못 함(%s) — ① 대조로 확인" % (result.get("verify_reason") or "확인 불가")
+            return out
+
+        self.run("규칙 배포", work)
+
+    def require_ui(self, key: str) -> str:
+        value = str(self.settings.get(key) or "").strip()
+        if not value:
+            messagebox.showerror("opsarchive", "설정 탭에서 '%s' 를 먼저 넣으세요." % key)
+        return value
 
     # ------------------------------------------------------------ 탭 5: 보관소
     def _tab_store(self, notebook) -> None:
