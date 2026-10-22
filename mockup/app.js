@@ -2455,6 +2455,7 @@ function alarmCard(pr) {
     return `<i class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}" title="${Dt.md(d)}${on ? ' · 학습함' : ''}"></i>`;
   }).join('');
   return `<div class="alarm" data-live="alarm">
+    <div class="sec-title"><h4>학습 현황</h4></div>
     <div class="alarm-h"><span class="alarm-ic">${ALARM_IC}</span>오늘의 알람</div>
     <b class="alarm-big">${n}<i>/${DAY_GOAL}장</i></b>
     <p class="alarm-label">${sub}</p>
