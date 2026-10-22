@@ -340,6 +340,17 @@ class DiagnosticsTest(unittest.TestCase):
         self.assertEqual(sealed[0][0][0], "client_report")
         self.assertEqual(sealed[0][0][3]["client"]["reason"], "still_alive")
 
+    def test_client_reports_env_can_turn_sealing_off(self):
+        """GUI 마인드맵 client_report 노드가 미는 EVIDENCE_CLIENT_REPORTS=0 이면 받기만 하고 봉인하지 않는다."""
+        sealed = []
+        with self._token_patch(), mock.patch.dict(os.environ, {"EVIDENCE_CLIENT_REPORTS": "0"}), mock.patch.object(
+                main, "_seal_in_background", side_effect=lambda *a, **k: sealed.append((a, k))):
+            res = self.client.post("/diagnostics/withdraw", headers={"Authorization": "Bearer signed-token"},
+                                   json={"reason": "still_alive"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), {"received": True})
+        self.assertEqual(sealed, [])
+
     def test_extra_fields_are_ignored(self):
         with self._token_patch():
             res = self.client.post("/diagnostics/withdraw", headers={"Authorization": "Bearer signed-token"},

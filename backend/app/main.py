@@ -1163,7 +1163,8 @@ async def diagnostics_withdraw(request: Request, payload: WithdrawReport) -> dic
     """
     account, _token = await _account_token(request)
     rate_limit(request)
-    _seal_in_background("client_report", account["uid"], [], {"client": payload.model_dump()}, None)
+    if os.getenv("EVIDENCE_CLIENT_REPORTS") != "0":    # 관리자 마인드맵 client_report 노드로 끌 수 있다
+        _seal_in_background("client_report", account["uid"], [], {"client": payload.model_dump()}, None)
     return {"received": True}
 
 

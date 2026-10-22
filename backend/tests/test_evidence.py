@@ -327,6 +327,28 @@ class VerifyErasedTest(unittest.TestCase):
             result = evidence.seal_and_report("erase_failed", uid="uid-on")
         self.assertTrue(result.get("enabled"))
 
+    def test_notify_env_can_turn_off_issue_notification(self):
+        """GUI 마인드맵 issue_notify 노드가 미는 EVIDENCE_NOTIFY=0 이면 토큰·저장소가 있어도 알리지 않는다."""
+        env = {"EVIDENCE_GH_TOKEN": "t", "EVIDENCE_GH_REPO": "o/r", "EVIDENCE_NOTIFY": "0"}
+        with mock.patch.dict(os.environ, env, clear=False), mock.patch.object(evidence.urllib.request, "urlopen") as sent:
+            self.assertFalse(evidence.notify({"archive_id": "a"}))
+        sent.assert_not_called()
+
+    def test_notify_env_default_still_notifies(self):
+        class Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return b"{}"
+        env = {"EVIDENCE_GH_TOKEN": "t", "EVIDENCE_GH_REPO": "o/r"}
+        with mock.patch.dict(os.environ, env, clear=False),                 mock.patch.dict(os.environ, {"EVIDENCE_NOTIFY": "1"}),                 mock.patch.object(evidence.urllib.request, "urlopen", return_value=Resp()) as sent:
+            evidence.notify({"archive_id": "a"})
+        sent.assert_called_once()
+
     def test_verification_failure_does_not_raise(self):
         class Broken:
             def read_tombstone(self, uid):

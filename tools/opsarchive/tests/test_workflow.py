@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import threading
@@ -22,8 +23,8 @@ REQUIRED_IDS = {
     "observe", "iam_check", "pin_check",
     "anchor_interval", "anchor", "verify_chain",
     "include_secrets",
-    # 앱(evidence.py)이 실제로 읽는 변수에 대응하는 새 개념 노드들.
-    "max_bytes", "key_generation", "gh_repo", "max_source_logs",
+    # 앱(evidence.py)이 실제로 읽는 변수에 대응하는 노드들 — 모두 실제 환경변수에 연결된다(개념 노드 없음).
+    "max_bytes", "key_generation", "gh_repo", "gh_token", "pubkey", "max_source_bytes", "max_logs_bytes",
     "iam_check_enabled",
 }
 
@@ -46,7 +47,7 @@ class NodeSchemaTest(unittest.TestCase):
         for node in workflow.NODES:
             for key in ("id", "label", "group", "kind", "default", "desc", "env", "requires", "redeploy"):
                 self.assertIn(key, node, node.get("id"))
-            self.assertIn(node["kind"], ("toggle", "number", "choice", "action"), node["id"])
+            self.assertIn(node["kind"], ("toggle", "number", "choice", "action", "text", "secret", "key"), node["id"])
             self.assertTrue(node["desc"].strip(), node["id"])
 
     def test_choice_nodes_have_options(self):
@@ -95,12 +96,13 @@ class NodeSchemaTest(unittest.TestCase):
         self.assertTrue(generation["redeploy"])
         self.assertIn("핀 세대", generation["desc"])     # 핀 세대와 같아야 한다는 경고
         # 값이 owner/repo 문자열인 노드는 값을 받지 않고 안내만 한다(env 없음).
-        self.assertIsNone(by_id["gh_repo"]["env"])
-        self.assertEqual(by_id["gh_repo"]["kind"], "toggle")
+        self.assertEqual((by_id["gh_repo"]["kind"], by_id["gh_repo"]["env"]), ("text", "EVIDENCE_GH_REPO"))
         self.assertIn("owner/repo", by_id["gh_repo"]["desc"])
-        self.assertIsNone(by_id["max_source_logs"]["env"])
-        self.assertEqual(by_id["max_source_logs"]["kind"], "toggle")
-        self.assertIn("EVIDENCE_MAX_SOURCE_BYTES", by_id["max_source_logs"]["desc"])
+        self.assertEqual((by_id["gh_token"]["kind"], by_id["gh_token"]["env"]), ("secret", "EVIDENCE_GH_TOKEN"))
+        self.assertEqual((by_id["pubkey"]["kind"], by_id["pubkey"]["env"]), ("key", "EVIDENCE_PUBKEY"))
+        self.assertEqual(by_id["max_source_bytes"]["env"], "EVIDENCE_MAX_SOURCE_BYTES")
+        self.assertEqual(by_id["max_logs_bytes"]["env"], "EVIDENCE_MAX_LOGS_BYTES")
+        self.assertEqual((by_id["max_source_bytes"]["default"], by_id["max_logs_bytes"]["default"]), (524288, 65536))
 
 
 class LoadSaveTest(unittest.TestCase):
@@ -221,15 +223,15 @@ class PlanTest(unittest.TestCase):
         with mock.patch.object(workflow, "_load_settings", return_value=dict(SETTINGS)):
             items = workflow.plan(workflow.DEFAULTS)
         by_id = {i["id"]: i for i in items}
-        for node_id in ("anchor_interval", "issue_notify", "client_report"):
-            self.assertFalse(by_id[node_id]["ok"])
+        for node_id in ("anchor_interval", "iam_check_enabled", "gh_token", "pubkey"):
+            self.assertFalse(by_id[node_id]["ok"], node_id)
 
     def test_every_plan_item_has_an_action(self):
         with mock.patch.object(workflow, "_load_settings", return_value=dict(SETTINGS)):
             items = workflow.plan(workflow.DEFAULTS)
         for item in items:
             self.assertIn("action", item)
-            self.assertIn(item["action"], ("run", "env", "info"), item["id"])
+            self.assertIn(item["action"], ("run", "env", "info", "manual"), item["id"])
 
     def test_runnable_nodes_are_action_run(self):
         with mock.patch.object(workflow, "_load_settings", return_value=dict(SETTINGS)):
@@ -251,11 +253,15 @@ class PlanTest(unittest.TestCase):
         with mock.patch.object(workflow, "_load_settings", return_value=dict(SETTINGS)):
             items = workflow.plan(workflow.DEFAULTS)
         by_id = {i["id"]: i for i in items}
-        for node_id in ("anchor_interval", "issue_notify", "gh_repo", "client_report",
-                        "max_source_logs"):
+        for node_id in ("anchor_interval", "iam_check_enabled"):
             self.assertEqual(by_id[node_id]["action"], "info", node_id)
             self.assertFalse(by_id[node_id]["ok"], node_id)
             self.assertEqual(by_id[node_id]["reason"], "안내 노드", node_id)
+        # 예전 개념 노드는 이제 실제 환경변수 노드다
+        for node_id in ("issue_notify", "client_report", "gh_repo", "max_source_bytes", "max_logs_bytes"):
+            self.assertEqual(by_id[node_id]["action"], "env", node_id)
+        for node_id in ("gh_token", "pubkey"):
+            self.assertEqual(by_id[node_id]["action"], "manual", node_id)
 
     def test_env_action_node_is_not_locally_runnable(self):
         # action="env" 인 노드는 run_step 이 실행하지 못한다(즉시 not_runnable) — 계획의 ok 와 실제가 어긋나지 않게 구분한다.
@@ -379,10 +385,118 @@ class PushEnvTest(unittest.TestCase):
         self.assertEqual(fn2.call_args.args, ("codyssey_final", "EVIDENCE_KEY_GENERATION", "3"))
 
     def test_info_nodes_have_no_env(self):
-        for node_id in ("gh_repo", "max_source_logs"):
+        for node_id in ("anchor_interval", "iam_check_enabled"):
             with self.assertRaises(commands.CommandError) as caught:
                 workflow.push_env(node_id, self.policy, service="codyssey_final")
             self.assertEqual(caught.exception.code, "no_env", node_id)
+
+    def test_former_concept_nodes_push_real_env(self):
+        self.policy.update({"issue_notify": False, "client_report": False, "gh_repo": "owner/private-repo"})
+        for node_id, env, value in (("issue_notify", "EVIDENCE_NOTIFY", "0"),
+                                    ("client_report", "EVIDENCE_CLIENT_REPORTS", "0"),
+                                    ("gh_repo", "EVIDENCE_GH_REPO", "owner/private-repo")):
+            with mock.patch.object(workflow.commands, "env_set", return_value={}) as fn:
+                workflow.push_env(node_id, self.policy, service="codyssey_final")
+            self.assertEqual(fn.call_args.args, ("codyssey_final", env, value), node_id)
+
+    def test_secret_is_never_stored_and_key_goes_through_publish(self):
+        self.assertIsNone(workflow._normalize({"gh_token": "ghp_secret"})["gh_token"])   # 정책 파일에 남지 않는다
+        with mock.patch.object(workflow.commands, "env_set", return_value={}) as fn:
+            workflow.push_env("gh_token", self.policy, service="codyssey_final", secret_value="tok")
+        self.assertEqual(fn.call_args.args, ("codyssey_final", "EVIDENCE_GH_TOKEN", "tok"))
+        with self.assertRaises(commands.CommandError) as caught:
+            workflow.push_env("pubkey", self.policy, service="codyssey_final")
+        self.assertTrue(caught.exception.code.startswith("use_publish"))
+
+    def test_bad_repo_text_is_rejected(self):
+        self.assertEqual(workflow._normalize({"gh_repo": "not a repo; rm -rf"})["gh_repo"], "")
+        self.assertEqual(workflow._normalize({"gh_repo": "a/b"})["gh_repo"], "a/b")
+
+
+class FakeRender:
+    """Render 환경변수 저장소 + 재배포 가짜."""
+
+    def __init__(self, env=None, deploy_ok=True, drop=()):
+        self.env = dict(env or {})
+        self.deploy_ok = deploy_ok
+        self.drop = set(drop)          # 재배포 뒤 이 키는 다른 값으로 보인다(반영 실패 흉내)
+        self.puts, self.deploys = [], 0
+
+    def service_id(self, name):
+        return "srv-1"
+
+    def get_env(self, sid, key, api_key_value=None):
+        if self.deploys and key in self.drop:
+            return "other"
+        return self.env.get(key)
+
+    def put_env(self, sid, key, value, api_key_value=None):
+        self.puts.append(key)
+        self.env[key] = value
+
+    def deploy(self, sid, timeout=300):
+        self.deploys += 1
+        return {"ok": self.deploy_ok, "note": "재배포 완료" if self.deploy_ok else "실패"}
+
+
+class ApplyEnvTest(unittest.TestCase):
+    def setUp(self):
+        self.policy = workflow.load("missing-workflow.json")
+
+    def run_apply(self, fake, **kw):
+        from opsarchive import render
+        with mock.patch.multiple(render, service_id=fake.service_id, get_env=fake.get_env, put_env=fake.put_env,
+                                 deploy=fake.deploy), \
+             mock.patch.object(workflow.commands, "health", return_value={"status": "ok", "evidence": {"generation": 1}}):
+            return workflow.apply_env(self.policy, service="codyssey_final", base_url="https://x", **kw)
+
+    def test_only_changed_values_are_pushed_then_one_redeploy_and_verified(self):
+        current = workflow.desired_env(self.policy)
+        current["EVIDENCE_DAILY_CAP"] = "9"            # Render 에는 옛 값
+        fake = FakeRender(current)
+        out = self.run_apply(fake)
+        self.assertEqual(fake.puts, ["EVIDENCE_DAILY_CAP"])
+        self.assertEqual(fake.deploys, 1)
+        self.assertTrue(out["verified"])
+        self.assertNotIn("error", out)
+
+    def test_nothing_changed_means_no_redeploy(self):
+        fake = FakeRender(workflow.desired_env(self.policy))
+        out = self.run_apply(fake)
+        self.assertEqual((fake.puts, fake.deploys, out["verified"]), ([], 0, True))
+
+    def test_value_not_applied_after_redeploy_is_an_error(self):
+        fake = FakeRender({}, drop={"EVIDENCE_TTL_DAYS"})
+        out = self.run_apply(fake)
+        self.assertFalse(out["verified"])
+        self.assertIn("EVIDENCE_TTL_DAYS", out["error"])
+
+    def test_failed_redeploy_is_not_verified(self):
+        out = self.run_apply(FakeRender({}, deploy_ok=False))
+        self.assertTrue(out["error"].startswith("redeploy_unconfirmed"))
+
+    def test_generation_mismatch_on_health_is_caught(self):
+        self.policy["key_generation"] = 2
+        fake = FakeRender({})
+        out = self.run_apply(fake)
+        self.assertIn("EVIDENCE_KEY_GENERATION(/health)", out["mismatch"])
+
+    def test_values_only_without_redeploy(self):
+        fake = FakeRender({})
+        out = self.run_apply(fake, redeploy=False)
+        self.assertEqual(fake.deploys, 0)
+        self.assertIsNone(out["verified"])
+        self.assertIn("재배포", out["note"])
+
+    def test_secret_value_is_pushed_but_not_reported(self):
+        fake = FakeRender(workflow.desired_env(self.policy))
+        out = self.run_apply(fake, node_ids=[], secrets={"EVIDENCE_GH_TOKEN": "ghp_xyz"})
+        self.assertEqual(fake.env["EVIDENCE_GH_TOKEN"], "ghp_xyz")
+        self.assertEqual(out["changed"], ["EVIDENCE_GH_TOKEN(비밀)"])
+        self.assertNotIn("ghp_xyz", json.dumps(out, ensure_ascii=False))
+
+    def test_empty_text_node_is_not_pushed(self):
+        self.assertNotIn("EVIDENCE_GH_REPO", workflow.desired_env(self.policy))    # 빈 저장소 이름으로 덮지 않는다
 
 
 class AutomationLoopTest(unittest.TestCase):

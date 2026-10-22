@@ -19,6 +19,10 @@
 - `EVIDENCE_MAX_BYTES` / `EVIDENCE_MAX_SOURCE_BYTES` / `EVIDENCE_MAX_LOGS_BYTES` : 하드 캡.
 - `EVIDENCE_PER_UID_SECONDS`(기본 3600) / `EVIDENCE_DAILY_CAP`(기본 5) : 남용 방지.
 - `EVIDENCE_TTL_DAYS`(기본 90) : Firestore TTL(`expire_at`) — 이 기간이 지나면 자동 삭제된다.
+- `EVIDENCE_SEAL_FAILURES`(기본 켜짐, "0" 이면 끔) : 탈퇴 실패 증거를 봉인할지.
+- `EVIDENCE_NOTIFY`(기본 켜짐, "0" 이면 끔) : 봉인하면 GitHub 이슈로 알릴지(토큰·저장소가 있어도 끌 수 있다).
+- `EVIDENCE_CLIENT_REPORTS`(기본 켜짐, "0" 이면 끔) : 화면이 보낸 탈퇴 불일치 보고(`/diagnostics/withdraw`)를 봉인할지.
+  위 셋은 관리자 GUI 마인드맵(seal_failures·issue_notify·client_report 노드)이 Render 환경변수로 민다.
 """
 
 from __future__ import annotations
@@ -471,6 +475,8 @@ def store(blob: bytes, meta: dict[str, Any]) -> dict[str, Any]:
 
 def notify(document: dict[str, Any]) -> bool:
     """GitHub 이슈로 **메타데이터만** 보낸다(본문·키 없음). 토큰/리포가 없으면 건너뛴다."""
+    if os.getenv("EVIDENCE_NOTIFY") == "0":
+        return False                     # 관리자 마인드맵 issue_notify 노드로 껐다
     token = (os.getenv("EVIDENCE_GH_TOKEN") or "").strip()
     repo = (os.getenv("EVIDENCE_GH_REPO") or "").strip()
     if not token or not repo:
