@@ -1895,6 +1895,9 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 }
 .appbar, .pnav { background-image: linear-gradient(180deg, var(--glass-spec) 0%, transparent 60%); }
 .demo-fab, .toast { box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-spec); }
+/* 유리 면은 --surface 를 따라 밝아지므로(다크에선 어두워짐) 글자도 --text 로. 원래의 진한 면용 흰 글자(--on-fill·--inv-text)를 두면
+   라이트에서 흰 글자가 흰 유리 위에 놓인다 — '이 화면에 필요한 데이터를 자동으로 준비했어요' 토스트. */
+.demo-fab, .toast { color: var(--text); }
 
 /* 접근성 대체: 투명도·대비·모션 */
 @media (prefers-reduced-transparency: reduce) {

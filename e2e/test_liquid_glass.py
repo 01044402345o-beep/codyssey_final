@@ -146,6 +146,11 @@ with sync_playwright() as p:
         check(f"대비 {label} {r}:1 (>= {want})", r >= want, str(r))
     check("탭바 글자 대비 4.5:1 이상", contrast(pg, ".pnav button") >= 4.5,
           str(contrast(pg, ".pnav button")))
+    # 유리 위 글자: 토스트·데모 버튼이 진한 면용 흰 글자를 그대로 두면 밝은 유리 위에서 안 보인다
+    pg.evaluate("toast('이 화면에 필요한 데이터를 자동으로 준비했어요.')"); pg.wait_for_timeout(250)
+    for sel, label in ((".toast", "토스트"), (".demo-fab", "데모 버튼")):
+        r = contrast(pg, sel)
+        check(f"유리 위 {label} 글자 대비 {r}:1 (>= 4.5)", r >= 4.5, str(r))
 
     # ── 접근성 대체 ──
     cc = b.new_context(viewport={"width": 390, "height": 844}, contrast="more")
@@ -179,6 +184,10 @@ with sync_playwright() as p:
     for sel, label in ((".alarm-big", "큰 숫자"), (".alarm-label", "라벨"), (".alarm-meta", "메타")):
         r = contrast(pd, sel)
         check(f"다크 대비 {label} {r}:1 (>= 4.5)", r >= 4.5, str(r))
+    pd.evaluate("toast('이 화면에 필요한 데이터를 자동으로 준비했어요.')"); pd.wait_for_timeout(250)
+    for sel, label in ((".toast", "토스트"), (".demo-fab", "데모 버튼")):
+        r = contrast(pd, sel)
+        check(f"다크 유리 위 {label} 글자 대비 {r}:1 (>= 4.5)", r >= 4.5, str(r))
     cd.close()
 
     # ── 레이아웃 회귀 ──
