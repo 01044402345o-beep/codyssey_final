@@ -2389,24 +2389,15 @@ function scrHome() {
     hero = `<button type="button" class="hero" data-act="edit-trip" aria-label="여행 설정 수정"><span class="route">${esc(tripTitle(t))}</span><span class="big">D-${Dt.diff(t.tripStart, S.today)}<small>여행까지</small></span>
       <span class="dates">여행 ${Dt.md(t.tripStart)}~${Dt.md(t.tripEnd)} · 학습 종료 ${Dt.md(t.tripEnd)}</span><span class="hero-edit">여행 설정 수정 ›</span></button>`;
   }
-
-  const spacer = `<br>`;
-  let final_spacer = spacer; 
-   
-  return frame(`
-    <div class="sec-title">
-      ${final_spacer}
-    </div>
-  `, { tabbar: true });
-
   const r = S.sched.find(x => x.date === S.today);
   let today;
   if (!r) {
     const first = S.sched[0];
-    today = `<div class="today-card"><div class="top"><span class="badge k-free">학습 전</span></div><h3>학습은 ${Dt.full(first.date)}부터 시작해요</h3>
+    today = `<br><div class="today-card"><div class="top"><span class="badge k-free">학습 전</span></div><h3>학습은 ${Dt.full(first.date)}부터 시작해요</h3>
       <p class="sub" style="font-size:0.8125rem">첫날 학습 · ${describe(first)}문장</p><button class="btn soft block" style="margin-top:12px" data-act="study-date" data-date="${first.date}">첫날 카드 미리 보기</button></div>`;
   } else {
     const st = rowStatus(r), n = r.ids.length;
+    today = `<br>`
     const title = r.kind === 'free' ? '오늘은 자유 일정이에요' : r.kind === 'new' ? `새 문장 ${n}개` : r.kind === 'trip' ? `오늘 장소 문장 ${n}개` : `${KIND[r.kind].label} · 문장 ${n}개`;
     today = `<div class="today-card"><div class="top"><span class="badge ${KIND[r.kind].cls}">${KIND[r.kind].label}</span>${st === 'done' ? '<span class="st done">완료</span>' : ''}</div>
       <h3>${title}</h3><p class="sub" style="font-size:0.8125rem">${describe(r)}</p>
