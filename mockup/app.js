@@ -486,7 +486,7 @@ function resumeScreen() {
   }
   navFromMenu(dest);
   if (RESTORE.studyDate) S.studyDate = RESTORE.studyDate;
-  if (RESTORE.card) S.card = { date: RESTORE.card.date, i: RESTORE.card.i, back: RESTORE.card.back, flipped: new Set(RESTORE.card.flipped) };
+  if (RESTORE.card) S.card = { date: RESTORE.card.date, i: RESTORE.card.i, back: RESTORE.card.back, flipped: new Set(RESTORE.card.flipped), alarm: false };
   render();
   SESS_READY = true;
   skipStateWrite = false;
@@ -2410,7 +2410,6 @@ function scrHome() {
     <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 12px"><div><div class="small">안녕하세요</div><b style="font-size:1.125rem">${esc(userName())}${isGuest() ? '' : '님'}</b></div><span class="badge t-norm">${STATUS_KO[t.status]}</span></div>
     ${hero}<div style="height:12px"></div>${today}
     ${pr.miss ? `<div style="height:10px"></div>${notice(`지난 학습 ${pr.miss}일이 미완료예요. 일정표에서 여행 종료일까지 언제든 채울 수 있어요.`, 'warn')}` : ''}
-    ${alarmCard(pr)}
     ${upcoming.length ? `<div class="sec-title"><h4>다가오는 일정</h4></div>${upcoming.map(srow).join('')}` : ''}
     ${themeCard()}
     ${privacyCard()}
@@ -2443,7 +2442,7 @@ function bumpAct() {
    값은 알람의 '시간' 자리에 오늘 목표(n/10)를, 라벨 자리에 안내 문구를, 버튼 자리에
    '학습 시작'을 둔다. 목록·토글이 아니라 알람 카드 자체다. 배경은 알람처럼 어두운 면을 쓴다. */
 const ALARM_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="13.5" r="7.2"/><path d="M12 10v3.8l2.4 1.6M4.6 4.2 7 2.4M19.4 4.2 17 2.4"/></svg>';
-function alarmCard(pr) {
+function alarmCard(pr, o = {}) {
   const n = actToday(), done = n >= DAY_GOAL, st = streakDays();
   const r = S.sched.find(x => x.date === S.today);
   const date = r ? r.date : S.today;
@@ -2462,7 +2461,9 @@ function alarmCard(pr) {
     <div class="alarm-week" role="group" aria-label="최근 7일">${week}</div>
     <div class="alarm-meta"><span>🔥 연속 ${st}일</span><span aria-hidden="true">·</span><span>여행 전체 ${Math.round(pr.rate * 100)}%</span></div>
     <div class="alarm-acts">
-      <button class="alarm-primary" data-act="study-date" data-date="${date}">${done ? '다시 보기' : '학습 시작'}</button>
+      ${o.inDeck
+        ? `<button class="alarm-primary" data-act="alarm-next">${done ? '다시 보기' : '학습 시작'}</button>`
+        : `<button class="alarm-primary" data-act="study-date" data-date="${date}">${done ? '다시 보기' : '학습 시작'}</button>`}
       <button class="alarm-second" data-act="tab" data-id="u-sched">일정표 열기</button>
     </div>
   </div>`;
@@ -2701,7 +2702,16 @@ function studyView(r, opts = {}) {
       <button class="btn primary block" data-act="tab" data-id="u-home">홈으로</button><div style="height:8px"></div>
       <button class="btn soft block" data-act="restudy">다시 보기</button></div>`, bottom: '', tabbar: true };
   }
-  const i = Math.min(S.card.i, r.ids.length - 1), s = S.smap[r.ids[i]];
+  if (deckAlarmOn(r)) {   // 덱의 첫 장 — 알람 카드. 뒤집기·진도 집계 없음
+    const pr = progress(), total = deckLen(r);
+    return { inner: `<div class="app-pad">${head}${banner ? banner + '<div style="height:10px"></div>' : ''}
+      ${alarmCard(pr, { inDeck: true })}
+      <div class="card-nav"><button class="round" data-act="card-prev" disabled>${I.back}</button>
+        <div style="text-align:center"><div class="dots">${r.ids.map((_, k) => `<i class="${k === 0 ? 'cur' : ''}"></i>`).join('')}</div>
+        <div class="small" style="margin-top:6px" data-live="flipcount">오늘의 알람 · 문장 ${r.ids.length}개 · 덱 1/${total}</div></div>
+        <button class="round" data-act="card-next">${I.next}</button></div></div>`, bottom: '', tabbar: false };
+  }
+  const i = deckIdx(r), s = S.smap[r.ids[i]];
   const isNew = r.kind === 'new' || (r.newIds || []).includes(s.id);
   const pl = s.placeId ? S.places.find(p => p.id === s.placeId) : null;
   const tag = s.source !== 'place' ? `<span class="badge t-norm">공통 · ${s.sitLabel}</span>` : `<span class="badge ${pl.kind === 'attraction' ? 't-dep' : 't-arr'}">${esc(pl.name)}</span>`;
@@ -2719,16 +2729,18 @@ function studyView(r, opts = {}) {
           <div class="en" data-read>${enHtml(s.en)}</div><div class="ko-s">${phHtml(s.ko)}</div>${tts}</div>
       </div>
     </div>
-    <div class="card-nav"><button class="round" data-act="card-prev" ${i === 0 ? 'disabled' : ''}>${I.back}</button>
+    <div class="card-nav"><button class="round" data-act="card-prev" ${deckPos(r) <= 0 ? 'disabled' : ''}>${I.back}</button>
       <div style="text-align:center"><div class="dots">${r.ids.map((_, k) => `<i class="${S.card.flipped.has(k) ? 'seen' : ''} ${k === i ? 'cur' : ''}"></i>`).join('')}</div>
       <div class="small" style="margin-top:6px" data-live="flipcount">${i + 1} / ${r.ids.length} · 뒤집은 카드 ${S.card.flipped.size}</div></div>
-      <button class="round" data-act="card-next" ${i === r.ids.length - 1 ? 'disabled' : ''}>${I.next}</button></div>
+      <button class="round" data-act="card-next" ${deckPos(r) >= deckLen(r) - 1 ? 'disabled' : ''}>${I.next}</button></div>
   </div>`;
   return { inner, bottom: `<button class="btn accent block" data-act="sheet-open" aria-haspopup="dialog">↑ 회화 연습 열기</button>`, tabbar: false };
 }
 /* 하단 '회화 연습' 시트(Leechangjin 님 목업 #97): 내 문장 + 말해보기, 상대의 예상 답변, 내가 이어서 할 말.
    공통 문장에만 예상 답변(talk)이 있다. 장소 문장은 말해보기만 보인다. */
-const curSent = () => { const r = studyShown() && pickRow(); return r ? S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]] : null; };
+const curSent = () => { const r = studyShown() && pickRow();
+  if (!r || deckAlarmOn(r)) return null;
+  return S.smap[r.ids[deckIdx(r)]]; };
 /* 시트의 한 줄: ask(상대가 먼저) · r0/r1(예상 답변) · next(내가 이어서) · a0/a1(다른 표현, Thesaurus 처럼) */
 function talkLine(s, k) {
   const t = s && s.talk;
@@ -2770,6 +2782,26 @@ function closeSheet() {
   if (SPK.state === 'recording' || SPK.state === 'requesting') cancelSpeak();   // 닫으면 녹음도 멈춘다
   render();
 }
+/* 알람 카드는 덱의 첫 장이다. '학습' 탭으로 들어왔을 때만 덱에 들어간다 —
+   일정표·문장 모음에서 들어온 학습 화면은 날짜 학습·상황 연습이라 맥락이 다르다.
+   이 카드는 진도에 들어가지 않는다: S.card.flipped 에 쌓이지 않고, 뒤집은 카드 수·
+   완료 판정(r.ids.length)에도 포함되지 않는다. PROG 도 쓰지 않는다.
+   S.card.i 는 언제나 '문장' 번호다. 알람을 보고 있는지는 S.card.alarm(기본 켜짐)으로 따로 둔다 —
+   덱 위치를 i 에 섞으면, 알람이 붙는지(입구·화면)가 바뀔 때 보던 문장이 한 칸씩 밀린다
+   (예: 넓은 화면에서 학습 탭 → 일정표 오른쪽 상세, 같은 날짜를 일정표에서 다시 열기). */
+const studyEntryIsTab = () => !S.drill && S.studyEntry === 'tab';
+const alarmFirst = r => !!r && r.kind !== 'drill' && S.screen === 'u-study' && studyEntryIsTab();
+const deckOffset = r => (alarmFirst(r) ? 1 : 0);
+const deckLen = r => r.ids.length + deckOffset(r);
+const deckAlarmOn = r => alarmFirst(r) && S.card.alarm !== false;
+const deckIdx = r => Math.max(0, Math.min(S.card.i, r.ids.length - 1));      // 보고 있는(또는 다음에 볼) 문장 번호
+const deckPos = r => (deckAlarmOn(r) ? 0 : deckIdx(r) + deckOffset(r));       // 덱 안 위치(알람 = 0)
+function deckStep(r, d) {   // 덱에서 한 장 앞(+1)/뒤(-1)
+  if (d > 0) { if (deckAlarmOn(r)) S.card.alarm = false; else S.card.i = Math.min(r.ids.length - 1, deckIdx(r) + 1); return; }
+  if (deckAlarmOn(r)) return;
+  if (deckIdx(r) === 0 && alarmFirst(r)) S.card.alarm = true; else S.card.i = Math.max(0, deckIdx(r) - 1);
+}
+
 function scrStudy() {
   if (S.drill) {   // 상황별 연습: 넓은 화면에서도 일정 목록 없이 카드만 (뒤로 → 문장 모음)
     const v = studyView(S.drill);
@@ -2821,8 +2853,11 @@ function completeBtn(r) {
 function updateStudyLive() {
   const r = pickRow(); if (!r) return;
   const dots = document.querySelectorAll('.dots i');
-  dots.forEach((d, k) => d.classList.toggle('seen', S.card.flipped.has(k)));
-  const fc = $('[data-live=flipcount]'); if (fc) fc.textContent = `${Math.min(S.card.i, r.ids.length - 1) + 1} / ${r.ids.length} · 뒤집은 카드 ${S.card.flipped.size}`;
+  dots.forEach((d, k) => { d.classList.toggle('seen', S.card.flipped.has(k)); d.classList.toggle('cur', k === deckIdx(r) && !deckAlarmOn(r)); });
+  const fc = $('[data-live=flipcount]');
+  if (fc) fc.textContent = deckAlarmOn(r)
+    ? `오늘의 알람 · 문장 ${r.ids.length}개 · 덱 1/${deckLen(r)}`
+    : `${deckIdx(r) + 1} / ${r.ids.length} · 뒤집은 카드 ${S.card.flipped.size}`;
   const st = $('[data-live=status]'); if (st) st.innerHTML = completeBtn(r);
 }
 
@@ -3495,7 +3530,7 @@ function updateSpeakUi() {
   if (TALK.on) updateTalkUi();
   const r = studyShown() && pickRow();
   if (!r) return;
-  const s = S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]];
+  const s = S.smap[r.ids[deckIdx(r)]];
   if (!s) return;
   const f = document.activeElement && document.activeElement.closest && document.activeElement.closest('[data-live="speak-btn"]') ? document.activeElement.closest('[data-live="speak-btn"]').dataset.k : null;
   document.querySelectorAll('[data-live="speak-btn"]').forEach(el => { el.innerHTML = speakBtnHtml(s, el.dataset.k); });
@@ -3517,7 +3552,7 @@ async function toggleSpeak(opt) {
   if (SPK.state === 'requesting' || SPK.state === 'uploading') return;      // 중복 요청 방지
   if (SPK.state === 'recording') { stopSpeak(); return; }
   if (!voiceConsent().voice) { askVoiceConsent(opt ? () => toggleSpeak(opt) : null); return; }   // 동의 전에는 마이크도 열지 않는다
-  const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]]; if (!s) return;
+  const r = pickRow(); const s = r && S.smap[r.ids[deckIdx(r)]]; if (!s) return;
   cancelSpeak();
   if (ttsSupported()) { try { speechSynthesis.cancel(); } catch (e) { /* 이미 멈춤 */ } }   // 원어민 듣기가 녹음에 섞이지 않게
   const tok = SPK.tok; SPK.sid = s.id; SPK.line = (opt && opt.line) || 'me'; SPK.state = 'requesting'; updateSpeakUi();
@@ -4063,7 +4098,7 @@ const ACT = {
   tab: el => {
     const id = el.dataset.id;
     if (['u-home', 'u-sched', 'u-study', 'u-coll', 'u-route'].includes(id) && !S.plan) { navFromMenu(id); return; }
-    if (id === 'u-study') { S.studyDate = null; endDrill(); }
+    if (id === 'u-study') { S.studyDate = null; S.studyEntry = 'tab'; endDrill(); S.card.alarm = true; }
     S.justCompleted = null; go(id);
   },
   noop: () => {},
@@ -4107,7 +4142,7 @@ const ACT = {
       render(); renderDemo(); toast(ok ? '복습 목록을 지웠어요.' : '브라우저 저장소에 접근하지 못했어요.');
     }, { danger: true }),
   'weak-save': () => {
-    const r = pickRow(); const s = r && S.smap[r.ids[Math.min(S.card.i, r.ids.length - 1)]];
+    const r = pickRow(); const s = r && S.smap[r.ids[deckIdx(r)]];
     if (!s || SPK.sid !== s.id || !SPK.result || !SPK.result.offer) return;       // 다른 카드·취소된 결과에는 저장하지 않는다
     saveWeakList(AI.upsertWeak(weakList(), weakItem(s)));
     SPK.result = { ...SPK.result, offer: false, saved: true, savedBy: 'user' }; updateSpeakUi(); renderDemo(); toast('복습 목록에 저장했어요.');
@@ -4320,18 +4355,24 @@ const ACT = {
     confirmBox('장소를 확정할까요?', `선택한 ${n}곳으로 방문 순서와 문장을 만들어요. 확정한 뒤에는 장소를 바꿀 수 없어요.`, '확정하기', () => { S.modal = null; S.trip.status = 'route_requested'; request('route'); });
   },
 
+  'alarm-next': () => { const r = pickRow(); if (!r) return; deckStep(r, 1); render(); },
   'study-date': el => {
+    if (S.screen !== 'u-study') S.studyEntry = 'list';
     S.studyDate = el.dataset.date; S.justCompleted = null; endDrill();
     if (isWide() && (S.screen === 'u-sched' || S.screen === 'u-study')) { go(S.screen); window.scrollTo(0, 0); }   // 2열: 화면은 그대로, 오른쪽 상세만 바뀐다
     else go('u-study');
   },
   flip: el => {
+    const r0 = pickRow();
+    if (r0 && deckAlarmOn(r0)) {   // 알람 카드는 뒤집는 카드가 아니다 — 다음 장으로 넘긴다
+      deckStep(r0, 1); render(); return;
+    }
     el.classList.toggle('flipped');
     // 보고 있는 면을 기억한다. 동의 창 등으로 화면을 다시 그려도 카드가 앞면으로 돌아가지 않게.
     S.card.back = el.classList.contains('flipped') ? S.card.i : null;
     if (el.classList.contains('flipped')) {
-      const r = pickRow(), before = S.card.flipped.size;
-      S.card.flipped.add(S.card.i); updateStudyLive();
+      const r = pickRow(), k = deckIdx(r), before = S.card.flipped.size;
+      S.card.flipped.add(k); updateStudyLive();
       if (S.card.flipped.size > before) bumpAct();   // 이 카드를 이번에 처음 뒤집었다 → 오늘 활동 +1
       if (r && before < r.ids.length && S.card.flipped.size >= r.ids.length) allFlipped(r);   // 방금 다 뒤집었다
     }
@@ -4348,9 +4389,9 @@ const ACT = {
     mineAudio.onended = mineAudio.onpause = mineAudio.onerror = done;
     mineAudio.play().catch(() => { done(); toast('이 브라우저에서는 녹음을 다시 재생하지 못했어요.'); });
   },
-  'card-prev': () => { cancelSpeak(); S.sheet = false; S.card.i = Math.max(0, S.card.i - 1); render(); },
-  'card-next': () => { cancelSpeak(); S.sheet = false; const r = pickRow(); S.card.i = Math.min(r.ids.length - 1, S.card.i + 1); render(); },
-  'speak-card': el => { const r = pickRow(); speak(S.smap[r.ids[S.card.i]].en, el, readTarget(el)); },
+  'card-prev': () => { cancelSpeak(); S.sheet = false; const r = pickRow(); if (r) deckStep(r, -1); render(); },
+  'card-next': () => { cancelSpeak(); S.sheet = false; const r = pickRow(); if (r) deckStep(r, 1); render(); },
+  'speak-card': el => { const r = pickRow(); speak(S.smap[r.ids[deckIdx(r)]].en, el, readTarget(el)); },
   speak: el => speak(S.smap[el.dataset.id].en, el, readTarget(el)),
   'live-start': () => { loadLiveProviders(); startLive(); },
   'live-engine': el => { LIVE.pick = el.dataset.v; try { localStorage.setItem(INTERP_PROVIDER_KEY, LIVE.pick); } catch (e) { /* 저장소 막힘 */ } updateLiveUi(); },
@@ -4448,6 +4489,7 @@ const ACT = {
     if (!ids.length) return;
     const label = by === 'sit' ? S.commons.find(g => g.key === v).label : S.places.find(p => p.id === v).name;
     endDrill();
+    S.studyEntry = 'drill';
     S.drill = { kind: 'drill', date: `drill:${by}:${v}`, label, ids, newIds: [], completed: false, savedCard: S.card };
     S.justCompleted = null; resetCard(S.drill.date); go('u-study'); window.scrollTo(0, 0);
   },

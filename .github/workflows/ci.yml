@@ -125,6 +125,7 @@ jobs:
           python ../e2e/test_home_alarm.py http://localhost:8768   # 홈 '오늘의 알람' 카드: 아이콘·큰 숫자·라벨·버튼 순서, 0/4/10장 문구, 학습/일정표 이동, 넘침 없음
           python ../e2e/test_liquid_glass.py http://localhost:8768   # 재질: 탭바·앱바만 실제 blur, 카드는 blur 없음, 대비, 접근성 대체(투명도·대비)
           python ../e2e/test_material_scope.py http://localhost:8768   # 재질 역할(raised·tinted·ink·glass)을 화면마다: 카드 blur 0, 경계 토큰, ink 면 1개 이하
+          python ../e2e/test_alarm_study.py http://localhost:8768   # 학습 탭 덱 첫 장 = 오늘의 알람(진도 미반영), 입구별 노출, 입구가 바뀌어도 같은 문장, 유동 패딩
       - uses: actions/upload-artifact@v4
         if: always()
         with:
