@@ -2392,7 +2392,12 @@ function scrHome() {
 
   const spacer = `<br>`;
   let final_spacer = spacer; 
-  console.log(final_spacer);
+   
+  return frame(`
+    <div class="sec-title">
+      ${final_spacer}
+    </div>
+  `, { tabbar: true });
 
   const r = S.sched.find(x => x.date === S.today);
   let today;
