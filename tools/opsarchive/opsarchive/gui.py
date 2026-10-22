@@ -25,7 +25,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from . import commands, config, container as C, entropy, firebase, gcp, pins, render, workflow
+from . import commands, config, container as C, entropy, firebase, gcp, pins, render, users, workflow
 
 ENV_FIELDS = ["RENDER_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS", "EVIDENCE_GH_TOKEN",
               "EVIDENCE_GH_REPO"]
@@ -102,6 +102,9 @@ class App:
                 continue
             if tag == "status":
                 self.status_var.set(text)          # 메인 창 아래 상태 줄(로그 창이 닫혀 있어도 보인다)
+                continue
+            if tag == "users":
+                self._fill_users()                 # 워커가 불러온 사용자 목록·상세를 메인 스레드에서 반영
                 continue
             if tag == "services":
                 # 워커 스레드가 불러온 서비스 목록을 메인 스레드에서 창에 반영한다(Tk 규칙).
@@ -383,6 +386,7 @@ class App:
         self._tab_keys(notebook)
         self._tab_render(notebook)
         self._tab_rules(notebook)
+        self._tab_users(notebook)
         self._tab_store(notebook)
         self._tab_verify(notebook)
 
@@ -1377,6 +1381,253 @@ class App:
         if not value:
             messagebox.showerror("opsarchive", "설정 탭에서 '%s' 를 먼저 넣으세요." % key)
         return value
+
+    # ------------------------------------------------------------ 탭: 사용자 데이터
+    def _tab_users(self, notebook) -> None:
+        frame = self._frame(notebook, "사용자 데이터")
+        ttk.Label(frame, text="계정별 기록(users/{uid})을 찾아보고 관리합니다. 개인정보입니다 — 사용자의 요청(열람·삭제)이나 장애 대응 때만 여세요.\n"
+                              "상세 보기·통역 기록 내용·내보내기·삭제는 사유를 받아 이 PC의 열람 기록(~/.opsarchive/access-log.jsonl)에 남깁니다. "
+                              "계정 삭제(탈퇴)는 여기서 하지 않습니다 — 앱의 탈퇴 흐름을 쓰세요.",
+                  wraplength=840, foreground="#a60", justify="left").pack(anchor="w", padx=10, pady=(8, 4))
+        bar = ttk.Frame(frame)
+        bar.pack(fill="x", padx=10, pady=4)
+        ttk.Label(bar, text="uid 또는 이메일").pack(side="left")
+        self.user_query = tk.StringVar(value="")
+        entry = ttk.Entry(bar, textvariable=self.user_query, width=42)
+        entry.pack(side="left", padx=6)
+        entry.bind("<Return>", lambda _e: self.do_user_find())
+        ttk.Button(bar, text="찾기", command=self.do_user_find).pack(side="left", padx=2)
+        ttk.Button(bar, text="목록 새로 고침", command=self.do_user_list).pack(side="left", padx=2)
+        self.user_count = tk.StringVar(value="")
+        ttk.Label(bar, textvariable=self.user_count, foreground="#06c").pack(side="left", padx=10)
+
+        columns = ("uid", "updated", "days", "weak", "trip", "ilog", "consent")
+        titles = {"uid": "uid", "updated": "최근 변경", "days": "학습일", "weak": "복습",
+                  "trip": "여행", "ilog": "통역 기록", "consent": "통역 저장 동의"}
+        self.user_tree = ttk.Treeview(frame, columns=columns, show="headings", height=8)
+        for name in columns:
+            self.user_tree.heading(name, text=titles[name])
+            self.user_tree.column(name, width=230 if name == "uid" else 95, anchor="w")
+        self.user_tree.pack(fill="both", expand=True, padx=10, pady=4)
+        self.user_tree.bind("<<TreeviewSelect>>", self._on_pick_user)
+
+        acts = ttk.Frame(frame)
+        acts.pack(fill="x", padx=10, pady=2)
+        self.user_pick = tk.StringVar(value="")
+        ttk.Label(acts, text="선택:").pack(side="left")
+        ttk.Label(acts, textvariable=self.user_pick, width=34).pack(side="left", padx=4)
+        for text, cmd in (("상세 보기", self.do_user_detail), ("통역 기록 내용", self.do_user_ilog),
+                          ("JSON 내보내기", self.do_user_export), ("통역 기록 삭제", self.do_user_delete_ilog),
+                          ("열람 기록", self.do_user_audit)):
+            ttk.Button(acts, text=text, command=cmd).pack(side="left", padx=2)
+
+        self.user_text = tk.Text(frame, height=12, wrap="word", state="disabled")
+        self.user_text.pack(fill="both", expand=True, padx=10, pady=(4, 8))
+        self.user_rows: list = []
+        self.user_detail_text = ""
+
+    def _on_pick_user(self, _event=None) -> None:
+        selection = self.user_tree.selection()
+        if selection:
+            values = self.user_tree.item(selection[0], "values")
+            if values:
+                self.user_pick.set(values[0])
+
+    def _fill_users(self) -> None:
+        """사용자 표·상세 칸을 다시 채운다(메인 스레드에서만 — Tk 규칙)."""
+        if not hasattr(self, "user_tree"):
+            return
+        for item in self.user_tree.get_children():
+            self.user_tree.delete(item)
+        for r in self.user_rows:
+            self.user_tree.insert("", "end", values=(
+                r["uid"], r["updated"], r["study_days"], r["weak"], "있음" if r["trip"] else "—",
+                ("%d대화·%d문장" % (r["ilog_sessions"], r["ilog_lines"])) if r["ilog_sessions"] else "—",
+                "동의" if r["ilog_consent"] else "—"))
+        self.user_count.set("%d명" % len(self.user_rows) if self.user_rows else "")
+        self.user_text.configure(state="normal")
+        self.user_text.delete("1.0", "end")
+        self.user_text.insert("end", self.user_detail_text)
+        self.user_text.configure(state="disabled")
+
+    def _users(self) -> "users.Users":
+        return users.Users(self.require("project_id"), self.require("sa_path"))
+
+    def _picked_uid(self) -> str:
+        uid = (self.user_pick.get() or "").strip()
+        if not uid:
+            messagebox.showinfo("opsarchive", "표에서 사용자를 고르거나 위에서 찾으세요.")
+        return uid
+
+    def _ask_reason(self, what: str) -> str:
+        reason = simpledialog.askstring("사유 입력", "%s 사유를 적어 주세요(열람 기록에 남습니다).\n예: 사용자 열람 요청 10/22, 장애 #123" % what,
+                                        parent=self.root) or ""
+        if len(" ".join(reason.split())) < 2:
+            if reason:
+                messagebox.showinfo("opsarchive", "사유를 두 글자 이상 적어 주세요.")
+            return ""
+        return reason
+
+    def _show_user_text(self, text: str) -> None:
+        self.user_detail_text = text
+        self.log_queue.put(("users", ""))
+
+    def do_user_list(self) -> None:
+        def work() -> dict:
+            rows = self._users().list_users()
+            self.user_rows = rows
+            self._show_user_text("목록에는 요약만 나옵니다. 줄을 고르고 [상세 보기] 를 누르세요.")
+            return {"사용자": "%d명" % len(rows)}
+
+        self.run("사용자 목록", work)
+
+    def do_user_find(self) -> None:
+        query = (self.user_query.get() or "").strip()
+        if not query:
+            return
+
+        def work() -> dict:
+            uid = users.find_uid(self.require("project_id"), self.require("sa_path"), query)
+            store = self._users()
+            doc = store.get(uid)
+            self.user_rows = [users.summarize(uid, doc)] if doc else []
+            self.user_pick_value = uid
+            self._show_user_text(("찾음: %s — [상세 보기] 로 자세히 봅니다." % uid) if doc else
+                                 "uid %s 의 계정 기록 문서가 없습니다(로그인 기록이 없거나 탈퇴)." % uid)
+            return {"uid": uid, "문서": "있음" if doc else "없음"}
+
+        self.run("사용자 찾기", work)
+        self.root.after(300, self._apply_found_pick)
+
+    def _apply_found_pick(self) -> None:
+        if self.busy:
+            self.root.after(300, self._apply_found_pick)
+            return
+        uid = getattr(self, "user_pick_value", "")
+        if uid:
+            self.user_pick.set(uid)
+            self.user_pick_value = ""
+
+    def do_user_detail(self) -> None:
+        uid = self._picked_uid()
+        reason = uid and self._ask_reason("상세 보기")
+        if not reason:
+            return
+
+        def work() -> dict:
+            auth: object = None
+            try:
+                auth = users.auth_lookup(self.require("project_id"), self.require("sa_path"), uid=uid)
+            except (users.UserError, gcp.GcpError) as exc:
+                auth = "조회 못 함(%s) — 서비스 계정에 Firebase Authentication 조회 권한이 필요합니다" % exc.code
+            info = users.detail(self._users(), uid, reason, auth=auth)
+            self._show_user_text(self._format_detail(info))
+            return {"uid": uid, "문서": "있음" if info["document"] else "없음", "탈퇴 흔적": info["tombstone"]}
+
+        self.run("사용자 상세", work)
+
+    @staticmethod
+    def _format_detail(info: dict) -> str:
+        auth = info.get("auth")
+        lines = ["uid: %s" % info["uid"]]
+        if isinstance(auth, dict):
+            lines.append("계정: %s · %s · 로그인 방식 %s · 가입 %s · 최근 로그인 %s%s" % (
+                auth["email"] or "(이메일 없음)", auth["name"] or "(이름 없음)", ",".join(p for p in auth["providers"] if p) or "-",
+                auth["created"], auth["last_login"], " · 사용 중지됨" if auth["disabled"] else ""))
+        elif auth is None:
+            lines.append("계정: Authentication 에 없음(탈퇴했거나 삭제됨)")
+        else:
+            lines.append("계정: " + str(auth))
+        lines.append("탈퇴 흔적(deleted/uid): %s" % ("있음 — 앱이 이 계정의 읽기·쓰기를 거부합니다" if info["tombstone"] else "없음"))
+        if not info["document"]:
+            lines.append("계정 기록 문서: 없음")
+            return "\n".join(lines)
+        s = info["summary"]
+        lines.append("문서: 만든 시각 %s · 최근 변경 %s · %d바이트%s" % (s["created"], s["updated"], s["bytes"],
+                                                            (" · 깨진 필드 " + ",".join(s["broken"])) if s["broken"] else ""))
+        p = info["progress"]
+        lines.append("학습: %d일(%s ~ %s) · 마지막 화면 %s" % (p["study_days"], p["first"] or "-", p["last"] or "-", p["screen"] or "-"))
+        lines.append("복습 목록 %d개: %s" % (s["weak"], ", ".join(x for x in p["weak"] if x) or "-"))
+        c = info["consent"]
+        lines.append("말하기 동의: %s (버전 %s, %s)" % ("예" if c["voice"] else "아니요", c["version"], c["at"] or "-"))
+        t = info["trip"]
+        lines.append("여행: " + ("%s · %s · 학습 시작 %s" % (t["country"], " / ".join(t["cities"]), t["study_start"]) if t else "없음"))
+        il = info["ilog"]
+        if il:
+            lines.append("통역 기록: 동의 %s(버전 %s) · %d대화" % (il["consent_at"], il["consent_version"], len(il["sessions"])))
+            for x in il["sessions"][:30]:
+                lines.append("   · %s · %s · %d문장" % (x["at"], x["route"] or "여행 없이", x["lines"]))
+            lines.append("   (문장 본문은 [통역 기록 내용] 으로 따로 봅니다 — 상대방 말이 들어 있습니다)")
+        else:
+            lines.append("통역 기록: 없음(계정 저장에 동의하지 않았거나 지웠음)")
+        return "\n".join(lines)
+
+    def do_user_ilog(self) -> None:
+        uid = self._picked_uid()
+        reason = uid and self._ask_reason("통역 기록 내용 보기(상대방 말 포함)")
+        if not reason:
+            return
+
+        def work() -> dict:
+            text = users.ilog_text(self._users(), uid, reason)
+            self._show_user_text(text)
+            return {"uid": uid}
+
+        self.run("통역 기록 내용", work)
+
+    def do_user_export(self) -> None:
+        uid = self._picked_uid()
+        reason = uid and self._ask_reason("내보내기(열람 요구 대응)")
+        if not reason:
+            return
+        out = filedialog.asksaveasfilename(parent=self.root, defaultextension=".json",
+                                           initialfile="user-%s.json" % users.uid_hash(uid)[:8],
+                                           filetypes=[("JSON", "*.json")])
+        if not out:
+            return
+
+        def work() -> dict:
+            auth = None
+            try:
+                auth = users.auth_lookup(self.require("project_id"), self.require("sa_path"), uid=uid)
+            except (users.UserError, gcp.GcpError):
+                auth = None
+            result = users.export(self._users(), uid, reason, out, auth=auth)
+            self._show_user_text("내보냈습니다: %s\n개인정보가 든 파일입니다 — 전달한 뒤 지우세요." % out)
+            return result
+
+        self.run("사용자 내보내기", work)
+
+    def do_user_delete_ilog(self) -> None:
+        uid = self._picked_uid()
+        if not uid:
+            return
+        typed = simpledialog.askstring(
+            "통역 기록 삭제",
+            "이 사용자의 서버 통역 기록(ilog)을 지웁니다. 되돌릴 수 없습니다. 진도·여행은 그대로입니다.\n"
+            "계속하려면 uid 를 그대로 입력하세요:\n%s" % uid, parent=self.root) or ""
+        if typed.strip() != uid:
+            if typed:
+                messagebox.showinfo("opsarchive", "uid 가 달라 취소했습니다.")
+            return
+        reason = self._ask_reason("통역 기록 삭제")
+        if not reason:
+            return
+
+        def work() -> dict:
+            result = users.delete_ilog(self._users(), uid, reason)
+            self._show_user_text(("삭제했습니다. " if result["deleted"] else "") + result["note"])
+            return result
+
+        self.run("통역 기록 삭제", work)
+
+    def do_user_audit(self) -> None:
+        rows = users.read_audit(50)
+        text = "\n".join("%s  %-20s uid#%s  %s  [%s] %s" % (r.get("at", ""), r.get("action", ""), r.get("uid_hash", ""),
+                                                          r.get("admin", ""), r.get("result", ""), r.get("reason", ""))
+                         for r in reversed(rows))
+        self.user_detail_text = "열람 기록(최근 50건, %s)\n" % users.audit_path() + (text or "(아직 없음)")
+        self._fill_users()
 
     # ------------------------------------------------------------ 탭 5: 보관소
     def _tab_store(self, notebook) -> None:

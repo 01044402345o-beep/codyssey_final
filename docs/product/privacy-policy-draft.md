@@ -92,6 +92,7 @@
 - 녹음 원본을 저장하지 않는다. 말소리가 없는 녹음은 외부 전사 업체로 보내지 않는다.
 - 실시간 통역: 유료 제공자로 가는 연결은 로그인 토큰을 확인한 계정만 열 수 있고(익명 거절), 계정·IP 마다 시작 횟수를 제한하며, 한 번에 최대 3분이 지나면 서버가 끊는다. 통역 키는 서버에만 둔다.
 - AI 키·서비스 계정 키는 서버 환경변수에만 둔다(브라우저에 내려보내지 않음).
+- **관리자 열람:** 운영자는 관리자 도구(`tools/opsarchive` 사용자 데이터 탭)로 계정 기록을 볼 수 있다. 목록은 개수·있음/없음만 보이고, 상세·통역 기록 내용·내보내기·삭제는 사유를 적어야 하며 관리자 PC 의 열람 기록에 남는다(사용자 식별자는 해시, 내용은 남기지 않음). 용도는 이용자의 열람·삭제 요구 처리와 장애 대응으로 한정한다 **[팀 결정: 열람 기록 보관 기간·접근 가능한 사람]**.
 - 탈퇴 실패 기록은 관리자 공개키로 **봉인(암호화)** 해 저장하고, 자격증명은 지운 뒤 봉인한다. 앱 서버는 복호화할 수 없다.
 - 요청 수 제한(IP 기준).
 
@@ -127,6 +128,7 @@
 | 통역: 로그인 계정만·익명 거절·10분 6번 | `interp.py` `serve`·`allow_start`, `backend/tests/test_interp_gate.py` |
 | 통역 동의 창·버전·철회 | `mockup/app.js` `askInterpConsent`·`INTERP_CONSENT_VERSION`·`privacyCard` |
 | 통역 기록: 동의 시에만 서버 저장, 상대방 말 포함·음성 없음, 상한, 끄면 서버 사본 삭제 | `mockup/app.js` `askIlogConsent`·`ilogWire`·`ilogRevoke`·`ILOG_CONSENT_VERSION`, `backend/app/user_state.py` `parse_ilog`·`write_ilog`·`delete_ilog`, `main.py` `/user/interp-log`, `backend/tests/test_interp_log_server.py`, `e2e/test_interp_log.py` (10/22) |
+| 관리자 열람: 요약 목록, 사유·열람 기록, 통역 기록만 삭제 가능(계정 삭제 없음) | `tools/opsarchive/opsarchive/users.py`, `gui.py` `_tab_users`, `tools/opsarchive/tests/test_users.py` (10/22) |
 
 ## 팀이 정할 것 (이 초안을 게시하기 전에)
 
