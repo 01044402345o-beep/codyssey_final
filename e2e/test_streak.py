@@ -1,7 +1,8 @@
 """연속 학습·오늘의 목표 E2E (Duolingo 처럼).
 
 - 카드를 처음 뒤집을 때마다 그날 활동 +1(같은 카드를 다시 뒤집으면 세지 않는다). 상황별 연습도 센다.
-- 홈: 오늘 n/10장 원, '🔥 연속 N일', 최근 7일 점(오늘 표시). 오늘 아직이면 어제까지의 연속을 보여 준다.
+- 홈 '학습 현황'(알람 카드형, 10/22): '오늘의 목표' 행 n/10장, '연속 학습' 행 N일, 최근 7일 막대(오늘 표시).
+  오늘 아직이면 어제까지의 연속을 보여 준다.
 - 10장이 되면 '오늘 목표 달성!'을 한 번만 알린다. 새로고침해도 남는다. 120일보다 오래된 기록은 지운다.
 
     cd backend && uvicorn app.main:app --port 8768
@@ -42,24 +43,26 @@ with sync_playwright() as p:
     page.evaluate("window.__t = []; const o = toast; toast = m => { window.__t.push(m); o(m); }")
     today = page.evaluate("S.today")
 
-    card = page.locator(".streak-card")
-    check("홈에 오늘의 목표 카드: 0/10, 연속 0일, 7일 점(오늘 표시)",
-          card.count() == 1 and page.inner_text(".goal-ring").replace("\n", "") == "0/10장" and "연속 0일" in card.inner_text()
-          and page.locator(".week i").count() == 7 and page.locator(".week i.today").count() == 1, card.inner_text().replace("\n", " / "))
+    card = page.locator('.al-row[data-k="goal"]')
+    goal = lambda: page.inner_text('.al-row[data-k="goal"] .al-main b')       # noqa: E731 — 오늘 장 수
+    streak = lambda: page.inner_text('.al-row[data-k="streak"] .al-main b')   # noqa: E731 — 연속 일수
+    check("홈에 오늘의 목표 행: 0/10, 연속 0일, 7일 막대(오늘 표시)",
+          card.count() == 1 and goal() == "0" and "/10장" in card.inner_text() and streak() == "0"
+          and page.locator(".al-week i").count() == 7 and page.locator(".al-week i.today").count() == 1, card.inner_text().replace("\n", " / "))
 
     drill_flip(page, "airport", 3)
     page.locator(".flip").first.click(); page.wait_for_timeout(80); page.locator(".flip").first.click(); page.wait_for_timeout(80)   # 같은 카드 다시
     check("카드를 처음 뒤집을 때만 +1(같은 카드 다시 뒤집기는 세지 않음)", page.evaluate("actToday()") == 3, str(page.evaluate("PROG.act")))
 
     page.evaluate("go('u-home')"); page.wait_for_timeout(250)
-    check("홈: 3/10, 연속 1일, '7장만 더'", page.inner_text(".goal-ring").replace("\n", "") == "3/10장" and "연속 1일" in card.inner_text()
-          and "7장만 더" in card.inner_text() and page.locator(".week i.today.on").count() == 1, card.inner_text().replace("\n", " / "))
+    check("홈: 3/10, 연속 1일, '7장만 더'", goal() == "3" and streak() == "1"
+          and "7장만 더" in card.inner_text() and page.locator(".al-week i.today.on").count() == 1, card.inner_text().replace("\n", " / "))
 
     # 어제·그제 기록이 있으면 연속이 이어진다
     page.evaluate(f"PROG.act[Dt.add('{today}', -1)] = 4; PROG.act[Dt.add('{today}', -2)] = 11; PROG.act[Dt.add('{today}', -4)] = 2; render()")
     page.wait_for_timeout(200)
-    check("오늘·어제·그제 → 연속 3일(나흘 전은 끊김 뒤라 세지 않음)", page.evaluate("streakDays()") == 3 and "연속 3일" in card.inner_text(), card.inner_text().replace("\n", " / "))
-    check("최근 7일 점: 학습한 날 4개 칠함", page.locator(".week i.on").count() == 4)
+    check("오늘·어제·그제 → 연속 3일(나흘 전은 끊김 뒤라 세지 않음)", page.evaluate("streakDays()") == 3 and streak() == "3", streak())
+    check("최근 7일 막대: 학습한 날 4개 칠함", page.locator(".al-week i.on").count() == 4)
 
     # 오늘 아직이면 어제까지의 연속을 보여 준다
     saved = page.evaluate("actToday()")
@@ -74,7 +77,7 @@ with sync_playwright() as p:
     hits = [m for m in page.evaluate("window.__t") if isinstance(m, str) and "오늘 목표 달성" in m]
     check("10장이 되는 순간 '오늘 목표 달성! 🔥 연속 3일' 을 한 번만", n == 11 and len(hits) == 1 and "연속 3일" in hits[0], f"n={n} {hits}")
     page.evaluate("go('u-home')"); page.wait_for_timeout(250)
-    check("홈: 목표 원이 완료 표시, 달성 문구", page.locator(".goal-ring.done").count() == 1 and "달성" in card.inner_text())
+    check("홈: 오늘의 목표 행이 채움 문구, 장 수 11", goal() == "11" and "채웠어요" in card.inner_text(), card.inner_text().replace("\n", " / "))
 
     # 새로고침해도 남는다 + 오래된 기록 정리
     page.reload(); page.wait_for_timeout(1200)
