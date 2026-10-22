@@ -2402,7 +2402,9 @@ function scrHome() {
       <h3>${title}</h3><p class="sub" style="font-size:0.8125rem">${describe(r)}</p>
       ${r.newIds.length ? `<div style="margin-top:8px"><span class="badge b-new">새 문장 ${r.newIds.length}개 포함</span></div>` : ''}
       ${r.kind === 'free' ? `<button class="btn soft block" style="margin-top:12px" data-act="tab" data-id="u-coll">문장 모음에서 복습하기</button>`
-        : `<button class="btn ${st === 'done' ? 'soft' : 'accent'} block" style="margin-top:12px" data-act="study-date" data-date="${r.date}">${st === 'done' ? '완료했어요 · 다시 보기' : '오늘 학습 시작'}</button>`}</div>`;
+        : `<button class="btn ${st === 'done' ? 'soft' : 'accent'} block" style="margin-top:12px" data-act="study-date" data-date="${r.date}">${st === 'done' ? '완료했어요 · 다시 보기' : '오늘 학습 시작'}</button>`}</div>
+       <br>
+       <div class="sec-title"><h4>학습 현황</h4></div>`;
   }
   const upcoming = S.sched.filter(x => x.date > S.today).slice(0, 3);
   const inner = `<div class="app-pad">
@@ -2455,7 +2457,6 @@ function alarmCard(pr) {
     return `<i class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}" title="${Dt.md(d)}${on ? ' · 학습함' : ''}"></i>`;
   }).join('');
   return `<div class="alarm" data-live="alarm">
-    <div class="sec-title"><h4>학습 현황</h4></div>
     <div class="alarm-h"><span class="alarm-ic">${ALARM_IC}</span>오늘의 알람</div>
     <b class="alarm-big">${n}<i>/${DAY_GOAL}장</i></b>
     <p class="alarm-label">${sub}</p>
