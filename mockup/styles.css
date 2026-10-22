@@ -989,7 +989,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.78125rem; }
   --nav-h: calc(3.5rem + env(safe-area-inset-bottom, 0px));
   --nav-space: var(--nav-h);   /* 폰 고정 탭이 실제로 차지하는 높이 — app.js syncNavSpace 가 실측값으로 덮는다 */
 }
-html:not([data-mode=legacy]) { scroll-behavior: auto; overscroll-behavior-y: none; }   /* 문서 끝 바운스로 빈 바탕이 드러나지 않게 */
+/* 화면 내부는 끝 바운스(고무줄 스크롤)를 그대로 허용한다. 폰 하단 탭은 position: fixed 라 바운스에 끌려가지 않는다(#116).
+   바운스로 드러나는 문서 바깥도 같은 바탕색이라 빈 흰 띠가 보이지 않는다. */
+html:not([data-mode=legacy]) { scroll-behavior: auto; background: var(--bg); }
 html:not([data-mode=legacy]) body { background: var(--bg); min-height: 100dvh; height: auto; overflow-x: hidden; }
 html:not([data-mode=legacy]) .shell { display: block; height: auto; }
 html:not([data-mode=legacy]) .main { display: block; }
