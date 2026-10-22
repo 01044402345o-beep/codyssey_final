@@ -3493,7 +3493,7 @@ function privacyCard() {
       ${c.voice ? '<button class="btn soft" style="flex:1" data-act="consent-withdraw">전사 동의 철회</button>' : ''}
       ${n ? '<button class="btn soft" style="flex:1" data-act="weak-delete">복습 목록 삭제</button>' : ''}
       ${ic ? '<button class="btn soft" style="flex:1" data-act="interp-consent-withdraw">통역 동의 철회</button>' : ''}
-      ${ls ? '<button class="btn soft" style="flex:1" data-act="ilog-revoke">통역 기록 저장 끄기</button>' : ''}</div>` : ''}
+      ${ls ? '<button class="btn soft" style="flex:1" data-act="ilog-revoke">통역본 보관 끄기</button>' : ''}</div>` : ''}
   </div>`;
 }
 /* 홈 맨 아래 계정 블록. 로그아웃 버튼과 안내를 하나의 카드(.card = 패딩 한 곳)에 담는다.
