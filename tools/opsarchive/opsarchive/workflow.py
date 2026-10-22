@@ -52,16 +52,21 @@ NODES: list[dict] = [
      "desc": "봉인한 증거를 TTL 로 자동 만료하기까지의 일수.",
      "env": "EVIDENCE_TTL_DAYS", "requires": [], "redeploy": True},
     {"id": "issue_notify", "label": "실패 시 이슈 알림", "group": "탈퇴 대응", "kind": "toggle",
-     "default": True, "desc": "봉인·검증에서 이상이 생기면 GitHub 이슈로 알린다. "
-     "저장소는 EVIDENCE_GH_REPO 환경변수로 지정한다(값을 밀어넣지는 않고 설정 안내만 한다).",
-     "env": None, "requires": [], "redeploy": False},
-    {"id": "gh_repo", "label": "이슈 저장소", "group": "탈퇴 대응", "kind": "toggle",
-     "default": True, "desc": "이슈 통보 대상 저장소(EVIDENCE_GH_REPO = owner/repo). owner/repo 문자열이라 "
-     "여기서 값을 받지 않는다 — 설정 탭/.env 또는 `opsarchive env-set` 으로 올린다.",
-     "env": None, "requires": [], "redeploy": False},
-    {"id": "client_report", "label": "사용자 결과 보고", "group": "탈퇴 대응", "kind": "toggle",
-     "default": False, "desc": "탈퇴 처리 결과를 사용자에게 알리는 보고서(앱 기능 개념 — 밀어넣는 환경변수 없음).",
-     "env": None, "requires": [], "redeploy": False},
+     "default": True, "desc": "증거를 봉인하면 GitHub 이슈로 알린다(메타데이터만). 끄면 토큰·저장소가 있어도 알리지 않는다. "
+     "알리려면 이슈 저장소·이슈 토큰 노드도 채워야 한다.",
+     "env": "EVIDENCE_NOTIFY", "requires": [], "redeploy": True},
+    {"id": "gh_repo", "label": "이슈 저장소", "group": "탈퇴 대응", "kind": "text",
+     "default": "", "pattern": r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$", "placeholder": "owner/repo",
+     "desc": "이슈를 올릴 GitHub 저장소(EVIDENCE_GH_REPO = owner/repo). 비공개 저장소를 권한다.",
+     "env": "EVIDENCE_GH_REPO", "requires": [], "redeploy": True},
+    {"id": "gh_token", "label": "이슈 토큰", "group": "탈퇴 대응", "kind": "secret",
+     "default": None, "desc": "이슈를 올릴 GitHub 토큰(EVIDENCE_GH_TOKEN, 그 저장소의 Issues 쓰기만 있는 fine-grained 토큰). "
+     "값은 [Render에 반영] 때 가려진 칸으로 묻고 **어디에도 저장하지 않는다**(정책 파일·로그에 남지 않음).",
+     "env": "EVIDENCE_GH_TOKEN", "requires": [], "redeploy": True},
+    {"id": "client_report", "label": "화면 불일치 보고 봉인", "group": "탈퇴 대응", "kind": "toggle",
+     "default": True, "desc": "화면이 '탈퇴가 예상 밖 상태로 끝났다'고 보낸 보고(/diagnostics/withdraw)를 증거로 봉인할지. "
+     "끄면 보고는 받기만 하고 봉인하지 않는다.",
+     "env": "EVIDENCE_CLIENT_REPORTS", "requires": [], "redeploy": True},
     # -------------------------------------------------- 감시·증인
     {"id": "observe", "label": "접근로그 관측 창", "group": "감시·증인", "kind": "choice",
      "default": "60", "options": [("60", "60분"), ("360", "6시간"), ("1440", "24시간")],
@@ -89,6 +94,10 @@ NODES: list[dict] = [
     {"id": "verify_chain", "label": "체인 검증", "group": "검증·앵커", "kind": "action",
      "default": True, "desc": "앵커된 체크포인트의 서명·연속성·롤백과 누락 아카이브를 검증한다.",
      "env": None, "requires": ["project_id", "sa_path", "pin_path"], "redeploy": False},
+    {"id": "pubkey", "label": "봉인 공개키", "group": "검증·앵커", "kind": "key",
+     "default": None, "desc": "EVIDENCE_PUBKEY — 앱이 증거를 봉인할 관리자 공개키. 값은 손으로 넣지 않고 **키 파일에서 역산**해 올린다. "
+     "[Render에 반영] 또는 [이 노드 실행] = 공개키 발행(키 파일·패스프레이즈 → 환경변수 → 재배포 → 지문 대조).",
+     "env": "EVIDENCE_PUBKEY", "requires": ["service"], "redeploy": True},
     {"id": "key_generation", "label": "키 세대", "group": "검증·앵커", "kind": "number",
      "default": 1, "min": 1, "max": 100000,
      "desc": "EVIDENCE_KEY_GENERATION — /health 로 노출되어 핀 검증에 쓰인다. **핀 세대와 같아야 한다**(다르면 핀 검사가 실패한다).",
@@ -101,11 +110,14 @@ NODES: list[dict] = [
      "default": 1000000, "min": 100000, "max": 10000000,
      "desc": "봉인 증거 묶음의 전체 바이트 상한(EVIDENCE_MAX_BYTES). 넘으면 로그·소스·트레이스백을 잘라낸다.",
      "env": "EVIDENCE_MAX_BYTES", "requires": [], "redeploy": True},
-    {"id": "max_source_logs", "label": "소스·로그 캡 안내", "group": "안전", "kind": "toggle",
-     "default": True,
-     "desc": "소스·로그 캡(EVIDENCE_MAX_SOURCE_BYTES·EVIDENCE_MAX_LOGS_BYTES)은 앱 기본값 유지 — "
-     "여기서 값을 밀어넣지 않는다(설정 탭/.env 또는 `opsarchive env-set`).",
-     "env": None, "requires": [], "redeploy": False},
+    {"id": "max_source_bytes", "label": "소스 캡(바이트)", "group": "안전", "kind": "number",
+     "default": 524288, "min": 65536, "max": 4000000,
+     "desc": "증거에 담는 소스 파일 묶음 상한(EVIDENCE_MAX_SOURCE_BYTES, 앱 기본 512KB). 전체 상한보다 크게 잡아도 전체 상한에서 잘린다.",
+     "env": "EVIDENCE_MAX_SOURCE_BYTES", "requires": [], "redeploy": True},
+    {"id": "max_logs_bytes", "label": "로그 캡(바이트)", "group": "안전", "kind": "number",
+     "default": 65536, "min": 16384, "max": 1000000,
+     "desc": "증거에 담는 최근 로그 상한(EVIDENCE_MAX_LOGS_BYTES, 앱 기본 64KB).",
+     "env": "EVIDENCE_MAX_LOGS_BYTES", "requires": [], "redeploy": True},
 ]
 
 # 노드 정의에서 파생한 기본 정책 값.
@@ -116,21 +128,24 @@ _BY_ID: dict[str, dict] = {node["id"]: node for node in NODES}
 
 # 실행 순서: 정책 반영(env) → 관측 → 핀 → IAM → 앵커 → 체인 검증 → (안내 노드)
 _PLAN_ORDER: list[str] = [
-    "seal_failures", "daily_cap", "per_uid_seconds", "ttl_days",
-    "max_bytes", "key_generation", "include_secrets",
+    "pubkey", "seal_failures", "daily_cap", "per_uid_seconds", "ttl_days",
+    "max_bytes", "max_source_bytes", "max_logs_bytes", "key_generation", "include_secrets",
+    "issue_notify", "gh_repo", "gh_token", "client_report",
     "observe", "pin_check", "iam_check_enabled", "iam_check", "anchor", "verify_chain",
-    "anchor_interval", "issue_notify", "gh_repo", "client_report", "max_source_logs",
+    "anchor_interval",
 ]
 
 # 로컬에서 실제로 실행 가능한 노드(run_step 이 처리한다).
 _RUNNABLE: set[str] = {"observe", "pin_check", "iam_check", "anchor", "verify_chain"}
 # 값도 실행도 없이 안내만 하는 노드(env 없음).
-_INFO: set[str] = {"anchor_interval", "issue_notify", "gh_repo", "client_report", "max_source_logs",
-                   "iam_check_enabled"}
+_INFO: set[str] = {"anchor_interval", "iam_check_enabled"}
+# 값을 정책 파일에 두지 않고 반영할 때 받는 노드: secret(가려진 입력), key(키 파일에서 역산 — 공개키 발행)
+_MANUAL: set[str] = {"gh_token", "pubkey"}
 
 # number 노드의 사람이 읽는 단위(선택).
 _UNITS: dict[str, str] = {"daily_cap": "회", "per_uid_seconds": "초", "ttl_days": "일",
-                          "max_bytes": "바이트", "key_generation": "세대"}
+                          "max_bytes": "바이트", "key_generation": "세대",
+                          "max_source_bytes": "바이트", "max_logs_bytes": "바이트"}
 
 # 그래프 엣지: 기본 흐름 + 예외 분기(이상이면 이슈 알림 / 결과 보고).
 _EDGES: list[tuple[str, str]] = [
@@ -151,7 +166,11 @@ _EDGES: list[tuple[str, str]] = [
     ("verify_chain", "issue_notify"),
     ("verify_chain", "client_report"),
     ("issue_notify", "gh_repo"),
-    ("max_bytes", "max_source_logs"),
+    ("gh_repo", "gh_token"),
+    ("max_bytes", "max_source_bytes"),
+    ("max_source_bytes", "max_logs_bytes"),
+    ("pubkey", "seal_failures"),
+    ("pubkey", "key_generation"),
 ]
 
 
@@ -193,7 +212,12 @@ def _coerce(node: dict, value: Any) -> Any:
     if kind == "choice":
         keys = [key for key, _label in node.get("options", [])]
         return str(value) if str(value) in keys else default
-    return default        # action = 값을 갖지 않는다
+    if kind == "text":
+        import re as _re
+        text = str(value or "").strip() if isinstance(value, str) else ""
+        pattern = node.get("pattern")
+        return text if (not text or not pattern or _re.fullmatch(pattern, text)) else default
+    return default        # action·secret·key = 정책 파일에 값을 두지 않는다
 
 
 def _normalize(policy: Any) -> dict:
@@ -243,6 +267,8 @@ def _enabled(node: dict, value: Any) -> bool:
         return value is not None
     if kind == "choice":
         return value not in (None, "")
+    if kind == "text":
+        return bool(value)
     return True
 
 
@@ -258,6 +284,12 @@ def _state(node: dict, value: Any) -> str:
         return str(value)
     if kind == "number":
         return "%s%s" % (value, _UNITS.get(node["id"], ""))
+    if kind == "text":
+        return value or "(미설정)"
+    if kind == "secret":
+        return "반영 때 입력(저장 안 함)"
+    if kind == "key":
+        return "키 파일로 발행"
     return "대기"        # action = 값을 갖지 않는다
 
 
@@ -275,7 +307,7 @@ def graph(policy: dict) -> dict:
             "label": node["label"],
             "group": node["group"],
             "state": _state(node, value),
-            "editable": node["kind"] != "action",
+            "editable": node["kind"] in ("toggle", "number", "choice", "text"),
             "enabled": _enabled(node, value),
             "desc": node["desc"],
             "env": node.get("env"),
@@ -298,7 +330,9 @@ def _plan_action(node: dict) -> str:
         return "run"
     if node["id"] in _INFO:
         return "info"
-    if node.get("env") and node["kind"] in ("toggle", "number", "choice"):
+    if node["id"] in _MANUAL:
+        return "manual"            # 반영할 때 사람이 입력한다(비밀 토큰·키 파일)
+    if node.get("env") and node["kind"] in ("toggle", "number", "choice", "text"):
         return "env"
     return "info"
 
@@ -313,6 +347,8 @@ def _plan_status(node: dict, policy: dict, settings: dict) -> tuple[bool, str]:
         return True, ""
     if action == "info":
         return False, "안내 노드"
+    if action == "manual":
+        return False, "반영할 때 입력 필요(가려진 칸·키 파일)"
     value = policy.get(node_id, node["default"])
     if not _enabled(node, value):
         return False, "꺼짐"
@@ -403,21 +439,23 @@ def run_step(node_id: str, policy: dict, *, secrets: Optional[dict] = None,
 def _env_value(node: dict, value: Any) -> str:
     if node["kind"] == "toggle":
         return "1" if value else "0"
-    return str(value)
+    return "" if value is None else str(value)
 
 
 def push_env(node_id: str, policy: dict, *, service: str,
-             api_key_value: Optional[str] = None) -> dict:
-    """정책 값을 Render 환경변수로 밀어넣는다. 실제 재배포는 호출자가 한다."""
+             api_key_value: Optional[str] = None, secret_value: Optional[str] = None) -> dict:
+    """정책 값을 Render 환경변수로 밀어넣는다(한 노드). 재배포·반영 확인은 `apply_env` 가 한다."""
     node = _node(node_id)
     if node is None:
         raise commands.CommandError("unknown_node")
     env = node.get("env")
     if not env:
         raise commands.CommandError("no_env")
+    if node["kind"] == "key":
+        raise commands.CommandError("use_publish — 공개키는 키 파일에서 역산해 발행한다(Render 탭 ① 또는 이 노드 실행)")
     policy = _normalize(policy)
-    value = _env_value(node, policy.get(node_id, node["default"]))
-    result = commands.env_set(service, env, value, api_key_value=api_key_value)
+    value = secret_value if node["kind"] == "secret" else _env_value(node, policy.get(node_id, node["default"]))
+    result = commands.env_set(service, env, value or "", api_key_value=api_key_value)
     out = dict(result) if isinstance(result, dict) else {"result": result}
     out["node"] = node_id
     out["env"] = env
@@ -568,3 +606,79 @@ __all__ = [
     "NODES", "DEFAULTS", "load", "save", "workflow_path",
     "graph", "plan", "run_step", "push_env", "automation_loop",
 ]
+
+
+# ------------------------------------------------------------------ 모아서 반영 → 재배포 → 반영 확인
+
+def desired_env(policy: dict, node_ids: Optional[list] = None) -> dict:
+    """정책에서 Render 로 보낼 값 {환경변수: 값}. 비어 있는 text 노드·secret·key 는 빼고(입력·발행이 따로다)."""
+    policy = _normalize(policy)
+    out = {}
+    for node in NODES:
+        if node_ids is not None and node["id"] not in node_ids:
+            continue
+        if not node.get("env") or node["kind"] not in ("toggle", "number", "choice", "text"):
+            continue
+        value = _env_value(node, policy.get(node["id"], node["default"]))
+        if value != "":
+            out[node["env"]] = value
+    return out
+
+
+def apply_env(policy: dict, *, service: str, node_ids: Optional[list] = None, secrets: Optional[dict] = None,
+              redeploy: bool = True, base_url: str = "", api_key_value: Optional[str] = None,
+              deploy_timeout: int = 600) -> dict:
+    """정책을 Render 에 **바뀐 것만** 올리고, 한 번 재배포한 뒤, 실제로 반영됐는지 확인한다.
+
+    확인: ① Render 에서 다시 읽은 값 == 정책 값(비밀은 같은지만 보고 값은 안 남김) ② 재배포 완료
+    ③ 앱 /health 가 살아 있고 evidence.generation == key_generation 노드 값.
+    바뀐 것이 없으면 재배포하지 않는다. secrets = {"EVIDENCE_GH_TOKEN": 값} (GUI 가 가려진 칸으로 받은 것).
+    """
+    from . import render
+    sid = render.service_id(service)
+    want = desired_env(policy, node_ids)
+    for key, value in (secrets or {}).items():
+        if value:
+            want[key] = value
+    secret_keys = set((secrets or {}).keys())
+    changed, unchanged = [], []
+    for key, value in want.items():
+        current = render.get_env(sid, key, api_key_value=api_key_value)
+        if current == value:
+            unchanged.append(key)
+            continue
+        render.put_env(sid, key, value, api_key_value=api_key_value)
+        changed.append(key)
+    out: dict = {"service_id": sid, "changed": changed, "unchanged": unchanged, "redeployed": False,
+                 "deploy": "", "verified": None, "mismatch": [], "health": {}}
+    if not changed:
+        out["verified"] = True
+        out["note"] = "바뀐 값이 없어 재배포하지 않았습니다."
+        return out
+    if not redeploy:
+        out["note"] = "값만 올렸습니다 — 재배포해야 앱에 적용됩니다."
+        return out
+    outcome = render.deploy(sid, timeout=deploy_timeout)
+    out["redeployed"] = bool(outcome.get("ok"))
+    out["deploy"] = str(outcome.get("note", ""))
+    for key, value in want.items():
+        if render.get_env(sid, key, api_key_value=api_key_value) != value:
+            out["mismatch"].append(key)
+    if base_url:
+        try:
+            health = commands.health(base_url)
+            evidence = (health or {}).get("evidence") or {}
+            out["health"] = {"status": (health or {}).get("status"), "generation": evidence.get("generation")}
+            expected = _normalize(policy).get("key_generation")
+            if node_ids is None or "key_generation" in node_ids:
+                if evidence and evidence.get("generation") != expected:
+                    out["mismatch"].append("EVIDENCE_KEY_GENERATION(/health)")
+        except Exception as exc:        # noqa: BLE001 — 확인 실패는 '확인 못 함'으로만 알린다
+            out["health"] = {"error": type(exc).__name__}
+    out["verified"] = bool(out["redeployed"] and not out["mismatch"])
+    if out["mismatch"]:
+        out["error"] = "not_applied: " + ", ".join(out["mismatch"])
+    elif not out["redeployed"]:
+        out["error"] = "redeploy_unconfirmed — " + out["deploy"]
+    out["changed"] = [k + ("(비밀)" if k in secret_keys else "") for k in changed]
+    return out

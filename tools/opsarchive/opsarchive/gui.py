@@ -450,6 +450,7 @@ class App:
         self._button(bar, "정책에 저장", self.save_node)
         self._button(bar, "Render에 반영", self.push_node_env)
         self._button(bar, "이 노드 실행", self.run_node)
+        self._button(bar, "변경 모아 반영(재배포·확인)", self.apply_all_env)
 
         bar2 = ttk.Frame(frame)
         bar2.pack(fill="x", padx=10, pady=(0, 4))
@@ -562,7 +563,7 @@ class App:
         self.node_title.configure(text="%s  (%s)" % (node.get("label", ""), self.selected_node))
         extra = ""
         if node.get("env"):
-            extra = "\n서버 환경변수: %s%s" % (node["env"], " · 반영 후 재배포 필요" if node.get("redeploy") else "")
+            extra = "\n서버 환경변수: %s%s" % (node["env"], " · [Render에 반영] 이 재배포와 반영 확인까지 한다" if node.get("redeploy") else "")
         if node.get("missing"):
             extra += "\n필수 설정 없음: %s" % ", ".join(node["missing"])
         self.node_desc.configure(text=(node.get("desc", "") or "") + extra)
@@ -583,6 +584,16 @@ class App:
             self.node_value.set(str(current))
             ttk.Entry(self.value_box, textvariable=self.node_value, width=12).pack(side="left")
             ttk.Label(self.value_box, text="(%s ~ %s)" % (node.get("min"), node.get("max"))).pack(side="left", padx=6)
+        elif kind == "text":
+            self.node_value.set(str(current or ""))
+            ttk.Entry(self.value_box, textvariable=self.node_value, width=36).pack(side="left")
+            ttk.Label(self.value_box, text="예: %s" % node.get("placeholder", "")).pack(side="left", padx=6)
+        elif kind == "secret":
+            self.node_value.set("")
+            ttk.Label(self.value_box, text="값은 저장하지 않습니다 — [Render에 반영] 을 누르면 가려진 칸으로 묻습니다.").pack(side="left")
+        elif kind == "key":
+            self.node_value.set("")
+            ttk.Label(self.value_box, text="[Render에 반영] 또는 [이 노드 실행] = 공개키 발행(키 파일·패스프레이즈).").pack(side="left")
         else:
             self.node_value.set("")
             ttk.Label(self.value_box, text="값이 없는 실행 노드입니다 — [이 노드 실행] 을 누르세요.").pack(side="left")
@@ -591,7 +602,7 @@ class App:
         node = self._node_def(self.selected_node)
         if not node:
             return
-        if node.get("kind") not in ("toggle", "choice", "number"):
+        if node.get("kind") not in ("toggle", "choice", "number", "text"):
             # 값이 없는 실행 노드에서 파일을 다시 쓰고 '저장했습니다'라고 하면 사실과 다르다.
             messagebox.showinfo("opsarchive", "값이 없는 실행 노드입니다 — [이 노드 실행] 을 쓰세요.")
             return
@@ -614,18 +625,60 @@ class App:
         self._show_node_editor()
 
     def push_node_env(self) -> None:
+        """한 노드를 Render 에 반영한다 — 값 올리기 → (묻고) 재배포 → 다시 읽어 반영 확인까지."""
         node = self._node_def(self.selected_node)
         if not node or not node.get("env"):
             messagebox.showinfo("opsarchive", "이 노드는 서버 환경변수와 연결돼 있지 않습니다.")
             return
-        self.run("Render 반영(%s)" % node["env"], lambda: workflow.push_env(
-            self.selected_node, self.policy, service=self.require("service")))
+        if node.get("kind") == "key":
+            self.do_publish()                     # 공개키는 키 파일에서 역산해 발행(환경변수·재배포·지문 대조)
+            return
+        secrets = None
+        node_ids = [self.selected_node]
+        if node.get("kind") == "secret":
+            value = simpledialog.askstring("opsarchive", "%s 값을 붙여넣으세요(화면·파일·로그에 남지 않습니다)" % node["env"],
+                                           show="*", parent=self.root) or ""
+            if not value.strip():
+                return
+            secrets, node_ids = {node["env"]: value.strip()}, []
+        elif node.get("kind") == "text" and not str(self.policy.get(self.selected_node) or "").strip():
+            messagebox.showinfo("opsarchive", "값이 비어 있습니다 — 먼저 값을 넣고 [정책에 저장] 하세요.")
+            return
+        self._apply_env(node_ids, secrets, "Render 반영(%s)" % node["env"])
+
+    def apply_all_env(self) -> None:
+        """정책의 모든 환경변수 노드 중 **바뀐 것만** 올리고 한 번 재배포한 뒤 반영을 확인한다."""
+        self._apply_env(None, None, "변경 모아 반영")
+
+    def _apply_env(self, node_ids, secrets, label: str) -> None:
+        answer = messagebox.askyesnocancel(
+            "opsarchive", "바뀐 값을 Render 에 올립니다.\n\n[예] 올리고 재배포한 뒤 반영됐는지 확인(권장)\n"
+                          "[아니요] 값만 올리기(재배포 전에는 앱에 적용되지 않음)\n[취소] 그만두기", parent=self.root)
+        if answer is None:
+            return
+        service = self.require("service")
+        base_url = str(self.settings.get("base_url") or "")
+        policy = dict(self.policy)
+
+        def work() -> dict:
+            result = workflow.apply_env(policy, service=service, node_ids=node_ids, secrets=secrets,
+                                        redeploy=bool(answer), base_url=base_url)
+            if result.get("verified"):
+                result["_state"] = "반영 확인(Render 값 = 정책, 재배포 완료)" if result.get("redeployed") else "바뀐 값 없음"
+            elif not answer and not result.get("error"):
+                result["_state"] = "값만 올림 — 재배포 필요"
+            return result
+
+        self.run(label, work)
 
     def run_node(self) -> None:
         node = self._node_def(self.selected_node)
         if not node:
             return
         secrets = {}
+        if self.selected_node == "pubkey":
+            self.do_publish()
+            return
         if self.selected_node == "anchor":
             sign_file = self.pick_key("sign")
             if not sign_file:

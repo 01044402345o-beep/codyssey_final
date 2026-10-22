@@ -190,11 +190,12 @@ root.destroy()
 ## 8. 정직한 한계 / 미구현
 
 - **자동 실행의 스케줄러 부재** — 주기 실행은 관리자 PC(프로세스)가 켜져 있는 동안만 돈다. 서버측 cron/스케줄러가 아니다(workflow.py 15행, 423행).
-- **env 반영 후 재배포 필요** — `push_env` 는 값만 바꾼다(`needs_redeploy=True`). 재배포는 GUI 가 하지 않는다.
-- **앱이 읽지 않는 env 노드** — `EVIDENCE_SEAL_FAILURES` 를 비롯, 실제로는 `issue_notify`/`client_report` 환경변수도 미연결. `seal_failures` 노드의 `[Render에 반영]` 은 값을 밀어도 **앱에 효과가 없다(개념 노드)**.
-- **서버 측 정책을 GUI 가 직접 못 바꾼다** — env 경유로만 가능하고, 그 env 조차 `EVIDENCE_PUBKEY`·`EVIDENCE_KEY_GENERATION`·`EVIDENCE_GH_*`·`EVIDENCE_MAX_*` 는 노드가 없어 GUI 로 못 만진다.
+- ~~env 반영 후 재배포 필요~~ → **해결(2026-10-22)**: `[Render에 반영]`·`[변경 모아 반영(재배포·확인)]` 이 `workflow.apply_env` 로 **바뀐 값만** 올리고 한 번 재배포한 뒤, Render 에서 값을 다시 읽어 정책과 같은지·재배포가 끝났는지·`/health` 의 키 세대가 맞는지 확인한다. 바뀐 것이 없으면 재배포하지 않는다. [아니요] 를 고르면 값만 올린다.
+- ~~앱이 읽지 않는 env 노드~~ → **해결**: 앱이 실제로 읽는다 — `seal_failures`→`EVIDENCE_SEAL_FAILURES`(evidence.seal_and_report), `issue_notify`→`EVIDENCE_NOTIFY`(evidence.notify), `client_report`→`EVIDENCE_CLIENT_REPORTS`(/diagnostics/withdraw). 백엔드 테스트가 각 변수의 효과를 확인한다(`test_evidence`·`test_account_erase`).
+- ~~서버 측 정책을 GUI 가 못 바꾼다~~ → **해결**: 노드 추가·연결 — `gh_repo`(text, `EVIDENCE_GH_REPO`, owner/repo 형식 검사), `gh_token`(secret, `EVIDENCE_GH_TOKEN`, 반영 때 가려진 칸으로 받고 **저장·로그 안 함**), `pubkey`(key, `EVIDENCE_PUBKEY` — 키 파일에서 역산하는 공개키 발행으로 연결), `max_source_bytes`·`max_logs_bytes`(number). `key_generation`·`max_bytes` 는 이미 있다. 앱이 읽는 `EVIDENCE_*` 변수 중 노드가 없는 것은 없다.
 - **`observe` 는 플랫폼 로그 보존 기간만큼만** 본다(그보다 오래된 구간은 안 보인다).
 - **[정책 다시 읽기] 버튼의 코드 불일치** — gui.py 392행이 호출하는 `workflow.policy_path()` 는 `workflow.py` 에 **없다**(존재하는 이름은 `workflow_path`). 이 버튼은 클릭 시 `AttributeError` 가 날 수 있다(코드에서 직접 확인; 다른 버튼은 `workflow.load()` 사용).
+- **공개키는 값으로 넣지 않는다** — `pubkey` 노드는 키 파일·패스프레이즈가 필요한 발행 흐름이라 [변경 모아 반영] 에 포함되지 않는다(따로 실행).
 - **번호 노드 최소값 1** — `per_uid_seconds`/`daily_cap`/`ttl_days` 는 1 미만으로 내려가지 않는다(끄기 개념이 없다).
 - **문서-코드 어긋남 경고**: 이 문서는 특정 커밋의 코드를 읽고 작성했다. 값·규칙이 바뀌면 **항상 `workflow.NODES`·`plan()`·`_RUNNABLE` 을 코드에서 다시 확인하라.** 추측으로 채우지 않았고, 확인 못 한 값은 위 표에 표시했다.
 
@@ -215,12 +216,13 @@ root.destroy()
 | max_bytes | 안전 | number | 1000000 | EVIDENCE_MAX_BYTES | 예 | 아니오(정책 반영) |
 | key_generation | 검증·앵커 | number | 1 | EVIDENCE_KEY_GENERATION | 예 | 아니오(정책 반영) — **핀의 세대와 같아야 한다** |
 | gh_repo | 탈퇴 대응 | toggle | 꺼짐 | 없음(안내) | 아니오 | 아니오 — opsarchive env-set 또는 .env 로 EVIDENCE_GH_REPO 를 올린다 |
-| max_source_logs | 안전 | toggle | 켜짐 | 없음(안내) | 아니오 | 아니오 — 소스·로그 캡은 앱 기본값(EVIDENCE_MAX_SOURCE_BYTES·EVIDENCE_MAX_LOGS_BYTES) 유지 |
+| ~~max_source_logs~~ (10/22 제거 → max_source_bytes·max_logs_bytes) | 안전 | toggle | 켜짐 | 없음(안내) | 아니오 | 아니오 — 소스·로그 캡은 앱 기본값(EVIDENCE_MAX_SOURCE_BYTES·EVIDENCE_MAX_LOGS_BYTES) 유지 |
 | iam_check_enabled | 감시·증인 | toggle | 켜짐 | 없음 | 아니오 | 아니오 — 끄면 자동 실행이 iam_check 를 건너뛴다(수동 [이 노드 실행] 은 그대로 가능) |
 
 ### plan 의 ction 구분(2026-10-17)
 
-plan() 은 각 항목에 ction 을 함께 준다: un(실제 실행) · env(환경변수 반영 대상) · info(안내 노드).
+plan() 은 각 항목에 ction 을 함께 준다: 
+un(실제 실행) · env(환경변수 반영 대상) · info(안내 노드).
 ok=True 인 항목이 전부 실행되는 것은 아니라는 점을 GUI 계획 미리보기에서 확인하세요.
 
 ### 자동 실행의 경보 구분(2026-10-17)
@@ -231,3 +233,17 @@ ok=True 인 항목이 전부 실행되는 것은 아니라는 점을 GUI 계획 
 otices — **확인 못 함**(예: 핀 미활성으로 ok=None, 관측 결과가 빈 dict)
 
 자동 실행 중 'IAM 점검이 정책에서 꺼져 있어…'·'앵커 주기가 수동이라…' 같은 로그가 나오면 정책에 따른 정상 동작이다.
+
+## 노드 표 갱신 (2026-10-22 — 개념 노드 제거)
+
+| id | 종류 | 연결 env | 기본값 | 비고 |
+|---|---|---|---|---|
+| issue_notify | toggle | EVIDENCE_NOTIFY | 켜짐 | 끄면 토큰·저장소가 있어도 이슈를 올리지 않는다 |
+| gh_repo | text | EVIDENCE_GH_REPO | (빈 값) | owner/repo 형식만. 비어 있으면 반영하지 않는다(빈 값으로 덮지 않음) |
+| gh_token | secret | EVIDENCE_GH_TOKEN | — | 반영할 때 입력. 정책 파일·로그·결과에 값이 남지 않는다 |
+| client_report | toggle | EVIDENCE_CLIENT_REPORTS | 켜짐 | 화면 불일치 보고를 봉인할지(앱의 기존 동작 = 켜짐) |
+| pubkey | key | EVIDENCE_PUBKEY | — | 공개키 발행(Render 탭 ①)과 같은 흐름 |
+| max_source_bytes | number | EVIDENCE_MAX_SOURCE_BYTES | 524288 | 앱 기본값과 같다 |
+| max_logs_bytes | number | EVIDENCE_MAX_LOGS_BYTES | 65536 | 앱 기본값과 같다 |
+
+`max_source_logs`(안내 토글)는 없어졌다 — 저장된 workflow.json 에 남아 있어도 읽을 때 버린다.
