@@ -1,0 +1,71 @@
+# 전세계 국가·도시명 주간 수집 — GeoNames 덤프(CC BY 4.0)를 받아 회귀 검사 후 Firestore 에 저장한다.
+#
+# 왜: 앱의 여행 입력(국가·도시)이 한국어 자유 입력뿐이라 표준 데이터가 필요하다. 저장소가 아니라 Firestore 에 둔다.
+# 소스 선정 근거(다중 에이전트 리서치·회귀 조사, 2026-10-24)와 운영 절차: docs/ops/GEO_REFRESH.md
+#
+# - 회귀 검사(이전 스냅샷 대비 급감·형식·교차 소스)가 실패하면 아무것도 쓰지 않고 이슈로 알린다.
+# - 바뀐 문서만 쓴다(첫 적재 뒤에는 주간 쓰기가 적다). 메타(geo_meta/current)를 마지막에 쓴다.
+# - GCP 인증은 Workload Identity Federation 단기 토큰(키 파일 없음). 서드파티 액션 없이 표준 라이브러리 스크립트만.
+#
+# 켜기 전까지는 아무것도 하지 않는다: 저장소 변수 GEO_REFRESH=on 일 때만 돈다(수동 실행의 dry_run 은 언제나 가능).
+# 필요한 변수: GCP_WIF_PROVIDER, GEO_SA_EMAIL(roles/datastore.user), FIREBASE_PROJECT_ID(없으면 기본 프로젝트)
+name: geo-refresh
+
+on:
+  schedule:
+    - cron: "23 18 * * 0"      # 월요일 03:23 KST
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "저장하지 않고 수집·검사만(요약·리포트만 남김)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write      # GitHub OIDC 토큰 → GCP 단기 토큰
+  issues: write        # 실패하면 이슈 하나에 모아 알림
+
+concurrency:
+  group: geo-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: vars.GEO_REFRESH == 'on' || (github.event_name == 'workflow_dispatch' && inputs.dry_run)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: GCP 단기 토큰(WIF, 키 파일 없음)
+        if: vars.GCP_WIF_PROVIDER != '' && vars.GEO_SA_EMAIL != ''
+        env:
+          GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          GCP_ANCHOR_SA: ${{ vars.GEO_SA_EMAIL }}
+        run: python3 .github/scripts/gcp_wif_token.py
+
+      - name: 수집 → 회귀 검사 → Firestore 저장
+        env:
+          FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID || 'com-example-myapplicatio-3bb36' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '' }}
+        run: |
+          python3 .github/scripts/geo_refresh.py run --work "$RUNNER_TEMP/geo" --report geo-report.json ${DRY_RUN:+--dry-run}
+
+      - name: 리포트 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: geo-report
+          path: geo-report.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: 실패하면 이슈로 알림
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/geo_refresh.py issue geo-report.json

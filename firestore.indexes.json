@@ -1,0 +1,10 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "geo_cities",
+      "fieldPath": "data",
+      "indexes": []
+    }
+  ]
+}
