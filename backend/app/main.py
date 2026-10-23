@@ -63,6 +63,7 @@ from . import stt_selftest as selftest
 from . import interp
 from . import interp_local
 from . import body_limit
+from . import security_headers
 from .agents.facts import (
     FACT_SOURCES_READY,
     collect_facts,
@@ -145,6 +146,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# 보안 헤더(CSP·클릭재킹·HSTS·nosniff·캐시) — 정적 화면과 API 모든 응답. ZAP 스캔 대응, security_headers.py 참고.
+app.middleware("http")(security_headers.add_security_headers)
 
 _hits: dict[str, deque[float]] = defaultdict(deque)
 _hits_lock = threading.Lock()

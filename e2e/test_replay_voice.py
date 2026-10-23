@@ -36,7 +36,7 @@ def check(name, cond, extra=""):
 def record(page, secs=1.5):
     page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(int(secs * 1000))
     page.locator('[data-act="speak-rec"]').first.click()
-    page.wait_for_function("SPK.state === 'idle' && !!SPK.result", timeout=30000)
+    page.wait_for_function("() => SPK.state === 'idle' && !!SPK.result", timeout=30000)
     page.wait_for_timeout(200)
 
 
@@ -61,7 +61,7 @@ with sync_playwright() as p:
     page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(300)
     page.locator('[data-act="modal-ok"]').click(); page.wait_for_timeout(1500)       # 동의 → 녹음 시작
     page.locator('[data-act="speak-rec"]').first.click()
-    page.wait_for_function("SPK.state === 'idle' && !!SPK.result", timeout=30000)
+    page.wait_for_function("() => SPK.state === 'idle' && !!SPK.result", timeout=30000)
     page.wait_for_timeout(200)
     res = page.locator(".speak-res").first.inner_text() if page.locator(".speak-res").count() else ""
     check("결과(말소리 없음 판정 포함) 뒤 '▶ 내 발음 듣기'가 뜬다", page.locator('[data-act="play-mine"]').count() == 1, res)
