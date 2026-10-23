@@ -24,4 +24,7 @@ USER appuser
 ENV PORT=8080
 EXPOSE 8080
 WORKDIR /app/backend
-CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --proxy-headers --forwarded-allow-ips="*"
+# --no-proxy-headers: uvicorn 이 X-Forwarded-For 로 클라이언트 주소를 바꾸지 않게 한다.
+# 예전 --forwarded-allow-ips="*" 는 헤더의 맨 왼쪽(사용자가 넣는 값)을 IP 로 써서 속도 제한을 위조로 우회할 수 있었다(10/23 #3).
+# 사용자 IP 는 main.client_ip 가 TRUSTED_PROXY_HOPS(Cloud Run 직접 접속 = 1)로 헤더 끝에서 센다.
+CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --no-proxy-headers

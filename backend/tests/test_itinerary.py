@@ -308,7 +308,7 @@ class ItineraryTests(unittest.TestCase):
         )
         for env, enabled, configured, calling in cases:
             self._env(**env)
-            health = self.client.get("/health").json()
+            health = main.health_detail()
             self.assertIs(health["itinerary_enabled"], enabled)
             self.assertIs(health["fact_agents"]["google_places_configured"], configured)
             self.assertIs(health["fact_agents"]["itinerary_calling"], calling)

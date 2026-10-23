@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import unittest
+from unittest import mock
 from types import SimpleNamespace
 from typing import Any, Callable
 
@@ -154,7 +155,7 @@ class MinAttemptsTest(Base):
             ai.retry("x", fn, lambda a: f"m{a}")
         exc = cm.exception
         self.assertEqual(len(exc.failures), 30)
-        self.assertEqual(exc.failures[1], {"attempt": 2, "model": "m2", "error": "RuntimeError", "detail": "fail 2"})
+        self.assertEqual(exc.failures[1], {"attempt": 2, "model": "m2", "error": "RuntimeError", "detail": "fail 2", "status": None})
         self.assertLessEqual(len(exc.failures[0]["detail"]), ai.ERROR_MAX_CHARS + 1)
         self.assertEqual(exc.last_error, "RuntimeError: fail 30")
         self.assertEqual(sum("실패 model=" in line for line in logs.output), 30)
@@ -323,6 +324,22 @@ class EndpointTest(Base):
         self.assertEqual(len(d["failures"]), 30)
         self.assertEqual(d["failures"][0]["error"], "ConnectionError")
 
+    def test_provider_error_text_is_not_returned(self) -> None:
+        # 공급자 오류 원문(키·프로젝트·쿼터 정보)이 응답에 실리지 않는다(10/23 교차 검증 #5). 클래스·상태만.
+        def leak(*_):
+            err = ApiError(429)
+            err.args = ("quota exceeded for project-secret-123 key=AIzaLEAKLEAKLEAK",)
+            raise err
+        self.install(gen_fn=leak)
+        with self.assertLogs("app.generate", level="WARNING"):   # 원문은 서버 로그로만
+            d = self.http.post("/generate", json=self.body()).json()
+        text = json.dumps(d, ensure_ascii=False)
+        self.assertNotIn("AIzaLEAK", text)
+        self.assertNotIn("project-secret-123", text)
+        self.assertEqual(d["error"], "ai_exhausted")
+        self.assertEqual(d["failures"][0]["status"], 429)
+        self.assertNotIn("detail", d["failures"][0])
+
     def test_generate_bad_json_tried_30_times(self) -> None:
         fake = self.install(gen_fn=lambda *_: "not json")
         d = self.http.post("/generate", json=self.body()).json()
@@ -357,7 +374,7 @@ class EndpointTest(Base):
         self.assertEqual(d["attempts"], 0)
 
     def test_health_reports_dynamic_selection(self) -> None:
-        d = self.http.get("/health").json()
+        d = main.health_detail()
         self.assertEqual(d["model_selection"], "dynamic")
         self.assertEqual(d["min_attempts"], 30)
         self.assertNotIn("model", d)
@@ -366,6 +383,104 @@ class EndpointTest(Base):
         self.assertEqual(set(d["stt_providers"]), {"groq", "openai", "assemblyai"})
         self.assertEqual(len(d["speech_detectors"]), 2)
         self.assertFalse(d["cross_validation_ready"])
+
+
+class CostBudgetTest(EndpointTest):
+    """로그인 없는 경로의 유료 호출 증폭 방어(10/23 교차 검증 #2). 30회 규칙(NFR-03)은 시작한 요청에 그대로다."""
+
+    def test_ip_budget_blocks_repeat_failures_with_zero_calls(self) -> None:
+        os.environ["AI_IP_ATTEMPTS_PER_HOUR"] = "30"
+        fake = self.install(gen_fn=lambda *_: "not json")
+        first = self.http.post("/generate", json=self.body()).json()
+        self.assertEqual(first["attempts"], 30)                  # 시작한 요청은 30회 그대로
+        n = len(fake.gen_calls)
+        second = self.http.post("/generate", json=self.body()).json()
+        self.assertEqual(len(fake.gen_calls), n)                 # 같은 IP: 호출 0회
+        self.assertEqual(second["error"], "budget_exhausted")
+        self.assertEqual(second["usable"], "rejected")
+        third = self.http.post("/generate", json=self.body(), headers={"X-Forwarded-For": "1.2.3.4"}).json()
+        self.assertEqual(third["error"], "budget_exhausted")      # HOPS=0 이면 헤더로 IP 를 바꿀 수 없다
+
+    def test_daily_budget_reserves_floor_and_refunds_unused(self) -> None:
+        os.environ["AI_DAILY_ATTEMPT_BUDGET"] = "45"
+        os.environ["AI_IP_ATTEMPTS_PER_HOUR"] = "0"
+        self.install(gen_fn=lambda *_: json.dumps(GOOD_PACK))
+        for _ in range(5):                                       # 성공은 1회만 쓰고 29회를 돌려받는다
+            self.assertEqual(self.http.post("/generate", json=self.body()).json()["usable"], "ok")
+        fake = self.install(gen_fn=lambda *_: "not json")
+        self.http.post("/generate", json=self.body())            # 30회를 다 쓴다
+        n = len(fake.gen_calls)
+        d = self.http.post("/generate", json=self.body()).json()  # 남은 예산 < 30 → 시작 거부
+        self.assertEqual(len(fake.gen_calls), n)
+        self.assertEqual(d["error"], "budget_exhausted")
+
+    def test_concurrency_cap_returns_503_without_calls(self) -> None:
+        os.environ["AI_MAX_CONCURRENCY"] = "1"
+        fake = self.install(gen_fn=lambda *_: json.dumps(GOOD_PACK))
+        with ai.paid_slot():                                      # 다른 요청이 자리를 잡고 있다
+            r = self.http.post("/generate", json=self.body())
+        self.assertEqual(r.status_code, 503)
+        self.assertEqual(r.headers.get("retry-after"), "10")
+        self.assertEqual(fake.gen_calls, [])
+        self.assertEqual(self.http.post("/generate", json=self.body()).status_code, 200)   # 자리가 풀리면 다시
+
+    def test_deterministic_early_stop_is_opt_in(self) -> None:
+        os.environ["AI_IP_ATTEMPTS_PER_HOUR"] = "0"
+        fake = self.install(gen_fn=lambda *_: "not json")
+        self.assertEqual(self.http.post("/generate", json=self.body()).json()["attempts"], 30)   # 기본: NFR-03 그대로
+        os.environ["AI_MAX_DETERMINISTIC"] = "3"
+        fake = self.install(gen_fn=lambda *_: "not json")
+        d = self.http.post("/generate", json=self.body()).json()
+        self.assertEqual((len(fake.gen_calls), d["attempts"]), (3, 3))
+
+    # ---- 교차 검증에서 나온 결함(10/23) ----
+    def test_client_ip_reaches_parallel_worker_threads(self) -> None:
+        # /speak-check 의 STT 는 _run_parallel(ThreadPoolExecutor)에서 돈다 — contextvar 가 따라가야 IP 예산이 걸린다
+        import contextvars
+        def run():
+            ai.set_client("1.2.3.4")
+            return main._run_parallel({"a": lambda: ai._client.get(), "b": lambda: ai._client.get()})
+        out = contextvars.copy_context().run(run)
+        self.assertEqual(out, {"a": "1.2.3.4", "b": "1.2.3.4"})
+
+    def test_ip_budget_counts_in_flight_reservations(self) -> None:
+        # 진행 중인 요청끼리도 서로의 예약을 본다(끝날 때만 세면 동시 요청이 상한을 넘는다)
+        import contextvars
+        os.environ["AI_IP_ATTEMPTS_PER_HOUR"] = "30"
+        def two():
+            ai.set_client("9.9.9.9")
+            first = ai.budget_reserve(30)
+            second = ai.budget_reserve(30)
+            ai.budget_settle(30, 30)
+            return first, second
+        self.assertEqual(contextvars.copy_context().run(two), ("", "IpBudget"))
+
+    def test_per_ip_concurrency_cap(self) -> None:
+        os.environ["AI_MAX_CONCURRENCY_PER_IP"] = "1"
+        fake = self.install(gen_fn=lambda *_: json.dumps(GOOD_PACK))
+        with ai.paid_slot("testclient"):                          # 같은 IP 가 자리를 잡고 있다
+            self.assertEqual(self.http.post("/generate", json=self.body()).status_code, 503)
+            with ai.paid_slot("5.6.7.8"):                         # 다른 IP 는 영향 없음
+                pass
+        self.assertEqual(fake.gen_calls, [])
+        self.assertEqual(self.http.post("/generate", json=self.body()).status_code, 200)
+
+    def test_managed_proxy_without_hops_disables_ip_budget(self) -> None:
+        # Render/Cloud Run 에서 HOPS=0 이면 모두 프록시 IP 하나로 보인다 — IP 상한이 서비스 전체 상한이 되면 안 된다
+        from starlette.requests import Request
+        req = Request({"type": "http", "client": ("10.0.0.5", 1), "headers": []})
+        with mock.patch.dict(os.environ, {"RENDER": "true"}), mock.patch.object(main, "TRUSTED_PROXY_HOPS", 0):
+            self.assertEqual(main.ai_client_key(req), "")
+        with mock.patch.dict(os.environ, {"RENDER": "true"}), mock.patch.object(main, "TRUSTED_PROXY_HOPS", 1):
+            req2 = Request({"type": "http", "client": ("10.0.0.5", 1), "headers": [(b"x-forwarded-for", b"203.0.113.7")]})
+            self.assertEqual(main.ai_client_key(req2), "203.0.113.7")
+
+    def test_transient_errors_never_stop_early_even_when_opted_in(self) -> None:
+        os.environ["AI_IP_ATTEMPTS_PER_HOUR"] = "0"
+        os.environ["AI_MAX_DETERMINISTIC"] = "3"
+        fake = self.install(gen_fn=boom)                          # 네트워크 오류는 일시적 → 30회
+        self.assertEqual(self.http.post("/generate", json=self.body()).json()["attempts"], 30)
+        self.assertEqual(len(fake.gen_calls), 30)
 
 
 if __name__ == "__main__":

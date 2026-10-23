@@ -58,9 +58,9 @@ jobs:
       - name: 서버 기동 확인 (/health 에 restaurant, 화면 서빙)
         working-directory: backend
         run: |
-          uvicorn app.main:app --port 8000 &
+          HEALTH_DETAIL_TOKEN=ci-local uvicorn app.main:app --port 8000 &
           for i in $(seq 1 30); do curl -sf localhost:8000/health > /dev/null && break; sleep 1; done
-          curl -s localhost:8000/health | tee health.json
+          curl -s -H "X-Admin-Token: ci-local" localhost:8000/health | tee health.json   # 상세(min_attempts)는 관리자 토큰으로만
           python -c "import json;d=json.load(open('health.json'));assert 'restaurant' in d['categories'], d;assert d['min_attempts']>=30, d"
           test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/)" = 200
 

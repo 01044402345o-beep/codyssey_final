@@ -119,5 +119,34 @@ class RateLimitThreads(unittest.TestCase):
         self.assertEqual(errors, [])
 
 
+
+
+class ProxyHeaderConfig(unittest.TestCase):
+    """uvicorn 이 X-Forwarded-For 를 믿어 주소를 바꾸면 client_ip 의 HOPS 계산이 무의미해진다(10/23 #3).
+
+    --forwarded-allow-ips="*" 는 헤더 맨 왼쪽(사용자가 넣는 값)을 request.client 로 쓴다 → 매 요청 다른 IP 로 위조 가능.
+    """
+    ROOT = __import__("pathlib").Path(__file__).resolve().parents[2]
+
+    def test_start_commands_do_not_trust_forwarded_headers(self):
+        for name in ("backend/Dockerfile", "render.yaml"):
+            text = (self.ROOT / name).read_text(encoding="utf-8")
+            cmd = [l for l in text.splitlines() if "uvicorn app.main:app" in l and not l.lstrip().startswith("#")]
+            self.assertTrue(cmd, name)
+            for line in cmd:
+                self.assertIn("--no-proxy-headers", line, name)
+                self.assertNotIn("forwarded-allow-ips", line, name)
+
+    def test_uvicorn_trust_all_takes_spoofable_leftmost_entry(self):
+        # 근거 고정: '*' 로 믿으면 맨 왼쪽 값이 주소가 된다(그래서 시작 명령에서 끈다)
+        from uvicorn.middleware.proxy_headers import _TrustedHosts
+        self.assertEqual(_TrustedHosts("*").get_trusted_client_address("6.6.6.6, 203.0.113.7")[0], "6.6.6.6")
+
+    def test_forwarded_allow_ips_star_is_flagged(self):
+        with mock.patch.dict(os.environ, {"FORWARDED_ALLOW_IPS": "*"}):
+            warns = main.security_review()["warnings"]
+        self.assertTrue(any("FORWARDED_ALLOW_IPS" in w for w in warns))
+
+
 if __name__ == "__main__":
     unittest.main()

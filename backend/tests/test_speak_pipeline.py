@@ -199,7 +199,21 @@ class SilenceGateTest(Base):
 
 
 class AudioLimitTest(Base):
-    """8MB 는 압축 녹음이면 30분이 넘는다. 길이(MAX_AUDIO_SECONDS)로도 막고, 외부 API 는 부르지 않는다."""
+    """압축 녹음은 바이트 상한 안에서도 길 수 있다. 길이(MAX_AUDIO_SECONDS)로도 막고, 외부 API 는 부르지 않는다."""
+
+    def test_long_low_bitrate_opus_is_413_without_full_decode(self) -> None:
+        # 1MB 안에 10분짜리 opus(헤더 길이 없음) — 푸는 도중에 멈추고 외부 API 0회(10/23 #1)
+        from tests.test_speech_vad import long_opus
+        fake, gem = self.install({"groq": lambda n: Resp(200, stt_ok(TARGET))})
+        r = self.http.post("/speak-check", data={"target": TARGET, "situation": "알레르기·재료 고지"},
+                           files={"file": ("a.webm", long_opus(600), "audio/webm")})
+        self.assertEqual(r.status_code, 413)
+        self.assertEqual(fake.posts, [])
+        self.assertEqual(gem.texts, [])
+
+    def test_over_byte_cap_is_413(self) -> None:
+        code, _ = self.speak(b"\0" * (main.MAX_AUDIO_BYTES + 1))
+        self.assertEqual(code, 413)
 
     def test_longer_than_limit_is_413_before_any_api(self) -> None:
         fake, gem = self.install({"groq": lambda n: Resp(200, stt_ok(TARGET))})
@@ -333,6 +347,18 @@ class ProviderChainTest(Base):
         self.assertFalse(d["usable"])
         self.assertEqual((d["failed_at"], d["attempts"]), ("stt", 60))
         self.assertEqual(gem.texts, [])
+
+    def test_stt_failure_does_not_show_provider_text(self) -> None:
+        # 화면(speakResHtml)은 응답의 error 를 그대로 보여 준다 — 공급자 원문이 사용자에게 보이면 안 된다(10/23 #5)
+        fake, gem = self.install({"groq": lambda n: Resp(401, "invalid key gsk_LEAKLEAK for org-secret"),
+                                  "openai": lambda n: Resp(429, "x")}, keys=("GROQ_API_KEY", "OPENAI_API_KEY"))
+        _, d = self.speak(GOOD)
+        self.assertNotIn("error", d)
+        self.assertEqual(d["error_code"], "stt_failed")
+        self.assertTrue(d["reason"])
+        text = json.dumps(d, ensure_ascii=False)
+        self.assertNotIn("gsk_LEAK", text)
+        self.assertNotIn("org-secret", text)
 
     def test_unconfigured_provider_skipped(self) -> None:
         fake, _ = self.install({"openai": lambda n: Resp(200, stt_ok(TARGET))}, keys=("OPENAI_API_KEY",))

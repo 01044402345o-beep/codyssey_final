@@ -45,7 +45,7 @@ class T(unittest.TestCase):
         env = {"K_SERVICE": "codyssey-api", "K_REVISION": "codyssey-api-00007-abc", "GIT_COMMIT": "1234567",
                "RENDER": "", "RENDER_GIT_COMMIT": ""}
         with mock.patch.dict(os.environ, env):
-            d = self.http.get("/health").json()["deploy"]
+            d = main.health_detail()["deploy"]
         self.assertEqual(d["platform"], "cloud-run")
         self.assertEqual(d["revision"], "codyssey-api-00007-abc")
         self.assertEqual(d["commit"], "1234567")

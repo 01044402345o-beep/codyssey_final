@@ -317,6 +317,20 @@ class T(unittest.TestCase):
         for name in allowed:
             self.assertIsInstance(doc["fields"][name].get("stringValue"), str, name)
 
+    def test_firestore_rules_reject_writes_after_erasure(self):
+        """탈퇴 흔적(deleted/{uid})이 있으면 create/update 를 거부한다 — 남은 ID 토큰으로 직접 써서 되살리지 못하게(10/23 #8).
+
+        흔적 컬렉션 이름은 firebase_admin 이 쓰는 이름과 같아야 한다. 삭제는 막지 않는다.
+        """
+        text = (REPO_ROOT / "firestore.rules").read_text(encoding="utf-8")
+        self.assertRegex(text, r"!\s*exists\(/databases/\$\(database\)/documents/deleted/\$\(uid\)\)")
+        self.assertRegex(text, r"allow create, update: if signedIn\(\) && notErased\(\)")
+        self.assertRegex(text, r"allow delete: if signedIn\(\);")
+        self.assertRegex(text, r"match /\{document=\*\*\} \{\s*allow read, write: if false;")
+        import inspect
+        from app import firebase_admin
+        self.assertIn("/documents/deleted/", inspect.getsource(firebase_admin.ServiceAccountAdmin._tombstone_url))
+
     def test_firestore_rules_make_trip_optional(self):
         """규칙을 백엔드보다 먼저 배포해도 옛 백엔드(trip 을 쓰지 않음)의 쓰기가 막히면 안 된다.
 

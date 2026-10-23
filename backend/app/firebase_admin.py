@@ -125,7 +125,8 @@ def verify_erased(uid: str) -> dict[str, Any]:
 # 왜 필요한가: 관리자 삭제는 갱신 토큰을 즉시 무효화하지만, 이미 발급된 ID 토큰은 만료(≤1h)까지 유효하다.
 # 그 창 안에 다른 기기가 PUT /user/state 를 보내면 users/{uid} 문서가 다시 만들어진다.
 # 탈퇴한 uid 를 흔적(deleted/{uid})으로 남겨 그 uid 의 쓰기를 거부한다.
-#   - 흔적은 서비스 계정(관리자)으로만 읽고 쓴다 → Firestore 규칙을 거치지 않아 규칙 변경이 필요 없다.
+#   - 흔적은 서비스 계정(관리자)으로만 읽고 쓴다 → 흔적 자체의 읽기·쓰기는 Firestore 규칙을 거치지 않는다.
+#   - firestore.rules 는 흔적이 있는 uid 의 users/{uid} create/update 를 거부한다(10/23) — 컬렉션 이름 'deleted' 를 바꾸면 규칙도 같이.
 #   - 담는 것은 uid 와 시각뿐이다(개인정보 없음).
 TOMBSTONE_TTL = 3600        # 양성 캐시 수명. 탈퇴는 되돌리지 않으므로 길게 잡아도 안전하다
 FAIL_TTL = 5                # 흔적 조회 실패를 잠깐 기억한다(저장소 장애 때 요청마다 재시도로 몰리지 않게)

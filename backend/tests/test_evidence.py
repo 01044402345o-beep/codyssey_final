@@ -12,6 +12,7 @@ import base64
 import io
 import json
 import os
+import time
 import sys
 import unittest
 from unittest import mock
@@ -240,6 +241,35 @@ class ThrottleTest(unittest.TestCase):
         self.assertTrue(evidence.throttle_ok("uid-2"))
         self.assertFalse(evidence.throttle_ok("uid-3"))
 
+    def test_client_reports_cannot_exhaust_server_budget(self):
+        # 무료 계정 여러 개로 화면 보고를 보내도 서버가 감지한 실패의 봉인 예산은 남는다(10/23 #7)
+        with mock.patch.dict(os.environ, {"EVIDENCE_CLIENT_DAILY_CAP": "1"}, clear=False):
+            self.assertTrue(evidence.throttle_ok("a", "client_report"))
+            self.assertFalse(evidence.throttle_ok("b", "client_report"))      # 화면 보고 예산 소진
+            self.assertTrue(evidence.throttle_ok("c", "erase_failed"))        # 서버 감지는 그대로
+            self.assertTrue(evidence.throttle_ok("d", "verify_mismatch"))
+            self.assertFalse(evidence.throttle_ok("e", "erase_failed"))       # 서버 예산(2)도 따로 센다
+
+    def test_client_report_does_not_block_same_uid_server_seal(self):
+        self.assertTrue(evidence.throttle_ok("uid-1", "client_report"))
+        self.assertTrue(evidence.throttle_ok("uid-1", "erase_failed"))
+
+    def test_client_report_once_per_uid_per_day(self):
+        now = time.time()
+        self.assertTrue(evidence.throttle_ok("uid-1", "client_report"))
+        with mock.patch.object(evidence.time, "time", return_value=now + 7200):
+            self.assertFalse(evidence.throttle_ok("uid-1", "client_report"))   # 서버 감지 간격(1시간)이 지나도
+        with mock.patch.object(evidence.time, "time", return_value=now + 86401):
+            self.assertTrue(evidence.throttle_ok("uid-1", "client_report"))
+
+    def test_seal_and_report_server_trigger_not_throttled_after_client_flood(self):
+        private, public = C.keypair()
+        with mock.patch.dict(os.environ, {"EVIDENCE_PUBKEY": C.pack_public_key(public)}, clear=False),              mock.patch.object(evidence, "store", side_effect=RuntimeError("firestore down")):
+            for i in range(5):
+                evidence.seal_and_report("client_report", uid=f"spam-{i}")
+            out = evidence.seal_and_report("erase_failed", uid="real-user")
+        self.assertNotEqual(out["reason"], "throttled")
+
     def test_seal_and_report_respects_throttle_and_never_raises(self):
         private, public = C.keypair()
         with mock.patch.dict(os.environ, {"EVIDENCE_PUBKEY": C.pack_public_key(public)}, clear=False):
@@ -259,7 +289,7 @@ class HealthEndpointTest(unittest.TestCase):
         _, public = C.keypair()
         with mock.patch.dict(os.environ, {"EVIDENCE_PUBKEY": C.pack_public_key(public),
                                           "EVIDENCE_KEY_GENERATION": "7"}, clear=False):
-            body = TestClient(main.app).get("/health").json()
+            body = main.health_detail()
         self.assertEqual(body["evidence"]["fingerprint"], C.fingerprint(public))
         self.assertEqual(body["evidence"]["generation"], 7)
 
@@ -267,7 +297,7 @@ class HealthEndpointTest(unittest.TestCase):
         from fastapi.testclient import TestClient
         from app import main
         with mock.patch.dict(os.environ, {"EVIDENCE_PUBKEY": ""}, clear=False):
-            body = TestClient(main.app).get("/health").json()
+            body = main.health_detail()
         self.assertEqual(body["evidence"], {})
 
 

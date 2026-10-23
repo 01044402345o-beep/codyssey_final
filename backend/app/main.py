@@ -30,6 +30,7 @@ GEMINI_API_KEY 가 없으면 목업으로 응답한다. 그래서 키 없이도 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import ipaddress
 import json
 import logging
@@ -61,6 +62,7 @@ from . import stt_providers as stt
 from . import stt_selftest as selftest
 from . import interp
 from . import interp_local
+from . import body_limit
 from .agents.facts import (
     FACT_SOURCES_READY,
     collect_facts,
@@ -86,7 +88,7 @@ CONTRACT_DIR = Path(os.getenv("CONTRACT_DIR") or (REPO_ROOT / "agent_contract"))
 CATEGORY_DIR = CONTRACT_DIR / "categories"
 SCHEMA_PATH = CONTRACT_DIR / "schema.json"
 
-MAX_AUDIO_BYTES = 8 * 1024 * 1024
+MAX_AUDIO_BYTES = 1024 * 1024   # 30초 녹음은 opus 32~128kbps 로 120~480KB, Safari AAC 256kbps 도 ~960KB(10/23 #1, 예전 8MB)
 MAX_AUDIO_SECONDS = 30
 
 # 호출 제한 (단일 인스턴스 기준)
@@ -109,6 +111,10 @@ PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # 속도 제한 IP 설정이 위험하면 기동 로그에 남긴다(/health 의 security_review 와 같은 내용, 10/23 #3).
+    for w in security_review()["warnings"]:
+        if "TRUSTED_PROXY_HOPS" in w or "FORWARDED_ALLOW_IPS" in w:
+            logging.getLogger("app.ratelimit").warning(w)
     # Silero VAD(onnx)를 미리 불러 첫 녹음이 모델 로드를 기다리지 않게 한다. 실패해도 요청 때 다시 시도.
     def warm() -> None:
         try:
@@ -124,6 +130,15 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Codyssey Final API", version="0.1.0", lifespan=lifespan)
+# 요청 본문 크기 상한(10/23 #4). CORS 보다 먼저 add 해서 안쪽에 둔다 — 413 응답에도 CORS 헤더가 붙는다.
+# 경로별 실제 최대: /speak-check 오디오 1MB + 폼 필드, /user/state 핸들러 상한 100,000B, /user/interp-log 70,000B,
+# /generate 장소 20×160자 + 약점 20×64자(이스케이프 최악 ~25KB). 나머지는 2KB 미만.
+app.add_middleware(body_limit.BodyLimitMiddleware, default=64 * 1024, limits={
+    "/speak-check": MAX_AUDIO_BYTES + 64 * 1024,
+    "/user/state": 128 * 1024,
+    "/user/interp-log": 96 * 1024,
+    "/generate": 64 * 1024,
+})
 app.add_middleware(
     CORSMiddleware,
     allow_origins=(os.getenv("ALLOW_ORIGINS") or "*").split(","),
@@ -185,6 +200,14 @@ async def proxy_chain_probe(request: Request, call_next: Any) -> Any:
         _log_proxy_chain_once(request.client.host if request.client else "unknown",
                               request.headers.get("x-forwarded-for", ""))
     return await call_next(request)
+
+
+def ai_client_key(request: Request) -> str:
+    """AI 시도 예산·동시 실행 상한에 쓰는 사용자 IP. 관리형 플랫폼(프록시 뒤)인데 TRUSTED_PROXY_HOPS=0 이면
+    모든 사용자가 프록시 IP 하나로 보이므로 '' 를 준다 — IP 별 상한이 서비스 전체 상한이 되지 않게(전역 상한은 그대로)."""
+    if (os.getenv("RENDER") or os.getenv("K_SERVICE")) and TRUSTED_PROXY_HOPS == 0:
+        return ""
+    return client_ip(request)
 
 
 def rate_limit(request: Request) -> None:
@@ -297,6 +320,9 @@ def security_review() -> dict[str, Any]:
         warns.append("ALLOW_ORIGINS 가 열려 있습니다 — 브라우저에서 아무 사이트나 API 를 부를 수 있습니다.")
     if managed and TRUSTED_PROXY_HOPS == 0:
         warns.append("TRUSTED_PROXY_HOPS=0 — 프록시 뒤에서는 모든 사용자가 한 IP 로 묶여 속도 제한이 전체 제한이 됩니다.")
+    if (os.getenv("FORWARDED_ALLOW_IPS") or "").strip() == "*":
+        warns.append("FORWARDED_ALLOW_IPS=* — uvicorn 이 X-Forwarded-For 맨 왼쪽(사용자가 넣는 값)을 IP 로 씁니다. "
+                     "속도 제한을 위조 헤더로 우회할 수 있습니다. 지우고 TRUSTED_PROXY_HOPS 를 쓰세요.")
     warns.append("/generate 는 로그인 없이 호출할 수 있습니다 — 비용이 나가는 경로입니다.")
     return {
         "warnings": warns,
@@ -420,8 +446,37 @@ def usability(issues: list[dict[str, Any]], mock: bool, degraded: bool) -> str:
 
 # ---------------------------------------------------------------- 엔드포인트
 
+# 공개 /health 에 남기는 필드(10/23 #6). 나머지(키 개수·쿨다운·모델 상태·공급자 키 유무·보안 점검·경로 등)는
+# 정찰 정보라 관리자 토큰(HEALTH_DETAIL_TOKEN, 헤더 X-Admin-Token)이 있을 때만 준다.
+#   status        Render 헬스체크·opsarchive
+#   situations    화면(ai.js)
+#   categories    화면·CI
+#   evidence      공개키 지문·세대 — 핀 검증 워크플로우·opsarchive 가 토큰 없이 본다(원래 공개 정보)
+#   deploy        commit·platform 만 — 배포 확인용
+PUBLIC_HEALTH_KEYS = ("status", "situations", "categories", "evidence")
+
+
+def health_public(detail: dict[str, Any]) -> dict[str, Any]:
+    out = {k: detail[k] for k in PUBLIC_HEALTH_KEYS if k in detail}
+    out["deploy"] = {k: detail.get("deploy", {}).get(k) for k in ("commit", "platform")}
+    return out
+
+
+def _health_detail_allowed(request: Request) -> bool:
+    import hmac
+    token = (os.getenv("HEALTH_DETAIL_TOKEN") or "").strip()
+    given = (request.headers.get("x-admin-token") or "").strip()
+    return bool(token) and hmac.compare_digest(given.encode(), token.encode())
+
+
 @app.get("/health")
-def health() -> dict[str, Any]:
+def health(request: Request) -> dict[str, Any]:
+    """공개는 최소 필드만. 토큰이 틀리거나 없어도 401 이 아니라 공개 응답(헬스체크 호환, 상세 존재 여부를 드러내지 않음)."""
+    detail = health_detail()
+    return detail if _health_detail_allowed(request) else health_public(detail)
+
+
+def health_detail() -> dict[str, Any]:
     problems = config_problems()
     return {
         # 설정이 덜 갖춰지면 degraded — 배포 직후 이 값을 먼저 보게 된다
@@ -506,7 +561,11 @@ def generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     """처리 시간과 생각 예산 설정을 붙인다 — 속도 개선 전후를 같은 응답으로 비교하려고.
     elapsed_ms: 전체(ms). timing_ms.attempt_ms: 시도별 {model 호출 ms, 검증 ms, 통과 여부} — 재시도가 지연의 주범인지 본다."""
     t = _Timer()
-    res = _generate(req, request)
+    try:
+        with ai.paid_slot(ai_client_key(request)):   # 유료 경로 동시 실행 상한 — 넘으면 줄 세우지 않고 즉시 503(10/23 #2)
+            res = _generate(req, request)
+    except ai.Busy:
+        raise HTTPException(status_code=503, detail="busy", headers={"Retry-After": "10"})
     res["timing_ms"] = {**t.result(), "attempt_ms": res.pop("attempt_ms", [])}
     res["elapsed_ms"] = res["timing_ms"]["total"]
     res["thinking_budget"] = (os.getenv("GEMINI_THINKING_BUDGET") or "").strip() or None
@@ -520,6 +579,7 @@ def post_itinerary(req: ItineraryRequest, request: Request) -> dict[str, Any]:
     플래그가 꺼져 있으면 collect_itinerary 가 Places 와 Gemini 를 부르기 전에 돌아온다.
     """
     rate_limit(request)
+    ai.set_client(ai_client_key(request))
     try:
         return collect_itinerary(req)
     except Exception as exc:  # noqa: BLE001 — 수집 실패는 화면이 예시로 돌아갈 수 있게 unavailable
@@ -529,6 +589,7 @@ def post_itinerary(req: ItineraryRequest, request: Request) -> dict[str, Any]:
 
 def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     rate_limit(request)
+    ai.set_client(ai_client_key(request))   # AI 시도 예산을 IP 별로 센다(gemini.budget_reserve)
     if CONFIG_STRICT and config_problems():
         raise HTTPException(
             status_code=503,
@@ -557,7 +618,8 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
             logging.getLogger("app.itinerary").warning("itinerary error %s", type(exc).__name__)
             box["itinerary"] = {"status": "unavailable", "reason": "itinerary_error"}
 
-    th = threading.Thread(target=_itinerary_side, name="itinerary")
+    import contextvars
+    th = threading.Thread(target=contextvars.copy_context().run, args=(_itinerary_side,), name="itinerary")   # IP 예산이 따라가게
     th.start()
     try:
         body = _generate_sentences(req, cfg, schema, facts)
@@ -578,8 +640,8 @@ def _generate_sentences(
         try:
             issues = validate_pack(pack, cfg, req.weak_expressions, schema)
         except Exception as exc:  # noqa: BLE001 — 검증기 버그가 요청을 죽이지 않게
-            issues = [{"severity": "warn", "code": "validator_error",
-                       "detail": f"{type(exc).__name__}: {exc}"}]
+            logging.getLogger("app.generate").warning("검증기 오류: %s: %s", type(exc).__name__, exc)
+            issues = [{"severity": "warn", "code": "validator_error", "detail": type(exc).__name__}]
         return {
             "pack": pack,
             "issues": issues,
@@ -633,6 +695,8 @@ def _generate_sentences(
         # 최소 시도 횟수를 다 채워도 block 이 남으면 목업으로 대체한다. usable="rejected" 이므로
         # 프론트는 이 결과를 학습 화면에 넣으면 안 된다는 것을 알 수 있다.
         last_pack, last_issues = state["last_pack"], state["last_issues"]
+        logging.getLogger("app.generate").warning("생성 실패(%s, %d회): %s", exc.what, exc.attempts,
+                                                  state["last_error"] or exc.last_error)
         fallback = mock_pack(cfg, req)
         if last_issues:
             final_issues = last_issues
@@ -640,19 +704,23 @@ def _generate_sentences(
             try:
                 final_issues = validate_pack(fallback, cfg, req.weak_expressions, schema)
             except Exception as vexc:  # noqa: BLE001
-                final_issues = [{"severity": "block", "code": "validator_error",
-                                 "detail": f"{type(vexc).__name__}: {vexc}"}]
+                logging.getLogger("app.generate").warning("검증기 오류: %s: %s", type(vexc).__name__, vexc)
+                final_issues = [{"severity": "block", "code": "validator_error", "detail": type(vexc).__name__}]
         return {
             "pack": last_pack or fallback,
             "issues": final_issues,
             # 모델 목록 조회에서 실패했으면 생성 호출은 0회다. failed_at 으로 구분한다.
             "attempts": exc.attempts if exc.what == "generate" else 0,
             "failed_at": exc.what,
-            "failures": exc.failures,
+            "failures": ai.public_failures(exc.failures),
             "mock": last_pack is None,
             "degraded": True,
             "usable": "rejected",
-            "error": state["last_error"] or exc.last_error,
+            # 공급자 원문 대신 고정 코드. 원문은 아래 로그로만(10/23 #5).
+            "error": ("budget_exhausted" if exc.attempts == 0 and exc.failures
+                      and exc.failures[0].get("error") in ("DailyBudget", "IpBudget")
+                      else "models_list_failed" if exc.what != "generate"
+                      else "validation_blocked" if last_issues else "ai_exhausted"),
             "attempt_ms": state["attempt_ms"],
             "facts": facts,
         }
@@ -660,7 +728,7 @@ def _generate_sentences(
     pack, issues = res.value
     return {
         "pack": pack, "issues": issues, "attempts": res.attempts, "model": res.model,
-        "failures": res.failures,   # 성공 전에 실패한 시도들 (원인 진단용)
+        "failures": ai.public_failures(res.failures),   # 성공 전에 실패한 시도들 (원인 진단용, 공급자 원문 없음)
         "mock": False, "usable": "ok",
         "attempt_ms": state["attempt_ms"],
         "facts": facts,
@@ -707,8 +775,12 @@ def _run_parallel(tasks: dict[str, Any]) -> dict[str, Any]:
     """여러 외부 AI 호출을 동시에 돌린다. 예외도 값으로 돌려준다(어느 쪽이 실패했는지 판정에 쓴다)."""
     from concurrent.futures import ThreadPoolExecutor
 
+    import contextvars
+
     with ThreadPoolExecutor(max_workers=len(tasks)) as ex:
-        futures = {k: ex.submit(fn) for k, fn in tasks.items()}
+        # 작업마다 컨텍스트를 복사해 넘긴다 — AI 시도 예산의 사용자 IP(gemini.set_client)가 작업 스레드까지 따라가게.
+        # ThreadPoolExecutor.submit 은 contextvars 를 복사하지 않는다. 같은 Context 를 두 스레드가 동시에 run 하면 오류라 하나씩.
+        futures = {k: ex.submit(contextvars.copy_context().run, fn) for k, fn in tasks.items()}
         out: dict[str, Any] = {}
         for k, f in futures.items():
             try:
@@ -747,13 +819,22 @@ async def speak_check(
     situation: str = Form("", max_length=120),
 ) -> dict[str, Any]:
     t = _Timer()
-    res = await _speak_check(request, target, file, situation, t)
+    # 유료 구간(STT·피드백)에 들어갈 때만 자리를 잡는다. 디코드·VAD(외부 비용 0)는 자리를 차지하지 않는다.
+    stack = contextlib.ExitStack()
+    try:
+        with stack:
+            res = await _speak_check(request, target, file, situation, t,
+                                     acquire=lambda: stack.enter_context(ai.paid_slot(ai_client_key(request))))
+    except ai.Busy:
+        raise HTTPException(status_code=503, detail="busy", headers={"Retry-After": "10"})
     res["timing_ms"] = t.result()   # read·decode·silero·pyannote·stt(병렬 중 느린 쪽)·feedback·total. 거부 응답에도 들어간다
     return res
 
 
-async def _speak_check(request: Request, target: str, file: UploadFile, situation: str, t: _Timer) -> dict[str, Any]:
+async def _speak_check(request: Request, target: str, file: UploadFile, situation: str, t: _Timer,
+                       acquire: Any = lambda: None) -> dict[str, Any]:
     rate_limit(request)
+    ai.set_client(ai_client_key(request))
 
     # 상한 + 1 바이트까지만 읽는다. 큰 업로드를 통째로 메모리에 올리지 않는다.
     audio = await file.read(MAX_AUDIO_BYTES + 1)
@@ -761,7 +842,7 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
     if not audio:
         raise HTTPException(status_code=400, detail="빈 오디오입니다. 다시 녹음해 주세요.")
     if len(audio) > MAX_AUDIO_BYTES:
-        raise HTTPException(status_code=413, detail="오디오가 너무 큽니다 (최대 8MB).")
+        raise HTTPException(status_code=413, detail=f"오디오가 너무 큽니다 (최대 {MAX_AUDIO_BYTES // (1024 * 1024)}MB).")
 
     # 형식 검사는 목업 응답보다 먼저 한다. 키가 없어도 잘못된 입력은 잘못된 입력이다.
     mime = (file.content_type or "audio/webm").split(";")[0].strip() or "audio/webm"
@@ -771,11 +852,14 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
     # 1) 말소리 검출 — 키가 없어도 동작한다. 말이 없으면 여기서 끝(외부 API 0회).
     # 디코딩은 CPU 작업이라 스레드풀에서 한다. 이벤트 루프에서 하면 그동안 다른 요청(/health 포함)이 멈춘다.
     try:
-        samples = await run_in_threadpool(vad.decode, audio)
+        samples = await run_in_threadpool(vad.decode, audio, MAX_AUDIO_SECONDS)
+    except vad.AudioTooLongError:
+        # 푸는 도중에 멈춘다 — 긴 저비트레이트 파일이 메모리를 다 쓰기 전에(10/23 #1)
+        raise HTTPException(status_code=413, detail=f"녹음이 너무 깁니다 (최대 {MAX_AUDIO_SECONDS}초).")
     except vad.AudioDecodeError:
         raise HTTPException(status_code=400, detail="녹음 파일을 읽을 수 없습니다. 다시 녹음해 주세요.")
     t.mark("decode")
-    # 8MB 는 압축 녹음이면 30분이 넘는다. 길이로 다시 막는다(화면은 15초에서 멈춘다).
+    # 이중 안전장치: decode 가 이미 상한에서 멈추지만 길이를 한 번 더 본다(화면은 15초에서 멈춘다).
     # 전사 비용은 오디오 길이에 비례하므로 외부 AI 를 부르기 전에 거절한다.
     if len(samples) > MAX_AUDIO_SECONDS * vad.SAMPLE_RATE:
         raise HTTPException(status_code=413, detail=f"녹음이 너무 깁니다 (최대 {MAX_AUDIO_SECONDS}초).")
@@ -803,6 +887,7 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
     #    1차 전사(Whisper 계열 체인) · 교차검증 전사(AssemblyAI). 각각 최소 30회.
     #    교차검증 키가 없으면 1차 전사만 하고 제한 모드로 답한다(점수 없음).
     wav = vad.speech_only_wav(samples, speech)
+    acquire()   # 여기서부터 유료 호출 — 동시 실행 자리(없으면 Busy → 503)
     tasks: dict[str, Any] = {"primary": lambda: stt.transcribe(wav)}
     if stt.api_key(stt.CHECKER):
         tasks["checker"] = lambda: stt.transcribe_with(stt.CHECKER, wav)
@@ -812,11 +897,13 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
     if isinstance(jobs["primary"], Exception):
         exc = jobs["primary"]
         # 평가 실패는 점수·약점으로 저장되면 안 된다.
+        # 'error' 키를 싣지 않는다 — 화면(speakResHtml)이 error 를 그대로 보여 줘 공급자 원문이 사용자에게 보였다(10/23 #5).
+        logging.getLogger("app.speak").warning("STT 실패: %s", getattr(exc, "last_error", str(exc)))
         return no_speech("채점 중 오류가 발생했습니다. 다시 시도해 주세요.", failed_at="stt",
-                         error=getattr(exc, "last_error", str(exc)), attempts=getattr(exc, "attempts", 0),
-                         failures=getattr(exc, "failures", []), **base)
+                         error_code="stt_failed", attempts=getattr(exc, "attempts", 0),
+                         failures=ai.public_failures(getattr(exc, "failures", [])), **base)
     tr = jobs["primary"]
-    base.update(attempts=tr.attempts, model=tr.model, failures=tr.failures, stt=tr.meta())
+    base.update(attempts=tr.attempts, model=tr.model, failures=ai.public_failures(tr.failures), stt=tr.meta())
     ck = jobs.get("checker")
     if ck is None or isinstance(ck, Exception):
         # 교차검증 불가 → 제한 모드. 1차 전사도 환각 세그먼트를 걸러 비면 '말소리 없음'과 같게 다룬다.
@@ -826,7 +913,8 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
         if ck is None:
             cv.update(required=[stt.CHECKER], missing_keys=[stt.CHECKER])
         else:
-            cv["checker"] = {"error": getattr(ck, "last_error", str(ck)), "attempts": getattr(ck, "attempts", 0)}
+            logging.getLogger("app.speak").warning("교차검증 STT 실패: %s", getattr(ck, "last_error", str(ck)))
+            cv["checker"] = {"error_code": "checker_failed", "attempts": getattr(ck, "attempts", 0)}
         if compare.is_placeholder(heard):
             return no_speech("음성이 인식되지 않았습니다. 다시 녹음해 주세요.", failed_at="cross_validation",
                              heard_raw=tr.text, cross_validation=cv, **base)
@@ -860,7 +948,7 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
 
     if not os.getenv("GEMINI_API_KEY"):
         fix_one, tip = compare.template_feedback(diff)
-        feedback = {"source": "template", "attempts": 0, "error": "GEMINI_API_KEY 없음"}
+        feedback = {"source": "template", "attempts": 0, "error_code": "no_key"}
     else:
         try:
             fb = await run_in_threadpool(ai.run, "speak-feedback", write_feedback)
@@ -868,7 +956,8 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
         except ai.AttemptsExhausted as exc:
             # 점수는 코드가 이미 정했으므로 결과는 쓸 수 있다. 문구만 사실 기반 문장 틀로 대신한다.
             fix_one, tip = compare.template_feedback(diff)
-            feedback = {"source": "template", "attempts": exc.attempts, "error": exc.last_error}
+            logging.getLogger("app.speak").warning("피드백 생성 실패: %s", exc.last_error)
+            feedback = {"source": "template", "attempts": exc.attempts, "error_code": "ai_exhausted"}
     t.mark("feedback")
 
     return {

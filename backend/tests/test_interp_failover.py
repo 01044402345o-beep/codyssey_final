@@ -189,7 +189,7 @@ class T(unittest.TestCase):
 
     def test_health_reports_local_status(self):
         with self.env(INTERP_PROVIDERS="soniox,local"):
-            h = self.http.get("/health").json()["interp_local"]
+            h = main.health_detail()["interp_local"]
         self.assertTrue(h["enabled"])
         self.assertIn(h["status"], ("idle", "loading", "ready", "error"))
 

@@ -11,7 +11,7 @@
   const WEAK_THRESHOLD = 70;
   /* 참고 신호: 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 "다르게 들렸어요"로 표시한다 (저장 판정에 쓰지 않음). */
   const HEARD_MATCH_MIN = 0.8;
-  const MAX_AUDIO_BYTES = 8 * 1024 * 1024; // backend/app/main.py MAX_AUDIO_BYTES 와 같다
+  const MAX_AUDIO_BYTES = 1024 * 1024; // backend/app/main.py MAX_AUDIO_BYTES 와 같다(10/23: 8MB → 1MB, 30초 녹음은 1MB 안)
   const GEN_TIMEOUT_MS = 90 * 1000;
   const ID_RE = /^[a-z][a-z0-9_]*$/;
 

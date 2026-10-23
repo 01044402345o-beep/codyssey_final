@@ -32,12 +32,12 @@ class T(unittest.TestCase):
             for key in ENV:
                 os.environ.pop(key, None)
             self.assertEqual(self.http.get("/auth/config").json(), {"enabled": False})
-            self.assertIs(self.http.get("/health").json()["firebase_auth"], False)
+            self.assertIs(main.health_detail()["firebase_auth"], False)
 
     def test_config_returns_only_public_fields(self):
         with mock.patch.dict(os.environ, ENV):
             body = self.http.get("/auth/config").json()
-            self.assertIs(self.http.get("/health").json()["firebase_auth"], True)
+            self.assertIs(main.health_detail()["firebase_auth"], True)
         self.assertEqual(body["enabled"], True)
         self.assertEqual(body["projectId"], "demo-project")
         self.assertNotIn("private_key", body)

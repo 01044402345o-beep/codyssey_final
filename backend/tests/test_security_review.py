@@ -26,12 +26,12 @@ class SecurityReviewTest(unittest.TestCase):
         secret = "AIzaSyTESTKEYVALUE1234567890"
         with mock.patch.dict(os.environ, {"GEMINI_API_KEY": secret, "SONIOX_API_KEY": "sk_" + secret}, clear=False):
             r = main.security_review()
-            h = main.health()
+            h = main.health_detail()
         blob = repr(r) + repr(h.get("security_review")) + repr(h.get("gemini_keys"))
         self.assertNotIn(secret, blob)
 
     def test_health_에_점검_블록이_있다(self):
-        h = main.health()
+        h = main.health_detail()
         self.assertIn("security_review", h)
         self.assertIsInstance(h["security_review"].get("warnings"), list)
 

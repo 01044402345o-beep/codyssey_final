@@ -14,6 +14,12 @@ rules_version = '2';
 //   - 삭제는 create/update 의 필드 검사와 무관하게 allow delete 로만 허용한다(삭제에는 request.resource.data 가 없다).
 //   - create/update 에서 write 를 쪼개도 기존 동작은 그대로다(규칙 단독 배포 안전).
 //   - 서비스 계정 키가 설정된 배포에서는 POST /account/erase 가 관리자 토큰으로 지운다 — 이 규칙을 거치지 않는다.
+// 탈퇴 흔적: 관리자 경로는 지우기 전에 deleted/{uid} 를 남긴다(firebase_admin.write_tombstone, 서비스 계정).
+//   - 흔적이 있는 uid 는 create/update 를 거부한다. 탈퇴 뒤에도 남은 ID 토큰(최대 1시간)으로 Firestore REST 에
+//     직접 써서 문서를 되살리지 못하게 한다(백엔드의 _reject_if_erased 만으로는 직접 쓰기를 못 막는다, 10/23).
+//   - exists() 는 대상 문서의 규칙을 거치지 않으므로 클라이언트가 못 읽는 deleted/ 도 확인할 수 있다(쓰기당 읽기 1회).
+//   - deleted/** 는 맨 아래 규칙으로 클라이언트가 만들거나 지울 수 없다. 흔적이 없는 uid 는 동작이 같다(규칙 단독 배포 안전).
+//   - 삭제는 막지 않는다(탈퇴 재시도·흔적을 쓰지 않는 레거시 탈퇴 경로).
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{uid} {
@@ -22,8 +28,11 @@ service cloud.firestore {
           && request.auth.uid == uid
           && request.auth.token.firebase.sign_in_provider != 'anonymous';
       }
+      function notErased() {
+        return !exists(/databases/$(database)/documents/deleted/$(uid));
+      }
       allow read: if signedIn();
-      allow create, update: if signedIn()
+      allow create, update: if signedIn() && notErased()
         && request.resource.data.keys().hasOnly(['session', 'weak', 'consent', 'trip', 'ilog'])
         && request.resource.data.session is string
         && request.resource.data.weak is string

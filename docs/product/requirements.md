@@ -38,7 +38,7 @@
 |---|---|---|---|---|
 | NFR-01 | 응답 시간 | 말하기 채점은 정상 상태 10초 이내 | 완료(실측 약 5초) | `docs/measurement/score_측정_실행법.md` |
 | NFR-02 | 콜드스타트 | 재시작 뒤 첫 요청은 느릴 수 있음 — 시연 전 깨우기 | 한계 문서화 | `docs/deploy/DEPLOY_RUNBOOK.md` |
-| NFR-03 | 신뢰성 | AI API 호출당 **최소 30회** 시도, 모델 회전·실패 모델 쿨다운, 모델명 하드코딩 금지 | 완료 | `backend/app/gemini.py`, `tests/test_gemini_retry.py`(뮤테이션 검증) |
+| NFR-03 | 신뢰성 | AI API 호출당 **최소 30회** 시도, 모델 회전·실패 모델 쿨다운, 모델명 하드코딩 금지 | 완료 | `backend/app/gemini.py`, `tests/test_gemini_retry.py`(뮤테이션 검증). 10/23: 시작한 요청의 30회는 그대로 두고, 남용 방어로 시작 전 예산(일일·IP)과 동시 실행 상한을 둔다. 입력 탓 실패의 조기 중단(`AI_MAX_DETERMINISTIC`)은 기본 꺼짐 — 켜려면 이 요건을 고쳐야 한다 |
 | NFR-04 | 정확성(환각 방지) | 전사에 목표 문장을 주지 않음, 두 신경망 VAD AND, 이종 모델 전사 교차검증, 점수는 코드 | 완료 | `docs/research/speak-hallucination.md` |
 | NFR-05 | 개인정보 | 서버는 녹음을 저장하지 않음, 말소리 없으면 외부 전송 없음. 로그인 계정의 진도·복습·동의·여행 입력은 `/user/state`, uid 가 없으면 브라우저 | 완료 | `/speak-check`, `e2e/test_silence.py`, `tests/test_user_state.py` |
 | NFR-06 | 남용·비용 방어 | IP당 20회/60초, 입력 길이(도시 80자·장소 20개·목표 200자), 오디오 8MB·`audio/*` | 완료 | `backend/app/main.py` |
