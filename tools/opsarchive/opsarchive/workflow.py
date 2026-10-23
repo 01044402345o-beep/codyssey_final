@@ -41,7 +41,8 @@ NODES: list[dict] = [
      "env": "EVIDENCE_SEAL_FAILURES", "requires": [], "redeploy": True},
     {"id": "daily_cap", "label": "일일 봉인 상한", "group": "탈퇴 대응", "kind": "number",
      "default": 5, "min": 1, "max": 100000,
-     "desc": "하루에 봉인할 수 있는 증거(아카이브) 수 상한. 넘으면 추가 봉인을 막는다.",
+     "desc": "서버가 감지한 탈퇴 실패(삭제 실패·검증 불일치)의 하루 봉인 상한. 화면 보고(client_report)는 "
+             "별도 예산(EVIDENCE_CLIENT_DAILY_CAP, 기본 3)이라 이 상한을 쓰지 않는다.",
      "env": "EVIDENCE_DAILY_CAP", "requires": [], "redeploy": True},
     {"id": "per_uid_seconds", "label": "사용자별 최소 간격(초)", "group": "탈퇴 대응", "kind": "number",
      "default": 3600, "min": 1, "max": 86400,

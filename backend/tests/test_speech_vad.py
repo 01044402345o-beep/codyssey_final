@@ -158,3 +158,58 @@ class PyannoteLocalTest(unittest.TestCase):
         r = vad.detect_pyannote(pcm)
         self.assertEqual(len(r.segments), 1)
         self.assertGreater(r.speech_sec, 1.0)
+
+
+def long_opus(seconds: int, live: bool = True, bitrate: int = 6000) -> bytes:
+    """저비트레이트 opus webm(공격 파일 모양). live=True 면 MediaRecorder 처럼 헤더에 길이가 없다."""
+    import av
+    buf = io.BytesIO()
+    out = av.open(buf, "w", format="webm", options={"live": "1"} if live else {})
+    s = out.add_stream("libopus", rate=48000)
+    s.bit_rate, s.layout = bitrate, "mono"
+    rng = np.random.default_rng(0)
+    for i in range(seconds):
+        a = (rng.standard_normal(48000) * 300).astype(np.int16)
+        f = av.AudioFrame.from_ndarray(a.reshape(1, -1), format="s16", layout="mono")
+        f.rate, f.pts = 48000, i * 48000
+        for p in s.encode(f):
+            out.mux(p)
+    for p in s.encode(None):
+        out.mux(p)
+    out.close()
+    return buf.getvalue()
+
+
+class DecodeLimitTest(unittest.TestCase):
+    """긴 저비트레이트 파일은 다 풀기 전에 멈춘다(10/23 교차 검증 #1: 8MB 안에 3시간, 풀면 1.7GB)."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.long_live = long_opus(600)              # 10분, 헤더 길이 없음
+        cls.long_std = long_opus(600, live=False)   # 10분, 헤더 길이 있음
+
+    def test_long_file_fits_in_byte_cap_so_bytes_alone_cannot_stop_it(self) -> None:
+        self.assertLess(len(self.long_live), 1024 * 1024)
+
+    def test_stops_while_decoding_without_header_duration(self) -> None:
+        import time
+        t = time.perf_counter()
+        with self.assertRaises(vad.AudioTooLongError):
+            vad.decode(self.long_live, 30)
+        self.assertLess(time.perf_counter() - t, 2.0)   # 끝까지 풀지 않는다
+
+    def test_header_duration_rejected_up_front(self) -> None:
+        with self.assertRaises(vad.AudioTooLongError):
+            vad.decode(self.long_std, 30)
+
+    def test_within_limit_decodes_same_as_before(self) -> None:
+        from faster_whisper.audio import decode_audio
+        for name in ("good.wav", "tone_440hz.webm"):
+            data = (Path(__file__).parent / "fixtures" / name).read_bytes()
+            old = decode_audio(io.BytesIO(data), sampling_rate=vad.SAMPLE_RATE)
+            new = vad.decode(data)
+            self.assertEqual(new.shape, old.shape, name)
+            self.assertLess(float(np.max(np.abs(new - old))) if new.size else 0.0, 1e-6, name)
+
+    def test_short_opus_ok(self) -> None:
+        self.assertGreater(vad.decode(long_opus(5)).size, 4 * vad.SAMPLE_RATE)

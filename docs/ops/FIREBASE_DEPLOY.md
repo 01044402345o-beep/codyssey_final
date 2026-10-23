@@ -107,7 +107,7 @@ firebase deploy --only hosting      # 규칙까지 바꿀 때만 --only hosting,
 ## 6. 배포 후 확인 (순서대로)
 
 ```bash
-curl -s https://<PROJECT_ID>.web.app/health | jq '{status, deploy, security_review, gemini_keys}'
+curl -s -H "X-Admin-Token: $HEALTH_DETAIL_TOKEN" https://<PROJECT_ID>.web.app/health | jq '{status, deploy, security_review, gemini_keys}'   # 상세는 관리자 토큰으로만(공개 응답은 status·deploy.commit 등 최소 필드)
 curl -s -o /dev/null -w '%{http_code}\n' https://<PROJECT_ID>.web.app/generate -X POST   # 422(검증 실패)면 라우팅 성공
 curl -s https://<PROJECT_ID>.web.app/interp/providers | jq '[.providers[]|{id,available}]'
 ```

@@ -31,10 +31,13 @@
 """
 from __future__ import annotations
 
+import contextvars
+import json
 import logging
 import os
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Callable, Generic, TypeVar
 
@@ -98,11 +101,29 @@ def backoff(attempt: int) -> float:
 
 
 def failure(attempt: int, exc: BaseException, model: str | None = None) -> dict[str, Any]:
-    """실패한 시도 1건. 응답의 failures[] 와 서버 로그에 같은 내용이 남는다."""
+    """실패한 시도 1건(서버 내부·로그용). 응답에는 public_failures() 로 걸러서 내보낸다."""
     msg = " ".join(str(exc).split())
     if len(msg) > ERROR_MAX_CHARS:
         msg = msg[:ERROR_MAX_CHARS] + "…"
-    return {"attempt": attempt, "model": model, "error": type(exc).__name__, "detail": msg}
+    status = getattr(exc, "code", None) or getattr(exc, "status_code", None) or getattr(exc, "status", None)
+    return {"attempt": attempt, "model": model, "error": type(exc).__name__, "detail": msg,
+            "status": status if isinstance(status, int) else None}
+
+
+# 공급자(Gemini·STT) 오류 원문은 응답에 싣지 않는다(10/23 교차 검증 #5). 쿼터·프로젝트 정보·모델 이름·내부 메시지가
+# 들어 있을 수 있다. 응답에는 시도 번호·모델·예외 클래스·HTTP 상태만, 원문은 서버 로그에만 남긴다.
+# BlockedResult 의 detail 은 공급자 원문이 아니라 우리 검증기의 이슈 코드(JSON)라 남긴다(무엇이 막혔는지 진단용).
+_PUBLIC_DETAIL_ERRORS = frozenset({"BlockedResult"})
+
+
+def public_failures(failures: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out = []
+    for f in failures or []:
+        item = {"attempt": f.get("attempt"), "model": f.get("model"), "error": f.get("error"), "status": f.get("status")}
+        if f.get("error") in _PUBLIC_DETAIL_ERRORS:
+            item["detail"] = f.get("detail")
+        out.append(item)
+    return out
 
 
 class AttemptsExhausted(RuntimeError):
@@ -128,21 +149,148 @@ def retry(
     실패한 시도는 모두 WARNING 으로 로그에 남긴다 — 성공해도 앞선 실패 원인을 볼 수 있게.
     """
     floor = min_attempts()
+    # 비용 예산(10/23 #2): 시작 전에 floor 회분을 예약한다. 예약하지 못하면 호출 0회로 실패시킨다 —
+    # 시작한 요청의 30회 보장(NFR-03)은 깨지 않고, 시작 자체를 막는다. 끝나면 쓰지 않은 만큼 돌려준다.
+    denied = budget_reserve(floor)
+    if denied:
+        log.warning("%s 시작 거부: %s", what, denied)
+        raise AttemptsExhausted(what, 0, [{"attempt": 0, "model": None, "error": denied,
+                                           "detail": denied, "status": None}])
+    det_cap = deterministic_cap(floor)
     failures: list[dict[str, Any]] = []
-    attempt = 0
-    while True:
-        attempt += 1
-        try:
-            return fn(attempt), attempt, failures
-        except Exception as exc:  # noqa: BLE001 — 어떤 오류든 하한 전에는 포기하지 않는다
-            f = failure(attempt, exc, model_of(attempt))
-            failures.append(f)
-            log.warning("%s 시도 %d/%d 실패 model=%s %s: %s",
-                        what, attempt, floor, f["model"], f["error"], f["detail"])
-        if attempt >= floor:
-            log.error("%s %d회 시도 후 최종 실패", what, attempt)
-            raise AttemptsExhausted(what, attempt, failures)
-        _sleep(backoff(attempt))
+    attempt = det = 0
+    try:
+        while True:
+            attempt += 1
+            try:
+                return fn(attempt), attempt, failures
+            except Exception as exc:  # noqa: BLE001 — 어떤 오류든 하한 전에는 포기하지 않는다
+                f = failure(attempt, exc, model_of(attempt))
+                failures.append(f)
+                log.warning("%s 시도 %d/%d 실패 model=%s %s: %s",
+                            what, attempt, floor, f["model"], f["error"], f["detail"])
+                if det_cap and is_deterministic(exc):
+                    det += 1
+                    if det >= det_cap:   # 입력 탓으로 같은 실패가 반복 — 운영자가 켠 경우에만(기본 꺼짐)
+                        log.error("%s 결정적 실패 %d회로 조기 중단(AI_MAX_DETERMINISTIC)", what, det)
+                        raise AttemptsExhausted(what, attempt, failures)
+            if attempt >= floor:
+                log.error("%s %d회 시도 후 최종 실패", what, attempt)
+                raise AttemptsExhausted(what, attempt, failures)
+            _sleep(backoff(attempt))
+    finally:
+        budget_settle(floor, attempt)
+
+
+# ---------------------------------------------------------------- 비용 예산 (10/23 교차 검증 #2)
+# 로그인 없이 부를 수 있는 /generate·/speak-check 에서, 입력을 조작해 매번 실패하게 만들면 요청 하나가 유료 호출 30회가
+# 된다(IP 당 분당 20요청 → 600회). 30회 규칙(NFR-03, PR #5: 일시 장애를 흡수하려는 것)은 그대로 두고 둘레를 막는다.
+#   AI_MAX_CONCURRENCY       유료 경로 동시 실행 수(기본 16, IP 별 AI_MAX_CONCURRENCY_PER_IP 6). 넘으면 즉시 503.
+#   AI_DAILY_ATTEMPT_BUDGET  프로세스 하루(UTC) 시도 예산(기본 3000, 0=무제한). 시작 때 floor 회 예약, 끝나면 남은 만큼 반환.
+#   AI_IP_ATTEMPTS_PER_HOUR  IP 당 한 시간 실제 시도 수(기본 150, 0=무제한). 30회 다 쓰는 요청 5건이면 그 IP 는 한 시간 막힌다.
+#   AI_MAX_DETERMINISTIC     (선택, 기본 꺼짐) 입력 탓 실패(파싱·검증 차단)가 이 횟수 반복되면 30회 전에 멈춘다.
+#                            NFR-03 '오류 종류로 조기 중단하지 않음'과 다르므로 팀이 합의했을 때만 켠다.
+# 모두 프로세스 메모리라 인스턴스가 늘면 그만큼 커진다(속도 제한과 같은 한계).
+_budget_lock = threading.Lock()
+_budget = {"day": "", "used": 0}
+_ip_hits: dict[str, list[float]] = {}
+_ip_pending: dict[str, int] = {}       # 진행 중인 요청이 예약한 시도 수 — 동시 요청끼리도 서로를 본다
+_client: contextvars.ContextVar[str] = contextvars.ContextVar("ai_client_ip", default="")
+_slots_lock = threading.Lock()
+_slots_used = 0
+_slots_by_ip: dict[str, int] = {}
+
+
+def set_client(ip: str) -> None:
+    """요청 처리 중인 사용자 IP(속도 제한과 같은 값). 스레드풀로 넘어가도 contextvars 로 따라간다."""
+    _client.set(ip or "")
+
+
+def _ip_used(ip: str, now: float) -> int:
+    hits = _ip_hits.get(ip, [])
+    hits[:] = [t for t in hits if now - t < 3600]
+    return len(hits)
+
+
+def budget_reserve(floor: int) -> str:
+    """예약 성공이면 ''. 실패면 이유 코드(DailyBudget·IpBudget)."""
+    now = time.time()
+    day = time.strftime("%Y-%m-%d", time.gmtime(now))
+    daily = max(0, _env_int("AI_DAILY_ATTEMPT_BUDGET", 3000))
+    per_ip = max(0, _env_int("AI_IP_ATTEMPTS_PER_HOUR", 150))
+    ip = _client.get()
+    with _budget_lock:
+        if _budget["day"] != day:
+            _budget["day"], _budget["used"] = day, 0
+        if per_ip and ip and _ip_used(ip, now) + _ip_pending.get(ip, 0) >= per_ip:
+            return "IpBudget"
+        if daily and _budget["used"] + floor > daily:
+            return "DailyBudget"
+        _budget["used"] += floor
+        if ip:
+            _ip_pending[ip] = _ip_pending.get(ip, 0) + floor
+    return ""
+
+
+def budget_settle(floor: int, attempts: int) -> None:
+    """예약한 floor 중 쓰지 않은 만큼 돌려주고, IP 에는 실제 시도 수만큼 더한다."""
+    now = time.time()
+    ip = _client.get()
+    with _budget_lock:
+        _budget["used"] = max(0, _budget["used"] - max(0, floor - attempts))
+        if ip:
+            left = _ip_pending.get(ip, 0) - floor
+            if left > 0:
+                _ip_pending[ip] = left
+            else:
+                _ip_pending.pop(ip, None)
+            if attempts:
+                _ip_hits.setdefault(ip, []).extend([now] * attempts)
+
+
+def deterministic_cap(floor: int) -> int:
+    n = _env_int("AI_MAX_DETERMINISTIC", 0)
+    return min(n, floor) if n > 0 else 0
+
+
+def is_deterministic(exc: BaseException) -> bool:
+    """같은 입력이면 다시 해도 같은 실패: 검증 차단·JSON 파싱 실패. 네트워크·429·5xx·빈 응답은 일시적인 것으로 본다."""
+    if type(exc).__name__ == "BlockedResult" or isinstance(exc, json.JSONDecodeError):
+        return True
+    return isinstance(exc, ValueError) and "빈 응답" not in str(exc)
+
+
+class Busy(RuntimeError):
+    """유료 경로 동시 실행 상한."""
+
+
+@contextmanager
+def paid_slot(ip: str = ""):
+    """유료 AI 경로 하나를 실행하는 동안 자리를 잡는다. 자리가 없으면 Busy(호출부가 503 으로 바꾼다).
+
+    전역 AI_MAX_CONCURRENCY(기본 16, 스레드풀 40 보다 작게)와 IP 별 AI_MAX_CONCURRENCY_PER_IP(기본 6) 둘 다 본다.
+    화면은 도시마다 /generate 를 동시에 보낸다(최대 5곳) — 한 사람이 5자리를 쓰므로 IP 별 6 이면 정상 사용은 막지 않는다.
+    """
+    global _slots_used
+    cap = max(1, _env_int("AI_MAX_CONCURRENCY", 16))
+    per_ip = max(1, _env_int("AI_MAX_CONCURRENCY_PER_IP", 6))
+    with _slots_lock:
+        if _slots_used >= cap or (ip and _slots_by_ip.get(ip, 0) >= per_ip):
+            raise Busy("busy")
+        _slots_used += 1
+        if ip:
+            _slots_by_ip[ip] = _slots_by_ip.get(ip, 0) + 1
+    try:
+        yield
+    finally:
+        with _slots_lock:
+            _slots_used -= 1
+            if ip:
+                n = _slots_by_ip.get(ip, 0) - 1
+                if n > 0:
+                    _slots_by_ip[ip] = n
+                else:
+                    _slots_by_ip.pop(ip, None)
 
 
 # ---------------------------------------------------------------- API 키: 주 키 → 예비 키, 롤백
@@ -385,6 +533,10 @@ def reset_cache() -> None:
     global _models_cache
     with _models_lock:
         _models_cache = None
+    with _budget_lock:
+        _budget["day"], _budget["used"] = "", 0
+        _ip_hits.clear()
+        _ip_pending.clear()
     global _key_active
     with _state_lock:
         _last_good.clear()

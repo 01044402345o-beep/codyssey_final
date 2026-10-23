@@ -3,7 +3,7 @@ import os
 import unittest
 from unittest import mock
 
-from app.main import health
+from app.main import health_detail as health
 
 
 class T(unittest.TestCase):

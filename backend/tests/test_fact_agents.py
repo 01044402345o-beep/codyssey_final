@@ -240,7 +240,7 @@ class GenerateKeepsSentencePath(unittest.TestCase):
         called.assert_called()
 
     def test_health_reports_sources_off(self):
-        health = self.http.get("/health").json()
+        health = main.health_detail()
         self.assertEqual(health["fact_agents"]["google_places"], False)
         self.assertEqual(health["fact_agents"]["osm"], "no-key")
         self.assertIs(health["fact_agents"]["kakao"], False)

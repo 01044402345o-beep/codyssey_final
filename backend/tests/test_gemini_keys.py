@@ -134,7 +134,7 @@ class T(unittest.TestCase):
         self.w.fail["primary-secret"] = BAD_KEY
         ai.run("t", gen)
         from fastapi.testclient import TestClient
-        body = TestClient(main.app).get("/health").text
+        body = json.dumps(main.health_detail(), ensure_ascii=False)
         self.assertNotIn("primary-secret", body)
         self.assertNotIn("backup-secret", body)
         h = json.loads(body)["gemini_keys"]

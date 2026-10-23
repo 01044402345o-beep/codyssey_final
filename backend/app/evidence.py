@@ -516,28 +516,42 @@ def notify(document: dict[str, Any]) -> bool:
 # ---------------------------------------------------------------- 스로틀 · 오케스트레이션
 
 _lock = threading.Lock()
-_last_by_uid: dict[str, float] = {}
-_daily = {"day": "", "count": 0}
+# 화면이 보낸 보고(client_report)와 서버가 감지한 실패(erase_failed·verify_mismatch 등)는 예산을 따로 쓴다.
+# 하나를 같이 쓰면 무료 계정 몇 개로 /diagnostics/withdraw 를 보내 하루 상한을 다 채울 수 있고,
+# 그 뒤 실제로 서버가 감지한 탈퇴 실패는 봉인되지 않는다(2026-10-23 교차 검증 #7).
+CLIENT_TRIGGERS = frozenset({"client_report"})
+_last_by_uid: dict[tuple[str, str], float] = {}
+_daily = {"server": {"day": "", "count": 0}, "client": {"day": "", "count": 0}}
 
 
-def throttle_ok(uid: str) -> bool:
-    """uid 당 1회/시간, 전역 하루 상한. 초과하면 False(아카이브를 만들지 않는다).
+def throttle_ok(uid: str, trigger: str = "") -> bool:
+    """예산별 하루 상한 + uid 별 간격. 초과하면 False(아카이브를 만들지 않는다).
 
+    - 서버 감지: EVIDENCE_DAILY_CAP(기본 5)/일, 같은 uid 는 EVIDENCE_PER_UID_SECONDS(기본 1시간)에 1번.
+    - 화면 보고: EVIDENCE_CLIENT_DAILY_CAP(기본 3)/일, 같은 uid 는 EVIDENCE_CLIENT_PER_UID_SECONDS(기본 하루)에 1번.
+      화면 보고는 서버 감지 예산과 uid 간격을 소모하지 않는다.
     프로세스 단위라 인스턴스가 여러 개면 상한이 느슨해진다 — 그 사실은 문서에 적혀 있다.
     """
+    kind = "client" if trigger in CLIENT_TRIGGERS else "server"
+    if kind == "client":
+        cap = _int_env("EVIDENCE_CLIENT_DAILY_CAP", 3)
+        window = max(_int_env("EVIDENCE_CLIENT_PER_UID_SECONDS", 86400), 1)
+    else:
+        cap = _int_env("EVIDENCE_DAILY_CAP", 5)
+        window = _int_env("EVIDENCE_PER_UID_SECONDS", 3600)
     now = time.time()
     today = time.strftime("%Y-%m-%d", time.gmtime(now))
     with _lock:
-        if _daily["day"] != today:
-            _daily["day"], _daily["count"] = today, 0
-        if _daily["count"] >= _int_env("EVIDENCE_DAILY_CAP", 5):
+        box = _daily[kind]
+        if box["day"] != today:
+            box["day"], box["count"] = today, 0
+        if box["count"] >= cap:
             return False
-        window = _int_env("EVIDENCE_PER_UID_SECONDS", 3600)
-        if uid and now - _last_by_uid.get(uid, 0) < window:
+        if uid and now - _last_by_uid.get((kind, uid), 0) < window:
             return False
-        _daily["count"] += 1
+        box["count"] += 1
         if uid:
-            _last_by_uid[uid] = now
+            _last_by_uid[(kind, uid)] = now
     return True
 
 
@@ -545,7 +559,8 @@ def reset_state() -> None:
     """테스트용: 스로틀·링 버퍼를 비운다."""
     with _lock:
         _last_by_uid.clear()
-        _daily["day"], _daily["count"] = "", 0
+        for box in _daily.values():
+            box["day"], box["count"] = "", 0
     _ring.records.clear()
 
 
@@ -562,7 +577,7 @@ def seal_and_report(trigger: str, *, uid: str = "", ledger: list[dict[str, Any]]
     if os.getenv("EVIDENCE_SEAL_FAILURES") == "0":
         # 관리자 워크플로우(GUI 마인드맵의 seal_failures 노드)가 이 변수를 민다 — 끄면 봉인하지 않는다.
         return {"enabled": False, "reason": "disabled_by_env"}
-    if not throttle_ok(uid):
+    if not throttle_ok(uid, trigger):
         return {"enabled": True, "reason": "throttled"}
     try:
         report = collect(trigger, uid=uid, ledger=ledger, verification=verification,

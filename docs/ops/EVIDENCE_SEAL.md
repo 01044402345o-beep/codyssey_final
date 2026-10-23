@@ -136,7 +136,7 @@ scrypt(n=2^15, r=8, p=1) 로 패스프레이즈 유도. 파일 권한 0600.
 
 환경변수: `EVIDENCE_PUBKEY`, `EVIDENCE_KEY_GENERATION`, `EVIDENCE_GH_TOKEN`, `EVIDENCE_GH_REPO`,
 `EVIDENCE_MAX_BYTES`, `EVIDENCE_MAX_SOURCE_BYTES`, `EVIDENCE_MAX_LOGS_BYTES`,
-`EVIDENCE_PER_UID_SECONDS`, `EVIDENCE_DAILY_CAP`, `EVIDENCE_TTL_DAYS`, `EVIDENCE_INCLUDE_SECRETS`.
+`EVIDENCE_PER_UID_SECONDS`, `EVIDENCE_DAILY_CAP`(서버 감지 예산), `EVIDENCE_CLIENT_PER_UID_SECONDS`·`EVIDENCE_CLIENT_DAILY_CAP`(화면 보고 전용 예산, 기본 하루 1회/uid·3회), `EVIDENCE_TTL_DAYS`, `EVIDENCE_INCLUDE_SECRETS`.
 
 - `EVIDENCE_PUBKEY` 가 없으면 **완전 비활성**(기본 꺼짐). 있으면 봉인·업로드가 켜진다.
 - 저장은 기존 스타일대로 **REST 직접 호출**(Firestore 문서 쓰기) — 새 무거운 의존성을 넣지 않는다. 서비스 계정에 `roles/datastore.user`(이미 있음)만 필요하다.

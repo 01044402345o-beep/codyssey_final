@@ -21,7 +21,7 @@
 | id | 그룹 | 종류 | 기본값 | 연결 env | 재배포 필요 | 실행 가능 |
 |---|---|---|---|---|---|---|
 | `seal_failures` | 탈퇴 대응 | toggle | `True` | `EVIDENCE_SEAL_FAILURES` | 필요 | ✘ (env 밀어넣기 노드) |
-| `daily_cap` | 탈퇴 대응 | number | `50` (1~100000) | `EVIDENCE_DAILY_CAP` | 필요 | ✘ |
+| `daily_cap` | 탈퇴 대응 | number | `5` (1~100000) | `EVIDENCE_DAILY_CAP` | 필요 | ✘ |
 | `per_uid_seconds` | 탈퇴 대응 | number | `60` (1~86400) | `EVIDENCE_PER_UID_SECONDS` | 필요 | ✘ |
 | `ttl_days` | 탈퇴 대응 | number | `30` (1~3650) | `EVIDENCE_TTL_DAYS` | 필요 | ✘ |
 | `issue_notify` | 탈퇴 대응 | toggle | `True` | — | 불필요 | ✘ (안내 노드) |
@@ -47,7 +47,7 @@
 | 노드 id | 미는 env | 값 형식 | 앱이 읽는가 | 앱 근거(evidence.py) | 앱 기본값 |
 |---|---|---|---|---|---|
 | `seal_failures` | `EVIDENCE_SEAL_FAILURES` | `"1"`/`"0"` (toggle) | **아니오 — 지금은 효과 없음(개념 노드)** | evidence.py 에 문자열 없음(봉인 on/off 는 `EVIDENCE_PUBKEY` 유무로 결정) | — |
-| `daily_cap` | `EVIDENCE_DAILY_CAP` | 정수 (`str(값)`) | 예 | 523행 `_int_env("EVIDENCE_DAILY_CAP", 5)` | **5** (노드 기본 50과 다름) |
+| `daily_cap` | `EVIDENCE_DAILY_CAP` | 정수 (`str(값)`) | 예 | 523행 `_int_env("EVIDENCE_DAILY_CAP", 5)` | **5** (서버 감지 예산. 화면 보고는 `EVIDENCE_CLIENT_DAILY_CAP` 별도) |
 | `per_uid_seconds` | `EVIDENCE_PER_UID_SECONDS` | 정수 | 예 | 525행 `_int_env("EVIDENCE_PER_UID_SECONDS", 3600)` | **3600** (노드 기본 60과 다름) |
 | `ttl_days` | `EVIDENCE_TTL_DAYS` | 정수 | 예 | 399·464·562행 `_int_env("EVIDENCE_TTL_DAYS", 90)` | **90** (노드 기본 30과 다름) |
 | `include_secrets` | `EVIDENCE_INCLUDE_SECRETS` | `"1"`/`"0"` | 예 (문자열 `"1"` 일 때만) | 167행 `os.getenv("EVIDENCE_INCLUDE_SECRETS") == "1"` | 꺼짐 |

@@ -32,6 +32,13 @@ class AudioDecodeError(ValueError):
     """녹음 파일을 오디오로 읽을 수 없음(손상·형식 오류)."""
 
 
+class AudioTooLongError(ValueError):
+    """디코드 중 길이 상한 초과(헤더의 길이 또는 실제로 풀린 샘플 수)."""
+
+
+MAX_DECODE_SECONDS = 30   # main.MAX_AUDIO_SECONDS 와 같게
+
+
 @dataclass
 class SpeechResult:
     duration_sec: float
@@ -55,20 +62,58 @@ class SpeechResult:
         }
 
 
-def decode(data: bytes) -> np.ndarray:
-    from faster_whisper.audio import decode_audio
+def decode(data: bytes, max_seconds: float = MAX_DECODE_SECONDS) -> np.ndarray:
+    """16 kHz mono float32 로 푼다. max_seconds 를 넘으면 **푸는 도중에** AudioTooLongError 로 멈춘다.
+
+    예전에는 faster_whisper.audio.decode_audio 로 파일 전체를 푼 뒤 길이를 봤다. 저비트레이트 opus 는 8MB 안에
+    3시간이 넘게 들어가고(6 kbps 실측 6.24 MB), 푸는 동안 최대 1.7 GB 를 써서 로그인 없는 요청 하나로 서버가 죽을 수
+    있었다(10/23 교차 검증 #1). 이제 프레임마다 샘플을 세고 상한을 넘는 순간 그만둔다(실측 최대 ~44 MB).
+    브라우저 MediaRecorder 의 webm 은 헤더에 길이가 없어(duration=None) 헤더 검사만으로는 막지 못한다 — 샘플 수로 센다.
+    결과는 decode_audio 와 같다(픽스처 3개 샘플 수·값 동일 실측).
+    """
+    import av
+
+    limit = int(max_seconds * SAMPLE_RATE)
+    chunks: list[np.ndarray] = []
+    n = 0
+
+    def take(frames: Any) -> None:
+        nonlocal n
+        for rf in frames:
+            arr = rf.to_ndarray().reshape(-1)
+            n += arr.size
+            if n > limit:
+                raise AudioTooLongError(f"longer than {max_seconds}s")
+            chunks.append(arr)
 
     try:
-        audio = decode_audio(io.BytesIO(data), sampling_rate=SAMPLE_RATE)
+        with av.open(io.BytesIO(data), mode="r", metadata_errors="ignore") as container:
+            if not container.streams.audio:
+                raise AudioDecodeError("no audio stream")
+            stream = container.streams.audio[0]
+            # 헤더에 길이가 있으면 풀기 전에 거절한다(여유 5초).
+            if container.duration is not None and container.duration / av.time_base > max_seconds + 5:
+                raise AudioTooLongError("header duration")
+            resampler = av.AudioResampler(format="s16", layout="mono", rate=SAMPLE_RATE)
+            for packet in container.demux(stream):
+                try:
+                    frames = packet.decode()
+                except av.error.InvalidDataError:
+                    continue            # faster_whisper 의 _ignore_invalid_frames 와 같은 관용
+                for f in frames:
+                    take(resampler.resample(f))
+            take(resampler.resample(None))   # 남은 샘플 flush
+    except (AudioTooLongError, AudioDecodeError):
+        raise
     except EOFError:
         # 컨테이너 머리만 있고 오디오 프레임이 없는 녹음(브라우저 실측: 소리 입력이 없는 스트림 → 110바이트 webm).
         # 깨진 파일이 아니라 '소리가 없는 녹음'이므로 빈 오디오로 보고 VAD 가 말소리 없음으로 판정하게 한다.
         return np.zeros(0, dtype=np.float32)
     except Exception as exc:  # noqa: BLE001 — av.error.InvalidDataError 등: 오디오로 읽을 수 없는 파일
         raise AudioDecodeError(f"{type(exc).__name__}: {exc}") from exc
-    if audio is None:
+    if not chunks:
         return np.zeros(0, dtype=np.float32)
-    return audio
+    return np.concatenate(chunks).astype(np.float32) / 32768.0
 
 
 def detect(audio: np.ndarray) -> SpeechResult:

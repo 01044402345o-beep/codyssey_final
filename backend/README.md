@@ -85,7 +85,13 @@ python scripts/check_negatives.py
 | `EVIDENCE_KEY_GENERATION` | 정수(기본 1) | 키 회전 세대. `/health` 의 `evidence.generation` 으로 노출되어 핀 검증이 대조한다(회전과 대입 구분) |
 | `EVIDENCE_GH_TOKEN` / `EVIDENCE_GH_REPO` | PAT(`issues:write` 한정) / `owner/repo` | 증거 이슈 통보용. 없으면 보관만 하고 통보는 건너뛴다. 이슈에는 **메타데이터만** 간다 |
 | `EVIDENCE_MAX_BYTES` / `EVIDENCE_MAX_SOURCE_BYTES` / `EVIDENCE_MAX_LOGS_BYTES` | 바이트(기본 1MB/512KB/64KB) | 수집 하드 캡. 넘으면 잘라내고 `truncated` 표시 |
-| `EVIDENCE_PER_UID_SECONDS` / `EVIDENCE_DAILY_CAP` | 초(3600) / 회(5) | 스로틀(프로세스 단위). 남용 시 아카이브 폭주를 막는다 |
+| `EVIDENCE_PER_UID_SECONDS` / `EVIDENCE_DAILY_CAP` | 초(3600) / 회(5) | 서버 감지 봉인(탈퇴 실패·검증 불일치) 스로틀(프로세스 단위). 남용 시 아카이브 폭주를 막는다 |
+| `EVIDENCE_CLIENT_PER_UID_SECONDS` / `EVIDENCE_CLIENT_DAILY_CAP` | 초(86400) / 회(3) | 화면 보고(`POST /diagnostics/withdraw`) 전용 예산. 서버 감지 예산을 소모하지 않는다(무료 계정 몇 개로 상한을 채워 실제 실패가 봉인되지 않던 문제, 10/23) |
+| `HEALTH_DETAIL_TOKEN` | 임의 문자열 | 설정하면 `X-Admin-Token` 헤더가 같을 때만 `/health` 상세(키 상태·모델·보안 점검 등)를 준다. 없으면 공개 최소 필드만 |
+| `AI_MAX_CONCURRENCY` / `AI_MAX_CONCURRENCY_PER_IP` | 정수(기본 16 / 6) | 유료 AI 경로(`/generate`, `/speak-check` 의 STT·피드백 구간) 동시 실행 상한(전역 / IP 별). 넘으면 즉시 503 `busy`. 화면은 도시마다 /generate 를 동시에 보내므로(최대 5) IP 별 6 |
+| (참고) IP 별 예산 | — | Render·Cloud Run 에서 `TRUSTED_PROXY_HOPS=0` 이면 모든 사용자가 프록시 IP 하나로 보이므로 IP 별 예산·상한을 끈다(전역 상한만). HOPS 를 맞추면 켜진다 |
+| `AI_DAILY_ATTEMPT_BUDGET` / `AI_IP_ATTEMPTS_PER_HOUR` | 회(3000) / 회(150), `0`=무제한 | AI 시도 예산. 시작 때 30회를 예약하고 남은 만큼 돌려준다. 예약이 안 되면 호출 0회로 대체 응답 |
+| `AI_MAX_DETERMINISTIC` | 정수(기본 꺼짐) | 켜면 파싱·검증 차단 같은 입력 탓 실패가 이 횟수 반복될 때 30회 전에 멈춘다. NFR-03 과 다르므로 팀 합의 후에만 |
 | `EVIDENCE_TTL_DAYS` | 일(기본 90) | Firestore `expire_at` — TTL 정책이 자동 삭제한다(암호 파기) |
 | `EVIDENCE_INCLUDE_SECRETS` | `1` 이면 스크럽 해제 | 기본은 자격증명을 `[MASKED]` 로 지운다. 권장하지 않는다 |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | 서비스 계정 JSON **문자열 전체** | 탈퇴(`POST /account/erase`) 전용. 있으면 탈퇴 흔적(`deleted/{uid}`) + 토큰 취소 + 문서 삭제 + Auth 계정 삭제(최근 로그인 불필요). 없으면 503 `admin_unavailable` 이고 화면은 규칙 삭제 + 클라이언트 `deleteUser` 로 되돌아간다. **코드·저장소에 두지 않는다**(Render 환경변수 시크릿). `docs/deploy/DEPLOY_RUNBOOK.md` E 참조 |
@@ -275,7 +281,8 @@ Long-term Memory의 실제 완료 기준:
 | 입력 길이 | `city` 80자, `places` 20개, `weak_expressions` 20개(각 64자), `target` 200자 | Pydantic → 초과 시 422 |
 | id 형식 | `category_id`·`weak_expressions[]` 는 `^[a-z][a-z0-9_]*$` (계약 id 형식). `category_id` 는 파일 경로가 되므로 `../` 등을 막는다 | 어긋나면 422. 형식은 맞지만 계약에 없는 취약 상황 id 는 프롬프트에서 빼고 `weak_unknown_situation` 경고만 남긴다 |
 | 장소 종류 | `places[].place_type` 은 그 카테고리 계약의 `place_types` 중 하나(대소문자·앞뒤 공백 무시, 생략 가능) | 밖이면 422 + `allowed` 목록. 프롬프트에 자유 문자열이 들어가지 않게 한다 |
-| 오디오 | 8MB, 30초(`MAX_AUDIO_SECONDS`), `audio/*` 만 | 초과 시 413, 형식 오류 415, 빈 파일 400. 길이는 디코딩 직후·외부 AI 호출 전에 검사(화면은 15초에서 녹음을 멈춤) |
+| 오디오 | 1MB, 30초(`MAX_AUDIO_SECONDS`), `audio/*` 만 | 초과 시 413, 형식 오류 415, 빈 파일 400. 길이는 **디코딩하는 도중에** 세어 넘으면 바로 멈춘다(긴 저비트레이트 파일로 메모리를 터뜨리지 못하게, 10/23) |
+| 요청 본문 | 경로별(기본 64KB, `/speak-check` 1MB+64KB, `/user/state` 128KB, `/user/interp-log` 96KB) | 넘으면 413 `request_too_large`. 길이 없는 chunked 도 받는 만큼 센다(`app/body_limit.py`) |
 
 > ⚠️ **Google Cloud 예산 알림은 지출을 자동으로 차단하는 상한이 아닙니다.** 알림만으로는
 > 비용이 계속 나갑니다. "알림 + 상한이면 코드보다 확실하다"는 설명은 틀렸습니다.
