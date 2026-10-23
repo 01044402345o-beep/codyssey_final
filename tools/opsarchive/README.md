@@ -114,6 +114,15 @@ python -m opsarchive policy-set daily_cap 9 --no-apply  # 이번에는 저장만
 python -m opsarchive policy-apply                       # 변경 모아 반영
 python -m opsarchive policy-show
 ```
+
+**Cloud Run 배포 경로(Firebase Hosting + Cloud Run)** — `[Cloud Run에 반영]` 버튼 / `policy-apply --target cloudrun`.
+`settings.json` 의 `project_id`·`cloudrun_region`(기본 `asia-northeast3`)·`cloudrun_service`(기본 `codyssey-api`) 서비스에
+정책의 바뀐 값만 올린다(새 리비전 1개 = 재배포, 다시 읽어 확인 + `/health` 키 세대 대조).
+- gcloud 는 로그인 토큰만 받는다(`gcloud auth print-access-token`, 고정 인자). 값은 Cloud Run Admin API(REST)로 보낸다 — 명령줄에 싣지 않는다.
+- 서비스의 다른 변수·Secret Manager 참조는 그대로 둔다(바꿀 키만 고친다, etag 로 동시 변경 보호).
+- 비밀 노드(`gh_token` 등)는 올리지 않는다 — Secret Manager 에 두고 서비스에 참조로 연결한다.
+- 필요 권한: gcloud 로그인 계정에 `run.services.get`·`run.services.update`(예: Cloud Run Developer).
+- 자동 반영은 Render 에만 걸린다. Cloud Run 은 버튼·명령으로 반영한다.
 `[plan 미리보기]`로 이번에 무엇이 실행될지 미리 볼 수 있다.
 
 **로그는 별도 창**이다. 제목은 `opsarchive — 로그`이고 아래 상태 줄의 `[로그 창 열기]`로 연다.

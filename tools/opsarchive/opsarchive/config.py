@@ -31,6 +31,9 @@ DEFAULTS: dict[str, Any] = {
     "pin_path": "",
     "tsa_url": "https://freetsa.org/tsr",
     "kms_key": "",   # 자동 앵커용 Cloud KMS 서명 키 버전(선택) — docs/ops/KMS_AUTO_ANCHOR.md
+    # Cloud Run 배포 경로(Firebase Hosting + Cloud Run, docs/ops/FIREBASE_DEPLOY.md). [Cloud Run에 반영] 이 쓴다.
+    "cloudrun_service": "codyssey-api",
+    "cloudrun_region": "asia-northeast3",
 }
 
 

@@ -115,9 +115,11 @@ def build_parser() -> argparse.ArgumentParser:
     g = q.add_mutually_exclusive_group()
     g.add_argument("--apply", dest="apply", action="store_true", default=None, help="자동 반영 설정과 관계없이 반영")
     g.add_argument("--no-apply", dest="apply", action="store_false", help="정책에만 저장")
-    q = sub.add_parser("policy-apply", help="정책과 Render 를 대조해 바뀐 것만 올리고 재배포·확인(변경 모아 반영)")
+    q = sub.add_parser("policy-apply", help="정책과 Render(또는 Cloud Run)를 대조해 바뀐 것만 올리고 재배포·확인(변경 모아 반영)")
     q.add_argument("--service", default="")
-    q.add_argument("--no-redeploy", action="store_true", help="값만 올린다")
+    q.add_argument("--no-redeploy", action="store_true", help="값만 올린다(Render 만 — Cloud Run 은 값 변경이 곧 새 리비전)")
+    q.add_argument("--target", choices=["render", "cloudrun"], default="render",
+                   help="cloudrun: settings.json 의 project_id·cloudrun_region·cloudrun_service(또는 --service)")
     q = sub.add_parser("auto-apply", help="자동 반영 켜기/끄기/상태(settings.json; 환경변수 OPSARCHIVE_AUTO_APPLY 가 우선)")
     q.add_argument("mode", choices=["on", "off", "status"])
 
@@ -321,6 +323,10 @@ def main(argv: list[str] | None = None) -> int:
                 except ValueError as exc:
                     _print({"error": str(exc)})
                     return 2
+            elif args.target == "cloudrun":
+                result = workflow.apply_env_cloudrun(
+                    policy, project=str(settings.get("project_id") or ""), region=str(settings.get("cloudrun_region") or ""),
+                    service=args.service or str(settings.get("cloudrun_service") or ""))
             else:
                 result = workflow.apply_env(policy, service=service, redeploy=not args.no_redeploy,
                                             base_url=str(settings.get("base_url") or ""))
