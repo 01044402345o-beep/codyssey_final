@@ -24,7 +24,10 @@ class T(unittest.TestCase):
 
     def test_firebase_json_keeps_firestore_and_routes_only_api(self):
         cfg = json.loads((ROOT / "firebase.json").read_text(encoding="utf-8"))
-        self.assertEqual(cfg["firestore"], [{"database": "(default)", "rules": "firestore.rules"}])
+        # 규칙 배포 설정을 지우지 않는다. 색인 설정(geo_cities.data 색인 제외, docs/ops/GEO_REFRESH.md)만 더해졌다.
+        self.assertEqual(cfg["firestore"], [{"database": "(default)", "rules": "firestore.rules",
+                                             "indexes": "firestore.indexes.json"}])
+        self.assertTrue((ROOT / "firestore.indexes.json").is_file())
         sources = [r["source"] for r in cfg["hosting"]["rewrites"]]
         self.assertNotIn("/interp/stream", sources)                    # Hosting 은 WS 를 중계하지 못한다
         self.assertFalse(any(s in ("**", "/**") for s in sources))     # 정적 파일까지 Cloud Run 으로 보내지 않는다
