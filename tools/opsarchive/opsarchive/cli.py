@@ -106,6 +106,21 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--service", required=True, help="Render 서비스 이름(또는 ID)")
     q.add_argument("--timeout", type=int, default=300, help="배포 대기 시간(초)")
 
+    # 정책(마인드맵 노드) — GUI 와 같은 함수. 자동 반영이 켜져 있으면 값을 바꾸는 즉시 Render 에 올리고 재배포·확인한다.
+    sub.add_parser("policy-show", help="정책 노드 값과 자동 반영 상태")
+    q = sub.add_parser("policy-set", help="노드 값을 바꿔 정책에 저장(자동 반영이 켜져 있으면 Render 반영·재배포·확인까지)")
+    q.add_argument("node", help="노드 ID(예: daily_cap)")
+    q.add_argument("value", help="값(토글은 on/off)")
+    q.add_argument("--service", default="", help="Render 서비스 이름(비우면 settings.json)")
+    g = q.add_mutually_exclusive_group()
+    g.add_argument("--apply", dest="apply", action="store_true", default=None, help="자동 반영 설정과 관계없이 반영")
+    g.add_argument("--no-apply", dest="apply", action="store_false", help="정책에만 저장")
+    q = sub.add_parser("policy-apply", help="정책과 Render 를 대조해 바뀐 것만 올리고 재배포·확인(변경 모아 반영)")
+    q.add_argument("--service", default="")
+    q.add_argument("--no-redeploy", action="store_true", help="값만 올린다")
+    q = sub.add_parser("auto-apply", help="자동 반영 켜기/끄기/상태(settings.json; 환경변수 OPSARCHIVE_AUTO_APPLY 가 우선)")
+    q.add_argument("mode", choices=["on", "off", "status"])
+
     q = sub.add_parser("rules-status", help="저장소 firestore.rules 와 배포된 규칙을 대조한다(읽기 전용)")
     q.add_argument("--project", required=True)
     q.add_argument("--sa", required=True, help="서비스 계정 JSON(Firebase Rules 읽기 권한)")
@@ -288,6 +303,30 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "env-read":
             _print(commands.env_read(args.service, args.key))
             return 0
+        if args.cmd in ("policy-show", "policy-set", "policy-apply", "auto-apply"):
+            from . import workflow
+            settings = config.read_settings()
+            if args.cmd == "auto-apply":
+                _print(workflow.auto_apply_state() if args.mode == "status" else workflow.set_auto_apply(args.mode == "on"))
+                return 0
+            policy = workflow.load()
+            if args.cmd == "policy-show":
+                _print({"auto_apply": workflow.auto_apply_state(), "policy": policy, "path": workflow.workflow_path()})
+                return 0
+            service = args.service or settings.get("service") or ""
+            if args.cmd == "policy-set":
+                try:
+                    result = workflow.commit_change(policy, args.node, args.value, service=service,
+                                                    base_url=str(settings.get("base_url") or ""), apply=args.apply)
+                except ValueError as exc:
+                    _print({"error": str(exc)})
+                    return 2
+            else:
+                result = workflow.apply_env(policy, service=service, redeploy=not args.no_redeploy,
+                                            base_url=str(settings.get("base_url") or ""))
+            _print(result)
+            bad = (result.get("render") or result).get("error") if isinstance(result, dict) else None
+            return 1 if bad else 0
         if args.cmd == "deploy":
             result = commands.deploy(args.service, timeout=args.timeout)
             _print(result)
