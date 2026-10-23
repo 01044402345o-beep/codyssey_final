@@ -67,7 +67,9 @@ jobs:
   e2e:
     # 말하기 동의·AI 표시를 실제 브라우저(가짜 마이크)로 확인한다. 서버는 키 없이(목업 응답).
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 테스트 자체는 약 7분이지만 의존성 설치(playwright --with-deps 의 apt 포함)가 러너에 따라 3~11분이다.
+    # 15분이면 설치가 느린 날 테스트 도중 취소된다(2026-10-23·24 두 번 — 모든 테스트 통과 중이었다).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
