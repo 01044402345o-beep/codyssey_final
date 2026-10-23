@@ -103,7 +103,17 @@ GUI는 표준 라이브러리(tkinter)만 써서 **설치 단계가 없다**. �
 | 보관소 | 봉인 아카이브 목록을 보고 개인키로 연다 |
 | 검증 | 서명 키·핀 상태 확인, anchor, verify-chain, 챌린지 대조 |
 
-**개요 탭 마인드맵(정책 바꾸기)**: 노드 클릭 → 값을 수정(켜기/콤보/숫자) → `[정책에 저장]` → 환경변수 노드면 `[Render에 반영]` → `[재배포 실행]`.
+**개요 탭 마인드맵(정책 바꾸기)**: 노드 클릭 → 값을 수정(켜기/콤보/숫자/글자). **`[자동 반영]` 이 켜져 있으면(기본)** 바꾸는 즉시 정책에 저장하고, 환경변수 노드는 Render 에 바뀐 것만 올려 재배포·반영 확인까지 한다(연달아 바꾸면 한 번만 재배포). 꺼져 있으면 `[정책에 저장]` → `[Render에 반영]`/`[변경 모아 반영(재배포·확인)]` 을 직접 누른다.
+
+자동 반영 켜고 끄기(셋 다 `settings.json` 의 `auto_apply`, 환경변수 `OPSARCHIVE_AUTO_APPLY=1|0` 이 있으면 그것이 우선):
+
+```
+python -m opsarchive auto-apply status|on|off          # GUI 의 [자동 반영] 토글과 같은 값
+python -m opsarchive policy-set daily_cap 9             # 저장 + (켜져 있으면) Render 반영·재배포·확인
+python -m opsarchive policy-set daily_cap 9 --no-apply  # 이번에는 저장만
+python -m opsarchive policy-apply                       # 변경 모아 반영
+python -m opsarchive policy-show
+```
 `[plan 미리보기]`로 이번에 무엇이 실행될지 미리 볼 수 있다.
 
 **로그는 별도 창**이다. 제목은 `opsarchive — 로그`이고 아래 상태 줄의 `[로그 창 열기]`로 연다.

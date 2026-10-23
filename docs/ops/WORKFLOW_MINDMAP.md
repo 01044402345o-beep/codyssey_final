@@ -195,6 +195,11 @@ root.destroy()
 - ~~서버 측 정책을 GUI 가 못 바꾼다~~ → **해결**: 노드 추가·연결 — `gh_repo`(text, `EVIDENCE_GH_REPO`, owner/repo 형식 검사), `gh_token`(secret, `EVIDENCE_GH_TOKEN`, 반영 때 가려진 칸으로 받고 **저장·로그 안 함**), `pubkey`(key, `EVIDENCE_PUBKEY` — 키 파일에서 역산하는 공개키 발행으로 연결), `max_source_bytes`·`max_logs_bytes`(number). `key_generation`·`max_bytes` 는 이미 있다. 앱이 읽는 `EVIDENCE_*` 변수 중 노드가 없는 것은 없다.
 - **`observe` 는 플랫폼 로그 보존 기간만큼만** 본다(그보다 오래된 구간은 안 보인다).
 - **[정책 다시 읽기] 버튼의 코드 불일치** — gui.py 392행이 호출하는 `workflow.policy_path()` 는 `workflow.py` 에 **없다**(존재하는 이름은 `workflow_path`). 이 버튼은 클릭 시 `AttributeError` 가 날 수 있다(코드에서 직접 확인; 다른 버튼은 `workflow.load()` 사용).
+- **자동 반영(2026-10-23, 기본 켜짐)**: 노드 값을 바꾸면 즉시 정책에 저장하고, 서버 환경변수 노드면 Render 에 바뀐 것만 올려 재배포·반영 확인까지 한다(묻지 않음). 연달아 바꾸면 마지막 변경 1.5초 뒤 **한 번만** 재배포한다. 토글·선택은 바꾸는 즉시, 숫자·글자는 Enter 나 칸을 벗어날 때 저장한다. 비밀(`gh_token`)·키(`pubkey`) 노드는 자동으로 올리지 않는다.
+  - 끄고 켜기: GUI `[자동 반영: 켜짐/꺼짐]` 토글(버튼 줄 아래) · CLI `python -m opsarchive auto-apply on|off|status` · TUI 메뉴 7. 셋 다 `settings.json` 의 `auto_apply` 를 쓴다.
+  - 환경변수 `OPSARCHIVE_AUTO_APPLY=1|0` 이 있으면 그것이 우선한다(CI·스크립트·일회성). 이때 GUI 토글은 잠긴다.
+  - CLI 로 값 바꾸기: `policy-set <노드> <값>`(자동 반영이 켜져 있으면 Render 까지, `--no-apply`/`--apply` 로 이번만 바꿈) · `policy-apply`(변경 모아 반영) · `policy-show`.
+  - 꺼져 있으면 예전처럼 `[정책에 저장]` → `[Render에 반영]`/`[변경 모아 반영]` 을 직접 누른다.
 - **공개키는 값으로 넣지 않는다** — `pubkey` 노드는 키 파일·패스프레이즈가 필요한 발행 흐름이라 [변경 모아 반영] 에 포함되지 않는다(따로 실행).
 - **번호 노드 최소값 1** — `per_uid_seconds`/`daily_cap`/`ttl_days` 는 1 미만으로 내려가지 않는다(끄기 개념이 없다).
 - **문서-코드 어긋남 경고**: 이 문서는 특정 커밋의 코드를 읽고 작성했다. 값·규칙이 바뀌면 **항상 `workflow.NODES`·`plan()`·`_RUNNABLE` 을 코드에서 다시 확인하라.** 추측으로 채우지 않았고, 확인 못 한 값은 위 표에 표시했다.

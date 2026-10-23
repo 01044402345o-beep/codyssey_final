@@ -414,8 +414,8 @@ class App:
     # ------------------------------------------------------------ 탭 1: 개요
     def _tab_overview(self, notebook) -> None:
         frame = self._frame(notebook, "개요")
-        ttk.Label(frame, text="자동화 워크플로우 — 노드를 클릭해 값을 바꾸고 [정책에 저장] 하면 다음 실행부터 반영됩니다.\n"
-                             "서버 정책(환경변수)을 바꾸는 노드는 [Render에 반영] 뒤 재배포가 필요합니다.",
+        ttk.Label(frame, text="자동화 워크플로우 — 노드를 클릭해 값을 바꾸세요. [자동 반영] 이 켜져 있으면(기본) 바꾸는 즉시\n"
+                             "정책에 저장하고, 서버 환경변수 노드는 Render 에 올려 재배포·반영 확인까지 합니다.",
                   justify="left").pack(anchor="w", padx=10, pady=(8, 2))
         canvas_box = ttk.Frame(frame)
         canvas_box.pack(fill="both", expand=True, padx=10, pady=4)
@@ -451,6 +451,18 @@ class App:
         self._button(bar, "Render에 반영", self.push_node_env)
         self._button(bar, "이 노드 실행", self.run_node)
         self._button(bar, "변경 모아 반영(재배포·확인)", self.apply_all_env)
+        # 자동 반영 토글(기본 켜짐): 값을 바꾸면 정책에 저장하고 Render 에 올려 재배포·확인까지 한다.
+        # 설정은 settings.json 의 auto_apply — CLI `auto-apply on|off` 와 같은 값. 환경변수 OPSARCHIVE_AUTO_APPLY 가 있으면 그게 우선.
+        auto_bar = ttk.Frame(editor)
+        auto_bar.pack(fill="x", padx=8, pady=(0, 6))
+        self.auto_var = tk.BooleanVar(value=workflow.auto_apply_state()["on"])
+        self.auto_button = ttk.Checkbutton(auto_bar, variable=self.auto_var, style="Toolbutton",
+                                           command=self._toggle_auto_apply)
+        self.auto_button.pack(side="left")
+        self.auto_note = ttk.Label(auto_bar, text="")
+        self.auto_note.pack(side="left", padx=8)
+        self._auto_job = None
+        self._refresh_auto_button()
 
         bar2 = ttk.Frame(frame)
         bar2.pack(fill="x", padx=10, pady=(0, 4))
@@ -574,19 +586,21 @@ class App:
         if kind == "toggle":
             self.node_value.set("1" if current in (True, 1, "1") else "0")
             ttk.Checkbutton(self.value_box, text="켜기", variable=self.node_value,
-                            onvalue="1", offvalue="0").pack(side="left")
+                            onvalue="1", offvalue="0", command=self._on_value_changed).pack(side="left")
         elif kind == "choice":
             options = [value for value, _label in node.get("options", [])]
             self.node_value.set(str(current))
-            ttk.Combobox(self.value_box, textvariable=self.node_value, values=options,
-                         width=16, state="readonly").pack(side="left")
+            box = ttk.Combobox(self.value_box, textvariable=self.node_value, values=options,
+                               width=16, state="readonly")
+            box.pack(side="left")
+            box.bind("<<ComboboxSelected>>", lambda _e: self._on_value_changed())
         elif kind == "number":
             self.node_value.set(str(current))
-            ttk.Entry(self.value_box, textvariable=self.node_value, width=12).pack(side="left")
+            self._entry_autosave(ttk.Entry(self.value_box, textvariable=self.node_value, width=12))
             ttk.Label(self.value_box, text="(%s ~ %s)" % (node.get("min"), node.get("max"))).pack(side="left", padx=6)
         elif kind == "text":
             self.node_value.set(str(current or ""))
-            ttk.Entry(self.value_box, textvariable=self.node_value, width=36).pack(side="left")
+            self._entry_autosave(ttk.Entry(self.value_box, textvariable=self.node_value, width=36))
             ttk.Label(self.value_box, text="예: %s" % node.get("placeholder", "")).pack(side="left", padx=6)
         elif kind == "secret":
             self.node_value.set("")
@@ -598,31 +612,84 @@ class App:
             self.node_value.set("")
             ttk.Label(self.value_box, text="값이 없는 실행 노드입니다 — [이 노드 실행] 을 누르세요.").pack(side="left")
 
-    def save_node(self) -> None:
+    def save_node(self, quiet: bool = False) -> bool:
+        """정책에 저장한다(workflow.set_value — CLI 와 같은 검증). 자동 반영이 켜져 있으면 Render 반영을 예약한다.
+
+        quiet=True 는 값이 바뀔 때 자동으로 부르는 경로 — 바뀐 게 없으면 조용히 넘어가고 창을 띄우지 않는다."""
         node = self._node_def(self.selected_node)
         if not node:
-            return
-        if node.get("kind") not in ("toggle", "choice", "number", "text"):
-            # 값이 없는 실행 노드에서 파일을 다시 쓰고 '저장했습니다'라고 하면 사실과 다르다.
-            messagebox.showinfo("opsarchive", "값이 없는 실행 노드입니다 — [이 노드 실행] 을 쓰세요.")
-            return
-        value = self.node_value.get()
-        if node["kind"] == "toggle":
-            value = value in ("1", "True", "true")
-        elif node["kind"] == "number":
-            try:
-                value = int(value)
-            except ValueError:
-                messagebox.showerror("opsarchive", "숫자를 입력하세요.")
-                return
-        self.policy[self.selected_node] = value
-        path = workflow.save(self.policy)
-        # 저장은 클램프·정규화를 거친다 — 메모리를 파일과 맞추지 않으면 화면과 실제가 어긋난다.
-        self.policy = workflow.load()
-        self.log("노드 '%s' = %s 로 저장했습니다 (%s)"
-                 % (self.selected_node, self.policy.get(self.selected_node), path))
+            return False
+        if node.get("kind") not in workflow.VALUE_KINDS:
+            if not quiet:
+                # 값이 없는 실행 노드에서 파일을 다시 쓰고 '저장했습니다'라고 하면 사실과 다르다.
+                messagebox.showinfo("opsarchive", "값이 없는 실행 노드입니다 — [이 노드 실행] 을 쓰세요.")
+            return False
+        raw = self.node_value.get()
+        try:
+            parsed = workflow.parse_value(self.selected_node, raw)
+        except ValueError as exc:
+            if quiet:
+                self.log("값을 저장하지 않았습니다(%s)" % exc, "err")
+            else:
+                messagebox.showerror("opsarchive", "받을 수 없는 값입니다: %s" % exc)
+            return False
+        if quiet and parsed == self.policy.get(self.selected_node):
+            return False                         # 포커스만 옮겼을 때 — 저장·재배포하지 않는다
+        self.policy, value, changed = workflow.set_value(self.policy, self.selected_node, raw)
+        self.log("노드 '%s' = %s 로 저장했습니다 (%s)" % (self.selected_node, value, workflow.workflow_path()))
         self._redraw_mindmap()
         self._show_node_editor()
+        if self.auto_var.get() and workflow.is_auto_target(self.selected_node) and changed:
+            self._schedule_auto_apply()
+        return changed
+
+    def _on_value_changed(self) -> None:
+        """편집기에서 값이 바뀌었다 — 자동 반영이 켜져 있을 때만 바로 저장한다(꺼져 있으면 [정책에 저장] 을 누른다)."""
+        if self.auto_var.get():
+            self.save_node(quiet=True)
+
+    def _entry_autosave(self, entry) -> None:
+        entry.pack(side="left")
+        entry.bind("<Return>", lambda _e: self._on_value_changed())
+        entry.bind("<FocusOut>", lambda _e: self._on_value_changed())
+
+    AUTO_DELAY_MS = 1500     # 연달아 바꾸면 마지막 변경 뒤 한 번만 재배포한다
+
+    def _schedule_auto_apply(self) -> None:
+        if self._auto_job is not None:
+            self.root.after_cancel(self._auto_job)
+        self._auto_job = self.root.after(self.AUTO_DELAY_MS, self._auto_apply_now)
+        self.log_queue.put(("status", "자동 반영 대기 중 — %.1f초 뒤 Render 에 올립니다" % (self.AUTO_DELAY_MS / 1000)))
+
+    def _auto_apply_now(self) -> None:
+        self._auto_job = None
+        if not self.auto_var.get():
+            return
+        if self.busy:                            # 다른 작업이 끝나면 다시 시도(변경을 잃지 않는다)
+            self._auto_job = self.root.after(1000, self._auto_apply_now)
+            return
+        self._apply_env(None, None, "자동 반영", ask=False)
+
+    def _refresh_auto_button(self) -> None:
+        state = workflow.auto_apply_state()
+        self.auto_var.set(state["on"])
+        self.auto_button.configure(text="자동 반영: %s" % ("켜짐" if state["on"] else "꺼짐"),
+                                   state="disabled" if state["source"] == "env" else "normal")
+        if state["source"] == "env":
+            note = "환경변수 %s 로 고정됨" % workflow.AUTO_APPLY_ENV
+        elif state["on"]:
+            note = "값을 바꾸면 정책 저장 → Render 반영 → 재배포·확인(연달아 바꾸면 한 번만)"
+        else:
+            note = "값을 바꾼 뒤 [정책에 저장] · [Render에 반영] 을 직접 누릅니다"
+        self.auto_note.configure(text=note)
+
+    def _toggle_auto_apply(self) -> None:
+        state = workflow.set_auto_apply(self.auto_var.get())
+        self.log("자동 반영 %s%s" % ("켜짐" if state["on"] else "꺼짐", (" — " + state["note"]) if state.get("note") else ""))
+        if not state["on"] and self._auto_job is not None:
+            self.root.after_cancel(self._auto_job)
+            self._auto_job = None
+        self._refresh_auto_button()
 
     def push_node_env(self) -> None:
         """한 노드를 Render 에 반영한다 — 값 올리기 → (묻고) 재배포 → 다시 읽어 반영 확인까지."""
@@ -650,12 +717,19 @@ class App:
         """정책의 모든 환경변수 노드 중 **바뀐 것만** 올리고 한 번 재배포한 뒤 반영을 확인한다."""
         self._apply_env(None, None, "변경 모아 반영")
 
-    def _apply_env(self, node_ids, secrets, label: str) -> None:
-        answer = messagebox.askyesnocancel(
-            "opsarchive", "바뀐 값을 Render 에 올립니다.\n\n[예] 올리고 재배포한 뒤 반영됐는지 확인(권장)\n"
-                          "[아니요] 값만 올리기(재배포 전에는 앱에 적용되지 않음)\n[취소] 그만두기", parent=self.root)
-        if answer is None:
-            return
+    def _apply_env(self, node_ids, secrets, label: str, ask: bool = True) -> None:
+        if ask:
+            answer = messagebox.askyesnocancel(
+                "opsarchive", "바뀐 값을 Render 에 올립니다.\n\n[예] 올리고 재배포한 뒤 반영됐는지 확인(권장)\n"
+                              "[아니요] 값만 올리기(재배포 전에는 앱에 적용되지 않음)\n[취소] 그만두기", parent=self.root)
+            if answer is None:
+                return
+        else:
+            answer = True                        # 자동 반영: 바뀐 것만 올리고 재배포·확인까지(묻지 않는다)
+        if node_ids is None and self._auto_job is not None:
+            # 모아 반영이 예약된 자동 반영을 대신한다 — 같은 변경으로 두 번 재배포하지 않게.
+            self.root.after_cancel(self._auto_job)
+            self._auto_job = None
         service = self.require("service")
         base_url = str(self.settings.get("base_url") or "")
         policy = dict(self.policy)

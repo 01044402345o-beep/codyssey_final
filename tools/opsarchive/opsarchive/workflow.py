@@ -683,3 +683,125 @@ def apply_env(policy: dict, *, service: str, node_ids: Optional[list] = None, se
         out["error"] = "redeploy_unconfirmed — " + out["deploy"]
     out["changed"] = [k + ("(비밀)" if k in secret_keys else "") for k in changed]
     return out
+
+
+# ------------------------------------------------------------------ 자동 반영 (GUI·CLI·TUI 공통)
+# 노드 값을 바꾸면 정책에 저장하고, 서버 환경변수 노드면 Render 에 올려 재배포·반영 확인까지 한다(기본 켜짐).
+# 설정 위치: settings.json 의 "auto_apply"(GUI 토글·CLI `auto-apply on|off` 가 쓴다).
+# 환경변수 OPSARCHIVE_AUTO_APPLY(1/0, on/off)가 있으면 그것이 우선한다 — CI·스크립트·일회성 실행용.
+# 환경변수만 쓰지 않는 이유: GUI 가 바꾼 값이 다음 실행까지 남아야 하고, 프로세스 환경변수는 남지 않는다.
+AUTO_APPLY_ENV = "OPSARCHIVE_AUTO_APPLY"
+_ON = {"1", "true", "on", "yes", "y"}
+_OFF = {"0", "false", "off", "no", "n"}
+VALUE_KINDS = ("toggle", "choice", "number", "text")
+
+
+def auto_apply_state(settings: Optional[dict] = None) -> dict:
+    """{"on": bool, "source": "env" | "settings" | "default"}."""
+    raw = (os.environ.get(AUTO_APPLY_ENV) or "").strip().lower()
+    if raw in _ON:
+        return {"on": True, "source": "env"}
+    if raw in _OFF:
+        return {"on": False, "source": "env"}
+    data = settings if settings is not None else _raw_settings()
+    value = data.get("auto_apply")
+    if isinstance(value, bool):
+        return {"on": value, "source": "settings"}
+    return {"on": True, "source": "default"}
+
+
+def _raw_settings() -> dict:
+    """settings.json 원본(기본값·유도 경로를 섞지 않은 것)."""
+    try:
+        with open(config.settings_path(), "r", encoding="utf-8-sig") as fh:
+            got = json.load(fh)
+        return got if isinstance(got, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def set_auto_apply(on: bool) -> dict:
+    """settings.json 의 auto_apply 만 바꾼다(다른 키는 그대로). 환경변수가 우선하면 그 사실을 알린다."""
+    data = _raw_settings()
+    data["auto_apply"] = bool(on)
+    path = config.settings_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, ensure_ascii=False, indent=2, sort_keys=True)
+        fh.write("\n")
+    state = auto_apply_state(data)
+    if state["source"] == "env" and state["on"] != bool(on):
+        state["note"] = "환경변수 %s 가 우선합니다 — 지금은 %s" % (AUTO_APPLY_ENV, "켜짐" if state["on"] else "꺼짐")
+    return state
+
+
+def is_auto_target(node_id: str) -> bool:
+    """자동 반영(Render 올리기)할 수 있는 노드: 서버 환경변수에 연결된 값 노드. 비밀·키 노드는 사람이 직접."""
+    node = _node(node_id) or {}
+    return bool(node.get("env")) and node.get("kind") in VALUE_KINDS
+
+
+def parse_value(node_id: str, raw: Any) -> Any:
+    """화면·명령줄의 문자열을 노드 값으로 바꾼다. 받을 수 없는 값이면 ValueError(조용히 기본값으로 되돌리지 않는다)."""
+    node = _node(node_id)
+    if not node:
+        raise ValueError("unknown_node:%s" % node_id)
+    kind = node["kind"]
+    if kind not in VALUE_KINDS:
+        raise ValueError("not_a_value_node:%s" % node_id)
+    text = raw if isinstance(raw, str) else ("1" if raw is True else "0" if raw is False else str(raw))
+    text = text.strip()
+    if kind == "toggle":
+        if text.lower() in _ON:
+            return True
+        if text.lower() in _OFF:
+            return False
+        raise ValueError("bad_toggle:%s" % text)
+    if kind == "number":
+        try:
+            return int(text)
+        except ValueError as exc:
+            raise ValueError("bad_number:%s" % text) from exc
+    if kind == "choice":
+        keys = [key for key, _label in node.get("options", [])]
+        if text not in keys:
+            raise ValueError("bad_choice:%s (%s)" % (text, ", ".join(keys)))
+        return text
+    import re as _re
+    pattern = node.get("pattern")
+    if text and pattern and not _re.fullmatch(pattern, text):
+        raise ValueError("bad_text:%s" % node_id)
+    return text
+
+
+def set_value(policy: dict, node_id: str, raw: Any, path: Optional[str] = None) -> tuple[dict, Any, bool]:
+    """값을 검증해 정책에 저장한다. (저장 뒤 정책, 저장된 값(범위로 잘린 값일 수 있음), 바뀌었는지)."""
+    value = parse_value(node_id, raw)
+    before = dict(policy).get(node_id)
+    updated = dict(policy)
+    updated[node_id] = value
+    save(updated, path)
+    after = load(path)
+    return after, after.get(node_id), after.get(node_id) != before
+
+
+def commit_change(policy: dict, node_id: str, raw: Any, *, service: str, base_url: str = "",
+                  apply: Optional[bool] = None, path: Optional[str] = None,
+                  apply_fn: Optional[Callable[..., dict]] = None) -> dict:
+    """한 번에: 정책에 저장 → (자동 반영이 켜져 있고 환경변수 노드면) Render 에 바뀐 것만 올리고 재배포·확인.
+
+    apply=None 이면 auto_apply_state() 를 따른다. CLI `policy-set` 이 쓴다(GUI 는 여러 변경을 모아 한 번 재배포하므로
+    set_value 와 apply_env 를 따로 부른다).
+    """
+    after, value, changed = set_value(policy, node_id, raw, path)
+    out: dict = {"node": node_id, "value": value, "changed": changed, "policy_path": workflow_path(path)}
+    do_apply = auto_apply_state()["on"] if apply is None else bool(apply)
+    if not do_apply:
+        out["applied"] = "off"
+        return out
+    if not is_auto_target(node_id):
+        out["applied"] = "not_env_node"
+        return out
+    out["render"] = (apply_fn or apply_env)(after, service=service, base_url=base_url, redeploy=True)
+    out["applied"] = "done"
+    return out

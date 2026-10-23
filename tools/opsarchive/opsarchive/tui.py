@@ -17,6 +17,8 @@ MENU = [
     ("4", "doctor — 로컬 키와 배포 지문 대조"),
     ("5", "list — 봉인 아카이브 목록"),
     ("6", "decrypt — 아카이브 열기"),
+    ("7", "auto-apply — 자동 반영(정책 → Render) 켜기/끄기"),
+    ("8", "policy-set — 노드 값 바꾸기(자동 반영이 켜져 있으면 Render 까지)"),
     ("q", "종료"),
 ]
 
@@ -66,6 +68,24 @@ def run() -> int:
                 out = Prompt.ask("평문 저장 디렉터리(비우면 요약만)", default="")
                 console.print_json(data=commands.decrypt_archive(
                     project, sa, archive_id, key_file, commands.ask_passphrase(), out_dir=out or None))
+            elif choice == "7":
+                from . import workflow
+                state = workflow.auto_apply_state()
+                console.print("지금: %s (%s)" % ("켜짐" if state["on"] else "꺼짐", state["source"]))
+                mode = Prompt.ask("바꿀 값", choices=["on", "off", "그대로"], default="그대로")
+                if mode != "그대로":
+                    console.print_json(data=workflow.set_auto_apply(mode == "on"))
+            elif choice == "8":
+                from . import config, workflow
+                settings = config.read_settings()
+                node = Prompt.ask("노드 ID(예: daily_cap)")
+                value = Prompt.ask("값(토글은 on/off)")
+                try:
+                    console.print_json(data=workflow.commit_change(
+                        workflow.load(), node, value, service=str(settings.get("service") or ""),
+                        base_url=str(settings.get("base_url") or "")))
+                except ValueError as exc:
+                    console.print("[red]실패:[/red] " + str(exc))
             elif choice == "q":
                 return 0
         except commands.CommandError as exc:
