@@ -685,6 +685,49 @@ def apply_env(policy: dict, *, service: str, node_ids: Optional[list] = None, se
     return out
 
 
+def apply_env_cloudrun(policy: dict, *, project: str, region: str, service: str, node_ids: Optional[list] = None,
+                       base_url: str = "", timeout: int = 600, token: Optional[str] = None) -> dict:
+    """정책을 Cloud Run 에 **바뀐 것만** 올린다(새 리비전 1개 = 재배포). 확인은 apply_env 와 같다:
+    ① 서비스를 다시 읽은 값 == 정책 값 ② 리비전 준비 완료 ③ /health 의 evidence.generation == key_generation.
+    비밀 노드는 올리지 않는다(Secret Manager 참조로 둔다). 바뀐 것이 없으면 리비전을 만들지 않는다.
+    """
+    from . import cloudrun
+    name = cloudrun.service_name(project, region, service)
+    tok = token or cloudrun.access_token()
+    svc = cloudrun.get_service(name, tok)
+    current = cloudrun.plain_env(svc)
+    want = desired_env(policy, node_ids)
+    changes = {k: v for k, v in want.items() if current.get(k) != v}
+    out: dict = {"service": name, "changed": sorted(changes), "unchanged": sorted(set(want) - set(changes)),
+                 "redeployed": False, "deploy": "", "verified": None, "mismatch": [], "health": {}}
+    if not changes:
+        out["verified"] = True
+        out["note"] = "바뀐 값이 없어 새 리비전을 만들지 않았습니다."
+        return out
+    outcome = cloudrun.update_env(name, changes, tok, timeout=timeout)
+    out["redeployed"] = bool(outcome.get("ok"))
+    out["deploy"] = str(outcome.get("note", ""))
+    after = cloudrun.get_service(name, tok)
+    now = cloudrun.plain_env(after)
+    out["mismatch"] = [k for k, v in want.items() if now.get(k) != v]
+    url = base_url or cloudrun.service_url(after)
+    if url:
+        try:
+            health = commands.health(url)
+            evidence = (health or {}).get("evidence") or {}
+            out["health"] = {"status": (health or {}).get("status"), "generation": evidence.get("generation")}
+            if (node_ids is None or "key_generation" in node_ids) and evidence                     and evidence.get("generation") != _normalize(policy).get("key_generation"):
+                out["mismatch"].append("EVIDENCE_KEY_GENERATION(/health)")
+        except Exception as exc:        # noqa: BLE001
+            out["health"] = {"error": type(exc).__name__}
+    out["verified"] = bool(out["redeployed"] and not out["mismatch"])
+    if out["mismatch"]:
+        out["error"] = "not_applied: " + ", ".join(out["mismatch"])
+    elif not out["redeployed"]:
+        out["error"] = "redeploy_unconfirmed — " + out["deploy"]
+    return out
+
+
 # ------------------------------------------------------------------ 자동 반영 (GUI·CLI·TUI 공통)
 # 노드 값을 바꾸면 정책에 저장하고, 서버 환경변수 노드면 Render 에 올려 재배포·반영 확인까지 한다(기본 켜짐).
 # 설정 위치: settings.json 의 "auto_apply"(GUI 토글·CLI `auto-apply on|off` 가 쓴다).

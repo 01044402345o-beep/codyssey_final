@@ -451,6 +451,7 @@ class App:
         self._button(bar, "Render에 반영", self.push_node_env)
         self._button(bar, "이 노드 실행", self.run_node)
         self._button(bar, "변경 모아 반영(재배포·확인)", self.apply_all_env)
+        self._button(bar, "Cloud Run에 반영", self.apply_cloudrun)
         # 자동 반영 토글(기본 켜짐): 값을 바꾸면 정책에 저장하고 Render 에 올려 재배포·확인까지 한다.
         # 설정은 settings.json 의 auto_apply — CLI `auto-apply on|off` 와 같은 값. 환경변수 OPSARCHIVE_AUTO_APPLY 가 있으면 그게 우선.
         auto_bar = ttk.Frame(editor)
@@ -716,6 +717,26 @@ class App:
     def apply_all_env(self) -> None:
         """정책의 모든 환경변수 노드 중 **바뀐 것만** 올리고 한 번 재배포한 뒤 반영을 확인한다."""
         self._apply_env(None, None, "변경 모아 반영")
+
+    def apply_cloudrun(self) -> None:
+        """Cloud Run 배포 경로에 정책의 바뀐 값만 올린다(새 리비전 1개). gcloud 로그인 계정으로 REST API 를 부른다."""
+        project = str(self.settings.get("project_id") or "")
+        region = str(self.settings.get("cloudrun_region") or "")
+        service = str(self.settings.get("cloudrun_service") or "")
+        if not messagebox.askokcancel(
+                "opsarchive", "Cloud Run(%s · %s · %s)에 바뀐 값을 올립니다.\n값이 바뀌면 새 리비전(재배포)이 만들어집니다.\n"
+                              "비밀 노드는 올리지 않습니다(Secret Manager 참조로 둡니다)." % (project, region, service),
+                parent=self.root):
+            return
+        policy = dict(self.policy)
+
+        def work() -> dict:
+            result = workflow.apply_env_cloudrun(policy, project=project, region=region, service=service)
+            if result.get("verified"):
+                result["_state"] = "반영 확인(Cloud Run 값 = 정책, 새 리비전 준비)" if result.get("redeployed") else "바뀐 값 없음"
+            return result
+
+        self.run("Cloud Run 반영", work)
 
     def _apply_env(self, node_ids, secrets, label: str, ask: bool = True) -> None:
         if ask:

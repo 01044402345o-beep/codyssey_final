@@ -132,3 +132,8 @@ curl -s https://<PROJECT_ID>.web.app/interp/providers | jq '[.providers[]|{id,av
 - Cloud Run: `gcloud run services update-traffic codyssey-api --to-revisions=<이전 리비전>=100`
 - Hosting: `firebase hosting:rollback`
 - Render 는 그대로 살아 있으므로, Hosting 을 내려도 서비스는 유지된다(이중화의 실익).
+
+## 정책 환경변수 반영 (opsarchive)
+opsarchive 관리자 도구의 `[Cloud Run에 반영]`(또는 `python -m opsarchive policy-apply --target cloudrun`)이 정책 노드의
+`EVIDENCE_*` 값 중 **바뀐 것만** 이 서비스에 올리고 새 리비전을 기다린 뒤 반영을 확인한다. gcloud 로그인 계정의 토큰으로
+Cloud Run Admin API 를 부르며, 다른 변수와 Secret Manager 참조는 건드리지 않는다. 비밀 값은 Secret Manager 에 둔다.
