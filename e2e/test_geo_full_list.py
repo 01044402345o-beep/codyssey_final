@@ -76,12 +76,39 @@ with sync_playwright() as p:
     cnt = pg.inner_text("#geo-list-country .geo-count")
     check("빈 칸: '전체 248개국'을 화면에 적는다", "248" in cnt and "개국" in cnt, cnt)
 
-    # ── 2. 더 보기 → 전부 도달(생략 없음) ──
+    # ── 2. 더 보기 → 전부 도달(생략 없음). 손가락 탭으로 누른다 — 터치는 pointerup 뒤에 포커스가 옮겨 가서
+    #       마우스 클릭으로는 안 잡히던 '누르면 목록이 닫히는' 문제가 있었다 ──
+    stayed = []
     for _ in range(4):
         btn = pg.locator("#geo-list-country [data-act='geo-more']")
         if not btn.count():
             break
-        btn.click(); pg.wait_for_timeout(120)
+        btn.tap(); pg.wait_for_timeout(300)
+        stayed.append(pg.evaluate("!document.getElementById('geo-list-country').hidden && document.activeElement && document.activeElement.id === 'geo-country'"))
+    check("'더 보기'를 탭해도 목록이 닫히지 않고 칸이 포커스를 지킨다", stayed and all(stayed), str(stayed))
+    # 실기기(배포본)에서 잡힌 순서를 그대로 재현: pointerdown → pointerup → (타이머가 돈 뒤) 단추로 포커스 → click.
+    # 예전 코드는 이 순서에서 칸의 focusout 이 목록을 닫았다. 타이밍에 따라 안 잡히는 탭 대신 순서를 고정해 본다.
+    pg.fill("#geo-country", ""); pg.evaluate("document.activeElement.blur()"); pg.wait_for_timeout(200)
+    pg.focus("#geo-country"); pg.wait_for_timeout(400)
+    pd = pg.evaluate("""() => { const b = document.querySelector('#geo-list-country [data-act=geo-more]');
+      const ev = new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch' });
+      b.dispatchEvent(ev); b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' }));
+      return ev.defaultPrevented; }""")
+    pg.wait_for_timeout(50)
+    pg.evaluate("() => { const b = document.querySelector('#geo-list-country [data-act=geo-more]'); b.focus(); b.click(); }")
+    pg.wait_for_timeout(400)
+    check("'더 보기'는 눌러도 칸의 포커스를 빼앗지 않는다(pointerdown 기본 동작 막음)", pd)
+    check("포커스가 '더 보기' 단추로 옮겨 가도 목록은 열린 채(160줄)",
+          not pg.evaluate("document.getElementById('geo-list-country').hidden") and len(opts(pg, "#geo-list-country")) == 160,
+          str(len(opts(pg, "#geo-list-country"))))
+    pg.evaluate("document.activeElement.blur()"); pg.wait_for_timeout(300)
+    check("목록 안에서 바깥으로 포커스가 나가면 닫힌다", pg.evaluate("document.getElementById('geo-list-country').hidden"))
+    pg.focus("#geo-country"); pg.wait_for_timeout(400)
+    for _ in range(4):
+        btn = pg.locator("#geo-list-country [data-act='geo-more']")
+        if not btn.count():
+            break
+        btn.tap(); pg.wait_for_timeout(300)
     n2 = len(opts(pg, "#geo-list-country"))
     check("더 보기를 끝까지 누르면 248개국 전부", n2 == 248, f"{n2}개")
     check("전부 나오면 '더 보기'가 사라진다", not pg.evaluate("!!document.querySelector('#geo-list-country .geo-more')"))
@@ -110,7 +137,7 @@ with sync_playwright() as p:
         btn = pg.locator("#geo-list-city-0 [data-act='geo-more']")
         if not btn.count():
             break
-        btn.click(); pg.wait_for_timeout(160)
+        btn.tap(); pg.wait_for_timeout(260)
     c2 = len(opts(pg, "#geo-list-city-0"))
     check("더 보기로 서버의 다음 쪽까지 받아 1,234곳 전부", c2 == 1234, f"{c2}곳")
     check("빈 칸 목록은 offset 으로 쪽을 받는다(500·1000)", {o for q, o, _ in city_calls if not q} >= {0, 500, 1000}, str(city_calls))
