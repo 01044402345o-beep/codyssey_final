@@ -489,6 +489,7 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 /* 나라·도시 선택 목록(combobox) — 칸 바로 아래에 겹쳐 뜬다 */
 .geo-pick { position: relative; }
 .geo-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; max-height: min(320px, 50vh); overflow-y: auto;
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y;   /* 목록 끝에서 화면이 따라 스크롤되지 않게 */
   margin: 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow); }
 .geo-opt { display: flex; flex-direction: column; gap: 2px; min-height: 44px; padding: 9px 12px; border-radius: 8px; cursor: pointer; }
 .geo-opt b { font-weight: 600; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
