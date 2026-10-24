@@ -45,7 +45,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile, WebSocket
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
@@ -62,6 +63,7 @@ from . import stt_providers as stt
 from . import stt_selftest as selftest
 from . import interp
 from . import interp_local
+from . import geo
 from . import body_limit
 from . import security_headers
 from .agents.facts import (
@@ -1004,6 +1006,31 @@ async def interp_stream(ws: WebSocket) -> None:
         return firebase_auth.verify_bearer("Bearer " + token)
 
     await interp.serve(ws, ip=client_ip(ws), verify=verify)   # WebSocket 도 client·headers 가 있어 같은 규칙
+
+
+# ---------------------------------------------------------------- 국가·도시 목록 (여행 입력 선택 목록)
+# geo-refresh 워크플로우가 Firestore 에 쌓은 GeoNames 데이터(docs/ops/GEO_REFRESH.md). 개인 데이터가 아니라 캐시해도 된다.
+# 속도 제한은 걸지 않는다 — 입력할 때마다 부르고, 서버 메모리 캐시라 Firestore 읽기는 나라당 한두 번뿐이다.
+
+def _geo_response(fn: Any) -> Any:
+    try:
+        body = fn()
+    except geo.GeoError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+    return JSONResponse(body, headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/geo/countries")
+def geo_countries() -> Any:
+    """선택 목록용 국가(한국어 이름순). 도시가 없는 무인도·폐지 코드는 뺀다."""
+    return _geo_response(geo.countries_payload)
+
+
+@app.get("/geo/cities")
+def geo_cities(country: str = Query(..., min_length=2, max_length=2), q: str = Query("", max_length=60),
+               limit: int = Query(20, ge=1, le=50)) -> Any:
+    """그 나라에서 사람이 고를 만한 도시(인구 상위)를 이름으로 찾는다. q 가 비면 인구 상위."""
+    return _geo_response(lambda: geo.cities_payload(country, q, limit))
 
 
 @app.get("/auth/config")

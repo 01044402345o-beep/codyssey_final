@@ -114,6 +114,13 @@
         }
       },
       {
+        "source": "/geo/**",
+        "run": {
+          "serviceId": "codyssey-api",
+          "region": "asia-northeast3"
+        }
+      },
+      {
         "source": "/user/**",
         "run": {
           "serviceId": "codyssey-api",

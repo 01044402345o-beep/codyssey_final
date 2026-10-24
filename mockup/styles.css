@@ -486,6 +486,18 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .err { font-size: 0.75rem; color: var(--bad-text); margin-top: 5px; min-height: 0; }
 .err:empty { display: none; }
 .city-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 10px; position: relative; }
+/* 나라·도시 선택 목록(combobox) — 칸 바로 아래에 겹쳐 뜬다 */
+.geo-pick { position: relative; }
+.geo-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; max-height: min(320px, 50vh); overflow-y: auto;
+  margin: 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow); }
+.geo-opt { display: flex; flex-direction: column; gap: 2px; min-height: 44px; padding: 9px 12px; border-radius: 8px; cursor: pointer; }
+.geo-opt b { font-weight: 600; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.geo-opt small { color: var(--text-3); font-size: var(--fs-caption); overflow-wrap: anywhere; }
+.geo-opt small:empty { display: none; }
+.geo-opt[aria-selected="true"] { background: var(--surface-2); }
+@media (hover: hover) { .geo-opt:hover { background: var(--surface-2); } }
+.geo-note { padding: 10px 12px; color: var(--text-3); font-size: var(--fs-caption); }
+.geo-src { padding-top: 6px; border-top: 1px solid var(--border-faint); margin-top: 4px; }
 .city-card .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
 .city-card .row2 .input { font-size: 0.8125rem; padding: 0 8px; height: 40px; }
 .city-card .lbl { font-size: 0.6875rem; color: var(--text-3); margin-bottom: 3px; display: block; }
