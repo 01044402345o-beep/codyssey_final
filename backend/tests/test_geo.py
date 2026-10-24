@@ -43,12 +43,14 @@ class FakeFirestore:
                           country_doc("AU", "Australia", "오스트레일리아", 3),
                           country_doc("BV", "Bouvet Island", "부베 섬", 0, shards=0)]
 
+        self.shards = {"geo_cities/US_000": US_ROWS}
+
     def __call__(self, subpath):
         self.calls.append(subpath)
         if subpath.startswith("geo_countries"):
             return {"documents": self.countries}
-        if subpath == "geo_cities/US_000":
-            data = base64.b64encode(gzip.compress(json.dumps(US_ROWS).encode())).decode()
+        if subpath in self.shards:
+            data = base64.b64encode(gzip.compress(json.dumps(self.shards[subpath]).encode())).decode()
             return {"fields": {"data": {"bytesValue": data}}}
         return {}
 
@@ -109,6 +111,22 @@ class GeoStoreTest(unittest.TestCase):
         self.assertEqual(len(self.store.cities_page("US", "", limit=10 ** 9)[0]), len(US_ROWS))   # 상한 안에서 전부
         self.assertEqual(geo.MAX_CITY_LIMIT, geo.MAX_CITIES_PER_COUNTRY)
 
+    def test_empty_query_browses_every_shard_with_the_true_total(self):
+        # 빈 칸 목록은 첫 샤드에서 멈추지 않는다: 둘째 샤드까지 쪽으로 넘겨 끝까지 닿고, 전체 개수는 city_count
+        extra = [[100 + i, "Town %d" % i, "Town %d" % i, "", "NY", 50 - i, 40.0, -74.0, "PPL"] for i in range(4)]
+        self.fake.countries[0] = country_doc("US", "United States", "미국", len(US_ROWS) + len(extra), shards=2,
+                                             admin1={"NY": "New York"})
+        self.fake.shards["geo_cities/US_001"] = extra
+        page1, total = self.store.cities_page("US", "", limit=4)
+        self.assertEqual((len(page1), total), (4, 10))
+        page2, _ = self.store.cities_page("US", "", limit=4, offset=4)          # 첫 샤드 끝 2줄 + 둘째 샤드 2줄
+        self.assertEqual([c["id"] for c in page2], [1, 2, 100, 101])
+        page3, _ = self.store.cities_page("US", "", limit=4, offset=8)
+        self.assertEqual([c["name"] for c in page3], ["Town 2", "Town 3"])       # 끝까지 닿는다
+        self.assertEqual(self.store.cities_page("US", "", limit=4, offset=10)[0], [])
+        self.assertEqual(page3[0]["region"], "New York")
+        self.assertEqual(self.fake.calls.count("geo_cities/US_000"), 1)          # 앞 샤드를 다시 읽지 않는다
+
     def test_ko_label_only_strips_spaced_suffix(self):
         self.assertEqual(geo.ko_label("오사카 시"), "오사카")
         self.assertEqual(geo.ko_label("서울특별시"), "서울특별시")
@@ -136,6 +154,9 @@ class GeoEndpointTest(unittest.TestCase):
         self.assertEqual(body["total"], 1)                                    # 한국어 이름이 있는 건 보스턴(MA)뿐
         self.assertEqual(self.http.get("/geo/cities", params={"country": "US", "limit": 2000}).status_code, 200)
         self.assertEqual(self.http.get("/geo/cities", params={"country": "US", "limit": 2001}).status_code, 422)
+        page = self.http.get("/geo/cities", params={"country": "US", "limit": 2, "offset": 2}).json()
+        self.assertEqual(([c["id"] for c in page["cities"]], page["total"]), ([4930956, 4140963], 6))
+        self.assertNotIn("city_count", self.http.get("/geo/countries").json()["countries"][0])
 
     def test_validation_and_unavailable(self):
         self.assertEqual(self.http.get("/geo/cities", params={"country": "USA"}).status_code, 422)
