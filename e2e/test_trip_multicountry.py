@@ -135,6 +135,9 @@ with sync_playwright() as p:
     check("저장하면 국가 목록과 도시별 국가가 남는다", saved["c"] == ["미국", "일본"] and saved["ci"] == [0, 1], str(saved))
     back = pg.evaluate("() => { const d = tripInputOf(S.trip); return { c: d.countries, ci: d.cities.map(c => c.ci), country: d.country }; }")
     check("저장한 여행을 다시 열면 국가 구조가 복원된다", back["c"] == ["미국", "일본"] and back["ci"] == [0, 1] and back["country"] == "미국", str(back))
+    # 새로고침·다른 기기에서 읽는 값(브라우저 저장소 → 서버 동기화 본문)에도 국가 구조가 남는다
+    kept = pg.evaluate("() => { saveTripHere(S.trip); const t = AI.loadTrip(personalStore()); return t && { c: t.countries, ci: t.cities.map(c => c.ci) }; }")
+    check("저장소에 남은 여행에도 국가 목록·도시별 국가가 있다", kept and kept["c"] == ["미국", "일본"] and kept["ci"] == [0, 1], str(kept))
 
     check("JS 오류 없음", not errs, str(errs[:2]))
     b.close()

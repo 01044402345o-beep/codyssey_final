@@ -2121,7 +2121,7 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .geo-col { min-width: 0; }
 .ctry-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; position: relative; margin-bottom: 8px; }
 .ctry-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-.ctry-card .num { font-size: 0.6875rem; font-weight: 700; letter-spacing: .06em; color: var(--text-3); }
+.ctry-card .num { font-size: var(--fs-caption); font-weight: 700; letter-spacing: .06em; color: var(--text-3); }
 .ctry-card .del { position: static; flex: none; }
 .geo-col .city-card { margin-bottom: 8px; }
 .geo-par .add-city { margin-bottom: 2px; }
