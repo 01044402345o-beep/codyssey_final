@@ -113,6 +113,8 @@ jobs:
           python ../e2e/test_brand.py http://localhost:8768   # 마디 브랜드: 앱 아이콘·매니페스트·로그인 브랜드 줄
           python ../e2e/test_bottom_nav.py http://localhost:8768   # 폰 하단 탭 고정(스크롤·끝 바운스에 끌려가지 않음)
           python ../e2e/test_read_along.py http://localhost:8768   # 따라 읽기: 듣기 중 지금 읽는 단어 강조
+          python ../e2e/test_read_highlight_robust.py http://localhost:8768   # 따라 읽기 견고성: 말하는 중 render()·연속 render()·취소된 발화의 늦은 이벤트·화면 이탈·생성 문장 정렬
+          python ../e2e/test_read_highlight_pace.py http://localhost:8768   # 따라 읽기 속도: 경계 이벤트가 끊겨도 시계가 진행, 마지막 단어 도달, 되감기 없음, 끝까지 읽은 발화만 보정
           python ../e2e/test_alt_expressions.py http://localhost:8768   # 다른 표현: 시트의 같은 뜻 다른 표현·듣기
           python ../e2e/test_streak.py http://localhost:8768   # 연속 학습·오늘의 목표(카드 10장)
           python ../e2e/test_talk_mode.py http://localhost:8768   # 대화하기(스크립트 회화 1a): 상대가 먼저·힌트·Sorry?·대화 중 점수 없음
