@@ -286,6 +286,24 @@ class T(unittest.TestCase):
         # trip 은 나중에 붙은 항목이라 예전 본문(키 없음)도 받아들인다.
         self.assertEqual(user_state.parse_state(BODY)["trip"], None)
 
+    def test_multi_country_trip_round_trips_and_single_country_keeps_old_shape(self):
+        multi = {"country": "미국", "countries": ["미국", "캐나다"], "studyStart": "2026-10-01",
+                 "cities": [{"name": "뉴욕", "start": "2026-11-10", "end": "2026-11-13", "ci": 0},
+                            {"name": "토론토", "start": "2026-11-13", "end": "2026-11-16", "ci": 1}]}
+        saved = self.put(claims_for("uid-1"), {**BODY, "trip": multi})
+        self.assertEqual(saved.status_code, 200, saved.text)
+        self.assertEqual(self.get(claims_for("uid-1")).json()["trip"], multi)
+        single = {**TRIP, "countries": ["미국"], "cities": [{**c, "ci": 0} for c in TRIP["cities"]]}
+        self.assertEqual(user_state.parse_state({**BODY, "trip": single})["trip"], TRIP)   # 나라 하나 = 예전 모양
+        for bad in (
+            {**multi, "countries": ["캐나다", "미국"]},                                        # countries[0] != country
+            {**multi, "countries": ["미국", "캐나다", "일본", "영국", "독일"]},                # 5개국
+            {**multi, "cities": [{**multi["cities"][0], "ci": 2}, multi["cities"][1]]},       # 없는 나라 순번
+            {**multi, "cities": [{**multi["cities"][0], "ci": True}, multi["cities"][1]]},    # 순번이 정수가 아님
+            {**multi, "cities": [multi["cities"][0], {**multi["cities"][1], "ci": 0}]},       # 도시 없는 나라
+        ):
+            self.assertEqual(self.put(claims_for("uid-1"), {**BODY, "trip": bad}).status_code, 400, bad)
+
     def test_malformed_trip_is_rejected(self):
         for bad_trip in (
             {"country": "미국", "cities": [], "studyStart": "2026-10-01"},          # 도시 0곳

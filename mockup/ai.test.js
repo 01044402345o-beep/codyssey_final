@@ -169,6 +169,15 @@ test('여행 입력: 규칙 밖이면 null, 저장·읽기 왕복, 계정 칸마
   assert.equal(AI.cleanTrip({ ...good, cities: [{ name: '뉴욕', start: '2026/11/10', end: '2026-11-13' }] }), null);  // 날짜 형식
   assert.equal(AI.cleanTrip({ ...good, studyStart: '' }), null);
   assert.equal(AI.cleanTrip({ country: '미국', cities: good.cities }), null);                   // 학습 시작일 없음
+  // 여러 나라: countries·ci 를 지킨다. 나라가 하나면 예전 모양(서버·예전 기록과 같은 모양)
+  const multi = { country: '미국', countries: ['미국', ' 캐나다 '], studyStart: '2026-10-01',
+    cities: [{ name: '뉴욕', start: '2026-11-10', end: '2026-11-13', ci: 0 }, { name: '토론토', start: '2026-11-13', end: '2026-11-16', ci: 1 }] };
+  assert.deepEqual(AI.cleanTrip(multi), { ...multi, countries: ['미국', '캐나다'] });
+  assert.deepEqual(AI.cleanTrip({ ...good, countries: ['미국'], cities: [{ ...good.cities[0], ci: 0 }] }), AI.cleanTrip(good));
+  assert.equal(AI.cleanTrip({ ...multi, countries: ['캐나다', '미국'] }), null);                  // countries[0] != country
+  assert.equal(AI.cleanTrip({ ...multi, countries: ['미국', '캐나다', '일본', '영국', '독일'] }), null);   // 5개국
+  assert.equal(AI.cleanTrip({ ...multi, cities: [{ ...multi.cities[0], ci: 2 }, multi.cities[1]] }), null);   // 없는 나라
+  assert.equal(AI.cleanTrip({ ...multi, cities: [multi.cities[0], { ...multi.cities[1], ci: 0 }] }), null);   // 도시 없는 나라
 
   const mem = new Map();
   const storage = { getItem: k => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: k => mem.delete(k) };

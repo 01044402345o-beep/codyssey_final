@@ -236,17 +236,29 @@ def _trip(value: Any) -> dict[str, Any] | None:
     """
     if value is None:
         return None
-    if not isinstance(value, dict) or set(value) != {"country", "cities", "studyStart"}:
+    if not isinstance(value, dict) or set(value) - {"countries"} != {"country", "cities", "studyStart"}:
         _fail()
     country = value.get("country")
     if not isinstance(country, str) or not 1 <= len(country.strip()) <= 80:
         _fail()
+    # 여러 나라(최대 4): countries[0] == country, 도시마다 ci(속한 나라 순번). 나라가 하나면 예전 모양으로 돌려준다.
+    countries = [country.strip()]
+    if "countries" in value:
+        raw = value["countries"]
+        if not isinstance(raw, list) or not 1 <= len(raw) <= 4:
+            _fail()
+        if not all(isinstance(n, str) and 1 <= len(n.strip()) <= 80 for n in raw):
+            _fail()
+        countries = [n.strip() for n in raw]
+        if countries[0] != country.strip():
+            _fail()
+    multi = len(countries) > 1
     cities_in = value.get("cities")
     if not isinstance(cities_in, list) or not 1 <= len(cities_in) <= 5:
         _fail()
-    cities: list[dict[str, str]] = []
+    cities: list[dict[str, Any]] = []
     for city in cities_in:
-        if not isinstance(city, dict) or set(city) != {"name", "start", "end"}:
+        if not isinstance(city, dict) or set(city) - {"ci"} != {"name", "start", "end"}:
             _fail()
         name = city.get("name")
         if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
@@ -256,11 +268,19 @@ def _trip(value: Any) -> dict[str, Any] | None:
             _fail()
         if not isinstance(end, str) or not _DATE.fullmatch(end):
             _fail()
-        cities.append({"name": name.strip(), "start": start, "end": end})
+        ci = city.get("ci", 0)
+        if type(ci) is not int or not 0 <= ci < len(countries):
+            _fail()
+        cities.append({"name": name.strip(), "start": start, "end": end, **({"ci": ci} if multi else {})})
+    if multi and any(not any(c["ci"] == i for c in cities) for i in range(len(countries))):
+        _fail()   # 도시 없는 나라는 없다
     study = value.get("studyStart")
     if not isinstance(study, str) or not _DATE.fullmatch(study):
         _fail()
-    return {"country": country.strip(), "cities": cities, "studyStart": study}
+    out: dict[str, Any] = {"country": country.strip(), "cities": cities, "studyStart": study}
+    if multi:
+        out["countries"] = countries
+    return out
 
 
 def parse_state(body: Any) -> dict[str, Any]:

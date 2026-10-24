@@ -131,6 +131,8 @@ jobs:
           python ../e2e/test_alarm_orientation.py http://localhost:8768   # 오늘의 알람 카드 두 방향(카드 폭 420px 기준 세로형·가로형), 세로형이 남는 높이를 채움, 요일·진도 행 노출 조건, 넘침 없음
           python ../e2e/test_csp.py http://localhost:8768   # 보안 헤더·CSP 강제 상태에서 주요 화면 CSP 위반 0건, boot.js 테마·모드, 녹음 blob 재생, 인라인 스크립트 차단
           python ../e2e/test_geo_picker.py http://localhost:8768   # 여행 입력 나라·도시 선택 목록(combobox): 검색·키보드·터치·별칭(호주)·목록 실패 시 글자 입력
+          python ../e2e/test_geo_exclusive.py http://localhost:8768   # 나라·도시 목록은 한 번에 하나만 열림: 칸 이동·Esc 뒤 남는 목록 0, ↓가 다른 칸 목록을 되살리지 않음
+          python ../e2e/test_trip_multicountry.py http://localhost:8768   # 국가 추가·국가별 도시 묶음(여행 입력·설정 수정 공통): 390=1열/820=2열, 국가별 검증, 저장·복원
       - uses: actions/upload-artifact@v4
         if: always()
         with:

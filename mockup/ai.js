@@ -210,6 +210,15 @@
     const country = typeof trip.country === 'string' ? trip.country.trim() : '';
     if (!country || country.length > 80) return null;
     if (!Array.isArray(trip.cities) || trip.cities.length < 1 || trip.cities.length > 5) return null;
+    /* 여러 나라(최대 4): countries[0] 은 country 와 같고, 도시마다 ci(속한 나라 순번)를 둔다.
+       나라가 하나면 예전 모양(countries·ci 없음)으로 저장한다 — 예전 서버·예전 기록과 그대로 맞는다. */
+    let countries = [country];
+    if (trip.countries !== undefined) {
+      if (!Array.isArray(trip.countries) || trip.countries.length < 1 || trip.countries.length > 4) return null;
+      countries = trip.countries.map(n => (typeof n === 'string' ? n.trim() : ''));
+      if (countries.some(n => !n || n.length > 80) || countries[0] !== country) return null;
+    }
+    const multi = countries.length > 1;
     const cities = [];
     for (const c of trip.cities) {
       if (!c || typeof c !== 'object') return null;
@@ -217,11 +226,15 @@
       if (!name || name.length > 80) return null;
       if (typeof c.start !== 'string' || !TRIP_DATE.test(c.start)) return null;
       if (typeof c.end !== 'string' || !TRIP_DATE.test(c.end)) return null;
-      cities.push({ name: name, start: c.start, end: c.end });
+      const ci = c.ci === undefined ? 0 : c.ci;
+      if (!Number.isInteger(ci) || ci < 0 || ci >= countries.length) return null;
+      cities.push(multi ? { name: name, start: c.start, end: c.end, ci: ci } : { name: name, start: c.start, end: c.end });
     }
+    if (multi && countries.some((_, i) => !cities.some(c => c.ci === i))) return null;   // 도시 없는 나라는 없다
     const studyStart = trip.studyStart;
     if (typeof studyStart !== 'string' || !TRIP_DATE.test(studyStart)) return null;
-    return { country: country, cities: cities, studyStart: studyStart };
+    return multi ? { country: country, countries: countries, cities: cities, studyStart: studyStart }
+      : { country: country, cities: cities, studyStart: studyStart };
   }
   function loadTrip(storage) {
     try { return cleanTrip(JSON.parse(storage.getItem(TRIP_KEY) || 'null')); } catch (e) { return null; }
