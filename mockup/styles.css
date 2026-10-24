@@ -114,6 +114,7 @@
   --al-glow: color-mix(in srgb, #fff 76%, transparent);
   --al-glow-2: color-mix(in srgb, #fff 82%, transparent);
   --btn-spec: color-mix(in srgb, #fff 30%, transparent);
+  --al-rail-spec: color-mix(in srgb, #fff 22%, transparent);   /* 알람 진도 레일 윗면 하이라이트 */
   --grid-dot: rgba(22, 27, 38, .09);
   --focus-ring: rgba(22, 27, 38, .08);
   --focus: #161b26;         /* 키보드 포커스 링 */
@@ -1897,7 +1898,8 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .alarm-week { display: flex; align-items: flex-end; justify-content: center; gap: 6px;
   margin-top: auto; padding-top: clamp(10px, 1.8dvh, 20px);
   box-sizing: content-box; height: var(--alarm-week-h); }
-.alarm-week i { width: 10px; height: calc(5px + (var(--n, 0) * var(--alarm-week-h) / 8));
+.alarm-week i { --n: 0;   /* 그날 학습량 — app.js 가 인라인 style 로 덮는다 */
+  width: 10px; height: calc(5px + (var(--n) * var(--alarm-week-h) / 8));
   max-height: var(--alarm-week-h); border-radius: 3px;
   background: color-mix(in srgb, var(--text) 15%, var(--al-bg)); }
 .alarm-week i.on { background: var(--accent); }
@@ -1933,7 +1935,7 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .alarm-rail { flex: 1 1 auto; height: 8px; border-radius: var(--r-pill, 999px); overflow: hidden;
   background: color-mix(in srgb, var(--text) 15%, var(--al-bg)); }
 .alarm-rail i { display: block; height: 100%; border-radius: inherit; background: var(--accent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
+  box-shadow: inset 0 1px 0 var(--al-rail-spec);
   transition: width .25s ease; }
 .alarm-count { flex: none; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .alarm-count b { font-weight: 700; color: var(--text); }
