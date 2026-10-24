@@ -1060,7 +1060,7 @@ function pickRow() {
 }
 
 /* ================= TTS ================= */
-const TTS = { voices: [] };
+const TTS = { voices: [], perChar: 84 };   // perChar = 글자당 ms 추정. 발화가 끝날 때마다 실측으로 보정한다
 const ttsSupported = () => 'speechSynthesis' in window;
 function loadVoices() { if (ttsSupported()) TTS.voices = speechSynthesis.getVoices(); }
 function enVoice() {
@@ -1095,7 +1095,7 @@ function enHtml(text) {
   }
   return out;
 }
-let readTimer = null;
+let readTimer = null, readLive = null;   // readLive = 지금 말하는 문장의 시간표(render 직후 재부착용)
 function readMark(target, at) {   // at = 읽는 문장 안 글자 위치. 그 위치를 지난 마지막 단어를 칠한다
   if (!target) return;
   let cur = null;
@@ -1103,30 +1103,108 @@ function readMark(target, at) {   // at = 읽는 문장 안 글자 위치. 그 �
   target.querySelectorAll('.w.now').forEach(w => w !== cur && w.classList.remove('now'));
   if (cur) cur.classList.add('now');
 }
-function readClear() { clearTimeout(readTimer); readTimer = null; document.querySelectorAll('.w.now').forEach(w => w.classList.remove('now')); }
+/* 강조 지우기. target 을 주면 그 문장 안만 지운다 — 다른 문장의 강조까지 지우면
+   두 문장이 겹쳐 읽힐 때 살아 있는 쪽이 사라진다. */
+function readClear(target) {
+  clearTimeout(readTimer); readTimer = null;
+  (target && target.isConnected ? target : document).querySelectorAll('.w.now').forEach(w => w.classList.remove('now'));
+}
+/* 발화를 밖에서 끊을 때는 반드시 이걸 쓴다. speechSynthesis.cancel() 만 부르면 취소된 발화의
+   onstart/onboundary 가 늦게 도착해 살아 있는 문장의 타이머를 훔쳐 간다(강조가 한 단어에서 멈춤). */
+function stopTts() {
+  /* 시계(readLive)를 먼저 세운다. speechSynthesis.cancel() 은 onend 를 부르지 않으므로,
+     finish() 를 통한 정리 경로가 아예 없다 — 시계를 여기서 직접 멈추지 않으면
+     55ms 타이머가 영원히 돌며 마지막 단어를 칠한 채 남는다(카드를 앞면으로 되돌릴 때 실측 +12초). */
+  if (readLive) { readLive.stop(); readLive = null; }
+  if (curUtter) { curUtter.__cancelled = true; curUtter = null; }
+  clearInterval(endPoll); endPoll = null;
+  if (ttsSupported()) { try { speechSynthesis.cancel(); } catch (e) { /* 듣기 미지원 */ } }
+  document.querySelectorAll('.playing').forEach(e => e.classList.remove('playing'));   // 취소된 발화의 버튼이 계속 재생 중으로 남지 않게
+  readClear();
+}
 /* 따라 읽기 시간표. 브라우저마다 단어 경계(boundary) 이벤트가 다르다:
    - Android 의 일부 음성: 경계 이벤트가 아예 없다 → 글자 수로 시간을 어림해 따라간다.
    - iOS Safari: 경계 이벤트가 오다가 고유명사("Brooklyn Bridge", "Statue of Liberty")에서 멈추는 일이 있다(10/21 실기기).
    그래서 진짜 이벤트가 오면 위치만 맞추고 어림은 계속 돌린다. 이벤트가 끊겨도 다음 단어로 넘어간다. */
 function readTimeline(target, spoken, rate) {
-  const words = [...target.querySelectorAll('.w')].map(w => +w.dataset.c);
-  const msPerChar = 62 / (rate || 1);
-  const gap = k => Math.max(160, ((k + 1 < words.length ? words[k + 1] : spoken.length) - words[k]) * msPerChar);
-  let k = -1;
-  const step = () => {
-    if (k + 1 >= words.length) return;   // 마지막 단어는 끝날 때까지 칠해 둔다
-    k++; readMark(target, words[k]);
-    clearTimeout(readTimer); readTimer = setTimeout(step, gap(k));
+  /* 이 앱은 render() 로 #stage 를 통째로 갈아 끼운다(생성 응답 도착·음성 목록 로드·진행 저장·탭 이동).
+     노드를 붙잡아 두면 다시 그려진 순간 detached 가 되어, 타이머는 도는데 화면에는 아무것도 칠해지지 않는다
+     (강조가 끊기고 사라지는 원인). 그래서 매 틱마다 '지금 화면에 있는 같은 문장'을 다시 찾는다.
+     같은 문장인지는 단어 위치+글자로 판정한다 — enHtml 이 결정적이라 다시 그려도 서명이 같다. */
+  const sig = t => [...t.querySelectorAll('.w')].map(w => w.dataset.c + '·' + w.textContent).join('|');
+  const mark = sig(target), count = target.querySelectorAll('.w').length;
+  /* 같은 문장이 화면에 여러 번 있을 수 있다(문장 모음 목록, 회화 시트, 카드). 문서 전체를 뒤지면
+     카드에서 읽던 강조가 목록의 같은 문장으로 옮겨가 '재생 중이 아닌 곳'에 칠해진다(실측: u-coll 이동 시 34개 중 1개).
+     그래서 찾는 범위를 '같은 종류의 상자'로 좁히고, 보이는 것만 고른다. */
+  const SCOPE = ['.face', '.sent', '.talk-line', '.talk-me', '.interp-item', '.interp-show-card', '.sheet'];
+  const scope = SCOPE.find(q => target.closest(q)) || null;
+  const same = el => el.querySelectorAll('.w').length === count && sig(el) === mark;
+  const shown = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  const live = () => {
+    /* 시트가 열려 있고 그 안에 같은 문장이 있으면 시트 쪽에 칠한다 — 카드 쪽은 가려져 보이지 않는다. */
+    const sheet = document.querySelector('.sheet');
+    if (sheet && !sheet.contains(target)) { const inSheet = [...sheet.querySelectorAll('[data-read]')].find(same); if (inSheet) return inSheet; }
+    if (target.isConnected && same(target)) return target;
+    const pool = scope ? document.querySelectorAll(scope + ' [data-read]') : document.querySelectorAll('[data-read]');
+    for (const el of pool) if (same(el) && shown(el)) return el;
+    return null;   // 문장이 화면에서 사라졌다(다른 카드·화면으로 이동) → 강조를 멈춘다
+  };
+  const ws = [...target.querySelectorAll('.w')];
+  const words = ws.map(w => +w.dataset.c);
+  const wtxt = ws.map(w => w.textContent);
+  /* 단어마다 걸리는 시간: 글자 수 × 글자당 시간 + 구두점 뒤 쉼.
+     글자당 시간은 음성·속도마다 달라서 이전 발화의 실측으로 보정해 둔 값(TTS.perChar)을 쓴다. */
+  const base = (TTS.perChar || 84) / (rate || 1);
+  const wdur = k => {
+    const t = wtxt[k] || '';
+    const n = Math.max(1, t.replace(/[^0-9A-Za-z'\u2019-]/g, '').length);
+    const pause = /[.!?]"?$/.test(t) ? 260 : /[,;:\u2014-]"?$/.test(t) ? 130 : 0;
+    return Math.max(140, n * base + pause);
+  };
+  const cum = []; { let a = 0; for (let i = 0; i < words.length; i++) { cum.push(a); a += wdur(i); } }
+  /* 시계 하나로 따라간다. 예전에는 '단어마다 setTimeout' 이었는데, 경계 이벤트가 오면
+     다음 이벤트를 gap×2 만큼 기다렸다. iOS Safari 는 고유명사("Statue of Liberty", "Brooklyn Bridge")에서
+     경계 이벤트를 끊기 때문에, 그 두 배 대기가 그대로 '멈춘 화면'이 됐고 마지막 단어는 칠해지지도 못한 채
+     발화가 끝나 강조가 사라졌다(02:51·02:53 실기기 녹화). 이제 시계는 계속 흐르고,
+     경계 이벤트는 '지금 이 단어를 읽는 중'이라고 시계를 앞으로 다시 붙이는 데만 쓴다. 뒤로는 가지 않는다. */
+  let anchorK = 0, anchorT = 0, idx = -1, clock = null;
+  const nowMs = () => performance.now();
+  const startOf = k => anchorT + (cum[k] - cum[anchorK]);
+  const idxAt = t => { let i = anchorK; for (let k = anchorK; k < words.length; k++) if (startOf(k) <= t) i = k; return i; };
+  const stop = () => { clearInterval(clock); clock = null; };
+  const paint = i => {
+    const cur = live(); if (!cur) { stop(); readClear(); return false; }
+    if (i > idx) { idx = i; readMark(cur, words[idx]); }
+    return true;
   };
   return {
-    start() { step(); },
-    // 진짜 경계 이벤트: 그 단어로 맞추고, 다음 이벤트가 올 만한 시간의 두 배를 기다린 뒤에야 어림으로 넘어간다
-    sync(at) {
-      let i = 0; words.forEach((c, j) => { if (c <= at) i = j; });
-      k = i; readMark(target, words[k]);
-      clearTimeout(readTimer); readTimer = setTimeout(step, gap(k) * 2);
+    stop,                                        // 발화가 끝났을 때 반드시 부른다(안 부르면 시계가 유령처럼 계속 칠한다)
+    reached: () => idx >= words.length - 1,
+    /* 첫 단어는 onstart 즉시 칠한다(예전 350ms 지연은 '듣기 → 0.5초 아무것도 없음'으로 보였다). */
+    start() {
+      if (clock) return;
+      anchorK = 0; anchorT = nowMs(); idx = -1;
+      paint(0);
+      clock = setInterval(() => { if (!paint(idxAt(nowMs()))) stop(); }, 55);
     },
-    total: spoken.length * msPerChar,
+    sync(at) {
+      if (!Number.isFinite(at) || at < 0 || at > spoken.length) return;   // 말이 안 되는 위치는 버린다
+      const cur = live(); if (!cur) { stop(); readClear(); return; }
+      let j = 0; words.forEach((c, i) => { if (c <= at) j = i; });
+      /* 뒤로 가는 경계는 무시한다. 시계를 뒤에 다시 붙이면 그 차이만큼 화면이 멈춘다
+         (예전 구현이 고유명사에서 하던 실수와 같은 모양). */
+      if (j < idx) return;
+      anchorK = j; anchorT = nowMs();                              // 시계를 실제 음성 위치에 다시 붙인다
+      if (j > idx) { idx = j; readMark(cur, words[j]); }            // 칠은 앞으로만 간다
+      else readMark(cur, words[Math.max(0, idx)]);
+    },
+    total: cum.length ? cum[cum.length - 1] + wdur(words.length - 1) : spoken.length * base,
+    /* render() 가 #stage 를 갈아 끼운 직후 부른다. 다음 tick 까지 기다리지 않고 지금 읽는 단어를 다시 칠한다. */
+    resync() {
+      const cur = live();
+      if (!cur) { stop(); readClear(); return; }
+      readMark(cur, words[Math.max(0, idx)]);
+    },
   };
 }
 /* iOS(WebKit)는 참조가 없는 발화 객체를 말하는 도중에 버려 onend 가 오지 않을 수 있다 → 전역에 붙잡아 둔다.
@@ -1136,6 +1214,9 @@ const readTarget = el => { const box = el && el.closest('.talk-line, .talk-me, .
 function speak(text, btn, target, o = {}) {   // o = { rate, onend } — 대화하기가 쓴다
   if (ttsState() !== 'ok') { toast(ttsOffMsg()); return; }
   if (curUtter) curUtter.__cancelled = true;   // 앞 발화의 늦은 onend 가 새 발화를 지우지 않게
+  /* 예전 타임라인의 55ms 시계를 반드시 세운다. 안 세우면 두 시계가 서로의 강조를 지우며
+     칠이 앞뒤로 튄다(연타 시 '4 → 3 → 4'). */
+  if (readLive) { readLive.stop(); readLive = null; }
   speechSynthesis.cancel();
   clearInterval(endPoll); endPoll = null;
   if (mineAudio) { try { mineAudio.pause(); } catch (e) { /* 이미 멈춤 */ } }   // 내 발음과 겹치지 않게
@@ -1148,20 +1229,38 @@ function speak(text, btn, target, o = {}) {   // o = { rate, onend } — 대화�
   readClear();
   const tgt = target && target.querySelector('.w') ? target : null;
   const tl = tgt ? readTimeline(tgt, u.text, u.rate) : null;
+  readLive = tl;
   const est = (tl ? tl.total : u.text.length * 62 / (u.rate || 1)) + 800;
   let done = false;
   const finish = () => {
     if (done) return; done = true;
     clearInterval(endPoll); endPoll = null;
+    if (tl) tl.stop();                  // onend 뒤에 시계가 계속 돌면 강조가 유령처럼 마지막 단어에 남는다
     if (curUtter === u) curUtter = null;
     if (u.__cancelled) return;
     if (btn) btn.classList.remove('playing');
+    if (readLive === tl) readLive = null;
+    /* 다 읽은 뒤: 이번 발화의 실제 길이로 글자당 시간을 보정한다(음성마다 말 빠르기가 다르다).
+       다음 문장부터 어림이 실제 음성에 더 가깝게 붙는다. 마지막 여운·지연을 빼려고 260ms 를 뺀다. */
+    /* 보정은 '끝까지 읽은' 발화만 믿는다. 중간에 끊긴 발화(취소·오류·조기 onend)로 보정하면
+       글자당 시간이 바닥(45ms)까지 떨어져 이후 모든 문장이 두 배로 빨라진다. */
+    const msRan = u.__startedAt ? Date.now() - u.__startedAt : 0;
+    const trustworthy = msRan > 400 && (tl ? tl.reached() : msRan > est * 0.5);
+    if (!u.__cancelled && u.__startedAt && u.text.length > 6 && trustworthy) {
+      const ms = msRan;
+      if (ms > 400) {
+        const per = Math.min(170, Math.max(45, (ms - 260) / u.text.length * (u.rate || 1)));
+        TTS.perChar = Math.round(TTS.perChar * 0.6 + per * 0.4);
+      }
+    }
     readClear();
     if (o.onend) o.onend();
   };
   u.onstart = () => {
+    if (u.__cancelled || curUtter !== u) return;   // 이미 다른 발화로 넘어갔다 — 타이머를 훔치지 않는다
     if (btn) btn.classList.add('playing');
-    if (tl) readTimer = setTimeout(() => tl.start(), 350);
+    u.__startedAt = Date.now();
+    if (tl) tl.start();
     // 예상 시간이 지나면 '아직 말하는 중'인지 직접 본다. onend 가 오면 그쪽이 먼저 끝낸다.
     const startedAt = Date.now();
     endPoll = setInterval(() => {
@@ -1172,6 +1271,7 @@ function speak(text, btn, target, o = {}) {   // o = { rate, onend } — 대화�
     }, 400);
   };
   u.onboundary = e => {
+    if (u.__cancelled || curUtter !== u) return;
     if (!tl || (e.name && e.name !== 'word')) return;
     tl.sync(e.charIndex);
   };
@@ -1322,6 +1422,7 @@ function render() {
   const body = S.screen.startsWith('a-') ? adminScreen() : userScreen();
   $('#stage').className = 'stage ' + (S.screen.startsWith('a-') ? 'is-admin' : 'is-user');
   $('#stage').innerHTML = body + (LEGACY ? notes(sc) : '');
+  if (readLive) readLive.resync();   // 말하는 도중 화면이 갈아 끼워졌다 — 같은 단어를 새 노드에 다시 칠한다
   if (MODE === 'demo') $('#side-notes').innerHTML = notes(sc);
   syncNavSpace();
   const ab = $('#api-banner');
@@ -3729,7 +3830,7 @@ async function toggleSpeak(opt) {
   const r = pickRow(); if (!r || deckAlarmOn(r)) return;   // 알람 장에서 녹음을 시작하지 않는다
   const s = S.smap[r.ids[deckIdx(r)]]; if (!s) return;
   cancelSpeak();
-  if (ttsSupported()) { try { speechSynthesis.cancel(); } catch (e) { /* 이미 멈춤 */ } }   // 원어민 듣기가 녹음에 섞이지 않게
+  stopTts();   // 원어민 듣기가 녹음에 섞이지 않게
   const tok = SPK.tok; SPK.sid = s.id; SPK.line = (opt && opt.line) || 'me'; SPK.state = 'requesting'; updateSpeakUi();
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
@@ -3806,7 +3907,7 @@ const TALK = { on: false, sid: null, turns: [], i: 0, hint: 0, again: {}, result
 const talkCur = () => TALK.turns[TALK.i] || null;
 function cancelTalk() {
   TALK.tok++; clearTimeout(TALK.timer); TALK.timer = null;
-  if (ttsSupported()) { try { speechSynthesis.cancel(); } catch (e) { /* 이미 멈춤 */ } }
+  stopTts();
   if (TALK.on) cancelSpeak();
   Object.assign(TALK, { on: false, sid: null, turns: [], i: 0, hint: 0, again: {}, results: {}, note: '', slow: false });
 }
@@ -3842,7 +3943,7 @@ function talkNext() {
 function talkRecord() {
   const t = talkCur(); if (!t || t.who !== 'me') return;
   if (SPK.state === 'requesting' || SPK.state === 'uploading') return;
-  if (ttsSupported()) { try { speechSynthesis.cancel(); } catch (e) { /* 이미 멈춤 */ } }   // 상대 목소리가 녹음에 섞이지 않게
+  stopTts();   // 상대 목소리가 녹음에 섞이지 않게
   if (SPK.state === 'recording') { stopSpeak(); return; }
   const tok = TALK.tok, idx = TALK.i;
   TALK.note = ''; TALK.slow = false;
@@ -4551,12 +4652,12 @@ const ACT = {
       if (S.card.flipped.size > before) bumpAct();   // 이 카드를 이번에 처음 뒤집었다 → 오늘 활동 +1
       if (r && before < r.ids.length && S.card.flipped.size >= r.ids.length) allFlipped(r);   // 방금 다 뒤집었다
     }
-    else if (ttsSupported()) speechSynthesis.cancel();
+    else stopTts();
     sessionWrite();   /* 뒤집은 카드·보던 카드 위치를 남긴다 — 여기만 render 를 거치지 않는다 */
   },
   'play-mine': el => {
     if (!SPK.clip) return;
-    try { speechSynthesis.cancel(); } catch (e) { /* 듣기 미지원 */ }
+    stopTts();
     if (mineAudio) { try { mineAudio.pause(); } catch (e) { /* 이미 멈춤 */ } }
     mineAudio = new Audio(SPK.clip.url);
     el.classList.add('playing');
@@ -4576,7 +4677,7 @@ const ACT = {
     try { if (LIVE.worklet) LIVE.worklet.port.postMessage(LIVE.muted ? 'mute' : 'unmute'); } catch (e) { /* 없음 */ }
     updateLiveUi();
   },
-  'live-pause': () => { LIVE.paused = !LIVE.paused; if (LIVE.paused && ttsSupported()) speechSynthesis.cancel(); updateLiveUi(); },
+  'live-pause': () => { LIVE.paused = !LIVE.paused; if (LIVE.paused) stopTts(); updateLiveUi(); },
   'live-partner': () => { LIVE.partner = true; updateLiveUi(); },
   'live-expand': () => { LIVE.partner = true; updateLiveUi(); },
   'live-ui-open': () => { LIVE.uiOpen = true; updateLiveUi(); },
@@ -4619,7 +4720,7 @@ const ACT = {
   },
   'live-play': () => {   // 번역된 문장을 상대에게 들려준다(제공자 음성이 없을 때)
     const t = LIVE.cap.target; if (!t || !ttsSupported()) return;
-    speechSynthesis.cancel();
+    stopTts();
     const u = new SpeechSynthesisUtterance(t);
     u.lang = LIVE.dst === 'ko' ? 'ko-KR' : 'en-US';
     const v = enVoice(); if (LIVE.dst !== 'ko' && v) u.voice = v;
