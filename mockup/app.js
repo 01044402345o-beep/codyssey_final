@@ -2439,6 +2439,9 @@ async function geoMore(key) {
   const o = GEO.open; if (!o || o.key !== key || o.loadingMore) return;
   const el = document.querySelector(`[data-geo="${CSS.escape(key)}"]`), ul = el && geoListEl(el);
   if (!ul) return;
+  /* 단추 자리를 다시 그리면 포커스가 있던 단추가 사라져 포커스가 body 로 떨어지고, 그러면 '바깥으로 나갔다'고
+     보고 목록이 닫힌다. 다시 그리기 전에 포커스를 칸으로 돌려 둔다. */
+  if (ul.contains(document.activeElement)) el.focus({ preventScroll: true });
   const paint = () => {
     const more = ul.querySelector('.geo-more'), count = ul.querySelector('.geo-count'), foot = geoFoot(key, o);
     if (more) { if (foot.more) more.innerHTML = foot.more; else more.remove(); }
@@ -2539,7 +2542,21 @@ document.addEventListener('focusin', e => {
 });
 document.addEventListener('focusout', e => {
   const el = e.target;
-  if (el.dataset && el.dataset.geo) setTimeout(() => { if (document.activeElement !== el && !GEO.keep) geoClose(el.dataset.geo); }, 120);
+  if (!el.dataset || !el.dataset.geo) return;
+  setTimeout(() => {
+    const ul = geoListEl(el), a = document.activeElement;
+    if (a === el || GEO.keep || (ul && a && ul.contains(a))) return;   // 목록 안('더 보기' 단추)으로 간 포커스는 닫을 이유가 아니다
+    geoClose(el.dataset.geo);
+  }, 120);
+});
+document.addEventListener('focusout', e => {      // 포커스가 목록 안에 있다가 바깥으로 나가면 닫는다
+  const ul = e.target.closest && e.target.closest('.geo-list');
+  if (!ul) return;
+  setTimeout(() => {
+    const el = document.querySelector(`[aria-controls="${ul.id}"]`), a = document.activeElement;
+    if (!el || a === el || GEO.keep || (a && ul.contains(a))) return;
+    geoClose(el.dataset.geo);
+  }, 120);
 });
 document.addEventListener('keydown', e => {
   const el = e.target;
@@ -2562,6 +2579,9 @@ document.addEventListener('pointerdown', e => {
   if (!ul) return;
   GEO.keep = ul.id;
   if (e.pointerType === 'mouse' && e.target.closest('.geo-opt')) e.preventDefault();
+  /* '더 보기' 단추는 손가락·마우스 모두 포커스를 칸에 남긴다. 터치는 pointerup 뒤에야 포커스가 단추로 옮겨 가서,
+     그때는 GEO.keep 이 이미 풀려 칸의 focusout 이 목록을 닫았다(단추를 누르면 목록이 닫히던 원인). click 은 그대로 난다. */
+  if (e.target.closest('.geo-more')) e.preventDefault();
 });
 function geoRelease() {
   if (!GEO.keep) return;
