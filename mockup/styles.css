@@ -2113,3 +2113,18 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .notice { border-radius: var(--r-row); }
 .al-card { border-radius: var(--r-card); }
 @media (prefers-contrast: more) { .city-card .num { border-radius: var(--r-chip); } }
+
+/* ── 여러 국가: 국가마다 카드 하나, 도시는 그 안에. 두 국가 이상이면 나란히(병렬) ──
+   좁은 화면(폰)에서는 한 열로 쌓는다 — 날짜 입력 두 개를 170px 폭에 넣으면 읽을 수 없다.
+   병렬은 '국가별 묶음'이라는 뜻이고, 폭이 생기면(≥620px) 실제로 옆으로 선다. */
+.geo-par { display: grid; gap: 12px; margin-bottom: 4px; }
+.geo-col { min-width: 0; }
+.ctry-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; position: relative; margin-bottom: 8px; }
+.ctry-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.ctry-card .num { font-size: 0.6875rem; font-weight: 700; letter-spacing: .06em; color: var(--text-3); }
+.ctry-card .del { position: static; flex: none; }
+.geo-col .city-card { margin-bottom: 8px; }
+.geo-par .add-city { margin-bottom: 2px; }
+.add-country { margin-top: 10px; }
+@media (min-width: 620px) { .geo-par { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 940px) { .geo-par { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); } }
