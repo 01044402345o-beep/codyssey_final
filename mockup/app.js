@@ -2401,42 +2401,85 @@ function geoOpts(el, items, from, to) {
       : `<li role="option" id="${ul.id}-o${i}" class="geo-opt" data-geo-i="${i}" aria-selected="false"><b>${esc(it.label)}</b><small>${esc([it.label !== it.name ? it.name : '', it.region, it.population >= 10000 ? `인구 ${fmtPop(it.population)}` : ''].filter(Boolean).join(' · '))}</small></li>`;
   }).join('');
 }
-function geoRender(el, items, note, total) {
+/* 목록 아래 '더 보기'·'전체 N 중 M 표시' 두 줄. M 은 지금 그려진 줄, 남은 수는 서버에 남은 쪽까지 센다. */
+function geoFoot(key, o) {
+  const u = geoUnit(key), left = Math.max(0, o.total - o.shown);
+  const more = left > 0 ? `<button type="button" data-act="geo-more" data-geo-key="${esc(key)}"${o.loadingMore ? ' disabled' : ''}>${o.loadingMore ? '불러오는 중…' : `＋ 나머지 ${left.toLocaleString('ko-KR')}${u} 더 보기`}</button>` : '';
+  return { more, count: `전체 ${o.total.toLocaleString('ko-KR')}${u} 중 ${o.shown.toLocaleString('ko-KR')}${u} 표시` };
+}
+function geoRender(el, items, note, total, extra = {}) {
   const ul = geoListEl(el); if (!ul) return;
   const key = geoKey(el), isCountry = /^country/.test(key);
   /* 목록은 한 번에 하나만 열린다. GEO.open 은 칸 하나짜리 상태라, 도시 목록을 열면서 나라 목록을
      그대로 두면 나라 쪽은 주인을 잃어 닫히지 않는다 → 두 목록이 동시에 떠 있고, Esc·바깥 탭은
      도시만 닫아 나라 목록이 유령으로 남는다. 열기 전에 다른 칸의 목록을 먼저 접는다. */
   document.querySelectorAll('[data-geo][aria-expanded="true"]').forEach(other => { if (other !== el) geoHideList(other); });
-  GEO.open = { key, items, active: -1, shown: Math.min(GEO_PAGE, items.length) };
-  const opts = geoOpts(el, items, 0, GEO.open.shown);
+  /* 지금 칸에 적힌 값이 목록에 있으면 그 줄까지 그려 두고 표시한다(목록을 열면 고른 곳이 보이게). */
+  const cur = extra.current ? items.findIndex(it => geoNorm(isCountry ? (it.ko || it.name) : it.label) === geoNorm(extra.current)) : -1;
+  const shown = Math.min(items.length, Math.max(GEO_PAGE, cur >= 0 ? Math.ceil((cur + 1) / GEO_PAGE) * GEO_PAGE : 0));
+  GEO.open = { key, items, active: cur, shown, total: Math.max(total == null ? items.length : total, items.length),
+    browse: !!extra.browse, iso2: extra.iso2 || null, loadingMore: false };
+  const opts = geoOpts(el, items, 0, shown);
   /* '생략 없음'을 화면이 스스로 말한다: 전체 개수를 늘 적고, 남은 줄은 '더 보기'로 이어진다. */
-  const n = total == null ? items.length : total, u = geoUnit(key);
-  const left = items.length - GEO.open.shown;
-  const more = left > 0 ? `<li class="geo-note geo-more" role="presentation"><button type="button" data-act="geo-more" data-geo-key="${esc(key)}">＋ 나머지 ${left.toLocaleString('ko-KR')}${u} 더 보기</button></li>` : '';
-  ul.innerHTML = (opts || '') + more + (note ? `<li class="geo-note" role="presentation">${note}</li>` : '')
-    + (items.length ? `<li class="geo-note geo-count" role="presentation">전체 ${n.toLocaleString('ko-KR')}${u} 중 ${items.length.toLocaleString('ko-KR')}${u} 표시</li>
+  const foot = geoFoot(key, GEO.open);
+  ul.innerHTML = (opts || '') + (foot.more ? `<li class="geo-note geo-more" role="presentation">${foot.more}</li>` : '')
+    + (note ? `<li class="geo-note" role="presentation">${note}</li>` : '')
+    + (items.length ? `<li class="geo-note geo-count" role="presentation">${foot.count}</li>
       <li class="geo-note geo-src" role="presentation">출처: GeoNames (CC BY 4.0)</li>` : '');
   const show = !!(opts || note);
   ul.hidden = !show;
   el.setAttribute('aria-expanded', show ? 'true' : 'false');
+  if (show && cur >= 0) {
+    const li = ul.querySelector(`[data-geo-i="${cur}"]`);
+    if (li) { li.setAttribute('aria-selected', 'true'); el.setAttribute('aria-activedescendant', li.id); ul.scrollTop = Math.max(0, li.offsetTop - 8); }
+  }
 }
 /* '더 보기': 다음 묶음을 뒤에 붙인다. 앞의 스크롤 위치·이미 고른 줄은 그대로 둔다. */
-function geoMore(key) {
-  const o = GEO.open; if (!o || o.key !== key) return;
+async function geoMore(key) {
+  const o = GEO.open; if (!o || o.key !== key || o.loadingMore) return;
   const el = document.querySelector(`[data-geo="${CSS.escape(key)}"]`), ul = el && geoListEl(el);
   if (!ul) return;
+  const paint = () => {
+    const more = ul.querySelector('.geo-more'), count = ul.querySelector('.geo-count'), foot = geoFoot(key, o);
+    if (more) { if (foot.more) more.innerHTML = foot.more; else more.remove(); }
+    if (count) count.textContent = foot.count;
+  };
+  if (o.shown >= o.items.length && o.items.length < o.total && o.browse && o.iso2) {
+    /* 빈 칸 도시 목록: 받아 둔 줄을 다 그렸으면 서버에서 다음 쪽을 받아 이어 붙인다 — 끝까지 닿는다. */
+    o.loadingMore = true; paint();
+    const page = await geoCityPage(o.iso2, '', o.items.length);
+    o.loadingMore = false;
+    if (GEO.open !== o) return;                                   // 그사이 목록이 닫히거나 바뀌었다
+    if (!page.items.length) { o.total = o.items.length; paint(); return; }
+    o.items.push(...page.items); o.total = Math.max(page.total, o.items.length);
+  }
   const from = o.shown, to = Math.min(from + GEO_PAGE, o.items.length);
   o.shown = to;
   const more = ul.querySelector('.geo-more');
   if (more) more.insertAdjacentHTML('beforebegin', geoOpts(el, o.items, from, to));
-  if (to >= o.items.length) { if (more) more.remove(); }
-  else if (more) more.innerHTML = `<button type="button" data-act="geo-more" data-geo-key="${esc(key)}">＋ 나머지 ${(o.items.length - to).toLocaleString('ko-KR')}${geoUnit(key)} 더 보기</button>`;
+  paint();
+}
+/* 도시 한 쪽. 빈 칸(q 없음)은 인구순 전체를 offset 부터, 검색은 맞는 것 전부(서버 상한 안). 같은 쪽은 다시 받지 않는다. */
+const GEO_CITY_PAGE = 500;
+async function geoCityPage(iso2, q, offset) {
+  const ck = iso2 + '|' + geoNorm(q) + '|' + offset;
+  const hit = GEO.cities.get(ck);
+  if (hit) return { items: hit.items.slice(), total: hit.total };
+  let items = [], total = 0;
+  try {
+    const r = await fetch(`${API.base}/geo/cities?country=${iso2}&limit=${q ? 2000 : GEO_CITY_PAGE}&offset=${offset}&q=${encodeURIComponent(q)}`);
+    const body = r.ok ? await r.json() : null;
+    items = (body && body.cities) || [];
+    total = (body && body.total) || items.length;
+  } catch (e) { items = []; total = 0; }
+  if (GEO.cities.size > 200) { const first = GEO.cities.keys().next().value; if (first !== ck) GEO.cities.delete(first); }
+  GEO.cities.set(ck, { items, total });
+  return { items: items.slice(), total };
 }
 function fmtPop(n) { return n >= 10000 ? `${Math.round(n / 10000).toLocaleString('ko-KR')}만` : n.toLocaleString('ko-KR'); }
 function geoMove(el, d) {
-  const o = GEO.open; if (!o || !o.items.length) return;
-  o.active = (o.active + d + o.items.length) % o.items.length;
+  const o = GEO.open; if (!o || !o.shown) return;
+  o.active = (o.active + d + o.shown) % o.shown;          // 그려진 줄 안에서만 움직인다
   const ul = geoListEl(el);
   ul.querySelectorAll('.geo-opt').forEach((li, i) => li.setAttribute('aria-selected', i === o.active ? 'true' : 'false'));
   const cur = ul.querySelector(`[data-geo-i="${o.active}"]`);
@@ -2452,8 +2495,12 @@ function geoPick(el, i) {
   geoClose();
   updateInputLive();
 }
-async function geoQuery(el) {
-  const key = geoKey(el), q = el.value.trim(), seq = ++GEO.seq;
+/* browse = 칸을 눌러(또는 ↓) 목록만 연 것. 이미 적힌 값(고른 나라·저장된 여행)으로 거르지 않고
+   생략 없는 전체 목록을 보여 주며, 적힌 값은 목록 안에서 표시만 한다. 사용자가 글자를 치면(input) 그때부터 거른다.
+   (예전에는 칸에 '미국'이 들어 있으면 열자마자 '미국'으로 걸러 3개만 보였다 — 아무것도 안 쳤는데 전체가 안 나왔다.) */
+async function geoQuery(el, opt = {}) {
+  const key = geoKey(el), browse = !!opt.browse, q = browse ? '' : el.value.trim(), seq = ++GEO.seq;
+  const current = el.value.trim();
   const countries = await geoCountries();
   if (seq !== GEO.seq || document.activeElement !== el) return;
   if (!countries) { geoClose(); return; }                       // 목록을 못 받으면 글자 입력만
@@ -2464,7 +2511,7 @@ async function geoQuery(el) {
     const items = k
       ? countries.filter(c => c._k.some(x => x.startsWith(k))).concat(countries.filter(c => !c._k.some(x => x.startsWith(k)) && c._k.some(x => x.includes(k))))
       : countries;
-    geoRender(el, items, items.length ? '' : '목록에 없어요 — 적은 그대로 써도 돼요.', k ? items.length : countries.length);
+    geoRender(el, items, items.length ? '' : '목록에 없어요 — 적은 그대로 써도 돼요.', items.length, { browse, current });
     return;
   }
   /* 도시 칸의 국가는 '그 도시가 속한 국가'(ci)다 — 국가가 여럿이면 칸마다 다르다. */
@@ -2472,21 +2519,11 @@ async function geoQuery(el) {
   const ctryName = String((S.draft.countries || [])[ci] || '');
   const c = countryByName(ctryName);
   if (!c) { geoRender(el, [], ctryName.trim() ? '국가를 목록에서 고르면 도시 목록이 나와요.' : '국가를 먼저 고르세요.'); return; }
-  const ck = c.iso2 + '|' + geoNorm(q);
-  let hit = GEO.cities.get(ck), items = hit && hit.items, total = hit && hit.total;
-  if (!items) {
-    try {
-      /* limit=20 이면 인구 상위 20곳만 와서 '생략된 목록'이었다. 서버가 줄 수 있는 만큼 받는다. */
-      const r = await fetch(`${API.base}/geo/cities?country=${c.iso2}&limit=2000&q=${encodeURIComponent(q)}`);
-      const body = r.ok ? await r.json() : null;
-      items = (body && body.cities) || [];
-      total = (body && body.total) || items.length;
-    } catch (e) { items = []; total = 0; }
-    if (GEO.cities.size > 200) { const first = GEO.cities.keys().next().value; if (first !== ck) GEO.cities.delete(first); }
-    GEO.cities.set(ck, { items, total });
-  }
+  /* 빈 칸이면 서버가 그 나라 전체(모든 샤드)를 쪽으로 준다 — total 은 그 나라 전부. '더 보기'가 다음 쪽을 받는다. */
+  const { items, total } = await geoCityPage(c.iso2, q, 0);
   if (seq !== GEO.seq || document.activeElement !== el) return;
-  geoRender(el, items, items.length ? '' : (q ? '목록에 없어요 — 적은 그대로 써도 돼요.' : ''), total);
+  geoRender(el, items, items.length ? '' : (q ? '목록에 없어요 — 적은 그대로 써도 돼요.' : ''), total,
+    { browse: !q, iso2: c.iso2, current: browse ? current : '' });
 }
 function geoQueryLater(el) {
   clearTimeout(GEO.timer);
@@ -2496,7 +2533,9 @@ document.addEventListener('focusin', e => {
   const el = e.target;
   if (!el.dataset || !el.dataset.geo) return;
   if (GEO.open && GEO.open.key === el.dataset.geo) return;   // 목록을 만지다 칸으로 돌아온 것 — 다시 그리면 스크롤 위치가 날아간다
-  geoQuery(el);
+  // 칸을 누르면 전체 목록(적힌 값으로 거르지 않음). 적힌 값은 선택해 두어 바로 치면 바꿔 쓰게 한다.
+  if (el.value) { try { el.select(); } catch (err) { /* 선택 미지원 */ } }
+  geoQuery(el, { browse: true });
 });
 document.addEventListener('focusout', e => {
   const el = e.target;
@@ -2506,7 +2545,7 @@ document.addEventListener('keydown', e => {
   const el = e.target;
   if (!el.dataset || !el.dataset.geo) return;
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-    if (!GEO.open || GEO.open.key !== el.dataset.geo) { geoQuery(el); return; }   // 다른 칸의 목록을 움직이지 않는다
+    if (!GEO.open || GEO.open.key !== el.dataset.geo) { geoQuery(el, { browse: true }); return; }   // 다른 칸의 목록을 움직이지 않는다
     e.preventDefault(); geoMove(el, e.key === 'ArrowDown' ? 1 : -1);
   } else if (e.key === 'Enter' && GEO.open && GEO.open.active >= 0) {
     e.preventDefault(); geoPick(el, GEO.open.active);
