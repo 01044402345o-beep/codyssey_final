@@ -2128,3 +2128,9 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .add-country { margin-top: 10px; }
 @media (min-width: 620px) { .geo-par { grid-template-columns: 1fr 1fr; } }
 @media (min-width: 940px) { .geo-par { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); } }
+/* 목록의 전체 개수·출처 줄과 '더 보기' */
+.geo-note.geo-count { color: var(--text-3); font-size: var(--fs-caption); text-align: center; }
+.geo-note.geo-more { padding: 4px; }
+.geo-note.geo-more button { width: 100%; min-height: 44px; border: 1.5px dashed var(--border-strong); border-radius: 8px;
+  background: none; color: var(--text-soft); font-weight: 600; font-size: 0.875rem; }
+.geo-note.geo-more button:hover { border-color: var(--text); color: var(--text); }

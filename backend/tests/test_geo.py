@@ -100,6 +100,15 @@ class GeoStoreTest(unittest.TestCase):
         self.assertEqual(c.exception.status, 404)
         self.assertEqual(len(self.store.cities("US", "", limit=999)), len(US_ROWS))   # 상한 50 안에서 전부
 
+    def test_cities_page_reports_total_so_the_screen_can_tell_if_it_was_cut(self):
+        picked, total = self.store.cities_page("US", "", limit=2)
+        self.assertEqual((len(picked), total), (2, len(US_ROWS)))           # 2개만 줘도 전체 개수는 6
+        picked, total = self.store.cities_page("US", "bos", limit=1)
+        self.assertEqual((picked[0]["id"], total), (4930956, 2))
+        self.assertNotIn("_k", picked[0])
+        self.assertEqual(len(self.store.cities_page("US", "", limit=10 ** 9)[0]), len(US_ROWS))   # 상한 안에서 전부
+        self.assertEqual(geo.MAX_CITY_LIMIT, geo.MAX_CITIES_PER_COUNTRY)
+
     def test_ko_label_only_strips_spaced_suffix(self):
         self.assertEqual(geo.ko_label("오사카 시"), "오사카")
         self.assertEqual(geo.ko_label("서울특별시"), "서울특별시")
@@ -124,6 +133,9 @@ class GeoEndpointTest(unittest.TestCase):
     def test_cities_endpoint(self):
         body = self.http.get("/geo/cities", params={"country": "us", "q": "보스", "limit": 5}).json()
         self.assertEqual((body["country"], body["cities"][0]["label"]), ("US", "보스턴"))
+        self.assertEqual(body["total"], 1)                                    # 한국어 이름이 있는 건 보스턴(MA)뿐
+        self.assertEqual(self.http.get("/geo/cities", params={"country": "US", "limit": 2000}).status_code, 200)
+        self.assertEqual(self.http.get("/geo/cities", params={"country": "US", "limit": 2001}).status_code, 422)
 
     def test_validation_and_unavailable(self):
         self.assertEqual(self.http.get("/geo/cities", params={"country": "USA"}).status_code, 422)

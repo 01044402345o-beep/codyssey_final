@@ -1028,7 +1028,7 @@ def geo_countries() -> Any:
 
 @app.get("/geo/cities")
 def geo_cities(country: str = Query(..., min_length=2, max_length=2), q: str = Query("", max_length=60),
-               limit: int = Query(20, ge=1, le=50)) -> Any:
+               limit: int = Query(20, ge=1, le=2000)) -> Any:
     """그 나라에서 사람이 고를 만한 도시(인구 상위)를 이름으로 찾는다. q 가 비면 인구 상위."""
     return _geo_response(lambda: geo.cities_payload(country, q, limit))
 
