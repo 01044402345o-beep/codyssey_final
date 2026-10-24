@@ -27,6 +27,9 @@ COUNTRIES = [
     {"iso2": "AU", "name": "Australia", "ko": "오스트레일리아", "capital": "Canberra", "population": 25000000, "continent": "OC"},
     {"iso2": "JP", "name": "Japan", "ko": "일본", "capital": "Tokyo", "population": 126000000, "continent": "AS"},
     {"iso2": "FR", "name": "France", "ko": "프랑스", "capital": "Paris", "population": 67000000, "continent": "EU"},
+] + [  # 목록이 칸보다 길어 스크롤이 생기게(실제는 248개국)
+    {"iso2": "Z%s" % chr(65 + i), "name": "Testland %02d" % i, "ko": "테스트국 %02d" % i, "capital": "", "population": 1, "continent": "EU"}
+    for i in range(26)
 ]
 CITIES = {
     "US": [{"id": 1, "name": "New York City", "ko": "뉴욕", "label": "뉴욕", "region": "New York", "population": 8800000, "capital": False},
@@ -74,7 +77,31 @@ with sync_playwright() as p:
           and country.get_attribute("aria-controls") == "geo-list-country")
     country.fill(""); country.focus(); page.wait_for_timeout(300)
     check("포커스하면 나라 목록이 보인다", page.locator("#geo-list-country").is_visible()
-          and len(options(page, "#geo-list-country")) == 4 and country.get_attribute("aria-expanded") == "true")
+          and len(options(page, "#geo-list-country")) == 30 and country.get_attribute("aria-expanded") == "true")
+    lst = page.locator("#geo-list-country")
+    check("목록이 칸보다 길면 스크롤이 생긴다", page.evaluate(
+        "(() => { const u = document.getElementById('geo-list-country'); return u.scrollHeight > u.clientHeight + 50; })()"))
+    box = lst.bounding_box()
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    page.mouse.wheel(0, 400); page.wait_for_timeout(250)
+    check("마우스 휠로 목록이 스크롤되고 목록은 열린 채", page.evaluate("document.getElementById('geo-list-country').scrollTop") > 100
+          and lst.is_visible() and country.input_value() == "", str(page.evaluate("document.getElementById('geo-list-country').scrollTop")))
+    # 손가락 스크롤: 항목 위에 손가락을 대고(pointerdown) 끌면 브라우저가 pointercancel 을 보낸다 — 아무것도 고르지 않아야 한다
+    page.evaluate("""(() => { const li = document.querySelector('#geo-list-country .geo-opt');
+      li.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch' }));
+      li.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerType: 'touch' })); })()""")
+    page.wait_for_timeout(300)
+    check("손가락으로 끌어 스크롤하면 아무것도 고르지 않고 목록이 열린 채", country.input_value() == "" and lst.is_visible())
+    # 스크롤바를 마우스로 끄는 동안(칸이 포커스를 잃어도) 닫히지 않는다
+    page.evaluate("""(() => { const u = document.getElementById('geo-list-country');
+      u.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
+      document.activeElement.blur(); })()""")
+    page.wait_for_timeout(300)
+    still = lst.is_visible()
+    page.evaluate("document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'mouse' }))")
+    page.wait_for_timeout(150)
+    check("스크롤바를 끄는 동안 목록이 닫히지 않고, 떼면 칸으로 포커스가 돌아온다",
+          still and page.evaluate("document.activeElement && document.activeElement.dataset.geo") == "country")
     check("출처 표기(GeoNames CC BY 4.0)", "GeoNames" in page.inner_text("#geo-list-country"))
 
     country.fill("호주"); page.wait_for_timeout(250)
@@ -91,8 +118,8 @@ with sync_playwright() as p:
     check("Esc 로 목록을 닫는다", page.locator("#geo-list-country").is_hidden())
 
     country.fill("미"); page.wait_for_timeout(250)
-    page.locator("#geo-list-country .geo-opt").first.dispatch_event("pointerdown"); page.wait_for_timeout(200)
-    check("목록을 눌러(터치) 고른다", country.input_value() == "미국")
+    page.locator("#geo-list-country .geo-opt").first.tap(); page.wait_for_timeout(250)
+    check("목록을 탭해서 고른다(터치)", country.input_value() == "미국" and page.locator("#geo-list-country").is_hidden())
 
     city = page.locator('[data-geo="city.0"]')
     city.fill(""); city.focus(); page.wait_for_timeout(600)

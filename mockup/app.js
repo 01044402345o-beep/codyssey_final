@@ -2200,7 +2200,7 @@ const ENGLISH_ISO = ['US', 'GB', 'CA', 'AU', 'NZ', 'IE', 'SG', 'PH', 'MT'];
 // 사람들이 흔히 쓰는 다른 이름(GeoNames 한국어 이름과 다른 것) — 검색과 '영어권' 판정에 쓴다.
 const COUNTRY_ALIAS = { AU: ['호주'], US: ['미합중국', '아메리카'], GB: ['잉글랜드', '브리튼', '영국연합'], NL: ['홀랜드'],
   CZ: ['체코'], VN: ['월남'], AE: ['아랍에미리트', '두바이'], TW: ['타이완'], KR: ['한국', '남한'] };
-const GEO = { countries: null, loading: null, failed: false, cities: new Map(), open: null, seq: 0, timer: null };
+const GEO = { countries: null, loading: null, failed: false, cities: new Map(), open: null, seq: 0, timer: null, keep: null };
 const geoNorm = s => String(s || '').toLowerCase().replace(/\s+/g, '');
 function geoCountries() {
   if (GEO.countries) return Promise.resolve(GEO.countries);
@@ -2295,10 +2295,15 @@ function geoQueryLater(el) {
   clearTimeout(GEO.timer);
   GEO.timer = setTimeout(() => geoQuery(el), geoKey(el) === 'country' ? 0 : 180);   // 도시는 입력이 멈추면 한 번
 }
-document.addEventListener('focusin', e => { const el = e.target; if (el.dataset && el.dataset.geo) geoQuery(el); });
+document.addEventListener('focusin', e => {
+  const el = e.target;
+  if (!el.dataset || !el.dataset.geo) return;
+  if (GEO.open && GEO.open.key === el.dataset.geo) return;   // 목록을 만지다 칸으로 돌아온 것 — 다시 그리면 스크롤 위치가 날아간다
+  geoQuery(el);
+});
 document.addEventListener('focusout', e => {
   const el = e.target;
-  if (el.dataset && el.dataset.geo) setTimeout(() => { if (document.activeElement !== el) geoClose(el.dataset.geo); }, 120);
+  if (el.dataset && el.dataset.geo) setTimeout(() => { if (document.activeElement !== el && !GEO.keep) geoClose(el.dataset.geo); }, 120);
 });
 document.addEventListener('keydown', e => {
   const el = e.target;
@@ -2312,11 +2317,27 @@ document.addEventListener('keydown', e => {
     e.preventDefault(); geoClose();
   }
 });
-// 목록을 누를 때 칸의 포커스를 잃지 않게(pointerdown 에서 막고 고른다). 터치·마우스 모두.
+// 목록 조작: 고르기는 click 에서 한다 — 손가락을 대고 끌면(스크롤) click 이 나지 않으므로 스크롤하려다 고르지 않는다.
+// (예전에는 pointerdown 에서 고르고 기본 동작을 막아, 휴대폰에서 목록을 스크롤할 수 없었다.)
+// 누르고 있는 동안(스크롤바 끌기·손가락 스크롤)은 칸이 포커스를 잃어도 목록을 닫지 않고, 떼면 칸으로 포커스를 돌린다.
+// 마우스로 항목을 누를 때만 기본 동작을 막아 칸의 포커스를 지킨다(터치는 막지 않는다 — 막으면 스크롤이 안 된다).
 document.addEventListener('pointerdown', e => {
+  const ul = e.target.closest && e.target.closest('.geo-list');
+  if (!ul) return;
+  GEO.keep = ul.id;
+  if (e.pointerType === 'mouse' && e.target.closest('.geo-opt')) e.preventDefault();
+});
+function geoRelease() {
+  if (!GEO.keep) return;
+  const id = GEO.keep; GEO.keep = null;
+  const el = document.querySelector(`[aria-controls="${id}"]`);
+  if (el && GEO.open && GEO.open.key === el.dataset.geo && document.activeElement !== el) el.focus({ preventScroll: true });
+}
+document.addEventListener('pointerup', () => setTimeout(geoRelease, 0));   // click(고르기) 뒤에 돈다
+document.addEventListener('pointercancel', geoRelease);                    // 손가락 스크롤은 pointercancel 로 끝난다
+document.addEventListener('click', e => {
   const li = e.target.closest && e.target.closest('.geo-opt');
   if (!li) return;
-  e.preventDefault();
   const el = document.querySelector(`[aria-controls="${li.parentElement.id}"]`);
   if (el) geoPick(el, +li.dataset.geoI);
 });
