@@ -2226,17 +2226,31 @@ function isEnglishCountry(name) {
 }
 function geoKey(el) { return el.dataset.geo; }
 function geoListEl(el) { return document.getElementById(el.getAttribute('aria-controls')); }
+/* 한 칸의 목록만 닫는다. GEO.open 과 무관하게 그 칸을 실제로 접는다 —
+   '지금 열려 있는 칸'만 닫는 방식이면, 주인이 바뀐 낡은 목록은 영영 안 닫힌다(둘 다 열린 화면). */
+function geoHideList(el) {
+  if (!el) return;
+  el.setAttribute('aria-expanded', 'false'); el.removeAttribute('aria-activedescendant');
+  const ul = geoListEl(el); if (ul) { ul.hidden = true; ul.innerHTML = ''; }
+}
 function geoClose(onlyKey) {
   const o = GEO.open;
-  if (!o || (onlyKey && o.key !== onlyKey)) return;      // 다른 칸의 목록은 건드리지 않는다(칸을 옮길 때 늦게 오는 닫기)
+  if (onlyKey) {                                        // 그 칸은 반드시 닫는다(다른 칸이 열려 있어도)
+    geoHideList(document.querySelector(`[data-geo="${CSS.escape(onlyKey)}"]`));
+    if (o && o.key === onlyKey) GEO.open = null;
+    return;
+  }
+  if (!o) return;
   GEO.open = null;
-  const el = document.querySelector(`[data-geo="${o.key}"]`), ul = el && geoListEl(el);
-  if (el) { el.setAttribute('aria-expanded', 'false'); el.removeAttribute('aria-activedescendant'); }
-  if (ul) { ul.hidden = true; ul.innerHTML = ''; }
+  geoHideList(document.querySelector(`[data-geo="${CSS.escape(o.key)}"]`));
 }
 function geoRender(el, items, note) {
   const ul = geoListEl(el); if (!ul) return;
   const key = geoKey(el), isCountry = key === 'country';
+  /* 목록은 한 번에 하나만 열린다. GEO.open 은 칸 하나짜리 상태라, 도시 목록을 열면서 나라 목록을
+     그대로 두면 나라 쪽은 주인을 잃어 닫히지 않는다 → 두 목록이 동시에 떠 있고, Esc·바깥 탭은
+     도시만 닫아 나라 목록이 유령으로 남는다. 열기 전에 다른 칸의 목록을 먼저 접는다. */
+  document.querySelectorAll('[data-geo][aria-expanded="true"]').forEach(other => { if (other !== el) geoHideList(other); });
   GEO.open = { key, items, active: -1 };
   const opts = items.map((it, i) => isCountry
     ? `<li role="option" id="${ul.id}-o${i}" class="geo-opt" data-geo-i="${i}" aria-selected="false"><b>${esc(it.ko || it.name)}</b><small>${esc(it.name)}</small></li>`
@@ -2309,7 +2323,7 @@ document.addEventListener('keydown', e => {
   const el = e.target;
   if (!el.dataset || !el.dataset.geo) return;
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-    if (!GEO.open) { geoQuery(el); return; }
+    if (!GEO.open || GEO.open.key !== el.dataset.geo) { geoQuery(el); return; }   // 다른 칸의 목록을 움직이지 않는다
     e.preventDefault(); geoMove(el, e.key === 'ArrowDown' ? 1 : -1);
   } else if (e.key === 'Enter' && GEO.open && GEO.open.active >= 0) {
     e.preventDefault(); geoPick(el, GEO.open.active);
