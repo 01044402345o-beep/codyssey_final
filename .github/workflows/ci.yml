@@ -128,6 +128,7 @@ jobs:
           python ../e2e/test_liquid_glass.py http://localhost:8768   # 재질: 탭바·앱바만 실제 blur, 카드는 blur 없음, 대비, 접근성 대체(투명도·대비)
           python ../e2e/test_material_scope.py http://localhost:8768   # 재질 역할(raised·tinted·ink·glass)을 화면마다: 카드 blur 0, 경계 토큰, ink 면 1개 이하
           python ../e2e/test_alarm_study.py http://localhost:8768   # 학습 탭 덱 첫 장 = 오늘의 알람(진도 미반영), 입구별 노출, 입구가 바뀌어도 같은 문장, 유동 패딩
+          python ../e2e/test_alarm_orientation.py http://localhost:8768   # 오늘의 알람 카드 두 방향(카드 폭 420px 기준 세로형·가로형), 세로형이 남는 높이를 채움, 요일·진도 행 노출 조건, 넘침 없음
           python ../e2e/test_csp.py http://localhost:8768   # 보안 헤더·CSP 강제 상태에서 주요 화면 CSP 위반 0건, boot.js 테마·모드, 녹음 blob 재생, 인라인 스크립트 차단
           python ../e2e/test_geo_picker.py http://localhost:8768   # 여행 입력 나라·도시 선택 목록(combobox): 검색·키보드·터치·별칭(호주)·목록 실패 시 글자 입력
       - uses: actions/upload-artifact@v4
