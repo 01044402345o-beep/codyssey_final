@@ -24,6 +24,7 @@ from . import firebase_admin
 
 TTL = 6 * 3600
 MAX_CITIES_PER_COUNTRY = 20_000     # 첫 샤드 중 인구 상위만(메모리 상한)
+MAX_CITY_LIMIT = MAX_CITIES_PER_COUNTRY   # 한 나라의 도시를 한 번에 다 줄 수 있는 상한
 MAX_COUNTRIES_CACHED = 8
 ATTRIBUTION = "GeoNames (https://www.geonames.org), CC BY 4.0"
 ISO2 = re.compile(r"^[A-Z]{2}$")
@@ -144,11 +145,33 @@ class GeoStore:
                 self._cities.popitem(last=False)
         return cities
 
+    def cities_page(self, iso2: str, q: str = "", limit: int = 20) -> tuple[list[dict], int]:
+        """(고른 목록, 조건에 맞는 전체 개수). 목록이 잘렸는지 화면이 알 수 있어야 한다."""
+        iso2 = (iso2 or "").strip().upper()
+        if not ISO2.match(iso2):
+            raise GeoError(400, "bad_country")
+        limit = max(1, min(int(limit or 20), MAX_CITY_LIMIT))
+        rows = self._load_cities(iso2)
+        needle = _norm(q)[:60]
+        if not needle:
+            picked, total = rows, len(rows)                          # 인구 상위, 생략 없이
+        else:
+            first, second = [], []
+            for c in rows:
+                keys = c["_k"]
+                if any(k.startswith(needle) for k in keys if k):
+                    first.append(c)
+                elif any(needle in k for k in keys if k):
+                    second.append(c)
+            matched = first + second                                 # 행이 이미 인구순이라 각 묶음 안에서도 인구순
+            picked, total = matched, len(matched)
+        return [{k: v for k, v in c.items() if not k.startswith("_")} for c in picked[:limit]], total
+
     def cities(self, iso2: str, q: str = "", limit: int = 20) -> list[dict]:
         iso2 = (iso2 or "").strip().upper()
         if not ISO2.match(iso2):
             raise GeoError(400, "bad_country")
-        limit = max(1, min(int(limit or 20), 50))
+        limit = max(1, min(int(limit or 20), MAX_CITY_LIMIT))
         rows = self._load_cities(iso2)
         needle = _norm(q)[:60]
         if not needle:
@@ -176,5 +199,6 @@ def countries_payload() -> dict:
 
 
 def cities_payload(country: str, q: str, limit: int) -> dict:
-    return {"country": (country or "").strip().upper(), "cities": STORE.cities(country, q, limit),
+    picked, total = STORE.cities_page(country, q, limit)
+    return {"country": (country or "").strip().upper(), "cities": picked, "total": total,
             "attribution": ATTRIBUTION}
