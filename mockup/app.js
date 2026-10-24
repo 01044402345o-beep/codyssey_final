@@ -677,7 +677,7 @@ function archiveTrip() {
   S.trip.archived = true;
   S.archived.unshift({ id: S.trip.id, route: tripTitle(S.trip), dates: `${Dt.md(S.trip.tripStart)}~${Dt.md(S.trip.tripEnd)}` });
 }
-function resetCard(date = null) { S.card = { date, i: 0, flipped: new Set() }; S.sheet = false; }
+function resetCard(date = null) { S.card = { date, i: 0, alarm: true, flipped: new Set() }; S.sheet = false; }
 
 /* ---------- 보고서 (AI-01 흉내) ---------- */
 function genReport(t, round) {
@@ -2609,23 +2609,38 @@ function alarmCard(pr, o = {}) {
     : n ? `카드 ${DAY_GOAL - n}장만 더 뒤집으면 오늘 목표`
     : st ? '오늘 카드를 뒤집으면 연속이 이어져요' : '오늘 카드를 뒤집어 시작해 보세요';
   const days = Array.from({ length: 7 }, (_, i) => Dt.add(S.today, i - 6));
+  /* 막대 높이가 그날 학습량이 되도록 --n 을 넘긴다(세로형에서만 쓰인다. 가로형은 눈금).
+     막대 아래에 요일 이름을 붙인다 — 남는 공간이 있을 때만 CSS 가 보여 준다. */
+  const WD = ['일', '월', '화', '수', '목', '금', '토'];
+  const wdOf = d => WD[new Date(d + 'T00:00:00').getDay()];
   const week = days.map(d => {
-    const on = (PROG.act[d] || 0) > 0;
-    return `<i class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}" title="${Dt.md(d)}${on ? ' · 학습함' : ''}"></i>`;
+    const c = PROG.act[d] || 0, on = c > 0;
+    return `<i class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}" style="--n:${Math.min(c, 7)}" title="${Dt.md(d)}${on ? ` · ${c}장` : ''}"></i>`;
   }).join('');
-  return `<div class="alarm" data-live="alarm">
+  const wdLabels = days.map(d => {
+    const on = (PROG.act[d] || 0) > 0;
+    return `<b class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}">${wdOf(d)}</b>`;
+  }).join('');
+  const pr2 = pr, pct = Math.round(pr2.rate * 100);
+  return `<div class="alarm-wrap"><div class="alarm" data-live="alarm">
     <div class="alarm-h"><span class="alarm-ic">${ALARM_IC}</span>오늘의 알람</div>
     <b class="alarm-big">${n}<i>/${DAY_GOAL}장</i></b>
     <p class="alarm-label">${sub}</p>
     <div class="alarm-week" role="group" aria-label="최근 7일">${week}</div>
-    <div class="alarm-meta"><span>🔥 연속 ${st}일</span><span aria-hidden="true">·</span><span>여행 전체 ${Math.round(pr.rate * 100)}%</span></div>
+    <div class="alarm-days" aria-hidden="true">${wdLabels}</div>
+    <div class="alarm-prog">
+      <span class="alarm-plabel">완료율</span>
+      <div class="alarm-rail" role="img" aria-label="완료율 ${pct}% · 완료 ${pr2.done}일, 학습 ${pr2.den}일, 미완료 ${pr2.miss}일"><i style="width:${pct}%"></i></div>
+      <span class="alarm-count"><b>${pr2.done}</b>/${pr2.den}일</span>
+    </div>
+    <div class="alarm-meta"><span>🔥 연속 ${st}일</span></div>
     <div class="alarm-acts">
       ${o.inDeck
         ? `<button class="alarm-primary" data-act="alarm-next">${done ? '다시 보기' : '학습 시작'}</button>`
         : `<button class="alarm-primary" data-act="study-date" data-date="${date}">${done ? '다시 보기' : '학습 시작'}</button>`}
       <button class="alarm-second" data-act="tab" data-id="u-sched">일정표 열기</button>
     </div>
-  </div>`;
+  </div></div>`;
 }
 
 function ring(rate) {
@@ -3688,7 +3703,7 @@ const weakItem = s => ({ category_id: s.categoryId, id: s.situationId, situation
 function updateSpeakUi() {
   if (TALK.on) updateTalkUi();
   const r = studyShown() && pickRow();
-  if (!r) return;
+  if (!r || deckAlarmOn(r)) return;          // 알람 장에는 말하기 대상 문장이 없다
   const s = S.smap[r.ids[deckIdx(r)]];
   if (!s) return;
   const f = document.activeElement && document.activeElement.closest && document.activeElement.closest('[data-live="speak-btn"]') ? document.activeElement.closest('[data-live="speak-btn"]').dataset.k : null;
@@ -3711,7 +3726,8 @@ async function toggleSpeak(opt) {
   if (SPK.state === 'requesting' || SPK.state === 'uploading') return;      // 중복 요청 방지
   if (SPK.state === 'recording') { stopSpeak(); return; }
   if (!voiceConsent().voice) { askVoiceConsent(opt ? () => toggleSpeak(opt) : null); return; }   // 동의 전에는 마이크도 열지 않는다
-  const r = pickRow(); const s = r && S.smap[r.ids[deckIdx(r)]]; if (!s) return;
+  const r = pickRow(); if (!r || deckAlarmOn(r)) return;   // 알람 장에서 녹음을 시작하지 않는다
+  const s = S.smap[r.ids[deckIdx(r)]]; if (!s) return;
   cancelSpeak();
   if (ttsSupported()) { try { speechSynthesis.cancel(); } catch (e) { /* 이미 멈춤 */ } }   // 원어민 듣기가 녹음에 섞이지 않게
   const tok = SPK.tok; SPK.sid = s.id; SPK.line = (opt && opt.line) || 'me'; SPK.state = 'requesting'; updateSpeakUi();
@@ -4301,7 +4317,7 @@ const ACT = {
       render(); renderDemo(); toast(ok ? '복습 목록을 지웠어요.' : '브라우저 저장소에 접근하지 못했어요.');
     }, { danger: true }),
   'weak-save': () => {
-    const r = pickRow(); const s = r && S.smap[r.ids[deckIdx(r)]];
+    const r = pickRow(); const s = r && !deckAlarmOn(r) && S.smap[r.ids[deckIdx(r)]];
     if (!s || SPK.sid !== s.id || !SPK.result || !SPK.result.offer) return;       // 다른 카드·취소된 결과에는 저장하지 않는다
     saveWeakList(AI.upsertWeak(weakList(), weakItem(s)));
     SPK.result = { ...SPK.result, offer: false, saved: true, savedBy: 'user' }; updateSpeakUi(); renderDemo(); toast('복습 목록에 저장했어요.');

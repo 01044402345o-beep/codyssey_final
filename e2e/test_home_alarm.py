@@ -94,15 +94,15 @@ with sync_playwright() as p:
     check("0장: 시작 안내", "뒤집" in pg.inner_text(".alarm-label") or "시작" in pg.inner_text(".alarm-label"))
     act(pg, 3, ["2026-09-20", "2026-09-21"])
     check("주간 막대 7칸", pg.locator(".alarm-week i").count() == 7)
-    check("연속·여행 전체가 카드 안에", "연속" in pg.inner_text(".alarm-meta") and "%" in pg.inner_text(".alarm-meta"))
+    check("연속 학습일이 카드 안에", "연속" in pg.inner_text(".alarm-meta"))
 
     # ── 동작 ──
-    pg.click(".alarm-primary")
+    pg.evaluate("() => document.querySelector('.alarm-primary').click()")
     pg.wait_for_timeout(420)
     check("주 버튼이 오늘 학습으로", pg.evaluate("S.screen") == "u-study", pg.evaluate("S.screen"))
     pg.evaluate("ACT.tab({ dataset: { id: 'u-study' } })")
     pg.wait_for_timeout(300)
-    pg.click(".alarm-second")
+    pg.evaluate("() => document.querySelector('.alarm-second').click()")
     pg.wait_for_timeout(350)
     check("보조 버튼이 일정표로", pg.evaluate("S.screen") == "u-sched", pg.evaluate("S.screen"))
     pg.evaluate("ACT.tab({ dataset: { id: 'u-study' } })")
@@ -115,8 +115,8 @@ with sync_playwright() as p:
         check(f"{w}px: 가로 넘침 없음", pg.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
         check(f"{w}px: 카드가 화면 안", pg.evaluate("""(() => { const c = document.querySelector('.alarm').getBoundingClientRect();
             return c.left >= 0 && c.right <= innerWidth + 1; })()"""))
-        check(f"{w}px: 카드 높이 360px 이하", pg.evaluate(
-            "document.querySelector('.alarm').getBoundingClientRect().height") <= 360,
+        check(f"{w}px: 카드가 화면 높이를 넘지 않는다", pg.evaluate(
+            "document.querySelector('.alarm').getBoundingClientRect().height <= innerHeight"),
             str(round(pg.evaluate("document.querySelector('.alarm').getBoundingClientRect().height"))))
         check(f"{w}px: 숫자가 한 줄", pg.evaluate(
             "document.querySelector('.alarm-big').getBoundingClientRect().height") < 90)

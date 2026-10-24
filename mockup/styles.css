@@ -1851,15 +1851,27 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
    - 뒤 컨텐츠를 더 세게 확산(diffuse) → 투명도에 덜 의존한다. (WWDC26 Platforms State of the Union)
    => 컨텐츠 카드는 틴티드 변형(거의 불투명), 떠 있는 내비 층만 클리어 변형.
    검정(OLED)을 걷어낸다: 카드 면은 accent 8% 를 섞은 밝은 틴트, 글자는 --text 계열. */
+.alarm-wrap { container-type: inline-size; container-name: alarmcard; }
+/* 두 방향을 만든다(컨테이너 폭 기준):
+     세로(기본, container < 420px) — 세로 스택. 카드가 '남는 높이'를 먹고, 주간은 세로 막대
+     가로(container >= 420px)      — 숫자 블록 | 버튼 블록 2단, 주간은 가로 눈금
+   세로형은 화면 높이(dvh)에 붙고, 가로형은 카드 폭(cqi)에 붙는다. */
 .alarm {
   --al-edge: color-mix(in srgb, var(--text) 13%, transparent);   /* 어두워진 경계 */
   --al-t2: color-mix(in srgb, var(--text) 84%, var(--surface));
   --al-t3: color-mix(in srgb, var(--text) 66%, var(--surface));
   position: relative; overflow: hidden; text-align: center;
-  /* 위아래 패딩은 뷰포트 높이에 따라 유동(dvh). 좁은 폰에서는 낮아지고 큰 화면에서는 늘어난다.
-     --alarm-pad-y 하나만 바꾸면 위아래가 함께 움직인다(대칭 유지). */
-  --alarm-pad-y: clamp(14px, 2.1dvh, 24px);
-  padding: var(--alarm-pad-y) 18px; border-radius: 30px; color: var(--text);
+  /* 세로형: 카드는 '남는 높이'를 차지한다. 좁고 낮은 폰(568)에서는 330px,
+     844 에서 574px, 932 이상에서는 620px 에서 멈춘다. 넘치는 대신 여백이 늘어난다. */
+  --alarm-pad-y: clamp(14px, 3.4dvh, 34px);
+  --alarm-pad-x: clamp(14px, 4.6cqi, 26px);
+  --alarm-week-h: clamp(30px, 4.4dvh, 54px);
+  --alarm-btn-h: clamp(54px, 6.4dvh, 64px);
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center;
+  min-height: clamp(320px, 68dvh, 620px);
+  padding: var(--alarm-pad-y) var(--alarm-pad-x);
+  border-radius: 30px; color: var(--text);
   background-color: var(--al-bg);
   background-image: radial-gradient(125% 92% at 50% -12%, var(--al-glow) 0%, transparent 62%);
   border: 1px solid var(--al-edge);
@@ -1872,31 +1884,99 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .alarm-h { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--al-t3); }
 .alarm-ic { display: inline-grid; place-items: center; }
 .alarm-ic svg { width: 15px; height: 15px; }
-.alarm-big { display: block; margin: 8px 0 2px; font-family: var(--display); font-weight: 300;
-  font-size: clamp(3.25rem, 19vw, 4.25rem); line-height: 1; letter-spacing: -.045em;
+.alarm-big { display: block; margin: 6px 0 2px; font-family: var(--display); font-weight: 300;
+  font-size: clamp(3.25rem, min(21cqi, 11.6dvh), 5.9rem); line-height: 1; letter-spacing: -.045em;
   font-variant-numeric: tabular-nums; color: var(--text); }
 .alarm-big i { font-style: normal; font-size: 0.36em; font-weight: 500; letter-spacing: -.01em;
   color: var(--al-t3); margin-left: 4px; }
-.alarm-label { margin: 6px auto 0; max-width: 19em; font-size: 0.9375rem; line-height: 1.45; color: var(--al-t2); }
-.alarm-week { display: flex; justify-content: center; gap: 6px; margin-top: 14px; }
-.alarm-week i { width: 26px; height: 4px; border-radius: 2px;
+.alarm-label { margin: 4px auto 0; max-width: 19em; font-size: 0.9375rem; line-height: 1.45; color: var(--al-t2); }
+
+/* 세로형: 주간을 세로 막대로. 막대 높이가 그날 학습량이다.
+   margin-top:auto 를 두 곳(주간·버튼)에 걸어 남는 높이를 '두 구간'에 나눠 쓴다.
+   한 곳에 몰면 위는 빽빽하고 아래는 텅 빈 카드가 된다(실측: 390에서 97px 한 곳). */
+.alarm-week { display: flex; align-items: flex-end; justify-content: center; gap: 6px;
+  margin-top: auto; padding-top: clamp(10px, 1.8dvh, 20px);
+  box-sizing: content-box; height: var(--alarm-week-h); }
+.alarm-week i { width: 10px; height: calc(5px + (var(--n, 0) * var(--alarm-week-h) / 8));
+  max-height: var(--alarm-week-h); border-radius: 3px;
   background: color-mix(in srgb, var(--text) 15%, var(--al-bg)); }
 .alarm-week i.on { background: var(--accent); }
 .alarm-week i.today { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--text) 32%, var(--al-bg)); }
-.alarm-meta { display: flex; justify-content: center; align-items: center; gap: 7px; margin-top: 10px;
-  font-size: var(--fs-caption); color: var(--al-t3); }
-.alarm-acts { display: grid; gap: 8px; margin-top: 18px; }
-.alarm-primary { width: 100%; min-height: 54px; border: 0; border-radius: 999px; background: var(--accent);
+
+.alarm-meta { display: flex; justify-content: center; align-items: center; gap: 7px;
+  margin-top: clamp(8px, 1.4dvh, 16px); font-size: var(--fs-caption); color: var(--al-t3); }
+/* 버튼은 아래에 붙인다 — 남는 높이는 번호와 버튼 사이로 간다(알람 화면의 여백) */
+.alarm-acts { display: grid; gap: clamp(8px, 1.2dvh, 12px); margin-top: auto;
+  padding-top: clamp(14px, 2.4dvh, 28px); width: 100%; }
+.alarm-primary { width: 100%; min-height: var(--alarm-btn-h); border: 0; border-radius: 999px; background: var(--accent);
   color: var(--on-accent); font-size: 1.0625rem; font-weight: 700; letter-spacing: -.01em;
   box-shadow: inset 0 1px 0 var(--btn-spec); }
 .alarm-primary:active { transform: scale(.985); }
-.alarm-second { width: 100%; min-height: 44px; border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+.alarm-second { width: 100%; min-height: calc(var(--alarm-btn-h) - 10px); border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   border-radius: 999px; background: color-mix(in srgb, var(--text) 6%, var(--al-bg)); color: var(--al-t2);
   font-size: 0.9375rem; font-weight: 600; }
+
+/* ── 남는 공간이 있을 때만 보이는 상세 ──
+   요일 이름: 막대 아래. 2번째 여백(높이)이 생기면 켠다.
+   진도: '완료율 — 레일 — 9/46일' 한 줄. 라벨·레일·숫자를 한 행에 묶어 캡션 두 줄이 겹치지 않게.
+   좁고 낮은 폰(568)에서는 둘 다 숨긴다 — 공간이 없는데 넣으면 카드가 넘친다. */
+.alarm-days { display: none; justify-content: center; gap: 6px; margin-top: 6px; }
+.alarm-days b { width: 10px; font-size: 0.625rem; font-weight: 500; color: var(--al-t3);
+  text-align: center; letter-spacing: 0; }
+.alarm-days b.on { color: var(--accent-text); }
+.alarm-days b.today { font-weight: 700; color: var(--text); }
+.alarm-prog { display: none; width: 100%; max-width: min(100%, 272px); align-items: center; gap: 9px;
+  margin-top: clamp(12px, 2dvh, 20px); font-size: var(--fs-caption); color: var(--al-t3); }
+.alarm-plabel { flex: none; }
+/* 레일은 '미터'가 아니라 주간 막대의 가로판이다 — 같은 빈 톤(15%)·같은 강조색·8px 두께.
+   4px/2px 반경은 카드의 6단 반경 밖이었고, 주간 막대(10px)의 절반이라 혼자 얇게 떠 보였다. */
+.alarm-rail { flex: 1 1 auto; height: 8px; border-radius: var(--r-pill, 999px); overflow: hidden;
+  background: color-mix(in srgb, var(--text) 15%, var(--al-bg)); }
+.alarm-rail i { display: block; height: 100%; border-radius: inherit; background: var(--accent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
+  transition: width .25s ease; }
+.alarm-count { flex: none; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.alarm-count b { font-weight: 700; color: var(--text); }
+/* 아주 낮은 화면(≤600px): 카드가 화면을 넘지 않게 상한을 낮춘다 */
+@media (max-height: 600px) { .alarm { min-height: clamp(300px, 58dvh, 380px); } }
+@media (min-height: 620px) { .alarm-days { display: flex; } }
+@media (min-height: 780px) { .alarm-prog { display: flex; } }
+@media (prefers-reduced-motion: reduce) { .alarm-rail i { transition: none; } }
+
+/* ── 가로형(container >= 420px): 숫자 블록과 버튼 블록을 나란히. 높이는 내용에 맞춘다 ── */
+@container alarmcard (min-width: 420px) {
+  .alarm {
+    --alarm-pad-y: clamp(16px, 2.2dvh, 24px);
+    --alarm-pad-x: clamp(16px, 4.6cqi, 32px);
+    display: grid; text-align: left; min-height: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 0.58fr);
+    grid-template-areas: "h acts" "big acts" "label acts" "week meta" "days days";
+    column-gap: clamp(14px, 2.6cqi, 26px); row-gap: 0; align-items: start; }
+  .alarm-h { grid-area: h; }
+  .alarm-big { grid-area: big; margin: 4px 0 0; }
+  .alarm-label { grid-area: label; margin: 2px 0 0; max-width: none; }
+  .alarm-week { grid-area: week; justify-content: flex-start; height: auto; margin-top: 10px; }
+  .alarm-days { grid-area: days; justify-content: flex-start; margin-top: 5px; }
+  .alarm-days b { width: clamp(18px, 3.2cqi, 30px); }
+  .alarm-prog { display: none; }
+  /* 가로형에서는 세로 막대 대신 가로 눈금 — 폭이 남으므로 시간축으로 읽힌다 */
+  .alarm-week i { width: clamp(18px, 3.2cqi, 30px); height: 4px; max-height: none; border-radius: 2px; }
+  .alarm-meta { grid-area: meta; justify-content: flex-end; margin-top: 10px; }
+  .alarm-acts { grid-area: acts; display: flex; flex-direction: column; justify-content: flex-end;
+    gap: 8px; margin-top: 0; padding-top: 0; align-self: stretch; }
+  .alarm-primary { min-height: 50px; }
+  .alarm-second { min-height: 40px; }
+}
+/* 아주 넓은 카드(데스크톱 2열)에서는 버튼을 한 줄에 */
+@container alarmcard (min-width: 540px) {
+  .alarm-acts { flex-direction: row; align-items: flex-end; }
+  .alarm-primary { flex: 1.35 1 0; }
+  .alarm-second { flex: 1 1 0; }
+}
 @media (hover: hover) { .alarm-primary:hover { background: var(--accent-2); }
   .alarm-second:hover { background: color-mix(in srgb, var(--text) 10%, var(--al-bg)); } }
 @media (prefers-contrast: more) { .alarm { background: var(--surface); border: 2px solid var(--text); }
-  .alarm-h, .alarm-label, .alarm-meta, .alarm-big i { color: var(--text); }
+  .alarm-h, .alarm-label, .alarm-meta, .alarm-big i, .alarm-days b, .alarm-plabel, .alarm-count { color: var(--text); }
   .alarm-second { border-color: var(--text); background: var(--surface); color: var(--text); } }
 @media (prefers-reduced-motion: reduce) { .alarm-primary:active { transform: none; } }
 /* ================= iOS 26 Liquid Glass =================
