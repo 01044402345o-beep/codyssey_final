@@ -137,7 +137,7 @@ with sync_playwright() as p:
     check("목록에 없는 나라도 그대로 쓸 수 있다는 안내", "적은 그대로 써도 돼요" in page.inner_text("#geo-list-country"))
     page.keyboard.press("Escape")
     city.fill(""); city.focus(); page.wait_for_timeout(500)
-    check("목록에 없는 나라면 도시 칸은 안내만", "나라를 목록에서 고르면" in page.inner_text("#geo-list-city-0"))
+    check("목록에 없는 나라면 도시 칸은 안내만", "국가를 목록에서 고르면" in page.inner_text("#geo-list-city-0"))
 
     for w in (320, 390):
         page.set_viewport_size({"width": w, "height": 800}); page.wait_for_timeout(150)

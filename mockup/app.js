@@ -107,7 +107,13 @@ const R = {
   /* FR-TRIP-01 입력 검사 (화면·서버 공용) */
   validate(tr, today) {
     const e = {}, w = [];
-    if (!tr.country.trim()) e.country = '나라를 입력해 주세요.';
+    const ctry = (Array.isArray(tr.countries) && tr.countries.length ? tr.countries : [tr.country || '']);
+    ctry.forEach((nm, i) => {
+      if (!String(nm || '').trim()) { e['country' + i] = `국가 ${i + 1} 이름을 입력해 주세요.`; if (i === 0) e.country = e['country' + i]; }
+    });
+    if (ctry.length > 4) e.country0 = '국가는 최대 4개까지 입력할 수 있어요.';
+    const cseen = new Set();
+    ctry.forEach((nm, i) => { const k = String(nm || '').trim(); if (k && cseen.has(k)) e['country' + i] = '같은 국가를 두 번 입력했어요.'; cseen.add(k); });
     if (tr.cities.length < 1) e.cities = '도시를 1곳 이상 입력해 주세요.';
     if (tr.cities.length > 5) e.cities = '도시는 최대 5곳까지 입력할 수 있어요.';
     const names = new Set();
@@ -569,15 +575,19 @@ function applyProgress() {
 /* 생성 취소: 토큰을 올려 오래된 응답이 상태를 덮어쓰지 못하게 하고, 진행 중 요청도 중단한다 */
 function cancelGen() { genToken++; clearTimeout(genTimer); if (genAbort) { genAbort.abort(); genAbort = null; } }
 
+/* 초안의 정본은 countries(국가 이름 배열) + cities(도시, ci = 자기 국가의 순번)다.
+   country 는 첫 국가의 별칭 — 예전 코드(검증·보고서·지오 조회)를 그대로 살리기 위해 draftSync 가 채운다. */
+function draftSync(d) { d.country = (d.countries && d.countries[0]) || ''; return d; }
 function defaultDraft(base) {
-  return {
+  return draftSync({
+    countries: ['미국'],
     country: '미국',
     cities: [
-      { name: '뉴욕', start: Dt.add(base, 49), end: Dt.add(base, 52) },
-      { name: '보스턴', start: Dt.add(base, 52), end: Dt.add(base, 54) },
+      { name: '뉴욕', start: Dt.add(base, 49), end: Dt.add(base, 52), ci: 0 },
+      { name: '보스턴', start: Dt.add(base, 52), end: Dt.add(base, 54), ci: 0 },
     ],
     studyStart: Dt.add(base, 9),
-  };
+  });
 }
 
 function initState() {
@@ -611,12 +621,16 @@ function createTrip(d) {
 }
 /* 여행 입력만 뽑는다 — 저장하는 값. 장소·문장 본문은 담지 않는다(화면이 규칙으로 다시 만든다). */
 function tripInputOf(t) {
-  return { country: t.country, cities: t.cities.map(c => ({ name: c.name, start: c.start, end: c.end })), studyStart: t.studyStart };
+  const countries = (Array.isArray(t.countries) && t.countries.length ? t.countries : [t.country || '']).slice();
+  return draftSync({ countries, country: countries[0],
+    cities: t.cities.map(c => ({ name: c.name, start: c.start, end: c.end, ci: Math.min(+c.ci || 0, Math.max(0, countries.length - 1)) })),
+    studyStart: t.studyStart });
 }
 function tripFromInput(d, id) {
-  const cities = d.cities.map(c => ({ ...c, name: String(c.name || '').trim() }));
+  const cs = (Array.isArray(d.countries) && d.countries.length ? d.countries : [d.country || '']).map(n => String(n || '').trim());
+  const cities = d.cities.map(c => ({ ...c, name: String(c.name || '').trim(), ci: Math.min(+c.ci || 0, Math.max(0, cs.length - 1)) }));
   return {
-    id: id || 'tr_' + Math.random().toString(16).slice(2, 6), country: String(d.country || '').trim(), cities,
+    id: id || 'tr_' + Math.random().toString(16).slice(2, 6), country: cs[0] || '', countries: cs, cities,
     studyStart: d.studyStart, tripStart: cities[0].start, tripEnd: cities[cities.length - 1].end,
     status: 'input_done', regenerateCount: 0, reportRound: 0, failStreak: 0, genStartedAt: null, error: null,
     routeFallback: false, stageAt: { input_done: Date.now() }, requests: 0, fails: 0, reportSec: null, requestedAt: null, archived: false,
@@ -2124,32 +2138,54 @@ function scrInput() {
 /* 나라·도시·학습 시작일 입력 묶음. 여행 입력(SCR-02)과 여행 설정 수정(SCR-10)이 같은 마크업을 쓴다.
    [data-bind] 는 S.draft 를 고치고 updateInputLive 가 요약·경고·오류를 갱신한다. */
 function tripFields(d, E, v) {
-  const cities = d.cities.map((c, i) => `
-    <div class="city-card"><span class="num">CITY ${i + 1}</span>
-      ${d.cities.length > 1 ? `<button class="del" data-act="del-city" data-i="${i}" title="삭제">${I.x}</button>` : ''}
-      <div class="geo-pick"><input class="input name-input" data-bind="city.${i}.name" data-geo="city.${i}" value="${esc(c.name)}" placeholder="도시 이름"
-        role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="geo-list-city-${i}" aria-label="도시 ${i + 1} 이름" autocomplete="off">
-        <ul class="geo-list" id="geo-list-city-${i}" role="listbox" aria-label="도시 ${i + 1} 목록" hidden></ul></div>
-      <div class="err" data-err="cn${i}">${E['cn' + i] || ''}</div>
+  if (!Array.isArray(d.countries) || !d.countries.length) d.countries = [d.country || ''];
+  const multi = d.countries.length >= 2;
+  const cKey = i => (multi ? `country.${i}` : 'country');
+  const cId = i => (multi ? `geo-list-country-${i}` : 'geo-list-country');
+  const noneng = nonEngHtml(d);
+  /* 국가 카드 — 도시 카드와 같은 재질. 여러 국가일 때만 삭제 버튼이 붙는다. */
+  const countryCard = i => `<div class="ctry-card">
+      <div class="ctry-head"><span class="num">COUNTRY ${i + 1}</span>
+        ${d.countries.length > 1 ? `<button class="del" data-act="del-country" data-i="${i}" title="국가 삭제">${I.x}</button>` : ''}</div>
+      <div class="geo-pick"><input class="input" ${multi ? '' : 'id="geo-country" '}data-bind="${cKey(i)}" data-geo="${cKey(i)}" value="${esc(d.countries[i])}" placeholder="예: 미국"
+        role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${cId(i)}" aria-label="국가 ${i + 1}" autocomplete="off">
+        <ul class="geo-list" id="${cId(i)}" role="listbox" aria-label="국가 ${i + 1} 목록" hidden></ul></div>
+      <div class="err" data-err="${multi ? 'country' + i : 'country'}">${multi ? (E['country' + i] || '') : (E.country || '')}</div>
+    </div>`;
+  const cityCard = (c, gi) => `<div class="city-card"><span class="num">CITY ${gi + 1}</span>
+      ${d.cities.length > 1 ? `<button class="del" data-act="del-city" data-i="${gi}" title="삭제">${I.x}</button>` : ''}
+      <div class="geo-pick"><input class="input name-input" data-bind="city.${gi}.name" data-geo="city.${gi}" value="${esc(c.name)}" placeholder="도시 이름"
+        role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="geo-list-city-${gi}" aria-label="도시 ${gi + 1} 이름" autocomplete="off">
+        <ul class="geo-list" id="geo-list-city-${gi}" role="listbox" aria-label="도시 ${gi + 1} 목록" hidden></ul></div>
+      <div class="err" data-err="cn${gi}">${E['cn' + gi] || ''}</div>
       <div class="row2">
-        <div><span class="lbl">체류 시작일</span><input type="date" class="input" data-bind="city.${i}.start" value="${c.start}"></div>
-        <div><span class="lbl">체류 종료일 (떠나는 날)</span><input type="date" class="input" data-bind="city.${i}.end" value="${c.end}"></div>
+        <div><span class="lbl">체류 시작일</span><input type="date" class="input" data-bind="city.${gi}.start" value="${c.start}"></div>
+        <div><span class="lbl">체류 종료일 (떠나는 날)</span><input type="date" class="input" data-bind="city.${gi}.end" value="${c.end}"></div>
       </div>
-      <div class="err" data-err="cd${i}">${E['cd' + i] || ''}</div>
-    </div>`).join('');
-  return `<div class="field"><label for="geo-country">나라</label><div class="geo-pick">
-        <input class="input" id="geo-country" data-bind="country" data-geo="country" value="${esc(d.country)}" placeholder="예: 미국"
-          role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="geo-list-country" autocomplete="off">
-        <ul class="geo-list" id="geo-list-country" role="listbox" aria-label="나라 목록" hidden></ul></div>
-      <div class="err" data-err="country">${E.country || ''}</div>
-      <div class="hint">칸을 누르면 나라·도시 목록이 나와요. 목록에 없으면 그대로 적어도 돼요.</div>
-      <div data-live="noneng" style="margin-top:8px;${d.country.trim() && !isEnglishCountry(d.country) ? '' : 'display:none'}">${notice('현지에서 영어가 통하지 않을 수 있어요. 문장은 여행자가 흔히 쓰는 쉬운 영어로 만들어요.', 'warn')}</div>
-    </div>
-    <div class="field"><label>도시와 체류 날짜 <span class="small">(1~5곳)</span></label>
-      ${cities}
-      <div class="err" data-err="cities">${E.cities || ''}</div>
-      ${d.cities.length < 5 ? `<button class="add-city" data-act="add-city">+ 도시 추가</button>` : `<button class="add-city" data-act="add-city">+ 도시 추가 (최대 5곳)</button>`}
-      <div class="hint">앞 도시의 체류 종료일과 다음 도시의 시작일은 같은 날(이동일)이어야 해요.</div>
+      <div class="err" data-err="cd${gi}">${E['cd' + gi] || ''}</div>
+    </div>`;
+  const citiesOf = i => d.cities.map((c, gi) => ({ c, gi })).filter(({ c }) => (+c.ci || 0) === i);
+  const addCity = i => d.cities.length < 5
+    ? `<button class="add-city" data-act="add-city" data-ci="${i}">+ 도시 추가</button>`
+    : `<button class="add-city" data-act="add-city" data-ci="${i}">+ 도시 추가 (최대 5곳)</button>`;
+  const addCountry = d.countries.length < 4
+    ? `<button class="add-city add-country" data-act="add-country">+ 국가 추가</button>`
+    : `<button class="add-city add-country" data-act="add-country">+ 국가 추가 (최대 4개)</button>`;
+
+  /* 한 국가: 국가 카드 + 그 국가의 도시들 + 도시 추가. 두 국가 이상이면 이 묶음이 나란히(병렬) 선다. */
+  const col = i => `<div class="geo-col" data-col="${i}">${countryCard(i)}
+      <div class="field" style="margin:10px 0 0"><label>도시와 체류 날짜 <span class="small">(국가당 1곳 이상)</span></label>
+        ${citiesOf(i).map(({ c, gi }) => cityCard(c, gi)).join('')}
+        ${addCity(i)}
+        <div class="err" data-err="cities">${i === 0 ? (E.cities || '') : ''}</div>
+      </div></div>`;
+
+  return `<div class="field"><label>국가와 도시</label>
+      ${multi ? `<div class="geo-par">${d.countries.map((_, i) => col(i)).join('')}</div>`
+              : `${col(0)}`}
+      ${addCountry}
+      <div class="hint">칸을 누르면 국가·도시 목록이 나와요. 목록에 없으면 그대로 적어도 돼요. 국가를 둘 이상 넣으면 국가별로 나눠 보여요.</div>
+      <div data-live="noneng" style="margin-top:8px;${noneng ? '' : 'display:none'}">${noneng}</div>
     </div>
     <div class="field"><label>학습 시작일</label><input type="date" class="input" data-bind="studyStart" value="${d.studyStart}">
       <div class="err" data-err="studyStart">${E.studyStart || ''}</div>
@@ -2157,6 +2193,13 @@ function tripFields(d, E, v) {
     </div>
     <div class="summary-strip" data-live="summary">${inputSummary(d)}</div>
     <div data-live="warn" style="margin-top:10px">${v.warnings.map(w => notice(w, 'warn')).join('')}</div>`;
+}
+/* 영어권이 아닌 국가만 모아 한 번에 알린다(국가가 여럿이면 이름을 붙인다). */
+function nonEngHtml(d) {
+  const bad = (d.countries || []).map((n, i) => ({ n: String(n || '').trim(), i })).filter(x => x.n && !isEnglishCountry(x.n));
+  if (!bad.length) return '';
+  const many = (d.countries || []).length > 1;
+  return notice(`${many ? bad.map(x => `국가 ${x.i + 1}(${esc(x.n)})`).join(', ') + '은(는) ' : ''}현지에서 영어가 통하지 않을 수 있어요. 문장은 여행자가 흔히 쓰는 쉬운 영어로 만들어요.`, 'warn');
 }
 /* SCR-10: 홈 D-Day 카드에서 여는 여행 설정 수정. 저장하면 날짜만인지에 따라 계획을 다시 만든다. */
 function scrEdit() {
@@ -2185,7 +2228,7 @@ function inputSummary(d) {
 function updateInputLive() {
   const d = S.draft, v = R.validate(d, S.today);
   const s = $('[data-live=summary]'); if (s) s.innerHTML = inputSummary(d);
-  const n = $('[data-live=noneng]'); if (n) n.style.display = d.country.trim() && !isEnglishCountry(d.country) ? '' : 'none';
+  const n = $('[data-live=noneng]'); if (n) { const h = nonEngHtml(d); n.innerHTML = h; n.style.display = h ? '' : 'none'; }
   const w = $('[data-live=warn]'); if (w) w.innerHTML = v.warnings.map(x => notice(x, 'warn')).join('');
   if (S.showErrors) document.querySelectorAll('[data-err]').forEach(el => (el.textContent = v.errors[el.dataset.err] || ''));
 }
@@ -2246,7 +2289,7 @@ function geoClose(onlyKey) {
 }
 function geoRender(el, items, note) {
   const ul = geoListEl(el); if (!ul) return;
-  const key = geoKey(el), isCountry = key === 'country';
+  const key = geoKey(el), isCountry = /^country/.test(key);
   /* 목록은 한 번에 하나만 열린다. GEO.open 은 칸 하나짜리 상태라, 도시 목록을 열면서 나라 목록을
      그대로 두면 나라 쪽은 주인을 잃어 닫히지 않는다 → 두 목록이 동시에 떠 있고, Esc·바깥 탭은
      도시만 닫아 나라 목록이 유령으로 남는다. 열기 전에 다른 칸의 목록을 먼저 접는다. */
@@ -2272,10 +2315,11 @@ function geoMove(el, d) {
 }
 function geoPick(el, i) {
   const o = GEO.open; if (!o || !o.items[i]) return;
-  const it = o.items[i], key = geoKey(el);
-  const value = key === 'country' ? (it.ko || it.name) : it.label;
+  const it = o.items[i], key = geoKey(el), isCountry = /^country/.test(key);
+  const value = isCountry ? (it.ko || it.name) : it.label;
   el.value = value;
-  if (key === 'country') S.draft.country = value; else S.draft.cities[+key.split('.')[1]].name = value;
+  if (isCountry) { S.draft.countries[+(key.split('.')[1] || 0)] = value; draftSync(S.draft); }
+  else S.draft.cities[+key.split('.')[1]].name = value;
   geoClose();
   updateInputLive();
 }
@@ -2284,14 +2328,17 @@ async function geoQuery(el) {
   const countries = await geoCountries();
   if (seq !== GEO.seq || document.activeElement !== el) return;
   if (!countries) { geoClose(); return; }                       // 목록을 못 받으면 글자 입력만
-  if (key === 'country') {
+  if (/^country/.test(key)) {
     const k = geoNorm(q);
     const items = (k ? countries.filter(c => c._k.some(x => x.startsWith(k))).concat(countries.filter(c => !c._k.some(x => x.startsWith(k)) && c._k.some(x => x.includes(k)))) : countries).slice(0, 60);
     geoRender(el, items, items.length ? '' : '목록에 없어요 — 적은 그대로 써도 돼요.');
     return;
   }
-  const c = countryByName(S.draft.country);
-  if (!c) { geoRender(el, [], S.draft.country.trim() ? '나라를 목록에서 고르면 도시 목록이 나와요.' : '나라를 먼저 고르세요.'); return; }
+  /* 도시 칸의 국가는 '그 도시가 속한 국가'(ci)다 — 국가가 여럿이면 칸마다 다르다. */
+  const gi = +(key.split('.')[1] || 0), ci = Math.min(+(S.draft.cities[gi] || {}).ci || 0, Math.max(0, (S.draft.countries || []).length - 1));
+  const ctryName = String((S.draft.countries || [])[ci] || '');
+  const c = countryByName(ctryName);
+  if (!c) { geoRender(el, [], ctryName.trim() ? '국가를 목록에서 고르면 도시 목록이 나와요.' : '국가를 먼저 고르세요.'); return; }
   const ck = c.iso2 + '|' + geoNorm(q);
   let items = GEO.cities.get(ck);
   if (!items) {
@@ -4491,10 +4538,34 @@ const ACT = {
       }, { danger: true });
   },
 
-  'add-city': () => {
+  'add-country': () => {
+    if (S.draft.countries.length >= 4) { toast('국가는 최대 4개까지 입력할 수 있어요.'); return; }
+    S.draft.countries.push('');
+    // 새 국가에는 도시 한 곳을 함께 만든다 — 빈 국가 칸만 늘면 병렬 구조가 의미가 없다
+    if (S.draft.cities.length < 5) {
+      const last = S.draft.cities[S.draft.cities.length - 1];
+      S.draft.cities.push({ name: '', start: last && last.end, end: last && last.end ? Dt.add(last.end, 2) : '', ci: S.draft.countries.length - 1 });
+    }
+    draftSync(S.draft); render();
+  },
+  'del-country': el => {
+    const i = +el.dataset.i;
+    if (S.draft.countries.length <= 1) return;
+    const owns = S.draft.cities.filter(c => (+c.ci || 0) === i).length;
+    if (S.draft.cities.length - owns < 1) { toast('국가를 지우면 도시가 하나도 남지 않아요. 도시를 먼저 다른 국가에 추가해 주세요.'); return; }
+    S.draft.countries.splice(i, 1);
+    S.draft.cities = S.draft.cities
+      .filter(c => (+c.ci || 0) !== i)
+      .map(c => ({ ...c, ci: Math.max(0, (+c.ci || 0) > i ? (+c.ci || 0) - 1 : (+c.ci || 0) - 0) }));
+    if (S.draft.countries.length === 1) S.draft.cities.forEach(c => { c.ci = 0; });
+    draftSync(S.draft); render();
+  },
+  'add-city': el => {
+    const ci = Math.max(0, +((el && el.dataset.ci) || 0));
     if (S.draft.cities.length >= 5) { toast('도시는 최대 5곳까지 입력할 수 있어요.'); return; }
-    const last = S.draft.cities[S.draft.cities.length - 1];
-    S.draft.cities.push({ name: '', start: last.end, end: last.end ? Dt.add(last.end, 2) : '' });
+    const mine = S.draft.cities.filter(c => (+c.ci || 0) === ci);
+    const last = mine[mine.length - 1] || S.draft.cities[S.draft.cities.length - 1];
+    S.draft.cities.push({ name: '', start: last && last.end, end: last && last.end ? Dt.add(last.end, 2) : '', ci });
     render();
   },
   'del-city': el => { S.draft.cities.splice(+el.dataset.i, 1); render(); },
@@ -4731,7 +4802,10 @@ document.addEventListener('input', e => {
   }
   if (el.dataset.bind) {
     const k = el.dataset.bind.split('.');
-    if (k[0] === 'city') S.draft.cities[+k[1]][k[2]] = el.value; else S.draft[k[0]] = el.value;
+    if (k[0] === 'city') S.draft.cities[+k[1]][k[2]] = el.value;
+    // 'country' 는 한 국가일 때의 옛 키 — 그때도 정본(countries[0])에 써야 도시 목록이 같은 국가를 본다
+    else if (k[0] === 'country') { S.draft.countries[+(k[1] || 0)] = el.value; draftSync(S.draft); }
+    else S.draft[k[0]] = el.value;
     updateInputLive();
     if (el.dataset.geo) geoQueryLater(el);
   }
