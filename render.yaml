@@ -59,3 +59,11 @@ services:
       # langchain-core 가 끌고 오는 langsmith 로 아무것도 나가지 않게(코드도 강제로 끈다).
       - key: LANGSMITH_TRACING
         value: "false"
+      # 0 이면 LangGraph 없이 같은 노드를 순서대로(같은 결과). 메모리가 빠듯할 때의 탈출구.
+      - key: RESEARCH_USE_GRAPH
+        sync: false
+      # 백업 경로(도시 브리프 GET /city-brief) 끄기(기본 켜짐), /generate 프롬프트에 브리프 넣기(기본 꺼짐)
+      - key: CITY_BRIEF_ENABLED
+        sync: false
+      - key: CITY_BRIEF_PROMPT
+        sync: false

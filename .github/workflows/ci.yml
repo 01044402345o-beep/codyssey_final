@@ -87,7 +87,7 @@ jobs:
           # 모든 스위트가 한 서버·한 IP(127.0.0.1)를 나눠 쓴다. 기본 한도(20/60s)면 스위트가 늘수록
           # 뒤쪽 /generate 가 429 를 받아 test_full_regen 이 깨진다. 429 를 검사하는 E2E 는 없다.
           # 실시간 통역 E2E 는 외부 호출 없는 시험 모드 제공자로 파이프만 본다(키 없음).
-          RATE_LIMIT=1000 INTERP_PROVIDER=fake INTERP_ALLOW_FAKE=1 INTERP_STARTS=1000 uvicorn app.main:app --port 8768 &
+          RATE_LIMIT=1000 INTERP_PROVIDER=fake INTERP_ALLOW_FAKE=1 INTERP_STARTS=1000 CITY_BRIEF_ENABLED=0 uvicorn app.main:app --port 8768 &
           for i in $(seq 1 30); do curl -sf localhost:8768/health > /dev/null && break; sleep 1; done
           mkdir -p ../e2e-shots
           python ../e2e/test_account_withdrawal.py http://localhost:8768   # 탈퇴: 버튼 위치·확인·브라우저 기록 폐기

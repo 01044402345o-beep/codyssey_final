@@ -75,10 +75,26 @@ def research_route(route):
     route.fulfill(status=200, content_type="application/json", body=json.dumps(body, ensure_ascii=False))
 
 
+BRIEF = {"ok": True, "confidence": "verified", "city": "도쿄", "gaps": [],
+         "sections": [{"kind": "overview", "title": "도시 소개", "text": "도쿄는 일본의 수도이다.", "source": "wikipedia:ko",
+                       "url": "https://ko.wikipedia.org/wiki/도쿄"},
+                      {"kind": "get_in", "title": "Get in", "text": "By plane Narita and Haneda.", "source": "wikivoyage:en",
+                       "url": "https://en.wikivoyage.org/wiki/Tokyo"}],
+         "attribution": "위키백과·위키여행 CC BY-SA 4.0, 위키데이터 CC0"}
+brief_calls = []
+
+
+def brief_route(route):
+    brief_calls.append(route.request.url)
+    route.fulfill(status=200, content_type="application/json", body=json.dumps(BRIEF, ensure_ascii=False))
+
+
 def setup(page, research=True):
     page.route("**/geo/countries", lambda r: r.fulfill(status=200, content_type="application/json",
                                                      body=json.dumps({"countries": COUNTRIES, "attribution": "GeoNames"})))
     page.route("**/generate", lambda r: r.fulfill(status=503, content_type="application/json", body='{"detail":"busy"}'))
+    brief_calls.clear()
+    page.route("**/city-brief**", brief_route)
     if research:
         page.route("**/research**", research_route)
     else:
@@ -125,7 +141,8 @@ with sync_playwright() as p:
     info = page.inner_text(".rinfo")
     check("현지 정보: 날씨(평년값)·통화 원화 환율·긴급 전화·전기", "평년값" in info and "14.6" in info and "8.43원" in info
           and "110" in info and "100V" in info, info[:300])
-    check("현지 정보: 여행 권고(영국 기준)·좌측 통행·도착일 교통 안내", "영국 정부(FCDO) 기준" in info and "좌측" in info and "도착일" in info, info[:400])
+    check("현지 정보: 영국 권고는 없고 외교부 해외안전여행 안내·좌측 통행·도착일 교통 안내", "FCDO" not in info
+          and "외교부 해외안전여행" in info and "좌측" in info and "도착일" in info, info[:400])
     page.locator(".rinfo-topic summary", has_text="팁").click()
     check("실용 정보 주제를 펼치면 영어 원문", page.locator(".rinfo-topic[open] p").first.inner_text() == "Tipping is not customary.")
     check("출처 표기(위키보이지 CC BY-SA·Open-Meteo)", "Wikivoyage contributors (CC BY-SA 4.0)" in page.inner_text(".rinfo-credits")
@@ -139,6 +156,7 @@ with sync_playwright() as p:
     page.evaluate("() => { S.modal = null; S.trip.status = 'route_requested'; request('route'); }")
     page.wait_for_function("() => S.screen === 'u-route'", timeout=40000)
     check("조사 장소로 방문 순서·일정표가 만들어진다", page.evaluate("S.days.some(d => d.placeIds.length)") and page.evaluate("!!S.plan"))
+    check("조사 모드에서는 백업 브리프를 부르지 않는다", not brief_calls and page.locator(".brief-card").count() == 0)
     check("JS 오류 없음", not errors, "; ".join(errors[:3]))
 
     # 서버 조사가 꺼져 있으면 예전처럼 예시 데이터
@@ -148,6 +166,14 @@ with sync_playwright() as p:
     setup(p2, research=False)
     check("조사 꺼짐: 예시 데이터로 돌아간다", p2.evaluate("S.reportMode") == "example" and "미리 준비한 예시 데이터" in p2.inner_text(".app"))
     check("조사 꺼짐: 현지 정보 카드 없음", p2.locator(".rinfo").count() == 0)
+    p2.wait_for_selector(".brief-card:not(.loading)", timeout=10000)
+    bc = p2.inner_text(".brief-card")
+    check("백업 경로: 도시 브리프 카드(도시 소개·가는 법·출처 확인·라이선스)", "도쿄 알아두기" in bc and "도쿄는 일본의 수도" in bc
+          and "가는 법" in bc and "출처 확인" in bc and "CC BY-SA" in bc, bc[:200])
+    check("백업 경로: 나라·도시를 실어 /city-brief 를 한 번 부른다", len(brief_calls) == 1 and "city=%EB%8F%84%EC%BF%84" in brief_calls[0]
+          and "country=%EC%9D%BC%EB%B3%B8" in brief_calls[0], str(brief_calls))
+    p2.evaluate("render()"); p2.wait_for_timeout(200)
+    check("백업 경로: 다시 그려도 다시 부르지 않는다(캐시)", len(brief_calls) == 1, str(len(brief_calls)))
     check("조사 꺼짐: JS 오류 없음", not e2, "; ".join(e2[:3]))
     b.close()
 

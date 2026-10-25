@@ -82,15 +82,6 @@ def daily(start, days, tmax=15.0, tmin=5.0, rain=0.0):
                       "precipitation_sum": [rain] * days}}
 
 
-FCDO_INDEX = {"links": {"children": [
-    {"details": {"country": {"name": "Japan", "slug": "japan", "synonyms": []}}},
-    {"details": {"country": {"name": "France", "slug": "france", "synonyms": ["Paris"]}}}]}}
-FCDO_JAPAN = {"details": {"updated_at": "2026-10-19T09:14:11+01:00", "parts": [
-    {"slug": "entry-requirements", "title": "Entry requirements", "body": "<p>UK passport rules.</p>"},
-    {"slug": "safety-and-security", "title": "Safety and security", "body": "<p>Low crime. <a href='/x'>Earthquakes</a> happen.</p>"},
-    {"slug": "health", "title": "Health", "body": "<p>Good hospitals.</p>"}]}}
-
-
 class FakeServer:
     """transport(method, url, body, headers, timeout) — 실패를 꽂을 수 있다(fail={host_or_path: status})."""
 
@@ -115,10 +106,6 @@ class FakeServer:
             import datetime as dt
             s, e = dt.date.fromisoformat(q["start_date"][0]), dt.date.fromisoformat(q["end_date"][0])
             data = daily(s.isoformat(), (e - s).days + 1)
-        elif p.hostname == "www.gov.uk":
-            data = FCDO_JAPAN if p.path.endswith("/japan") else FCDO_INDEX if p.path.endswith("foreign-travel-advice") else None
-            if data is None:
-                return 404, b"", {}
         elif p.hostname == "api.frankfurter.dev":
             base = q["base"][0]
             if base == "XYZ":

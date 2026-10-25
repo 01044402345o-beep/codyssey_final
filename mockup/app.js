@@ -2722,7 +2722,7 @@ function scrReport() {
     <div class="stack" style="margin-bottom:14px">
       ${lead}
     </div>
-    ${researchInfo(city)}
+    ${S.research ? researchInfo(city) : briefCard(city)}
     <div class="city-head"><h3>${esc(city)}</h3><span class="cnt"><b>${sel}</b> / 최대 ${meta.base}곳</span></div>
     ${base.map(p => placeCard(p, locked)).join('')}
     ${cands.length ? `<button class="cand-toggle" data-act="cand" data-city="${esc(city)}">${open ? '후보 접기' : `후보 더 보기 (${cands.length})`}</button>${open ? cands.map(p => placeCard(p, locked)).join('') : ''}` : ''}
@@ -2754,7 +2754,8 @@ function researchInfo(city) {
     if ((co.plugs || []).length || co.voltage) rows.push(`<li><b>전기</b> ${esc((co.plugs || []).join(', '))}${co.voltage ? ` · ${esc(co.voltage)}V` : ''}</li>`);
     if (co.driving_side) rows.push(`<li><b>차량 통행</b> ${co.driving_side === 'left' ? '좌측' : co.driving_side === 'right' ? '우측' : esc(co.driving_side)}</li>`);
     if ((co.languages || []).length) rows.push(`<li><b>공용어</b> ${co.languages.map(esc).join(', ')}</li>`);
-    if (co.advisory && (co.advisory.parts || []).length) rows.push(`<li><b>여행 권고</b> <span class="small">영국 정부(FCDO) 기준 · ${esc(co.advisory.updated_at || '')}</span>${co.advisory.parts.map(p => link(p.url, p.title)).join(' ·')}</li>`);
+    // 안전 정보: 한국인 기준 출처(외교부 해외안전여행 API)가 붙기 전까지 본문을 싣지 않고 그 사이트로만 안내한다
+    rows.push(`<li><b>안전 정보</b> <span class="small">아직 조사하지 않아요</span>${link('https://www.0404.go.kr/', '외교부 해외안전여행에서 확인')}</li>`);
   }
   const roles = (inf.days || []).filter(d => RESEARCH_ROLE_KO[d.role]);
   const tips = roles.length ? `<div class="small rinfo-days">${roles.map(d => `${esc(RESEARCH_ROLE_KO[d.role])} ${esc(Dt.md(d.date))}${d.topics && d.topics.length ? ` — ${d.topics.map(t => esc(RESEARCH_TOPIC_KO[t] || t)).join('·')} 정보를 먼저 보세요` : ''}`).join('<br>')}</div>` : '';
@@ -2763,6 +2764,53 @@ function researchInfo(city) {
   if (!rows.length && !practical) return '';
   return `<details class="card rinfo" open><summary><b>${esc(city)} 현지 정보</b> <span class="small">여행 날짜에 맞춰 조사했어요</span></summary>
     ${rows.length ? `<ul class="rinfo-rows">${rows.join('')}</ul>` : ''}${tips}${practical}</details>`;
+}
+/* 백업(롤백) 경로: 조사 파이프라인(/research)이 꺼져 있거나 실패한 보고서에서는 도시 브리프(GET /city-brief —
+   위키백과 한/영·위키여행·위키데이터 교차검증, LLM 없음)로 '이 도시 알아두기'를 보여 준다(다른 에이전트 작업에서 들여옴).
+   카드는 받은 문단을 그대로 그린다 — 여기서 문장을 만들지 않는다. 자료가 없으면 '없음'으로 적는다(빈 카드로 성공한 척하지 않는다). */
+const BRIEF = { cache: new Map() };
+const BRIEF_KIND = { overview: '도시 소개', understand: '이해', get_in: '가는 법', see: '볼거리', eat: '먹을 것',
+  stay_safe: '주의', facts: '숫자', brief: '한눈에' };
+function briefCtx(cityName) {
+  const t = S.trip, c = t && t.cities.find(x => x.name === cityName);
+  const list = t ? (Array.isArray(t.countries) && t.countries.length ? t.countries : [t.country || '']) : [];
+  const country = c ? String(list[Math.min(+c.ci || 0, Math.max(0, list.length - 1))] || '') : '';
+  return { city: String(cityName || '').trim(), country: country.trim(), key: (cityName + '|' + country).toLowerCase() };
+}
+async function briefLoad(cityName, force) {
+  const { city, country, key } = briefCtx(cityName);
+  if (!city || API.base === null || (!force && BRIEF.cache.has(key))) return;
+  BRIEF.cache.set(key, { state: 'loading' });
+  try {
+    const r = await fetch(`${API.base}/city-brief?country=${encodeURIComponent(country)}&city=${encodeURIComponent(city)}&lang=ko`);
+    BRIEF.cache.set(key, r.ok ? { state: 'ok', data: await r.json() } : { state: 'error' });
+  } catch (e) { BRIEF.cache.set(key, { state: 'error' }); }
+  if (S.screen === 'u-report') render();
+}
+function briefCard(cityName) {
+  if (API.base === null) return '';
+  const { city, key } = briefCtx(cityName);
+  const st = BRIEF.cache.get(key);
+  if (!st) { setTimeout(() => briefLoad(cityName), 0); }
+  if (!st || st.state === 'loading') {
+    return `<div class="card brief-card loading" role="status" aria-live="polite"><div class="brief-h"><b>${esc(city)} 알아보는 중</b><span class="brief-tag">조사 중</span></div>
+      <div class="brief-sk"></div><div class="brief-sk w2"></div></div>`;
+  }
+  const d = st.data;
+  if (st.state === 'error' || !d || !d.ok) {
+    if (d && d.reason === 'city_brief_disabled') return '';
+    const why = st.state === 'error' ? '연결이 안 됐어요' : '출처를 찾지 못했어요';
+    return `<div class="card brief-card none"><div class="brief-h"><b>${esc(city)} 자료</b><span class="brief-tag none">없음</span>
+      <button type="button" class="brief-retry" data-act="brief-retry" data-city="${esc(cityName)}">다시 조사</button></div>
+      <p class="brief-none">${why}.</p></div>`;
+  }
+  const conf = d.confidence === 'verified' ? '출처 확인' : d.confidence === 'single_source' ? '출처 1곳' : '일부만 확인';
+  const rows = (d.sections || []).map(x => `<div class="brief-row"><span class="brief-k">${esc(BRIEF_KIND[x.kind] || x.kind)}</span>
+      <p class="brief-t">${esc(x.text)}</p>${x.url && /^https:\/\//.test(x.url) ? `<a class="brief-src" href="${esc(x.url)}" data-act="link" rel="noopener noreferrer">출처</a>` : ''}</div>`).join('');
+  const gaps = (d.gaps || []).length ? `<p class="brief-gap">확인하지 못한 것: ${esc(d.gaps.join(' · '))}</p>` : '';
+  return `<div class="card brief-card"><div class="brief-h"><b>${esc(city)} 알아두기</b><span class="brief-tag">${conf}</span>
+      <button type="button" class="brief-retry" data-act="brief-retry" data-city="${esc(cityName)}" title="다시 조사" aria-label="다시 조사">↻</button></div>
+    ${rows}${gaps}<p class="brief-attr">${esc(d.attribution || '')}</p></div>`;
 }
 function researchCredits() {
   const a = S.reportMode === 'research' && S.research ? S.research.attributions || [] : [];
@@ -4830,6 +4878,7 @@ const ACT = {
   },
 
   'geo-more': el => geoMore(el.dataset.geoKey || (GEO.open && GEO.open.key)),
+  'brief-retry': el => { briefLoad(el.dataset.city, true); render(); },
   'add-country': () => {
     if (S.draft.countries.length >= 4) { toast('국가는 최대 4개까지 입력할 수 있어요.'); return; }
     S.draft.countries.push('');

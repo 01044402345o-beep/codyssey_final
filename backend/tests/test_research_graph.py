@@ -62,9 +62,10 @@ class GraphTest(unittest.TestCase):
         self.assertEqual(osaka["places"][0]["name"], "Osaka Castle")
         jp = rep["countries"]["JP"]
         self.assertEqual((jp["currency"]["code"], jp["currency"]["krw_per_unit"], jp["emergency"]), ("JPY", 8.43, ["110", "119"]))
-        self.assertEqual([p["slug"] for p in jp["advisory"]["parts"]], ["safety-and-security", "health"])
+        self.assertIsNone(jp["advisory"])                                       # 영국 FCDO 권고는 쓰지 않는다
+        self.assertFalse(any("gov.uk" in c for c in self.srv.calls))
         self.assertEqual({a["provider"] for a in rep["attributions"]},
-                         {"wikivoyage", "wikidata", "openmeteo", "fcdo", "frankfurter", "geonames"})
+                         {"wikivoyage", "wikidata", "openmeteo", "frankfurter", "geonames"})
 
     def test_second_run_is_served_from_cache_without_http(self):
         self.run_trip()
@@ -83,6 +84,20 @@ class GraphTest(unittest.TestCase):
         self.assertEqual([c["status"] for c in rep["cities"]], ["ok", "empty"])
         self.assertEqual(rep["quality"], "reduced")
         self.assertIsNotNone(rep["cities"][1]["climate"])                         # 날씨는 따로 받았다
+
+    def test_plain_runner_gives_the_same_report_and_is_the_fallback(self):
+        def strip(rep):
+            return {**rep, "generated_at": 0}
+        resolved = identity.resolve(FakeStore(), trip())
+        via_graph = graph.run_graph(self.deps, resolved)
+        fresh = nodes.Deps(http=self.http, cache=ResearchCache(use_firestore=False), store=FakeStore(), today=TODAY)
+        self.assertEqual(strip(graph.run_plain(fresh, resolved)), strip(via_graph))     # 같은 노드, 같은 결과
+        with mock.patch.dict(os.environ, {"RESEARCH_USE_GRAPH": "0"}), mock.patch.object(graph, "run_graph") as g:
+            graph.run(self.deps, resolved)
+            g.assert_not_called()
+        with mock.patch.object(graph, "build", side_effect=ImportError("no langgraph")):
+            rep = graph.run(nodes.Deps(http=self.http, cache=ResearchCache(use_firestore=False), store=FakeStore(), today=TODAY), resolved)
+        self.assertEqual(rep["quality"], "full")                                   # 그래프가 죽어도 plain 으로
 
     def test_every_source_down_still_returns_a_report(self):
         self.srv.fail = {"https://": 503}
