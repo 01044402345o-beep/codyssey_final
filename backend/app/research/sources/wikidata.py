@@ -107,3 +107,59 @@ def country_facts(http: SafeHttp, iso2: str) -> dict:
         "languages": _split(_v(r, "langs"), 6),
     }
     return result("wikidata", "ok", data, url="https://www.wikidata.org/wiki/" + data["qid"] if data["qid"] else "")
+
+
+
+# 이름만 있는 도시(GeoNames 에서 못 찾음): Wikidata 검색 API(별칭·'~시' 포함, 빠름) → 같은 나라(P17)·좌표(P625)가 있는 첫 항목.
+# SPARQL 라벨 일치는 한국어 라벨이 '경주시'·'가마쿠라시' 라 놓치고, 질의 서비스 지연이 2~25초로 들쭉날쭉했다(10/26 실측).
+ACTION_API = "https://www.wikidata.org/w/api.php"
+_SAFE_NAME = re.compile(r"^[^\"\\\r\n<>{}|]{1,60}$")
+
+
+def _claim_ids(claims: dict, pid: str) -> list[str]:
+    return [((c.get("mainsnak") or {}).get("datavalue") or {}).get("value", {}).get("id") for c in claims.get(pid) or []
+            if isinstance(((c.get("mainsnak") or {}).get("datavalue") or {}).get("value"), dict)]
+
+
+def city_by_name(http: SafeHttp, country_qid: str, name: str) -> dict:
+    """→ data {qid, lat, lon, name_en, population, wikivoyage}. country_qid 는 나라 사실(country_facts)의 qid."""
+    if not config.source_on("wikidata"):
+        return disabled("wikidata")
+    name = (name or "").strip()
+    if not re.fullmatch(r"Q\d+", country_qid or "") or not _SAFE_NAME.fullmatch(name):
+        return result("wikidata", "empty", reason="bad_input")
+    lang = "en" if name.isascii() else "ko"
+    res, s = http.get_json(ACTION_API + "?" + urllib.parse.urlencode({
+        "action": "wbsearchentities", "search": name, "language": lang, "uselang": lang, "type": "item", "limit": 7,
+        "format": "json"}), timeout=8)
+    if not res.ok:
+        return result("wikidata", status_of(res), reason=res.error)
+    ids = [x.get("id") for x in (s or {}).get("search") or [] if re.fullmatch(r"Q\d+", str(x.get("id")))]
+    if not ids:
+        return result("wikidata", "empty", reason="no_item")
+    res, e = http.get_json(ACTION_API + "?" + urllib.parse.urlencode({
+        "action": "wbgetentities", "ids": "|".join(ids), "props": "claims|sitelinks|labels", "languages": "en",
+        "sitefilter": "enwikivoyage", "format": "json"}), timeout=8)
+    if not res.ok:
+        return result("wikidata", status_of(res), reason=res.error)
+    ents = (e or {}).get("entities") or {}
+    hits = []
+    for order, q in enumerate(ids):
+        ent = ents.get(q) or {}
+        cl = ent.get("claims") or {}
+        coord = (((cl.get("P625") or [{}])[0].get("mainsnak") or {}).get("datavalue") or {}).get("value") or {}
+        if country_qid not in _claim_ids(cl, "P17") or "latitude" not in coord:
+            continue
+        try:
+            pop = int(float(str((((cl.get("P1082") or [{}])[0].get("mainsnak") or {}).get("datavalue") or {}).get("value", {}).get("amount", "0"))))
+        except (TypeError, ValueError, AttributeError):
+            pop = 0
+        hits.append((pop == 0, order, q, ent, coord, pop))      # 인구가 있는(사람이 사는 곳) 항목을 앞에, 그다음 검색 순서
+    if not hits:
+        return result("wikidata", "empty", reason="no_item")
+    _, _, q, ent, coord, pop = min(hits, key=lambda h: (h[0], h[1]))
+    return result("wikidata", "ok", {
+        "qid": q, "lat": float(coord["latitude"]), "lon": float(coord["longitude"]),
+        "name_en": str(((ent.get("labels") or {}).get("en") or {}).get("value") or "")[:80], "population": max(0, pop),
+        "wikivoyage": str(((ent.get("sitelinks") or {}).get("enwikivoyage") or {}).get("title") or "")[:120]},
+        url="https://www.wikidata.org/wiki/" + q)

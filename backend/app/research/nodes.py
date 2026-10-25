@@ -18,7 +18,10 @@ from . import config
 from .cache import ResearchCache
 from .net import SafeHttp
 from . import chain, extract
-from .sources import frankfurter, openmeteo, wikidata, wikivoyage
+from .sources import frankfurter, openmeteo, overpass, wikidata, wikidata_places, wikivoyage
+
+# 장소 대체 체인에 쓸 수 있는 소스(순서·끄기는 RESEARCH_PLACE_CHAIN). google 은 키 있는 실시간 소스라 다음 단계.
+chain.ADAPTERS.update({"wikidata_places": wikidata_places.adapter, "overpass": overpass.adapter})
 
 DAY = 86400
 UNRESOLVED_TTL = 7 * DAY
@@ -70,6 +73,53 @@ def _src(r: dict) -> dict:
 def climate_section(tc: dict) -> str:
     s = dt.date.fromisoformat(tc["start"])
     return f"climate_{s.month:02d}{s.day:02d}_{min(tc['nights'], 59)}"
+
+
+# ------------------------------------------------------------------ 이름만 있는 도시 보강
+def _country_qid(deps: Deps, iso2: str) -> str:
+    """나라 Wikidata id — 나라 사실 캐시에서, 없으면 그 자리에서 조사해 캐시에 넣는다(뒤의 country 에이전트가 그대로 쓴다)."""
+    hit = deps.cache.get("research_countries", iso2, "facts")
+    if hit is not None:
+        return (hit["data"] or {}).get("qid") or ""
+    r = wikidata.country_facts(deps.http, iso2)
+    if r["status"] != "ok":
+        return ""
+    deps.cache.put("research_countries", iso2, "facts", r["data"], config.cache_days() * DAY, [_src(r)])
+    return r["data"].get("qid") or ""
+
+
+def enrich_unresolved(deps: Deps, resolved: dict, network: bool = True) -> list[str]:
+    """GeoNames 에서 못 찾은 도시(좌표 없음)는 Wikidata 에서 이름 + 나라로 한 번 찾아 좌표·영어 이름·위키보이지 제목을 채운다.
+    찾으면 날씨·주변 명소 조사가 가능해진다. 결과(못 찾음 포함)는 identity 섹션에 기억한다. 키는 그대로(n<해시>).
+    network=False 면 캐시만 본다(POST 를 늦추지 않게 — 네트워크 조회는 잡 안에서). → 아직 조회가 필요한 도시 키 목록."""
+    pending = []
+    for tc in resolved["cities"]:
+        ref = tc["ref"]
+        if ref["resolved"] or ref["lat"] is not None or not ref["iso2"]:
+            continue
+        hit = deps.cache.get("research_cities", ref["key"], "identity")
+        if hit is None:
+            if not network:
+                pending.append(ref["key"])
+                continue
+            qid = _country_qid(deps, ref["iso2"])
+            if not qid:
+                continue
+            r = wikidata.city_by_name(deps.http, qid, ref["input"])
+            if r["status"] not in ("ok", "empty"):
+                continue                                  # 장애는 기억하지 않는다
+            data = r["data"] if r["status"] == "ok" else {}
+            deps.cache.put("research_cities", ref["key"], "identity", data,
+                           config.cache_days() * DAY if data else UNRESOLVED_TTL, [_src(r)])
+        else:
+            data = hit["data"] or {}
+        if data.get("lat") is None:
+            continue
+        en = data.get("name_en") or ""
+        ref.update(lat=data["lat"], lon=data["lon"], population=int(data.get("population") or 0),
+                   wv_title=data.get("wikivoyage") or "", ascii=ref["ascii"] or (en if en.isascii() else ""),
+                   name=en or ref["name"])
+    return pending
 
 
 # ------------------------------------------------------------------ planner
@@ -165,6 +215,8 @@ def city_guide(deps: Deps, tc: dict, need: list, cached: dict) -> dict:
         sources.append(_src(b))
         if b["status"] == "ok" and b["data"]["wikivoyage"]:
             candidates.append(b["data"]["wikivoyage"])
+    if ref.get("wv_title"):
+        candidates.append(ref["wv_title"])
     if ref["ascii"]:
         candidates.append(ref["ascii"])
     r = wikivoyage.fetch(deps.http, candidates)

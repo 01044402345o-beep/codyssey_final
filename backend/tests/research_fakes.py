@@ -57,7 +57,25 @@ def wiki_pages(titles):
     return {"query": {"pages": pages}}
 
 
+def _b(**kw):
+    return {k: {"value": v} for k, v in kw.items()}
+
+
+NARA_AROUND = [
+    _b(item="http://www.wikidata.org/entity/Q186148", loc="Point(135.8398 34.6890)", en="Tōdai-ji", ko="도다이지",
+       desc="Buddhist temple in Nara, Japan", site="https://www.todaiji.or.jp/", wp="https://en.wikipedia.org/wiki/T%C5%8Ddai-ji", links="90"),
+    _b(item="http://www.wikidata.org/entity/Q186148", loc="Point(135.8398 34.6890)", en="Tōdai-ji", links="90"),   # 같은 항목(종류 2개)
+    _b(item="http://www.wikidata.org/entity/Q1062513", loc="Point(135.8430 34.6851)", en="Nara Park", desc="park in Nara",
+       wp="https://en.wikipedia.org/wiki/Nara_Park", links="40"),
+    _b(item="http://www.wikidata.org/entity/Q999001", loc="Point(139.70 35.68)", en="Far Shrine", links="30"),      # 50km 밖
+    _b(item="http://www.wikidata.org/entity/Q999002", loc="Point(135.80 34.68)", en="<script>x", links="20"),       # 주입 이름
+    _b(item="http://www.wikidata.org/entity/Q999003", loc="Point(135.81 34.69)", ko="나라 국립 박물관", links="10"),     # 영어 라벨 없음 → 한국어
+]
+
+
 def sparql(query):
+    if "wikibase:around" in query:
+        return {"results": {"bindings": NARA_AROUND if "Point(135.805" in query else []}}
     if "P1566" in query:
         if '"1850147"' in query:
             return {"results": {"bindings": [{"item": {"value": "http://www.wikidata.org/entity/Q1490"},
@@ -80,6 +98,33 @@ def daily(start, days, tmax=15.0, tmin=5.0, rain=0.0):
     times = [(s + dt.timedelta(days=i)).isoformat() for i in range(days)]
     return {"daily": {"time": times, "temperature_2m_max": [tmax] * days, "temperature_2m_min": [tmin] * days,
                       "precipitation_sum": [rain] * days}}
+
+
+def _claim(pid, value):
+    return {pid: [{"mainsnak": {"datavalue": {"value": value}}}]}
+
+
+def wikidata_api(q):
+    """wbsearchentities / wbgetentities — '가마쿠라' 검색: 첫 결과는 동명 항목(다른 나라), 둘째가 일본의 가마쿠라시."""
+    action = q["action"][0]
+    if action == "wbsearchentities":
+        return {"search": [{"id": "Q900001"}, {"id": "Q200267"}] if q["search"][0] == "가마쿠라" else []}
+    ents = {"Q900001": {"claims": {**_claim("P17", {"id": "Q30"}), **_claim("P625", {"latitude": 40.0, "longitude": -75.0})}},
+            "Q200267": {"labels": {"en": {"value": "Kamakura"}}, "sitelinks": {"enwikivoyage": {"title": "Kamakura"}},
+                        "claims": {**_claim("P17", {"id": "Q17"}), **_claim("P625", {"latitude": 35.3192, "longitude": 139.5466}),
+                                   **_claim("P1082", {"amount": "+172302"})}}}
+    return {"entities": {i: ents[i] for i in q["ids"][0].split("|") if i in ents}}
+
+
+OVERPASS = {"elements": [
+    {"type": "node", "id": 1, "lat": 34.684, "lon": 135.806, "tags": {"amenity": "cafe", "name": "Plain Cafe"}},
+    {"type": "node", "id": 2, "lat": 34.685, "lon": 135.807, "tags": {"amenity": "restaurant", "name": "柿の葉寿司", "name:en": "Kakinoha Sushi",
+                                                                      "cuisine": "sushi;japanese", "opening_hours": "10:00-19:00",
+                                                                      "website": "https://kakinoha.example/", "wikidata": "Q55"}},
+    {"type": "way", "id": 3, "center": {"lat": 34.686, "lon": 135.808}, "tags": {"tourism": "museum", "name": "Nara Museum"}},
+    {"type": "node", "id": 4, "lat": 34.684, "lon": 135.806, "tags": {"amenity": "cafe", "name": "Bad <b>"}},
+    {"type": "node", "id": 5, "lat": 34.684, "lon": 135.806, "tags": {"amenity": "cafe"}},                              # 이름 없음
+]}
 
 
 class FakeServer:
@@ -106,6 +151,15 @@ class FakeServer:
             import datetime as dt
             s, e = dt.date.fromisoformat(q["start_date"][0]), dt.date.fromisoformat(q["end_date"][0])
             data = daily(s.isoformat(), (e - s).days + 1)
+        elif p.hostname == "www.wikidata.org":
+            data = wikidata_api(q)
+        elif p.hostname == "en.wikipedia.org":
+            titles = q.get("titles", [""])[0].split("|")
+            data = {"query": {"redirects": [{"from": "Tōdai-ji", "to": "Tōdai-ji (temple)"}] if "Tōdai-ji" in titles else [],
+                              "pages": [{"title": "Tōdai-ji (temple)", "extract": "Tōdai-ji is a Buddhist temple complex. It houses a giant Buddha."}]
+                              if "Tōdai-ji" in titles else []}}
+        elif p.hostname == "overpass-api.de":
+            data = OVERPASS
         elif p.hostname == "api.frankfurter.dev":
             base = q["base"][0]
             if base == "XYZ":

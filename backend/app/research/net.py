@@ -26,6 +26,7 @@ ALLOWED_HOSTS = frozenset({
     "ko.wikipedia.org", "en.wikipedia.org", "www.wikidata.org",      # 백업 경로(agents/city_research — GET /city-brief)
     "api.open-meteo.com", "archive-api.open-meteo.com",
     "api.frankfurter.dev", "api.geoapify.com", "api.tavily.com", "places.googleapis.com",
+    "overpass-api.de",                                                  # 대체 장소 소스(OSM, chain.py)
 })
 WIKIMEDIA = frozenset({"en.wikivoyage.org", "query.wikidata.org", "ko.wikipedia.org", "en.wikipedia.org", "www.wikidata.org"})
 MAX_BYTES = 4 * 1024 * 1024          # 위키보이지 큰 도시 문서(위키텍스트) ~200KB, 5년치 날씨 ~150KB

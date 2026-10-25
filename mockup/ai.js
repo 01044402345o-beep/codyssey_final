@@ -580,10 +580,17 @@
     } finally { t.done(); }
   }
   const RESEARCH_KIND_KO = { attraction: '관광지', restaurant: '맛집', cafe: '카페' };
+  // 장소 출처(대체 소스 체인): 링크 앞 이름과 라이선스 표기. 모르는 값은 위키보이지로 본다(예전 보고서 호환).
+  const RESEARCH_PROVIDER = {
+    wikivoyage: ['Wikivoyage', 'Wikivoyage (CC BY-SA 4.0)'], wikidata: ['Wikidata', 'Wikidata (CC0)'],
+    wikipedia: ['Wikipedia', 'Wikipedia (CC BY-SA 4.0)'], osm: ['OpenStreetMap', '© OpenStreetMap contributors (ODbL)'],
+  };
   function researchPlace(raw, cityName, n) {
     const name = String(raw.name || '').trim();
-    const src = (Array.isArray(raw.sources) ? raw.sources : []).filter(s => s && /^https:\/\//.test(s.url || ''))
-      .map(s => ({ url: s.url, title: 'Wikivoyage · ' + String(s.title || '').slice(0, 60) }));
+    const prov = s => RESEARCH_PROVIDER[s && s.provider] || RESEARCH_PROVIDER.wikivoyage;
+    const okSrc = (Array.isArray(raw.sources) ? raw.sources : []).filter(s => s && /^https:\/\//.test(s.url || ''));
+    const src = okSrc.map(s => ({ url: s.url, title: prov(s)[0] + ' · ' + String(s.title || '').slice(0, 60) }));
+    const attribution = [...new Set((okSrc.length ? okSrc : [{}]).map(s => prov(s)[1]))].join(' · ');
     const home = typeof raw.homepage === 'string' && /^https?:\/\/[^\s"'<>]+$/.test(raw.homepage) ? raw.homepage : '';
     return {
       id: 'r' + n, providerId: String(raw.id || ''), city: cityName, kind: RESEARCH_KIND_KO[raw.kind] ? raw.kind : 'attraction',
@@ -593,7 +600,7 @@
       desc: typeof raw.summary_ko === 'string' ? raw.summary_ko : '', descEn: typeof raw.desc_en === 'string' ? raw.desc_en : '',
       reason: typeof raw.why_ko === 'string' ? raw.why_ko : '', rank: Number.isInteger(raw.rank) ? raw.rank : 0,
       cuisine: null, menuEn: null, menuKo: null, sources: src, homepage: home,
-      attribution: 'Wikivoyage (CC BY-SA 4.0)', primaryType: RESEARCH_KIND_KO[raw.kind] || '관광지',
+      attribution, primaryType: RESEARCH_KIND_KO[raw.kind] || '관광지',
       isCandidate: false, selected: false, visitDate: null, visitOrder: null, count: 0,
     };
   }

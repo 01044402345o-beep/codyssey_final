@@ -12,7 +12,7 @@ from app.research import extract, graph, identity, net, nodes, report
 from app.research.cache import ResearchCache
 from tests.research_fakes import FakeServer, FakeStore, trip
 
-ENV = {"RESEARCH_ENABLED": "1", "RESEARCH_SOURCES": "", "RESEARCH_LLM": "1"}
+ENV = {"RESEARCH_ENABLED": "1", "RESEARCH_SOURCES": "", "RESEARCH_LLM": "1", "RESEARCH_PLACE_CHAIN": "none"}
 TODAY = dt.date(2026, 10, 25)
 
 
