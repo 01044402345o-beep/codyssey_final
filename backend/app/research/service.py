@@ -59,6 +59,9 @@ def submit(req: dict, ip: str, *, http: Optional[SafeHttp] = None, cache: Option
     if not pending and nodes.all_fresh(plan):
         return {"status": "done", "report": graph.from_cache(resolved, plan), "cached": True}
     if req.get("cache_only"):
+        # 저장 안 하는 실시간 보충(Google)만 빠졌으면 캐시로 답한다(복원은 외부 호출 없이)
+        if not pending and nodes.all_fresh(plan, ignore=("live",)):
+            return {"status": "done", "report": graph.from_cache(resolved, plan), "cached": True}
         return {"status": "miss"}
 
     def work(on_progress) -> dict:

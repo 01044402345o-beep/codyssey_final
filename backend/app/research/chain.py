@@ -28,6 +28,9 @@ CIRCUIT_AFTER = 5
 CIRCUIT_FACTOR = 4
 SAME_PLACE_M = 150
 
+# 결과를 저장하면 안 되는 실시간 소스(Google 약관). 캐시된 대체 결과가 있어도 모자라면 이것만 다시 묻는다.
+LIVE_ONLY = frozenset({"google"})
+
 # 어댑터: (deps, tc, want{"attraction": n, "food": n}) -> SourceResult(data = 장소 목록, report.places_from 과 같은 모양)
 Adapter = Callable[[Any, dict, dict], dict]
 ADAPTERS: dict[str, Adapter] = {}
@@ -159,16 +162,19 @@ def active(adapters: Optional[dict[str, Adapter]] = None) -> list[str]:
     def allowed(n: str) -> bool:
         base = n.split("_", 1)[0]                     # wikidata_places → wikidata (RESEARCH_SOURCES 로 끈 소스는 체인에서도 끔)
         return base not in config.ALL_SOURCES or config.source_on(base)
-    return [n for n in config.place_chain() if n in adapters and allowed(n)]
+    def ready(n: str) -> bool:                        # 키가 필요한 소스는 adapter.available() 로 설정 여부를 알린다
+        check = getattr(adapters[n], "available", None)
+        return check() if callable(check) else True
+    return [n for n in config.place_chain() if n in adapters and allowed(n) and ready(n)]
 
 
 def run(deps: Any, tc: dict, have: list[dict], health: Optional[Health] = None,
-        adapters: Optional[dict[str, Adapter]] = None) -> dict:
+        adapters: Optional[dict[str, Adapter]] = None, only: Optional[frozenset] = None) -> dict:
     """→ {places: 대체 소스에서 새로 얻은 장소(have 와 겹치지 않음), by_source: {name: {status, outcome, count}}, outage: bool}.
     예외를 올리지 않는다. 마감(RESEARCH_SOFT_DEADLINE_S)이 지나면 지금까지 얻은 것으로 끝낸다."""
     health = health or HEALTH
     adapters = ADAPTERS if adapters is None else adapters
-    names = active(adapters)
+    names = [n for n in active(adapters) if only is None or n in only]
     got: list[dict] = []
     by_source: dict[str, dict] = {}
     w = want(have, tc["caps"])

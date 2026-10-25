@@ -18,10 +18,15 @@ from . import config
 from .cache import ResearchCache
 from .net import SafeHttp
 from . import chain, extract
-from .sources import frankfurter, openmeteo, overpass, wikidata, wikidata_places, wikivoyage
+from .sources import frankfurter, google_places, openmeteo, overpass, wikidata, wikidata_places, wikivoyage
 
-# 장소 대체 체인에 쓸 수 있는 소스(순서·끄기는 RESEARCH_PLACE_CHAIN). google 은 키 있는 실시간 소스라 다음 단계.
-chain.ADAPTERS.update({"wikidata_places": wikidata_places.adapter, "overpass": overpass.adapter})
+# 장소 대체 체인에 쓸 수 있는 소스(순서·끄기는 RESEARCH_PLACE_CHAIN). google 은 키가 있을 때만, 결과는 저장하지 않는다.
+chain.ADAPTERS.update({"wikidata_places": wikidata_places.adapter, "overpass": overpass.adapter, "google": google_places.adapter})
+
+
+def _storable(places: Optional[list]) -> list:
+    """캐시에 넣어도 되는 장소만(Google 장소는 뺀다)."""
+    return [p for p in places or [] if p.get("provider") != google_places.NO_STORE]
 
 DAY = 86400
 UNRESOLVED_TTL = 7 * DAY
@@ -141,8 +146,9 @@ def plan(deps: Deps, resolved: dict) -> dict:
         px = deps.cache.get("research_cities", key, "places_extra", allow_stale=True)
         if px is not None:
             cached["places_extra"] = px
-        if _needs_places(tc, cached.get("guide"), px):
-            need.append("places")
+        np = _needs_places(tc, cached.get("guide"), px)
+        if np:
+            need.append(np)
         if deps.use_llm():
             ex = deps.cache.get("research_cities", key, extract.section_name(tc))
             g = ((cached["guide"] or {}).get("data") or {}).get("wikivoyage") if cached["guide"] else None
@@ -156,26 +162,33 @@ def plan(deps: Deps, resolved: dict) -> dict:
     return {"countries": countries, "cities": cities}
 
 
-def _needs_places(tc: dict, guide: Optional[dict], px: Optional[dict]) -> bool:
-    """대체 소스를 물어야 하나: 체인이 켜져 있고, (위키보이지를 아직 모르거나) 위키보이지만으로 모자라고,
-    캐시된 대체 결과가 없거나·만료됐거나·지금보다 적은 수를 위해 모은 것일 때."""
+def _needs_places(tc: dict, guide: Optional[dict], px: Optional[dict]) -> Optional[str]:
+    """대체 소스를 물어야 하나 → "places"(체인 전체) | "live"(저장 안 하는 실시간 소스만) | None.
+    places: 체인이 켜져 있고, (위키보이지를 아직 모르거나) 위키보이지만으로 모자라고, 캐시된 대체 결과가 없거나·만료됐거나·
+    지금보다 적은 수를 위해 모은 것일 때. live: 캐시된 대체 결과를 더해도 모자라고 실시간 소스(Google)가 켜져 있을 때."""
     from . import report
     if not chain.active():
-        return False
+        return None
     if guide is None:
-        return True
+        return "places"
     wv = (guide.get("data") or {}).get("wikivoyage") or {}
-    w = chain.want(report.places_from(tc["ref"], wv) if wv.get("listings") else [], tc["caps"])
+    base = report.places_from(tc["ref"], wv) if wv.get("listings") else []
+    w = chain.want(base, tc["caps"])
     if not chain.short(w):
-        return False
+        return None
     if px is None or px.get("stale"):
-        return True
+        return "places"
     asked = (px.get("data") or {}).get("want") or {}
-    return any(w[k] > int(asked.get(k, 0)) for k in w)
+    if any(w[k] > int(asked.get(k, 0)) for k in w):
+        return "places"
+    have = chain.merge(base, (px.get("data") or {}).get("places") or [])
+    live = [n for n in chain.active() if n in chain.LIVE_ONLY]
+    return "live" if live and chain.short(chain.want(have, tc["caps"])) else None
 
 
-def all_fresh(p: dict) -> bool:
-    return not any(x["need"] for x in p["countries"] + p["cities"])
+def all_fresh(p: dict, ignore: tuple = ()) -> bool:
+    """ignore=("live",): 저장 안 하는 실시간 보충만 남았으면 캐시로 답해도 된다(저장된 여행 복원 등)."""
+    return not any(set(x["need"]) - set(ignore) for x in p["countries"] + p["cities"])
 
 
 # ------------------------------------------------------------------ country agent
@@ -255,17 +268,27 @@ def city_places(deps: Deps, tc: dict, need: list, cached: dict, guide: Optional[
     ref = tc["ref"]
     px = cached.get("places_extra")
     old = (px or {}).get("data")
-    if "places" not in need:
-        return {"extra_places": (old or {}).get("places") or [], "places_stale": bool(px and px.get("stale")),
-                "chain": (old or {}).get("by_source") or {}, "chain_outage": False}
+    cached_out = {"extra_places": (old or {}).get("places") or [], "places_stale": bool(px and px.get("stale")),
+                  "chain": (old or {}).get("by_source") or {}, "chain_outage": False}
+    if "places" not in need and "live" not in need:
+        return cached_out
     wv = (guide or {}).get("wikivoyage") or {}
     have = report.places_from(ref, wv) if wv.get("listings") else []
+    if "places" not in need:
+        # 캐시된 대체 결과로도 모자람 → 저장하지 않는 실시간 소스(Google)만 묻고, 캐시는 그대로 둔다
+        deps.progress(ref["input"], "places")
+        res = chain.run(deps, tc, chain.merge(have, cached_out["extra_places"]), only=chain.LIVE_ONLY)
+        deps.progress(ref["input"], "places", "done")
+        return {**cached_out, "extra_places": cached_out["extra_places"] + res["places"],
+                "chain": {**cached_out["chain"], **res["by_source"]}, "chain_outage": res["outage"]}
     w = chain.want(have, tc["caps"])
     if not chain.short(w):
         return {"extra_places": [], "places_stale": False, "chain": {}, "chain_outage": False}
     deps.progress(ref["input"], "places")
     res = chain.run(deps, tc, have)
-    new = {"places": res["places"], "by_source": res["by_source"], "want": w, "outage": res["outage"]}
+    store = _storable(res["places"])
+    live = [p for p in res["places"] if p not in store]
+    new = {"places": store, "by_source": res["by_source"], "want": w, "outage": res["outage"]}
     use, kept_old = chain.keep_last_good(new, old)
     if not kept_old:
         # 장애가 섞인 결과는 짧게(곧 다시), 정상 결과는 30일(미해결 도시 7일)
@@ -274,8 +297,8 @@ def city_places(deps: Deps, tc: dict, need: list, cached: dict, guide: Optional[
         srcs = [{"provider": n, "status": v.get("status") or "", "reason": v.get("reason") or ""} for n, v in res["by_source"].items()]
         deps.cache.put("research_cities", ref["key"], "places_extra", new, ttl, srcs)
     deps.progress(ref["input"], "places", "stale" if kept_old else ("partial" if res["outage"] else "done"))
-    return {"extra_places": use.get("places") or [], "places_stale": kept_old, "chain": use.get("by_source") or {},
-            "chain_outage": res["outage"]}
+    return {"extra_places": (use.get("places") or []) + live, "places_stale": kept_old,
+            "chain": use.get("by_source") or {}, "chain_outage": res["outage"]}
 
 
 def city_extract(deps: Deps, tc: dict, need: list, cached: dict, guide: Optional[dict], climate: Optional[dict],
@@ -294,7 +317,8 @@ def city_extract(deps: Deps, tc: dict, need: list, cached: dict, guide: Optional
     if deps.past_deadline():
         return {"extract": None, "extract_status": "deadline"}
     deps.progress(ref["input"], "extract")
-    places = chain.merge(report.places_from(ref, wv) if wv.get("listings") else [], extra_places or [])
+    # Google 장소는 LLM 추출(캐시됨)에 넣지 않는다 — 저장 금지 내용이 요약으로 남지 않게
+    places = chain.merge(report.places_from(ref, wv) if wv.get("listings") else [], _storable(extra_places))
 
     def work() -> dict:
         r = extract.run(tc, places, report.practical_from(wv), climate, deps.llm)

@@ -116,6 +116,16 @@ def wikidata_api(q):
     return {"entities": {i: ents[i] for i in q["ids"][0].split("|") if i in ents}}
 
 
+def google_places(body):
+    t = body.get("includedType")
+    rows = {"restaurant": [("g1", "Kamameshi Shizuka", 34.684, 135.83), ("g2", "Mellow Cafe Diner", 34.682, 135.828)],
+            "cafe": [("g3", "Rokumei Coffee", 34.681, 135.825)],
+            "tourist_attraction": [("g4", "Isuien Garden", 34.686, 135.836)]}.get(t, [])
+    return {"places": [{"id": i, "displayName": {"text": n}, "location": {"latitude": la, "longitude": lo},
+                        "primaryType": t, "businessStatus": "OPERATIONAL",
+                        "googleMapsUri": f"https://maps.google.com/?cid={i}"} for i, n, la, lo in rows]}
+
+
 OVERPASS = {"elements": [
     {"type": "node", "id": 1, "lat": 34.684, "lon": 135.806, "tags": {"amenity": "cafe", "name": "Plain Cafe"}},
     {"type": "node", "id": 2, "lat": 34.685, "lon": 135.807, "tags": {"amenity": "restaurant", "name": "柿の葉寿司", "name:en": "Kakinoha Sushi",
@@ -133,6 +143,7 @@ class FakeServer:
     def __init__(self, fail=None):
         self.fail = fail or {}
         self.calls = []
+        self.google = []                         # Places 요청 본문(locationBias 확인용)
 
     def __call__(self, method, url, body, headers, timeout):
         p = urllib.parse.urlparse(url)
@@ -160,6 +171,9 @@ class FakeServer:
                               if "Tōdai-ji" in titles else []}}
         elif p.hostname == "overpass-api.de":
             data = OVERPASS
+        elif p.hostname == "places.googleapis.com":
+            self.google.append(json.loads(body.decode()))
+            data = google_places(self.google[-1])
         elif p.hostname == "api.frankfurter.dev":
             base = q["base"][0]
             if base == "XYZ":

@@ -16,7 +16,8 @@
 | `WIKIMEDIA_CONTACT` | 저장소 URL | 위키미디어 User-Agent 연락처 |
 | `LANGSMITH_TRACING` | `false` | 코드가 강제로 끈다(langchain-core 의존성) |
 | `RESEARCH_USE_GRAPH` | `1` | 0 이면 LangGraph 없이 같은 노드를 스레드 4개로(같은 결과). 그래프가 실패해도 자동으로 이 경로 |
-| `RESEARCH_PLACE_CHAIN` | `wikidata_places,google` | 위키보이지 장소가 모자랄 때 차례로 묻는 대체 소스. `none` 이면 끔(위키보이지만). 어댑터가 없는 이름은 무시(`google` 은 다음 PR). `overpass` 는 넣어야 켜진다 |
+| `RESEARCH_PLACE_CHAIN` | `wikidata_places,google` | 위키보이지 장소가 모자랄 때 차례로 묻는 대체 소스. `none` 이면 끔(위키보이지만). `google` 은 `GOOGLE_MAPS_API_KEY` 가 있을 때만. `overpass` 는 넣어야 켜진다 |
+| `GOOGLE_MAPS_API_KEY` / `ITINERARY_DAILY_CAP` | 없음 / `20` | Google Places 실시간 보충(일정 에이전트와 한도 공유, 프로세스·UTC 하루). 다 쓰면 `capped` → 체인이 6시간 쉼 |
 | `RESEARCH_PLACE_MIN_EXTRA` | `2` | 종류별 목표 = 일정이 정한 장소 수 + 이만큼(화면 '후보' 몫) |
 | `RESEARCH_LLM` | `1` | 0 이면 LLM 추출(여행 조건 순위·한국어 요약)을 끈다. Gemini 키가 없으면 저절로 꺼진다 — 보고서는 listing 순서·영어 원문 |
 | `RESEARCH_LLM_CONCURRENCY` | `2` | 조사 잡 안에서 동시에 부르는 Gemini 수(도시 5곳이어도 2개씩) |
@@ -66,7 +67,10 @@ POST /research {countries:[{name, iso2?}], cities:[{name, gid?, ci, start, end, 
 | `overpass` | OSM 식당·카페·관광지(도심 반경, 태그로 순위, 설명은 요리 종류·영업시간 태그만) | ODbL | **기본 꺼짐** — 10/26 공용 overpass-api.de 가 포화(502)·"자동화 사용은 자체 인스턴스" 안내, 다른 공용 인스턴스도 무응답 |
 
 - 위키백과 주변검색(`list=geosearch`)은 쓰지 않는다: 종류 정보가 없어 역·학교·관공서가 섞인다.
-- 식당·카페 대체는 아직 약하다(위키보이지 → Wikidata 는 관광지 위주). 다음 단계의 Google 실시간·Geoapify 가 맡는다.
+| `google` | Google Places(New) 텍스트 검색(모자란 종류만: 관광지 / 식당·카페), 도시 좌표 원 `locationBias`(4/6/10km), 기존 `agents/itinerary._search_one` 재사용 | Google 약관 | **실시간 전용** — 아래 참고 |
+
+- **Google 은 저장하지 않는다**(약관: place_id 외 저장 금지). Google 장소는 `places_extra` 캐시·LLM 추출 캐시에 들어가지 않는다. 캐시된 대체 결과를 더해도 모자라면 계획이 `need: live` 를 남겨 **Google 만** 다시 묻는다(캐시된 Wikidata 등은 다시 안 부름). 저장된 여행 복원(`cache_only`)은 `live` 만 빠졌으면 캐시로 바로 답한다(외부 호출 0, Google 장소 없이). 키가 없으면 체인에서 빠져 `live` 가 생기지 않는다.
+- 식당·카페 대체: Google 키가 있으면 Google, 없으면 위키보이지·Wikidata 뿐(관광지 위주). Geoapify 는 같은 체인에 이어 붙인다(키·저장 조건 확인 후).
 
 ### 이름만 있는 도시 보강
 

@@ -242,14 +242,19 @@ def _place_from(item: Any, fetched_at: str) -> dict[str, Any] | None:
     }
 
 
-def _search_one(query: dict[str, str], http: Http, key: str, fetched_at: str) -> dict[str, Any]:
-    body = {
+def _search_one(query: dict[str, str], http: Http, key: str, fetched_at: str,
+                bias: dict[str, float] | None = None) -> dict[str, Any]:
+    """bias = {lat, lon, radius_m} 이면 그 원 안을 우선한다(도시 조사의 대체 소스가 쓴다 — 동명 도시로 새지 않게)."""
+    body: dict[str, Any] = {
         "textQuery": query["text"],
         "includedType": query["included_type"],
         "strictTypeFiltering": True,
         "languageCode": "en",
         "maxResultCount": 5,
     }
+    if bias:
+        body["locationBias"] = {"circle": {"center": {"latitude": bias["lat"], "longitude": bias["lon"]},
+                                           "radius": float(bias["radius_m"])}}
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": key,

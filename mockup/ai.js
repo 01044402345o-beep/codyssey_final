@@ -584,6 +584,7 @@
   const RESEARCH_PROVIDER = {
     wikivoyage: ['Wikivoyage', 'Wikivoyage (CC BY-SA 4.0)'], wikidata: ['Wikidata', 'Wikidata (CC0)'],
     wikipedia: ['Wikipedia', 'Wikipedia (CC BY-SA 4.0)'], osm: ['OpenStreetMap', '© OpenStreetMap contributors (ODbL)'],
+    google: ['Google 지도', 'Google Maps'],                               // 실시간 보충(서버가 저장하지 않음)
   };
   function researchPlace(raw, cityName, n) {
     const name = String(raw.name || '').trim();
