@@ -623,7 +623,8 @@ function createTrip(d) {
 function tripInputOf(t) {
   const countries = (Array.isArray(t.countries) && t.countries.length ? t.countries : [t.country || '']).slice();
   return draftSync({ countries, country: countries[0],
-    cities: t.cities.map(c => ({ name: c.name, start: c.start, end: c.end, ci: Math.min(+c.ci || 0, Math.max(0, countries.length - 1)) })),
+    cities: t.cities.map(c => ({ name: c.name, start: c.start, end: c.end, ci: Math.min(+c.ci || 0, Math.max(0, countries.length - 1)),
+      ...(Number.isInteger(c.gid) ? { gid: c.gid } : {}) })),
     studyStart: t.studyStart });
 }
 function tripFromInput(d, id) {
@@ -667,7 +668,9 @@ function applyTripDates(d) {
 /* 도시 이름 목록(순서 포함)이 같은가. 같으면 장소·문장을 다시 만들 필요가 없다(날짜만 다시 계산). */
 function sameTripCities(a, b) {
   if (a.length !== b.length) return false;
-  return a.every((c, i) => String(c.name || '').trim() === b[i].name);
+  // 이름이 같아도 둘 다 GeoNames id 가 있는데 다르면 다른 도시다(같은 이름의 다른 곳). 한쪽만 있으면 이름으로 본다.
+  return a.every((c, i) => String(c.name || '').trim() === b[i].name
+    && !(Number.isInteger(c.gid) && Number.isInteger(b[i].gid) && c.gid !== b[i].gid));
 }
 /* 날짜만 바꿀 때 만들어질 일정표의 날짜 집합. 완료한 날이 일정에서 빠지는지 저장 전에 확인하는 데 쓴다.
    buildPlan 의 일정 구성과 같은 규칙(여행 전 날짜 + studyStart 이후의 여행 날짜)을 따른다. */
@@ -2494,7 +2497,11 @@ function geoPick(el, i) {
   const value = isCountry ? (it.ko || it.name) : it.label;
   el.value = value;
   if (isCountry) { S.draft.countries[+(key.split('.')[1] || 0)] = value; draftSync(S.draft); }
-  else S.draft.cities[+key.split('.')[1]].name = value;
+  else {
+    const c = S.draft.cities[+key.split('.')[1]];
+    c.name = value;
+    if (Number.isInteger(it.id) && it.id > 0) c.gid = it.id; else delete c.gid;   // 목록의 그 도시(GeoNames id) — 조사 단계가 이름 대신 쓴다
+  }
   geoClose();
   updateInputLive();
 }
@@ -4998,7 +5005,10 @@ document.addEventListener('input', e => {
   }
   if (el.dataset.bind) {
     const k = el.dataset.bind.split('.');
-    if (k[0] === 'city') S.draft.cities[+k[1]][k[2]] = el.value;
+    if (k[0] === 'city') {
+      S.draft.cities[+k[1]][k[2]] = el.value;
+      if (k[2] === 'name') delete S.draft.cities[+k[1]].gid;   // 손으로 고친 이름은 목록에서 고른 그 도시가 아니다
+    }
     // 'country' 는 한 국가일 때의 옛 키 — 그때도 정본(countries[0])에 써야 도시 목록이 같은 국가를 본다
     else if (k[0] === 'country') { S.draft.countries[+(k[1] || 0)] = el.value; draftSync(S.draft); }
     else S.draft[k[0]] = el.value;

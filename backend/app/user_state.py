@@ -258,7 +258,7 @@ def _trip(value: Any) -> dict[str, Any] | None:
         _fail()
     cities: list[dict[str, Any]] = []
     for city in cities_in:
-        if not isinstance(city, dict) or set(city) - {"ci"} != {"name", "start", "end"}:
+        if not isinstance(city, dict) or set(city) - {"ci", "gid"} != {"name", "start", "end"}:
             _fail()
         name = city.get("name")
         if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
@@ -271,7 +271,11 @@ def _trip(value: Any) -> dict[str, Any] | None:
         ci = city.get("ci", 0)
         if type(ci) is not int or not 0 <= ci < len(countries):
             _fail()
-        cities.append({"name": name.strip(), "start": start, "end": end, **({"ci": ci} if multi else {})})
+        gid = city.get("gid")                     # GeoNames id(목록에서 고른 도시). 없으면 이름만 — 조사 단계가 이름으로 찾는다
+        if gid is not None and (type(gid) is not int or not 0 < gid < 2 ** 31):
+            _fail()
+        cities.append({"name": name.strip(), "start": start, "end": end, **({"ci": ci} if multi else {}),
+                       **({"gid": gid} if gid is not None else {})})
     if multi and any(not any(c["ci"] == i for c in cities) for i in range(len(countries))):
         _fail()   # 도시 없는 나라는 없다
     study = value.get("studyStart")
