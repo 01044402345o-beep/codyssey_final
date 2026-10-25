@@ -89,6 +89,8 @@ def health() -> dict:
         llm = config.llm_enabled()
     except Exception:  # noqa: BLE001
         llm = False
-    return {"enabled": config.research_enabled(), "langgraph": lg, "llm": llm, "sources": sorted(config.sources_enabled()),
+    from . import chain
+    return {"enabled": config.research_enabled(), "langgraph": lg, "llm": llm,
+            "place_chain": chain.active(), "place_sources": chain.HEALTH.snapshot(), "sources": sorted(config.sources_enabled()),
             "implemented": list(config.KEYLESS_SOURCES), "jobs_active": JOBS.active(), "max_jobs": config.max_jobs(),
             "max_rss_mb": rss}

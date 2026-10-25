@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 # 영국 외무부(FCDO) 권고는 쓰지 않는다 — 영국 국적자 기준(영국 대사관 연락처 등)이라 한국 사용자에게는 오정보다(10/25 결정).
 # 안전 정보는 외교부 해외안전여행(0404.go.kr) 공공데이터 API 키가 생기면 붙인다.
@@ -41,6 +42,23 @@ def source_on(name: str) -> bool:
 def use_graph() -> bool:
     """1(기본)이면 LangGraph 로, 0 이면 같은 노드를 스레드로 순서대로 돌린다(같은 결과). 그래프가 실패해도 자동으로 0 경로."""
     return (os.getenv("RESEARCH_USE_GRAPH") or "1").strip() != "0"
+
+
+DEFAULT_PLACE_CHAIN = ("wikidata_places", "overpass", "google")
+
+
+def place_chain() -> list[str]:
+    """위키보이지(늘 1순위) 다음에 장소가 모자랄 때 차례로 묻는 소스. 비우면 기본 순서, 'none' 이면 대체 소스 끔(킬 스위치)."""
+    raw = os.getenv("RESEARCH_PLACE_CHAIN")
+    if raw is None or not raw.strip():
+        return list(DEFAULT_PLACE_CHAIN)
+    names = [s.strip().lower() for s in raw.split(",") if s.strip()]
+    return [n for n in dict.fromkeys(names) if re.fullmatch(r"[a-z_]{2,30}", n) and n != "wikivoyage"]
+
+
+def place_min_extra() -> int:
+    """종류별 목표 = 일정이 정한 장소 수 + 이만큼(화면의 '후보' 몫)."""
+    return _int("RESEARCH_PLACE_MIN_EXTRA", 2, 0, 10)
 
 
 def llm_enabled() -> bool:
