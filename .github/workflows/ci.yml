@@ -107,6 +107,7 @@ jobs:
           python ../e2e/test_account_storage.py http://localhost:8768   # 계정마다 진도·복습 키
           python ../e2e/test_ai_restore.py http://localhost:8768   # 복원 뒤 백그라운드 /generate 로 AI 문장 채우기
           python ../e2e/test_itinerary_screen.py http://localhost:8768   # 오늘 날짜·예시 보고서·하루 블록
+          python ../e2e/test_research_report.py http://localhost:8768   # 도시 조사 → 보고서: 요청 본문(ISO2·gid, 사용자 정보 없음)·폴링·조사 장소·현지 정보·출처·확정→방문 순서·꺼짐이면 예시
           python ../e2e/test_full_regen.py http://localhost:8768   # 설정 화면에서 보고서·문장 완전 재생성
           python ../e2e/test_guest_start.py http://localhost:8768   # Firebase 배포에서도 로그인 없이 시작·새로고침 유지
           python ../e2e/test_login_simple.py http://localhost:8768   # 단순한 로그인 첫 화면 + 이메일 로그인 화면(두 갈래)

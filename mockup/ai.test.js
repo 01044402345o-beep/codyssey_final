@@ -579,3 +579,61 @@ test('talkSummary: 제한·샘플·폐기·교차검증 실패·heard 없음·�
   assert.equal(none.spoken, 0); assert.equal(none.fix, null);
   assert.equal(AI.talkSummary(turns, [{ usable: true, score: 10, heard: 'x', fix_one: 'Q' }]).fix, null, '배열 위치로는 붙지 않는다');
 });
+
+test('도시 조사: 요청 본문은 나라·도시·날짜·장소 수만(사용자 정보 없음), gid·ISO2 는 있을 때만', () => {
+  const trip = { countries: ['일본', '아틀란티스'], country: '일본', cities: [
+    { name: '도쿄', start: '2027-03-20', end: '2027-03-23', ci: 0, gid: 1850147 },
+    { name: '어딘가', start: '2027-03-23', end: '2027-03-25', ci: 1, gid: 'x' }] };
+  const body = AI.researchRequestBody(trip, { '도쿄': { attr: 2, rest: 3 } }, n => (n === '일본' ? 'JP' : ''));
+  assert.deepEqual(body.countries, [{ name: '일본', iso2: 'JP' }, { name: '아틀란티스' }]);
+  assert.deepEqual(body.cities[0], { name: '도쿄', ci: 0, start: '2027-03-20', end: '2027-03-23', attr: 2, rest: 3, gid: 1850147 });
+  assert.deepEqual(body.cities[1], { name: '어딘가', ci: 1, start: '2027-03-23', end: '2027-03-25', attr: 0, rest: 0 });
+  assert.ok(!JSON.stringify(body).includes('uid'));
+});
+
+test('도시 조사: 시작 → 폴링 → 완료, 서버 재시작(404)·시간 초과·서버 없음', async () => {
+  const calls = [];
+  const replies = [{ status: 'running', job_id: 'abcdefghijklmnop', progress: [] },
+                   { status: 'running', progress: [{ who: '도쿄', step: 'guide', state: 'done' }] },   // 서버 폴링 응답처럼 job_id 없음
+                   { status: 'done', report: { quality: 'full' } }];
+  const fetchImpl = async (url, opt) => { calls.push([opt.method, url]); const b = replies.shift(); return { ok: true, status: 200, json: async () => b }; };
+  const seen = [];
+  const res = await AI.collectResearch({ fetchImpl, base: '', body: {}, sleep: async () => {}, onProgress: p => seen.push(p.length) });
+  assert.equal(res.status, 'done');
+  assert.deepEqual(calls.map(c => c[0]), ['POST', 'GET', 'GET']);
+  assert.equal(calls[1][1], '/research/abcdefghijklmnop');
+  assert.deepEqual(seen, [0, 1]);
+  const gone = await AI.collectResearch({ fetchImpl: async (u, o) => (o.method === 'POST'
+    ? { ok: true, status: 202, json: async () => ({ status: 'running', job_id: 'abcdefghijklmnop' }) }
+    : { ok: false, status: 404, json: async () => ({}) }), base: '', body: {}, sleep: async () => {} });
+  assert.deepEqual(gone, { status: 'down', reason: 'http_404' });
+  const slow = await AI.collectResearch({ fetchImpl: async () => ({ ok: true, status: 202, json: async () => ({ status: 'running', job_id: 'abcdefghijklmnop' }) }),
+    base: '', body: {}, timeoutMs: 5, sleep: () => new Promise(r => setTimeout(r, 20)) });
+  assert.equal(slow.status, 'timeout');
+  assert.equal((await AI.collectResearch({ fetchImpl, base: null, body: {} })).status, 'down');
+});
+
+test('도시 조사 접기: 종류별 기본 caps + 후보 2, 다시 생성은 2칸 회전, area 는 늘 문자열, 실패면 example', () => {
+  const pl = (i, kind) => ({ id: 'wv:JP_1:' + i, name: 'P' + i, kind, area: i % 2 ? 'Chiyoda' : undefined, desc_en: 'd',
+    sources: [{ url: 'https://en.wikivoyage.org/wiki/Tokyo', title: 'Tokyo' }, { url: 'javascript:x', title: 'bad' }], homepage: 'javascript:alert(1)' });
+  const report = { quality: 'full', countries: { JP: { currency: { code: 'JPY' } } }, attributions: [{ text: 'Wikivoyage' }],
+    cities: [{ idx: 0, iso2: 'JP', status: 'ok', places: [0, 1, 2, 3, 4, 5].map(i => pl(i, 'attraction')).concat([pl(6, 'restaurant'), pl(7, 'cafe')]),
+               practical: [{ topic: 'tipping', text_en: 'No tipping.' }], climate: { kind: 'normals' }, days: [] }] };
+  const cities = [{ name: '도쿄' }];
+  const f = AI.foldResearch(cities, { status: 'done', report }, { '도쿄': { attr: 2, rest: 1 } });
+  assert.equal(f.mode, 'research');
+  const at = f.places.filter(p => p.kind === 'attraction');
+  assert.deepEqual(at.map(p => [p.name, p.selected, p.isCandidate]), [['P0', true, false], ['P1', true, false], ['P2', false, true], ['P3', false, true]]);
+  assert.deepEqual(f.places.filter(p => p.kind !== 'attraction').map(p => [p.name, p.selected]), [['P6', true], ['P7', false]]);
+  assert.ok(f.places.every(p => typeof p.area === 'string' && p.research && p.live));
+  assert.deepEqual(f.places[0].sources, [{ url: 'https://en.wikivoyage.org/wiki/Tokyo', title: 'Wikivoyage · Tokyo' }]);
+  assert.equal(f.places[0].homepage, '');                                         // 위험한 링크는 버린다
+  assert.deepEqual(f.meta['도쿄'], { base: 3, found: 3, mode: 'research', total: 8 });
+  assert.equal(f.info.cities['도쿄'].practical[0].topic, 'tipping');
+  const again = AI.foldResearch(cities, { status: 'done', report }, { '도쿄': { attr: 2, rest: 1 } }, 1);
+  assert.equal(again.places[0].name, 'P2');                                       // 다시 생성: 2칸 회전
+  assert.equal(AI.foldResearch(cities, { status: 'unavailable', reason: 'research_disabled' }, {}).mode, 'example');
+  assert.equal(AI.foldResearch(cities, { status: 'done', report: { ...report, quality: 'failed' } }, {}).mode, 'example');
+  const none = AI.foldResearch(cities, { status: 'done', report: { ...report, cities: [{ idx: 0, status: 'empty', places: [] }] } }, {});
+  assert.equal(none.mode, 'empty');
+});

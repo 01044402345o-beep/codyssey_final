@@ -2134,3 +2134,12 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .geo-note.geo-more button { width: 100%; min-height: 44px; border: 1.5px dashed var(--border-strong); border-radius: 8px;
   background: none; color: var(--text-soft); font-weight: 600; font-size: 0.875rem; }
 .geo-note.geo-more button:hover { border-color: var(--text); color: var(--text); }
+/* 도시 조사 — 보고서의 '현지 정보' 카드와 출처 표기(app.js researchInfo · researchCredits) */
+.rinfo { margin-bottom: 14px; }
+.rinfo > summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.rinfo-rows { margin: 10px 0 4px; padding-left: 18px; display: grid; gap: 4px; font-size: 0.875rem; line-height: 1.5; }
+.rinfo-days { margin: 8px 0; color: var(--text-soft); }
+.rinfo-topic { border-top: 1px solid var(--border); padding: 8px 0; }
+.rinfo-topic > summary { cursor: pointer; font-weight: 600; font-size: 0.875rem; }
+.rinfo-topic p { margin: 6px 0; color: var(--text-soft); font-size: 0.875rem; line-height: 1.55; overflow-wrap: anywhere; }
+.rinfo-credits { margin-top: 18px; color: var(--text-3); line-height: 1.5; }
