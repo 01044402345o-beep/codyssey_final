@@ -645,3 +645,15 @@ test('도시 조사 장소: LLM 추출 한국어 요약·이유·순위가 있�
   const q = AI.researchPlace({ id: 'x', name: 'Q', kind: 'attraction', summary_ko: { bad: 1 }, why_ko: 5, rank: '1' }, '도쿄', 2);
   assert.deepEqual([q.desc, q.reason, q.rank], ['', '', 0]);
 });
+
+test('도시 조사 장소: 대체 소스(Wikidata·Wikipedia·OSM) 출처 이름과 라이선스를 provider 별로', () => {
+  const p = AI.researchPlace({ id: 'wd:JP_1:Q1', name: 'Todai-ji', kind: 'attraction', sources: [
+    { provider: 'wikidata', url: 'https://www.wikidata.org/wiki/Q1', title: 'Todai-ji' },
+    { provider: 'wikipedia', url: 'https://en.wikipedia.org/wiki/Todai-ji', title: 'Todai-ji' }] }, '나라', 1);
+  assert.deepEqual(p.sources.map(s => s.title), ['Wikidata · Todai-ji', 'Wikipedia · Todai-ji']);
+  assert.equal(p.attribution, 'Wikidata (CC0) · Wikipedia (CC BY-SA 4.0)');
+  const o = AI.researchPlace({ id: 'osm:x', name: 'Cafe', kind: 'cafe', sources: [{ provider: 'osm', url: 'https://www.openstreetmap.org/node/1', title: 'Cafe' }] }, '나라', 2);
+  assert.equal(o.attribution, '© OpenStreetMap contributors (ODbL)');
+  const old = AI.researchPlace({ id: 'wv:1', name: 'X', kind: 'attraction', sources: [{ url: 'https://en.wikivoyage.org/wiki/X', title: 'X' }] }, '나라', 3);
+  assert.equal(old.attribution, 'Wikivoyage (CC BY-SA 4.0)');                    // provider 없는 예전 보고서
+});

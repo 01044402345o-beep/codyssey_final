@@ -131,6 +131,7 @@ def build(resolved: dict, country_out: dict, city_out: dict, notes: Optional[lis
                  for c in resolved["countries"] if c["iso2"]}
     cities = [city_report(tc, city_out.get(tc["ref"]["key"]) or {}) for tc in resolved["cities"]]
     used = {s.get("provider") for x in list(countries.values()) + cities for s in x.get("sources") or [] if s.get("status") == "ok"}
+    used |= {s.get("provider") for c in cities for p in c["places"] for s in p.get("sources") or []}   # 대체 소스(Wikidata·Wikipedia·OSM)
     if any(c["resolved"] for c in cities):
         used.add("geonames")
     attributions = [{"provider": p, "license": LICENSES[p][0], "text": LICENSES[p][1]} for p in LICENSES if p in used]

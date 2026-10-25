@@ -16,7 +16,7 @@
 | `WIKIMEDIA_CONTACT` | 저장소 URL | 위키미디어 User-Agent 연락처 |
 | `LANGSMITH_TRACING` | `false` | 코드가 강제로 끈다(langchain-core 의존성) |
 | `RESEARCH_USE_GRAPH` | `1` | 0 이면 LangGraph 없이 같은 노드를 스레드 4개로(같은 결과). 그래프가 실패해도 자동으로 이 경로 |
-| `RESEARCH_PLACE_CHAIN` | `wikidata_places,overpass,google` | 위키보이지 장소가 모자랄 때 차례로 묻는 대체 소스. `none` 이면 끔(위키보이지만). 어댑터가 없는 이름은 무시(이 PR 은 골격만 — 소스는 다음 PR) |
+| `RESEARCH_PLACE_CHAIN` | `wikidata_places,google` | 위키보이지 장소가 모자랄 때 차례로 묻는 대체 소스. `none` 이면 끔(위키보이지만). 어댑터가 없는 이름은 무시(`google` 은 다음 PR). `overpass` 는 넣어야 켜진다 |
 | `RESEARCH_PLACE_MIN_EXTRA` | `2` | 종류별 목표 = 일정이 정한 장소 수 + 이만큼(화면 '후보' 몫) |
 | `RESEARCH_LLM` | `1` | 0 이면 LLM 추출(여행 조건 순위·한국어 요약)을 끈다. Gemini 키가 없으면 저절로 꺼진다 — 보고서는 listing 순서·영어 원문 |
 | `RESEARCH_LLM_CONCURRENCY` | `2` | 조사 잡 안에서 동시에 부르는 Gemini 수(도시 5곳이어도 2개씩) |
@@ -57,6 +57,20 @@ POST /research {countries:[{name, iso2?}], cities:[{name, gid?, ci, start, end, 
 - **마지막 정상 캐시**: 대체 결과는 `places_extra` 섹션(30일, 장애가 섞이면 1일). 새 결과가 기존의 절반 미만이고 원인이 장애면 덮어쓰지 않고 기존(만료돼도)을 `stale: true` 로 쓴다. 만료 문서는 `get(..., allow_stale=True)` 로만 읽히고, Firestore `expire_at` 은 `valid_until + 30일`이라 TTL 정책을 걸어도 그동안 남는다.
 - **문서 없음도 기억**: 위키보이지에 문서가 정말 없으면(`empty`) `guide` 에 `{wikivoyage: null, reason}` 을 7일 저장한다(매번 다시 묻지 않고 `cache_only` 도 바로 답한다). 장애(`unavailable`·`rate_limited`)는 저장하지 않는다.
 - 보고서 도시: `place_status` = `ok`(일정 수 채움)·`thin`(일부)·`none`(0곳), `none_reason` = `outage`(소스 장애)·`no_coords`(좌표 모름)·`no_sources`(정상인데 자료 없음), `stale`, `chain`(소스별 status·outcome·count).
+
+### 대체 소스
+
+| 이름 | 무엇 | 라이선스 | 비고 |
+|---|---|---|---|
+| `wikidata_places` | Wikidata 주변 명소(SPARQL `wikibase:around`, 인구 비례 반경 4/6/10km, 종류 21개, 사이트링크 수 = 인지도 순 최대 30) + 영어 위키백과 첫 두 문장(설명) | CC0 / CC BY-SA | 관광지만. 기본 켜짐 |
+| `overpass` | OSM 식당·카페·관광지(도심 반경, 태그로 순위, 설명은 요리 종류·영업시간 태그만) | ODbL | **기본 꺼짐** — 10/26 공용 overpass-api.de 가 포화(502)·"자동화 사용은 자체 인스턴스" 안내, 다른 공용 인스턴스도 무응답 |
+
+- 위키백과 주변검색(`list=geosearch`)은 쓰지 않는다: 종류 정보가 없어 역·학교·관공서가 섞인다.
+- 식당·카페 대체는 아직 약하다(위키보이지 → Wikidata 는 관광지 위주). 다음 단계의 Google 실시간·Geoapify 가 맡는다.
+
+### 이름만 있는 도시 보강
+
+GeoNames 에서 못 찾은 도시(좌표 없음 → 날씨·주변 검색 불가)는 Wikidata 검색 API(`wbsearchentities` → `wbgetentities`)로 같은 나라(P17)·좌표(P625)가 있는 항목을 찾아 좌표·영어 이름·위키보이지 제목을 채운다(인구가 있는 항목 우선). 결과는 `research_cities/{ISO2}_n<해시>/sections/identity`(찾음 30일, 못 찾음 7일). POST 는 캐시만 보고 조회는 잡 안에서 한다. SPARQL 라벨 일치는 한국어 라벨이 '경주시'처럼 달라 놓치고 질의 서비스 지연이 2~25초로 들쭉날쭉해 쓰지 않는다. 실측(10/26): 가마쿠라·경주·전주·치앙마이·Cusco·Annecy 모두 약 2초에 찾음, 가마쿠라는 장소 0곳 → 위키보이지 26곳.
 
 ## LLM 추출 (PR3, `research/extract.py`)
 

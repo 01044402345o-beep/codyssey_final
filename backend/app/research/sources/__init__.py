@@ -14,6 +14,8 @@ LICENSES = {
     "openmeteo": ("CC BY 4.0", "Weather data by Open-Meteo.com (CC BY 4.0)"),
     "frankfurter": ("ECB reference rates", "Exchange rates: Frankfurter (ECB reference rates)"),
     "geonames": ("CC BY 4.0", "GeoNames (CC BY 4.0)"),
+    "wikipedia": ("CC BY-SA 4.0", "Wikipedia contributors (CC BY-SA 4.0)"),
+    "osm": ("ODbL 1.0", "© OpenStreetMap contributors (ODbL)"),
 }
 
 

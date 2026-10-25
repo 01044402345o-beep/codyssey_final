@@ -9,9 +9,9 @@ import re
 
 # 영국 외무부(FCDO) 권고는 쓰지 않는다 — 영국 국적자 기준(영국 대사관 연락처 등)이라 한국 사용자에게는 오정보다(10/25 결정).
 # 안전 정보는 외교부 해외안전여행(0404.go.kr) 공공데이터 API 키가 생기면 붙인다.
-ALL_SOURCES = ("wikivoyage", "wikidata", "openmeteo", "frankfurter", "geoapify", "google", "tavily")
+ALL_SOURCES = ("wikivoyage", "wikidata", "openmeteo", "frankfurter", "overpass", "geoapify", "google", "tavily")
 # 이번 단계(PR1)에 구현된 소스. 나머지는 후속 PR 에서 붙는다.
-KEYLESS_SOURCES = ("wikivoyage", "wikidata", "openmeteo", "frankfurter")
+KEYLESS_SOURCES = ("wikivoyage", "wikidata", "openmeteo", "frankfurter", "overpass")
 DEFAULT_CONTACT = "https://github.com/01044402345o-beep/codyssey_final"
 
 
@@ -44,7 +44,9 @@ def use_graph() -> bool:
     return (os.getenv("RESEARCH_USE_GRAPH") or "1").strip() != "0"
 
 
-DEFAULT_PLACE_CHAIN = ("wikidata_places", "overpass", "google")
+# overpass 는 기본에서 뺀다: 공용 서버(overpass-api.de)가 10/26 "자동화 사용은 자체 인스턴스로" 안내 + 포화(502),
+# 다른 공용 인스턴스도 응답 없음. 어댑터는 남겨 두고 RESEARCH_PLACE_CHAIN 에 넣으면 켜진다.
+DEFAULT_PLACE_CHAIN = ("wikidata_places", "google")
 
 
 def place_chain() -> list[str]:

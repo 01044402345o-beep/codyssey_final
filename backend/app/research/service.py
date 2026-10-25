@@ -54,15 +54,20 @@ def submit(req: dict, ip: str, *, http: Optional[SafeHttp] = None, cache: Option
     cache = cache or CACHE
     resolved = identity.resolve(store, req)
     base = nodes.Deps(http=http or SafeHttp(), cache=cache, store=store, today=today or dt.date.today())
+    pending = nodes.enrich_unresolved(base, resolved, network=False)       # 캐시만 — 네트워크 조회는 잡 안에서
     plan = nodes.plan(base, resolved)
-    if nodes.all_fresh(plan):
+    if not pending and nodes.all_fresh(plan):
         return {"status": "done", "report": graph.from_cache(resolved, plan), "cached": True}
     if req.get("cache_only"):
         return {"status": "miss"}
 
     def work(on_progress) -> dict:
         deps = nodes.Deps(http=base.http, cache=cache, store=store, today=base.today, on_progress=on_progress)
-        return graph.run(deps, resolved, plan)
+        p = plan
+        if pending:
+            nodes.enrich_unresolved(deps, resolved)
+            p = nodes.plan(deps, resolved)
+        return graph.run(deps, resolved, p)
 
     jid, joined = JOBS.start(job_key(req), ip, work)
     return {"status": "running", "job_id": jid, "joined": joined}
