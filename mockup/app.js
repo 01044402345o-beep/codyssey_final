@@ -846,6 +846,7 @@ function request(stage, byUser = true) {
   S.gen = { stage, step: 0, steps: stepsFor(stage), stuck: false };
   S.screen = 'u-gen'; render();
   cancelGen(); const tok = genToken;
+  if (stage === 'report') researchRun = startResearch(tok);   // 진행 단계를 보여 주는 동안 실제 조사를 돌린다
   genTimer = setTimeout(() => {
     if (tok !== genToken || t.status !== stage + '_requested') return;
     t.status = stage + '_generating'; t.genStartedAt = Date.now();
@@ -933,12 +934,50 @@ function failStage(stage) {
 }
 /* 보고서 요청만 /itinerary 를 부른다. 메뉴로 연 화면(ensure)은 예시 데이터를 유지한다.
    플래그가 꺼졌거나 모든 도시가 실패하면 genReport 로 돌아간다. */
+/* 도시 조사(backend/app/research): 사용자가 고른 나라·도시를 여행 날짜·체류에 맞게 실제 소스에서 조사한다.
+   서버가 꺼져 있거나(research_disabled) 실패하면 아래 /itinerary → 예시 경로로 그대로 돌아간다(섞지 않는다). */
+let researchAbort = null, researchRun = null;
+const RESEARCH_STEP_KO = { guide: '여행 가이드(위키보이지) 읽는 중', climate: '여행 날짜 날씨 확인 중', country: '나라 정보(통화·긴급번호·여행 권고) 확인 중' };
+function researchCaps(cities) {
+  const base = R.cityBase(R.buildDays(cities)), caps = {};
+  cities.forEach(c => { const b = base[c.name]; caps[c.name] = { attr: b ? b.attr : 0, rest: b ? b.rest : 0 }; });
+  return caps;
+}
+async function startResearch(tok) {
+  if (researchAbort) researchAbort.abort();
+  const ctl = researchAbort = new AbortController();
+  if (API.base === null || !S.trip) return { status: 'down', reason: 'no_server' };
+  try { await geoCountries(); } catch (e) { /* 나라 목록이 없으면 이름만 보낸다 */ }
+  const t = S.trip;
+  const body = AI.researchRequestBody(t, researchCaps(t.cities), n => (countryByName(n) || {}).iso2 || '');
+  return AI.collectResearch({
+    fetchImpl: (u, o) => fetch(u, o), base: API.base, body, signal: ctl.signal,
+    onProgress: evs => {
+      if (tok !== genToken || !S.gen || !evs.length) return;
+      const last = evs[evs.length - 1], done = evs.filter(e => e.state === 'done').length;
+      S.gen.waitNote = `실제 자료를 조사하고 있어요 · ${last.who || ''} ${RESEARCH_STEP_KO[last.step] || ''} (${done}단계 끝)`;
+      if (S.screen === 'u-gen') render();
+    },
+  });
+}
 async function runReport(tok) {
   S.reportMode = 'example';
   S.itineraryBlocks = null;
   S.reportPlaces = null;
   S.reportMetaLive = null;
+  S.research = null;
   if (API.base === null || !S.trip) return;
+  try {
+    const res = await (researchRun || startResearch(tok));
+    researchRun = null;
+    if (tok !== genToken) return;
+    const folded = AI.foldResearch(S.trip.cities, res, researchCaps(S.trip.cities), S.trip.reportRound);
+    if (folded.mode !== 'example') {
+      S.reportMode = folded.mode === 'research' ? 'research' : 'empty';
+      S.reportPlaces = folded.places; S.reportMetaLive = folded.meta; S.research = folded.info;
+      return;
+    }
+  } catch (e) { if (tok !== genToken) return; }
   if (genAbort) genAbort.abort();
   const ctl = genAbort = new AbortController();
   const caps = {};
@@ -973,7 +1012,8 @@ function succeed(stage) {
     S.cityTab = t.cities[0].name; S.showCand = {};
     S.screen = 'u-report'; render();
     const again = t.reportRound > 1 ? `보고서를 다시 만들었어요. 남은 다시 생성 ${3 - t.regenerateCount}번` : '보고서가 준비됐어요. 가지 않을 장소를 빼 주세요.';
-    toast(S.reportMode === 'empty' ? '확인된 장소가 없어요.' : S.reportMode === 'live' ? '확인한 장소를 골랐어요. 가지 않을 장소를 빼 주세요.' : again);
+    toast(S.reportMode === 'empty' ? '확인된 장소가 없어요.' : S.reportMode === 'live' ? '확인한 장소를 골랐어요. 가지 않을 장소를 빼 주세요.'
+      : S.reportMode === 'research' ? '여행 가이드에서 조사한 장소예요. 가지 않을 장소를 빼 주세요.' : again);
   } else if (stage === 'route') {
     if (S.itineraryBlocks) {
       S.days = AI.placeBlocksOnDays(R.buildDays(t.cities), S.places, t.cities, S.itineraryBlocks);
@@ -2666,6 +2706,8 @@ function scrReport() {
   if (S.reportMode === 'example') {
     lead += notice('이 장소 목록은 <b>미리 준비한 예시 데이터</b>예요. (AI 웹 검색은 아직 연결 전이에요) 영업시간과 메뉴는 바뀔 수 있으니 방문 전에 확인해 주세요.');
     if (meta.found < meta.base) lead += notice(`추천할 장소를 충분히 찾지 못했어요. 기본 ${meta.base}곳 중 ${meta.found}곳만 찾았어요. 후보로 채울 수 있어요.`, 'warn');
+  } else if (meta.mode === 'research') {
+    lead += notice(`여행 가이드(위키보이지)에서 <b>실제로 조사한 장소</b>예요 — 이 도시 ${meta.total}곳 중 여행 일정에 맞춰 골랐어요. 설명은 영어 원문 발췌이고, 영업시간·가격은 방문 전에 확인해 주세요.`);
   } else if (meta.mode === 'live') {
     lead += notice('Google Maps에서 확인한 장소예요. 한국어 설명, 메뉴, 영업시간, 평점, 가격은 없어요.');
     const failed = (meta.queries || []).filter(q => q && q.status && q.status !== 'verified');
@@ -2680,9 +2722,11 @@ function scrReport() {
     <div class="stack" style="margin-bottom:14px">
       ${lead}
     </div>
+    ${researchInfo(city)}
     <div class="city-head"><h3>${esc(city)}</h3><span class="cnt"><b>${sel}</b> / 최대 ${meta.base}곳</span></div>
     ${base.map(p => placeCard(p, locked)).join('')}
     ${cands.length ? `<button class="cand-toggle" data-act="cand" data-city="${esc(city)}">${open ? '후보 접기' : `후보 더 보기 (${cands.length})`}</button>${open ? cands.map(p => placeCard(p, locked)).join('') : ''}` : ''}
+    ${researchCredits()}
   </div>`;
   const left = 3 - t.regenerateCount;
   const bottom = locked ? `<button class="btn primary block" data-act="tab" data-id="${t.status === 'studying' ? 'u-route' : 'u-gen'}">${t.status === 'studying' ? '방문 순서 보기' : '진행 상황 보기'}</button>`
@@ -2691,7 +2735,52 @@ function scrReport() {
        <div class="small" style="text-align:center">다시 생성은 성공한 경우에만 횟수가 줄어요 · 남은 횟수 ${left}번</div>`;
   return frame(inner, { appbar: appbar('보고서 · 장소 선택', { step: 'STEP 2/3' }), bottom });
 }
+/* 조사한 도시의 '현지 정보' — 여행 날짜 날씨·통화·긴급번호·전기·여행 권고, 도착/이동/출국일에 필요한 교통 정보.
+   본문은 출처의 영어 원문 발췌다(한국어 요약은 다음 단계). 줄마다 출처로 이어진다. */
+const RESEARCH_TOPIC_KO = { transport_airport: '공항·도착', transport_local: '시내 교통', etiquette: '예절', safety: '안전',
+  health: '건강', language: '언어', connect: '통신·인터넷', cope: '생활 팁', tipping: '팁' };
+const RESEARCH_ROLE_KO = { arrival: '도착일', departure: '출국일', transfer_out: '이동일(떠남)', transfer_in: '이동일(도착)' };
+function researchInfo(city) {
+  const inf = S.research && S.research.cities[city];
+  if (!inf) return '';
+  const co = inf.iso2 && S.research.countries[inf.iso2];
+  const link = (url, label) => url && /^https:\/\//.test(url) ? ` <a href="${esc(url)}" data-act="link" rel="noopener noreferrer">${esc(label)}</a>` : '';
+  const rows = [];
+  const c = inf.climate;
+  if (c) rows.push(`<li><b>날씨</b> ${c.kind === 'forecast' ? '예보' : '평년값(최근 5년 같은 날짜)'} · 최고 ${esc(String(c.tmax_avg))}° / 최저 ${esc(String(c.tmin_avg))}° · 비 온 날 ${esc(String(c.wet_days_pct))}% <span class="small">${esc(c.window || '')}</span></li>`);
+  if (co) {
+    if (co.currency && co.currency.code) rows.push(`<li><b>통화</b> ${esc(co.currency.code)}${co.currency.krw_per_unit ? ` · 1${esc(co.currency.code)} ≈ ${esc(Number(co.currency.krw_per_unit).toLocaleString('ko-KR'))}원 <span class="small">기준일 ${esc(co.currency.as_of || '')}</span>` : ''}</li>`);
+    if ((co.emergency || []).length) rows.push(`<li><b>긴급 전화</b> ${co.emergency.map(esc).join(' · ')}</li>`);
+    if ((co.plugs || []).length || co.voltage) rows.push(`<li><b>전기</b> ${esc((co.plugs || []).join(', '))}${co.voltage ? ` · ${esc(co.voltage)}V` : ''}</li>`);
+    if (co.driving_side) rows.push(`<li><b>차량 통행</b> ${co.driving_side === 'left' ? '좌측' : co.driving_side === 'right' ? '우측' : esc(co.driving_side)}</li>`);
+    if ((co.languages || []).length) rows.push(`<li><b>공용어</b> ${co.languages.map(esc).join(', ')}</li>`);
+    if (co.advisory && (co.advisory.parts || []).length) rows.push(`<li><b>여행 권고</b> <span class="small">영국 정부(FCDO) 기준 · ${esc(co.advisory.updated_at || '')}</span>${co.advisory.parts.map(p => link(p.url, p.title)).join(' ·')}</li>`);
+  }
+  const roles = (inf.days || []).filter(d => RESEARCH_ROLE_KO[d.role]);
+  const tips = roles.length ? `<div class="small rinfo-days">${roles.map(d => `${esc(RESEARCH_ROLE_KO[d.role])} ${esc(Dt.md(d.date))}${d.topics && d.topics.length ? ` — ${d.topics.map(t => esc(RESEARCH_TOPIC_KO[t] || t)).join('·')} 정보를 먼저 보세요` : ''}`).join('<br>')}</div>` : '';
+  const practical = (inf.practical || []).map(p => `<details class="rinfo-topic"><summary>${esc(RESEARCH_TOPIC_KO[p.topic] || p.topic)}</summary>
+      <p lang="en">${esc(p.text_en || '')}</p>${p.source ? `<div class="small">${link(p.source.url, '원문 · Wikivoyage')}</div>` : ''}</details>`).join('');
+  if (!rows.length && !practical) return '';
+  return `<details class="card rinfo" open><summary><b>${esc(city)} 현지 정보</b> <span class="small">여행 날짜에 맞춰 조사했어요</span></summary>
+    ${rows.length ? `<ul class="rinfo-rows">${rows.join('')}</ul>` : ''}${tips}${practical}</details>`;
+}
+function researchCredits() {
+  const a = S.reportMode === 'research' && S.research ? S.research.attributions || [] : [];
+  if (!a.length) return '';
+  return `<div class="small rinfo-credits">출처: ${a.map(x => esc(x.text)).join(' · ')}. 위키보이지 발췌는 CC BY-SA 4.0 으로 같은 조건에서 다시 쓸 수 있어요.</div>`;
+}
 function placeCard(p, locked) {
+  if (p.research) {
+    const tone = p.kind === 'attraction' ? 'attraction' : 'restaurant';
+    const links = (p.sources || []).map(s => `<a href="${esc(s.url)}" data-act="link" rel="noopener noreferrer">${esc(s.title)}</a>`)
+      .concat(p.homepage ? [`<a href="${esc(p.homepage)}" data-act="link" rel="noopener noreferrer">홈페이지</a>`] : []).join(' · ');
+    return `<div class="place ${p.selected ? 'on' : 'off'} ${locked ? 'locked' : ''}" data-act="place" data-id="${esc(p.id)}">
+      <div class="check">${p.selected ? I.check : ''}</div>
+      <div><div class="nm"><span class="kind ${tone}">${esc(p.primaryType)}</span>${esc(p.name)}${p.isCandidate ? '<span class="badge b-only">후보</span>' : ''}</div>
+        ${p.area ? `<div class="meta">${esc(p.area)}</div>` : ''}
+        ${p.descEn ? `<div class="desc" lang="en">${esc(p.descEn)}</div>` : ''}
+        <div class="src">${links}${links ? ' · ' : ''}${esc(p.attribution)}</div></div></div>`;
+  }
   if (p.live) {
     const tone = p.kind === 'attraction' ? 'attraction' : 'restaurant';
     const chip = p.primaryType || (p.kind === 'cafe' ? '카페' : p.kind === 'attraction' ? '관광지' : '맛집');

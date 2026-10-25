@@ -538,6 +538,96 @@
     return Promise.all(jobs);
   }
 
+  /* ---------- 도시 조사 (POST /research → GET /research/{id}) ----------
+     backend/app/research. 사용자가 고른 나라·도시를 여행 조건에 맞게 실제 소스(위키보이지·위키데이터·Open-Meteo·
+     GOV.UK·Frankfurter)에서 조사한다. 서버 플래그가 꺼져 있거나 실패하면 mode 'example' — 화면은 예전 예시로 돌아간다.
+     요청에는 나라·도시·날짜·장소 수만 담는다(사용자 정보 없음). */
+  const RESEARCH_TIMEOUT_MS = 150000;
+  /* caps: { 도시이름: { attr, rest } } (R.cityBase), isoOf: 나라 이름 → ISO2(없으면 '') */
+  function researchRequestBody(trip, caps, isoOf) {
+    const countries = (Array.isArray(trip.countries) && trip.countries.length ? trip.countries : [trip.country || ''])
+      .map(n => String(n || '').trim()).filter(Boolean).slice(0, 4);
+    const body = {
+      countries: countries.map(name => { const iso2 = isoOf ? isoOf(name) : ''; return iso2 ? { name, iso2 } : { name }; }),
+      cities: (trip.cities || []).slice(0, 5).map(c => {
+        const cap = (caps && caps[c.name]) || {};
+        const out = { name: String(c.name || '').trim(), ci: Math.min(Math.max(+c.ci || 0, 0), Math.max(0, countries.length - 1)),
+          start: c.start, end: c.end, attr: Math.min(12, Math.max(0, +cap.attr || 0)), rest: Math.min(12, Math.max(0, +cap.rest || 0)) };
+        if (Number.isInteger(c.gid) && c.gid > 0) out.gid = c.gid;
+        return out;
+      }),
+    };
+    return body;
+  }
+  /* 시작 → (전부 캐시면 바로 done) → 2.5초(10번 뒤 5초) 간격으로 진행을 묻는다. 끝나면 {status, report?, reason?}.
+     잡이 사라지면(서버 재시작 404) 'down'. 시간이 넘으면 'timeout' — 서버 잡은 계속 돌아 캐시를 데운다. */
+  async function collectResearch({ fetchImpl, base, body, signal, timeoutMs = RESEARCH_TIMEOUT_MS, onProgress, sleep }) {
+    if (base === null || base === undefined) return { status: 'down', reason: 'no_server' };
+    const wait = sleep || (ms => new Promise(r => setTimeout(r, ms)));
+    const t = withTimeout(signal, timeoutMs);
+    try {
+      let res = await postJson(fetchImpl, base + '/research', body, t.signal);
+      const jid = res && typeof res.job_id === 'string' ? res.job_id : '';   // 폴링 응답에는 job_id 가 없다 — 처음 것을 쓴다
+      for (let n = 0; res && res.status === 'running' && jid; n++) {
+        if (onProgress) { try { onProgress(res.progress || []); } catch (e) { /* 표시만 */ } }
+        await wait(n < 10 ? 2500 : 5000);
+        if (t.signal.aborted) return { status: 'timeout' };
+        res = await httpJson(fetchImpl, base + '/research/' + encodeURIComponent(jid), { method: 'GET' }, t.signal);
+      }
+      return res && typeof res === 'object' ? res : { status: 'down' };
+    } catch (e) {
+      return { status: t.signal.aborted ? 'timeout' : 'down', reason: e && e.status ? 'http_' + e.status : 'network' };
+    } finally { t.done(); }
+  }
+  const RESEARCH_KIND_KO = { attraction: '관광지', restaurant: '맛집', cafe: '카페' };
+  function researchPlace(raw, cityName, n) {
+    const name = String(raw.name || '').trim();
+    const src = (Array.isArray(raw.sources) ? raw.sources : []).filter(s => s && /^https:\/\//.test(s.url || ''))
+      .map(s => ({ url: s.url, title: 'Wikivoyage · ' + String(s.title || '').slice(0, 60) }));
+    const home = typeof raw.homepage === 'string' && /^https?:\/\/[^\s"'<>]+$/.test(raw.homepage) ? raw.homepage : '';
+    return {
+      id: 'r' + n, providerId: String(raw.id || ''), city: cityName, kind: RESEARCH_KIND_KO[raw.kind] ? raw.kind : 'attraction',
+      live: true, research: true, name, en: name,
+      area: typeof raw.area === 'string' ? raw.area : '',                 // R.placeByCode 가 localeCompare 한다 — 늘 문자열
+      desc: '', descEn: typeof raw.desc_en === 'string' ? raw.desc_en : '', reason: '',
+      cuisine: null, menuEn: null, menuKo: null, sources: src, homepage: home,
+      attribution: 'Wikivoyage (CC BY-SA 4.0)', primaryType: RESEARCH_KIND_KO[raw.kind] || '관광지',
+      isCandidate: false, selected: false, visitDate: null, visitOrder: null, count: 0,
+    };
+  }
+  /* 조사 보고서 → 화면 장소. 종류(관광지 / 맛집·카페)마다 기본 caps 개 + 후보 2개(genReport 와 같은 규칙),
+     '다시 생성'(round)은 순위를 2칸씩 돌린다(추가 호출 없음). 도시 순서는 요청 순서(idx)로 맞춘다. */
+  function foldResearch(cities, result, caps, round = 0) {
+    const rep = result && result.status === 'done' && result.report && typeof result.report === 'object' ? result.report : null;
+    if (!rep || !Array.isArray(rep.cities) || rep.quality === 'failed') {
+      return { mode: 'example', places: [], meta: {}, info: null, reason: (result && (result.reason || result.status)) || 'down' };
+    }
+    const rot = (a, k) => { if (!a.length) return a; k = k % a.length; return a.slice(k).concat(a.slice(0, k)); };
+    const places = [], meta = {}, info = { countries: rep.countries || {}, cities: {}, attributions: rep.attributions || [] };
+    let seq = 0;
+    (cities || []).forEach((c, i) => {
+      const rc = rep.cities.find(x => x && x.idx === i) || rep.cities[i];
+      const cap = (caps && caps[c.name]) || { attr: 0, rest: 0 };
+      if (!rc) { meta[c.name] = { base: 0, found: 0, mode: 'empty', reason: 'no_city' }; return; }
+      info.cities[c.name] = { practical: rc.practical || [], climate: rc.climate || null, days: rc.days || [], iso2: rc.iso2 || '',
+        wikivoyage: rc.wikivoyage || null, resolved: !!rc.resolved, crossBorder: !!rc.cross_border_next };
+      const raw = (Array.isArray(rc.places) ? rc.places : []).filter(p => p && typeof p.name === 'string' && p.name.trim());
+      let found = 0;
+      const take = (list, need) => rot(list, round * 2).slice(0, need + 2).forEach((p, k) => {
+        const pl = researchPlace(p, c.name, ++seq);
+        pl.isCandidate = k >= need; pl.selected = !pl.isCandidate;
+        if (!pl.isCandidate) found++;
+        places.push(pl);
+      });
+      take(raw.filter(p => p.kind === 'attraction'), +cap.attr || 0);
+      take(raw.filter(p => p.kind === 'restaurant' || p.kind === 'cafe'), +cap.rest || 0);
+      const base = (+cap.attr || 0) + (+cap.rest || 0);
+      meta[c.name] = raw.length ? { base, found, mode: 'research', total: raw.length }
+        : { base: 0, found: 0, mode: 'empty', reason: rc.status === 'partial' ? 'no_places' : 'no_article' };
+    });
+    return { mode: places.length ? 'research' : 'empty', places, meta, info, reason: '' };
+  }
+
   /* ---------- 대화하기 (실시간 회화 1a — 스크립트, AI 호출 0회) ----------
      docs/research/realtime-agent/README.md 4절 1a · 3절 Must. 대사는 data.js 의 검수된 talk 만 쓴다.
      - 상대가 먼저(ask)가 있으면 상대 → 나 → 상대(replies[nextFor]) → 나(next). 없으면 나 → 상대 → 나.
@@ -608,6 +698,7 @@
     TRIP_KEY, cleanTrip, loadTrip, saveTrip, preferTrip,
     categoryOfKind,
     calendarToday, itineraryRequestBody, kindFromPrimary, foldItinerary, placeBlocksOnDays, collectItinerary,
+    RESEARCH_TIMEOUT_MS, researchRequestBody, collectResearch, researchPlace, foldResearch,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, scopedStorage, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
   };
