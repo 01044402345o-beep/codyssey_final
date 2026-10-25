@@ -72,6 +72,10 @@ POST /research {countries:[{name, iso2?}], cities:[{name, gid?, ci, start, end, 
 
 GeoNames 에서 못 찾은 도시(좌표 없음 → 날씨·주변 검색 불가)는 Wikidata 검색 API(`wbsearchentities` → `wbgetentities`)로 같은 나라(P17)·좌표(P625)가 있는 항목을 찾아 좌표·영어 이름·위키보이지 제목을 채운다(인구가 있는 항목 우선). 결과는 `research_cities/{ISO2}_n<해시>/sections/identity`(찾음 30일, 못 찾음 7일). POST 는 캐시만 보고 조회는 잡 안에서 한다. SPARQL 라벨 일치는 한국어 라벨이 '경주시'처럼 달라 놓치고 질의 서비스 지연이 2~25초로 들쭉날쭉해 쓰지 않는다. 실측(10/26): 가마쿠라·경주·전주·치앙마이·Cusco·Annecy 모두 약 2초에 찾음, 가마쿠라는 장소 0곳 → 위키보이지 26곳.
 
+### 화면 폴백 (장소 0곳 도시)
+
+예시(가짜) 장소로 채우지 않는다. 그 도시 탭에만: 이유별 안내(`outage` 자료 서버 장애 · `no_coords` 위치 모름 · `no_sources` 공개 자료 없음) + 도시 브리프 카드(`/city-brief`) + `outage` 면 '다시 조사하기'(같은 `/research`, 캐시된 도시는 즉시) + '장소 직접 추가'(이름 1~60자·종류, 출처 '직접 추가', 중복·`<>{}` 거부, 일정 수 안에서 자동 선택 → 확정·방문 순서·문장 생성 흐름 그대로). 장애로 지난 결과를 쓰면(`stale`) "지난번에 조사한 장소" 안내. 장소 출처 이름·라이선스는 provider 별.
+
 ## LLM 추출 (PR3, `research/extract.py`)
 
 도시당 Gemini 1회(기존 `gemini.run` — 키 순환·모델 회전·최소 시도 규칙 그대로). 비용 예산은 `research` 한 묶음으로 센다:

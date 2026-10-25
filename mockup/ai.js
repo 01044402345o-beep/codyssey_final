@@ -631,8 +631,11 @@
       take(raw.filter(p => p.kind === 'attraction'), +cap.attr || 0);
       take(raw.filter(p => p.kind === 'restaurant' || p.kind === 'cafe'), +cap.rest || 0);
       const base = (+cap.attr || 0) + (+cap.rest || 0);
-      meta[c.name] = raw.length ? { base, found, mode: 'research', total: raw.length }
-        : { base: 0, found: 0, mode: 'empty', reason: rc.status === 'partial' ? 'no_places' : 'no_article' };
+      // 장소 0곳 도시: 이유(outage 소스 장애 · no_coords 위치 모름 · no_sources 자료 없음)를 서버가 알려 준다(예전 보고서는 status 로 추정).
+      // base 는 일정이 정한 수 그대로 — 사용자가 직접 추가한 장소를 고를 수 있게.
+      meta[c.name] = raw.length ? { base, found, mode: 'research', total: raw.length, stale: !!rc.stale, placeStatus: rc.place_status || '' }
+        : { base, found: 0, mode: 'empty', stale: !!rc.stale,
+            reason: rc.none_reason || (rc.status === 'partial' ? 'no_places' : 'no_article') };
     });
     return { mode: places.length ? 'research' : 'empty', places, meta, info, reason: '' };
   }

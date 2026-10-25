@@ -628,7 +628,7 @@ test('도시 조사 접기: 종류별 기본 caps + 후보 2, 다시 생성은 2
   assert.ok(f.places.every(p => typeof p.area === 'string' && p.research && p.live));
   assert.deepEqual(f.places[0].sources, [{ url: 'https://en.wikivoyage.org/wiki/Tokyo', title: 'Wikivoyage · Tokyo' }]);
   assert.equal(f.places[0].homepage, '');                                         // 위험한 링크는 버린다
-  assert.deepEqual(f.meta['도쿄'], { base: 3, found: 3, mode: 'research', total: 8 });
+  assert.deepEqual(f.meta['도쿄'], { base: 3, found: 3, mode: 'research', total: 8, stale: false, placeStatus: '' });
   assert.equal(f.info.cities['도쿄'].practical[0].topic, 'tipping');
   const again = AI.foldResearch(cities, { status: 'done', report }, { '도쿄': { attr: 2, rest: 1 } }, 1);
   assert.equal(again.places[0].name, 'P2');                                       // 다시 생성: 2칸 회전
@@ -656,4 +656,17 @@ test('도시 조사 장소: 대체 소스(Wikidata·Wikipedia·OSM) 출처 이�
   assert.equal(o.attribution, '© OpenStreetMap contributors (ODbL)');
   const old = AI.researchPlace({ id: 'wv:1', name: 'X', kind: 'attraction', sources: [{ url: 'https://en.wikivoyage.org/wiki/X', title: 'X' }] }, '나라', 3);
   assert.equal(old.attribution, 'Wikivoyage (CC BY-SA 4.0)');                    // provider 없는 예전 보고서
+});
+
+test('도시 조사 접기: 장소 0곳 도시는 서버가 준 이유(none_reason)·stale, base 는 일정 수 그대로(직접 추가 선택용)', () => {
+  const report = { quality: 'reduced', countries: {}, attributions: [],
+    cities: [{ idx: 0, status: 'ok', place_status: 'thin', stale: true, places: [{ id: 'wd:1', name: 'A', kind: 'attraction', sources: [] }] },
+             { idx: 1, status: 'empty', place_status: 'none', none_reason: 'outage', places: [] },
+             { idx: 2, status: 'partial', places: [] }] };
+  const f = AI.foldResearch([{ name: '도쿄' }, { name: '나라' }, { name: '교토' }], { status: 'done', report },
+    { '도쿄': { attr: 2, rest: 1 }, '나라': { attr: 2, rest: 2 }, '교토': { attr: 1, rest: 1 } });
+  assert.equal(f.mode, 'research');
+  assert.deepEqual([f.meta['도쿄'].stale, f.meta['도쿄'].placeStatus], [true, 'thin']);
+  assert.deepEqual(f.meta['나라'], { base: 4, found: 0, mode: 'empty', stale: false, reason: 'outage' });
+  assert.equal(f.meta['교토'].reason, 'no_places');                                // 예전 보고서(none_reason 없음)
 });
