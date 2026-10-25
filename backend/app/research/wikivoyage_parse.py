@@ -1,7 +1,8 @@
 """위키보이지 위키텍스트 파서 — listing 템플릿·섹션·구역(하위 문서)을 코드로 뽑는다(LLM 없음).
 
 listing 템플릿: {{see|eat|do|drink|buy|sleep|go|listing | name= | alt= | url= | lat= | long= | wikidata= | content= ...}}
-(위키보이지 Template:Listing). 장소는 여기서만 나온다 — 모델이 장소를 지어낼 수 없다.
+(위키보이지 Template:Listing), 지도 표시 {{marker}}. 다른 언어판: de·ja {{vCard}}, fr {{voir}}…(nom·latitude),
+es {{listado}}…(nombre·latitud), it 은 en 과 같은 템플릿에 nome·descrizione. 장소는 여기서만 나온다 — 모델이 장소를 지어낼 수 없다.
 본문은 데이터다: 위키 문법·HTML·URL 을 걷어내고 길이를 자른다(프롬프트 주입 대비, 후속 LLM 단계에 그대로 쓴다).
 """
 from __future__ import annotations
@@ -120,36 +121,96 @@ def sections(text: str) -> list[tuple[str, str]]:
     return out
 
 
-def listings(text: str, page: str = "") -> list[dict]:
-    """listing 템플릿 → [{type, name, alt, lat, lon, url, wikidata, content, section, page}]. 이름 없는 것은 버린다."""
+# 언어판마다 listing 템플릿 이름·매개변수가 다르다(10/26 실측: en·it·zh / de·ja / fr / es).
+# 템플릿 이름 → 종류. None 이면 type 매개변수(또는 섹션 제목)로 종류를 정한다.
+_EN_LIKE = {t: t for t in LISTING_TYPES if t != "listing"} | {"listing": None, "marker": None}
+TEMPLATES = {
+    "en": _EN_LIKE, "it": _EN_LIKE, "zh": _EN_LIKE,
+    "de": {"vcard": None, "marker": None, "marker kopie": None},
+    "ja": {"vcard": None, "marker": None},
+    "fr": {"voir": "see", "faire": "do", "acheter": "buy", "manger": "eat", "sortir": "drink", "se loger": "sleep",
+           "aller": "go", "circuler": "go", "listing": None},
+    "es": {**_EN_LIKE, "listado": None, "ver": "see", "hacer": "do", "comprar": "buy", "comer": "eat", "beber": "drink",
+           "salir": "drink", "dormir": "sleep"},
+}
+_KEYS = {"name": ("name", "nome", "nom", "nombre"), "lat": ("lat", "latitude", "latitud"),
+         "lon": ("long", "lon", "longitude", "longitud"), "url": ("url", "sito", "web", "site"),
+         "content": ("content", "description", "descrizione", "descripción", "descripcion", "contenu"),
+         "type": ("type", "tipo"), "alt": ("alt",)}
+# type 매개변수 값(영어·독일어 vCard 세부 종류 등) → 종류
+_TYPE = {"see": "see", "do": "do", "eat": "eat", "drink": "drink", "buy": "buy", "sleep": "sleep", "go": "go",
+         "restaurant": "eat", "imbiss": "eat", "food": "eat", "fastfood": "eat", "cafe": "drink", "café": "drink",
+         "coffee": "drink", "bar": "drink", "pub": "drink", "nightlife": "drink", "teahouse": "drink",
+         "hotel": "sleep", "hostel": "sleep", "guest house": "sleep", "campsite": "sleep", "ryokan": "sleep",
+         "shop": "buy", "market": "buy", "shopping": "buy", "station": "go", "airport": "go", "bus station": "go",
+         "museum": "see", "church": "see", "castle": "see", "palace": "see", "temple": "see", "shrine": "see",
+         "monument": "see", "sight": "see", "building": "see", "park": "see", "garden": "see", "zoo": "see",
+         "tower": "see", "monastery": "see", "mosque": "see", "synagogue": "see", "square": "see", "bridge": "see",
+         "gallery": "see", "viewpoint": "see", "landmark": "see", "theater": "do", "theatre": "do", "activity": "do",
+         "beach": "do", "spa": "do", "onsen": "do", "sport": "do", "cinema": "do",
+         "vedere": "see", "fare": "do", "mangiare": "eat", "bere": "drink", "dormire": "sleep",
+         "ver": "see", "hacer": "do", "comer": "eat", "beber": "drink", "dormir": "sleep"}
+# 섹션 제목 낱말 → 종류(type 이 없거나 모를 때)
+_SECTION = (("sehensw", "see"), ("見る", "see"), ("voir", "see"), ("vedere", "see"), ("ver", "see"), ("景点", "see"),
+            ("观光", "see"), ("see", "see"), ("aktivit", "do"), ("する", "do"), ("faire", "do"), ("fare", "do"),
+            ("hacer", "do"), ("do", "do"), ("küche", "eat"), ("essen", "eat"), ("食べる", "eat"), ("manger", "eat"),
+            ("mangiare", "eat"), ("comer", "eat"), ("餐", "eat"), ("吃", "eat"), ("eat", "eat"), ("nachtleben", "drink"),
+            ("飲む", "drink"), ("sortir", "drink"), ("boire", "drink"), ("bere", "drink"), ("beber", "drink"),
+            ("drink", "drink"), ("unterkunft", "sleep"), ("泊まる", "sleep"), ("loger", "sleep"), ("alloggiare", "sleep"),
+            ("dormir", "sleep"), ("住", "sleep"), ("sleep", "sleep"), ("einkauf", "buy"), ("買う", "buy"),
+            ("acheter", "buy"), ("comprare", "buy"), ("comprar", "buy"), ("buy", "buy"), ("anreise", "go"),
+            ("mobilit", "go"), ("get in", "go"), ("get around", "go"))
+
+
+def _kind_of(tmpl_kind: Optional[str], params: dict, section: str) -> str:
+    if tmpl_kind:
+        return tmpl_kind
+    t = next((params[k] for k in _KEYS["type"] if params.get(k)), "").strip().lower()
+    if t in _TYPE:
+        return _TYPE[t]
+    low = section.casefold()
+    for word, kind in _SECTION:
+        if word in low:
+            return kind
+    return "listing"
+
+
+def _first(params: dict, key: str) -> str:
+    return next((params[k] for k in _KEYS[key] if params.get(k)), "")
+
+
+def listings(text: str, page: str = "", lang: str = "en") -> list[dict]:
+    """listing 템플릿 → [{type, name, alt, lat, lon, url, wikidata, content, section, page, marker}]. 이름 없는 것은 버린다.
+    lang 에 따라 템플릿·매개변수 이름을 맞춘다. 지도 표시(marker)는 설명이 없어 marker=True 로 표시한다."""
+    table = TEMPLATES.get(lang, TEMPLATES["en"])
     out = []
     for title, body in sections(text):
         for _s, _e, inner in _templates(body):
             parts = _split_params(inner)
-            kind = parts[0].strip().lower()
-            if kind not in LISTING_TYPES:
+            tname = re.sub(r"\s+", " ", parts[0].strip().lower())
+            if tname not in table:
                 continue
             params: dict[str, str] = {}
             for p in parts[1:]:
                 if "=" in p:
                     k, v = p.split("=", 1)
                     params[k.strip().lower()] = v.strip()
-            if kind == "listing":
-                kind = (params.get("type") or "listing").strip().lower()
-                if kind not in LISTING_TYPES:
-                    kind = "listing"
-            name = clean(params.get("name", ""), 120)
+            kind = _kind_of(table[tname], params, title)
+            if kind not in LISTING_TYPES:
+                kind = "listing"
+            name = clean(_first(params, "name"), 120)
             if not name:
                 continue
-            url = (params.get("url") or "").strip()
+            url = _first(params, "url").strip()
             wd = (params.get("wikidata") or "").strip()
             out.append({
                 "type": kind, "name": name, "alt": clean(params.get("alt", ""), 80),
-                "lat": _num(params.get("lat", "")), "lon": _num(params.get("long", "") or params.get("lon", "")),
+                "lat": _num(_first(params, "lat")), "lon": _num(_first(params, "lon")),
                 "url": url if re.fullmatch(r"https?://[^\s<>\"'{}|\\^`]{3,290}", url) and "@" not in url.split("/")[2] else "",
                 "wikidata": wd if re.fullmatch(r"Q\d{1,12}", wd) else "",
-                "content": clean(params.get("content", "") or params.get("description", ""), MAX_CONTENT),
-                "section": title, "page": page,
+                "content": clean(_first(params, "content"), MAX_CONTENT),
+                "section": title, "page": page, "marker": tname.startswith("marker"),
+                "subtype": next((params[k] for k in _KEYS["type"] if params.get(k)), "").strip().lower()[:30],
             })
     return out
 

@@ -2851,7 +2851,7 @@ function placeCard(p, locked) {
       <div><div class="nm"><span class="kind ${tone}">${esc(p.primaryType)}</span>${esc(p.name)}${p.isCandidate ? '<span class="badge b-only">후보</span>' : ''}</div>
         ${p.area ? `<div class="meta">${esc(p.area)}</div>` : ''}
         ${p.desc ? `<div class="desc">${esc(p.desc)}${p.reason ? ` <span class="why">— ${esc(p.reason)}</span>` : ''}</div>` : ''}
-        ${p.descEn ? `<div class="desc${p.desc ? ' en-sub' : ''}" lang="en">${esc(p.descEn)}</div>` : ''}
+        ${p.descEn ? `<div class="desc${p.desc ? ' en-sub' : ''}" lang="${esc(p.descLang || 'en')}">${esc(p.descEn)}</div>` : ''}
         <div class="src">${links}${links ? ' · ' : ''}${esc(p.attribution)}</div></div></div>`;
   }
   if (p.live) {

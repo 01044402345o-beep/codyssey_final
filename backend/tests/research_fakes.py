@@ -80,6 +80,8 @@ def sparql(query):
         if '"1850147"' in query:
             return {"results": {"bindings": [{"item": {"value": "http://www.wikidata.org/entity/Q1490"},
                                                "wv": {"value": "https://en.wikivoyage.org/wiki/Tokyo_(prefecture)"}}]}}
+        if '"1855612"' in query:                 # 나라: 항목은 있지만 영어 위키보이지 문서는 없음
+            return {"results": {"bindings": [{"item": {"value": "http://www.wikidata.org/entity/Q169134"}}]}}
         if '"1853909"' in query:
             return {"results": {"bindings": [{"item": {"value": "http://www.wikidata.org/entity/Q35765"},
                                                "wv": {"value": "https://en.wikivoyage.org/wiki/Osaka"}}]}}
@@ -109,11 +111,31 @@ def wikidata_api(q):
     action = q["action"][0]
     if action == "wbsearchentities":
         return {"search": [{"id": "Q900001"}, {"id": "Q200267"}] if q["search"][0] == "가마쿠라" else []}
+    if q.get("props", [""])[0] == "sitelinks":                    # 다른 언어판 위키보이지 사이트링크(나라)
+        return {"entities": {"Q169134": {"sitelinks": {"dewikivoyage": {"title": "Nara"}, "jawikivoyage": {"title": "奈良市"},
+                                                       "itwikivoyage": {"title": "Nara"}}}}}
+    if q.get("props", [""])[0] == "claims" and "Q500001" in q["ids"][0]:   # 좌표 복구
+        return {"entities": {"Q500001": {"claims": _claim("P625", {"latitude": 34.6851, "longitude": 135.8048})}}}
     ents = {"Q900001": {"claims": {**_claim("P17", {"id": "Q30"}), **_claim("P625", {"latitude": 40.0, "longitude": -75.0})}},
             "Q200267": {"labels": {"en": {"value": "Kamakura"}}, "sitelinks": {"enwikivoyage": {"title": "Kamakura"}},
                         "claims": {**_claim("P17", {"id": "Q17"}), **_claim("P625", {"latitude": 35.3192, "longitude": 139.5466}),
                                    **_claim("P1082", {"amount": "+172302"})}}}
     return {"entities": {i: ents[i] for i in q["ids"][0].split("|") if i in ents}}
+
+
+INTL = {
+    ("de", "Nara"): """==Sehenswürdigkeiten==
+* {{vCard| type = temple | name = Tōdai-ji | lat = 34.6890 | long = 135.8398 | wikidata = Q186148 | description = Großer Buddha.}}
+* {{vCard| type = museum | name = Nationalmuseum Nara | wikidata = Q500001 | description = Buddhistische Kunst.}}
+* {{Marker| name = Kōfuku-ji | type = temple | lat = 34.6830 | long = 135.8310 }}
+==Küche==
+* {{vCard| name = Kamameshi Shizuka | lat = 34.6840 | long = 135.8300 | description = Reistopf.}}
+* {{vCard| type = cafe | name = Rokumei Kaffee | lat = 34.6810 | long = 135.8250 }}
+""",
+    ("it", "Nara"): """==Cosa vedere==
+* {{see | nome = Tōdai-ji | lat = 34.6890 | long = 135.8398 | descrizione = Tempio.}}
+""",
+}
 
 
 def google_places(body):
@@ -154,6 +176,11 @@ class FakeServer:
                 return status, b"", {}
         if p.hostname == "en.wikivoyage.org":
             data = wiki_pages(q["titles"][0].split("|"))
+        elif p.hostname in ("de.wikivoyage.org", "ja.wikivoyage.org", "it.wikivoyage.org"):
+            lang = p.hostname.split(".")[0]
+            text = INTL.get((lang, q["titles"][0]))
+            data = {"query": {"pages": [{"title": q["titles"][0], "missing": True} if text is None else
+                                        {"title": q["titles"][0], "revisions": [{"revid": 7, "slots": {"main": {"content": text}}}]}]}}
         elif p.hostname == "query.wikidata.org":
             data = sparql(q["query"][0])
         elif p.hostname == "api.open-meteo.com":

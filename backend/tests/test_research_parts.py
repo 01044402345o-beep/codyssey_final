@@ -83,7 +83,9 @@ class NetTest(unittest.TestCase):
         self.assertEqual(net.ALLOWED_HOSTS, frozenset({
             "en.wikivoyage.org", "query.wikidata.org", "ko.wikipedia.org", "en.wikipedia.org", "www.wikidata.org",
             "api.open-meteo.com", "archive-api.open-meteo.com", "api.frankfurter.dev",
-            "api.geoapify.com", "api.tavily.com", "places.googleapis.com", "overpass-api.de"}))
+            "api.geoapify.com", "api.tavily.com", "places.googleapis.com", "overpass-api.de",
+            "de.wikivoyage.org", "it.wikivoyage.org", "fr.wikivoyage.org", "es.wikivoyage.org", "ja.wikivoyage.org",
+            "zh.wikivoyage.org"}))
 
     def test_user_agent_names_app_and_contact(self):
         seen = {}

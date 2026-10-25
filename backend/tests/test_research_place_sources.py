@@ -10,7 +10,7 @@ from app.research.cache import ResearchCache
 from app.research.sources import overpass, wikidata, wikidata_places
 from tests.research_fakes import FakeServer, FakeStore, trip
 
-ENV = {"RESEARCH_ENABLED": "1", "RESEARCH_SOURCES": "", "RESEARCH_LLM": "0", "RESEARCH_PLACE_CHAIN": ""}
+ENV = {"RESEARCH_ENABLED": "1", "RESEARCH_SOURCES": "", "RESEARCH_LLM": "0", "RESEARCH_PLACE_CHAIN": "wikidata_places,google"}
 TODAY = dt.date(2026, 10, 25)
 NARA = {"lat": 34.685, "lon": 135.805, "population": 367353}
 
@@ -81,7 +81,8 @@ class OverpassTest(unittest.TestCase):
         self.assertNotIn('"tourism"', seen[0])
 
     def test_off_by_default_in_chain(self):
-        self.assertNotIn("overpass", chain.active())                                         # 공용 서버 정책·포화(10/26) → 기본 끔
+        with mock.patch.dict(os.environ, {"RESEARCH_PLACE_CHAIN": ""}):
+            self.assertNotIn("overpass", chain.active())                                     # 공용 서버 정책·포화(10/26) → 기본 끔
         with mock.patch.dict(os.environ, {"RESEARCH_PLACE_CHAIN": "wikidata_places,overpass"}):
             self.assertEqual(chain.active(), ["wikidata_places", "overpass"])
 
