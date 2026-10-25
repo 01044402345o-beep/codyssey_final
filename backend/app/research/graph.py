@@ -94,11 +94,56 @@ def build(deps: nodes.Deps):
     return g.compile()
 
 
-def run(deps: nodes.Deps, resolved: dict, plan: Optional[dict] = None) -> dict:
+def run_graph(deps: nodes.Deps, resolved: dict, plan: Optional[dict] = None) -> dict:
     graph = build(deps)
     state = graph.invoke({"resolved": resolved, **({"plan": plan} if plan else {})},
                          config={"max_concurrency": 4, "recursion_limit": 40})
     return state["report"]
+
+
+def _city_plain(deps: nodes.Deps, item: dict) -> dict:
+    tc, need, cached = item["tc"], item["need"], item["cached"]
+    g = nodes.city_guide(deps, tc, need, cached)
+    c = nodes.city_climate(deps, tc, need, cached)
+    return nodes.city_finalize(tc, g.get("guide"), c.get("climate"), (g.get("guide_sources") or []) + (c.get("climate_sources") or []))
+
+
+def run_plain(deps: nodes.Deps, resolved: dict, plan: Optional[dict] = None) -> dict:
+    """LangGraph 없이 같은 노드를 스레드 4개로 돌린다 — 결과는 run_graph 와 같다(테스트로 고정).
+    RESEARCH_USE_GRAPH=0 이거나 그래프가 실패했을 때(메모리·의존성 문제) 쓰는 탈출구."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    plan = plan or nodes.plan(deps, resolved)
+    country_out, city_out, issues = {}, {}, []
+    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="research-plain") as ex:
+        jobs = [("country", c, ex.submit(nodes.run_country, deps, c)) for c in plan["countries"]]
+        jobs += [("city", c, ex.submit(_city_plain, deps, c)) for c in plan["cities"]]
+        for kind, item, fut in jobs:
+            try:
+                out = fut.result()
+            except Exception as exc:  # noqa: BLE001 — 하나가 실패해도 나머지는 끝까지
+                who = item["country"]["name"] if kind == "country" else item["tc"]["ref"]["input"]
+                issues.append({"who": who, "issue": f"{kind}_failed", "error": type(exc).__name__})
+                if kind == "city":
+                    city_out[item["tc"]["ref"]["key"]] = {"guide": {}, "climate": None, "sources": []}
+                continue
+            if kind == "country":
+                country_out[item["country"]["iso2"]] = out
+            else:
+                city_out[item["tc"]["ref"]["key"]] = out
+    return report.build(resolved, country_out, city_out, issues)
+
+
+def run(deps: nodes.Deps, resolved: dict, plan: Optional[dict] = None) -> dict:
+    from . import config
+    if not config.use_graph():
+        return run_plain(deps, resolved, plan)
+    try:
+        return run_graph(deps, resolved, plan)
+    except Exception as exc:  # noqa: BLE001 — 그래프(의존성·메모리)가 실패하면 같은 노드로 다시 돈다. 캐시된 섹션은 다시 받지 않는다
+        import logging
+        logging.getLogger("app.research").warning("research graph failed %s — plain runner", type(exc).__name__)
+        return run_plain(deps, resolved, plan)
 
 
 def from_cache(resolved: dict, plan: dict) -> dict:

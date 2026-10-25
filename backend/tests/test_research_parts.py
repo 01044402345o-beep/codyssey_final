@@ -10,7 +10,7 @@ from unittest import mock
 from app.research import cache as rcache
 from app.research import identity, net
 from app.research import wikivoyage_parse as wp
-from app.research.sources import fcdo, frankfurter, openmeteo, wikidata, wikivoyage
+from app.research.sources import frankfurter, openmeteo, wikidata, wikivoyage
 from tests.research_fakes import CHIYODA_WT, TOKYO_WT, FakeServer, FakeStore, trip
 
 ENV = {"RESEARCH_ENABLED": "1", "RESEARCH_SOURCES": ""}
@@ -72,16 +72,22 @@ class NetTest(unittest.TestCase):
 
     def test_size_cap_timeout_and_redaction(self):
         big = net.SafeHttp(transport=lambda *a: (200, b"x" * (net.MAX_BYTES + 1), {}), sleep=lambda s: None)
-        self.assertEqual(big.request("GET", "https://www.gov.uk/x").error, "too_large")
+        self.assertEqual(big.request("GET", "https://api.frankfurter.dev/x").error, "too_large")
 
         def boom(*a):
             raise TimeoutError()
-        self.assertEqual(net.SafeHttp(transport=boom, sleep=lambda s: None).request("GET", "https://www.gov.uk/x").error, "timeout")
+        self.assertEqual(net.SafeHttp(transport=boom, sleep=lambda s: None).request("GET", "https://api.frankfurter.dev/x").error, "timeout")
         self.assertEqual(net.redact("https://api.geoapify.com/v2/places?apiKey=SECRET&x=1"), "https://api.geoapify.com/v2/places?apiKey=***&x=1")
+
+    def test_allowlist_has_exactly_the_hosts_we_call(self):
+        self.assertEqual(net.ALLOWED_HOSTS, frozenset({
+            "en.wikivoyage.org", "query.wikidata.org", "ko.wikipedia.org", "en.wikipedia.org", "www.wikidata.org",
+            "api.open-meteo.com", "archive-api.open-meteo.com", "api.frankfurter.dev",
+            "api.geoapify.com", "api.tavily.com", "places.googleapis.com"}))
 
     def test_user_agent_names_app_and_contact(self):
         seen = {}
-        net.SafeHttp(transport=lambda m, u, b, h, t: (seen.update(h), (200, b"{}", {}))[1]).request("GET", "https://www.gov.uk/x")
+        net.SafeHttp(transport=lambda m, u, b, h, t: (seen.update(h), (200, b"{}", {}))[1]).request("GET", "https://api.frankfurter.dev/x")
         self.assertTrue(seen["User-Agent"].startswith("MADI-TravelEnglish/1.0 (https://"))
         with mock.patch.dict(os.environ, {"WIKIMEDIA_CONTACT": "ops(at)x.dev\r\nX: y"}):
             self.assertNotIn("\n", net.config.user_agent())
@@ -126,15 +132,6 @@ class SourcesTest(unittest.TestCase):
         self.assertIn("start_date=2021-01-01", srv.calls[0])
         self.assertEqual(openmeteo.climate(http(), None, None, "2027-01-01", "2027-01-02", today)["status"], "empty")
 
-    def test_fcdo_skips_entry_requirements_and_home_country(self):
-        r = fcdo.advisory(http(), "JP", "Japan")
-        self.assertEqual([p["slug"] for p in r["data"]["parts"]], ["safety-and-security", "health"])
-        self.assertEqual(r["data"]["parts"][0]["text"], "Low crime. Earthquakes happen.")
-        self.assertEqual(r["data"]["updated_at"], "2026-10-19")
-        self.assertEqual(fcdo.advisory(http(), "GB", "United Kingdom")["reason"], "home_country")
-        self.assertEqual(fcdo.slug_for(http(), "US", "United States"), "usa")
-        self.assertEqual(fcdo.slug_for(http(), "FR", "paris"), "france")
-
     def test_frankfurter_rate_and_unsupported_currency(self):
         self.assertEqual(frankfurter.krw_rate(http(), "JPY")["data"], {"currency": "JPY", "krw_per_unit": 8.43, "as_of": "2026-10-25"})
         self.assertEqual(frankfurter.krw_rate(http(), "XYZ")["status"], "empty")
@@ -144,7 +141,7 @@ class SourcesTest(unittest.TestCase):
         srv = FakeServer()
         with mock.patch.dict(os.environ, {"RESEARCH_SOURCES": "wikidata"}):
             self.assertEqual(wikivoyage.fetch(http(srv), ["Tokyo"])["status"], "disabled")
-            self.assertEqual(fcdo.advisory(http(srv), "JP", "Japan")["status"], "disabled")
+            self.assertEqual(openmeteo.climate(http(srv), 35.6, 139.7, "2027-03-20", "2027-03-22")["status"], "disabled")
         self.assertEqual(srv.calls, [])
 
 

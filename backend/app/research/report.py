@@ -101,16 +101,15 @@ def city_report(tc: dict, res: dict) -> dict:
 
 
 def country_report(c: dict, res: dict) -> dict:
-    facts, fx, adv = res.get("facts") or {}, res.get("fx") or {}, res.get("advisory") or {}
+    facts, fx = res.get("facts") or {}, res.get("fx") or {}
     return {
         "iso2": c["iso2"], "name": c["name"], "name_en": c["name_en"],
         "currency": ({"code": facts.get("currency", ""), **({"krw_per_unit": fx["krw_per_unit"], "as_of": fx["as_of"]} if fx else {})}
                      if facts.get("currency") else None),
         "emergency": facts.get("emergency") or [], "plugs": facts.get("plugs") or [], "voltage": facts.get("voltage") or "",
         "driving_side": facts.get("driving_side") or "", "languages": facts.get("languages") or [],
-        "advisory": ({"updated_at": adv.get("updated_at", ""), "basis": "UK FCDO",
-                      "parts": [{"slug": p["slug"], "title": p["title"], "url": p["url"], "text_en": p["text"][:900]}
-                                for p in adv.get("parts") or []]} if adv else None),
+        # 안전 권고: 한국인 기준 출처(외교부 해외안전여행)가 붙기 전까지 비운다 — 영국 FCDO 는 영국 국적자 기준이라 쓰지 않는다
+        "advisory": None,
         "sources": res.get("sources") or [],
     }
 

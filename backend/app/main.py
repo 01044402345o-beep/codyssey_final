@@ -692,6 +692,8 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
             if isinstance(s, dict) and isinstance(s.get("situation_id"), str)
         ],
     )
+    # 백업 경로: 도시 브리프의 출처 붙은 문단(CITY_BRIEF_PROMPT=1 일 때만, 기본 꺼짐 — city_brief_prompt).
+    facts["city_brief"] = city_brief_prompt("", req.city)
     # 일정은 문장 팩 결과에 의존하지 않는다. 겹치면 벽시계는 합이 아니라 큰 쪽이다.
     box: dict[str, Any] = {}
 
@@ -735,7 +737,7 @@ def _generate_sentences(
             "facts": facts,
         }
 
-    prompt = build_prompt(cfg, req, facts)
+    prompt = build_prompt(cfg, req, facts) + city_facts_clause(facts.get("city_brief"))
     state: dict[str, Any] = {"last_error": "", "last_pack": None, "last_issues": [], "attempt_ms": []}
 
     def once(client: Any, model: str, attempt: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -1110,6 +1112,49 @@ def geo_cities(country: str = Query(..., min_length=2, max_length=2), q: str = Q
                limit: int = Query(20, ge=1, le=2000), offset: int = Query(0, ge=0, le=10_000_000)) -> Any:
     """그 나라 도시를 이름으로 찾는다. q 가 비면 인구순 전체를 offset 부터 쪽으로(생략 없이 끝까지 넘길 수 있다)."""
     return _geo_response(lambda: geo.cities_payload(country, q, limit, offset))
+
+
+@app.get("/city-brief")
+def city_brief(request: Request, country: str = Query("", max_length=80), city: str = Query(..., min_length=1, max_length=80),
+               lang: str = Query("ko", max_length=2)) -> Any:
+    """도시 브리프 — 백업(롤백) 경로. 본 경로(POST /research)가 꺼져 있거나 실패했을 때 화면이 부른다.
+
+    위키백과(한/영)·위키여행·위키데이터를 병렬 조회해 교차검증한다(agents/city_research). LLM 없음, 원문 발췌 + 출처.
+    끄기: CITY_BRIEF_ENABLED=0.
+    """
+    rate_limit(request)
+    from .agents import city_research                      # 앱 시작 경로에서 떼어 둔다
+    if not city_research.enabled():
+        return {"ok": False, "reason": "city_brief_disabled"}
+    try:
+        return city_research.research(country, city, "en" if lang == "en" else "ko")
+    except city_research.ResearchError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def city_brief_prompt(country: str, city: str) -> dict[str, Any]:
+    """CITY_BRIEF_PROMPT=1 일 때만: 도시 브리프를 facts 규약으로(출처 붙은 문단만). 실패는 unavailable — 생성은 계속된다.
+    기본 꺼짐 — /generate 마다 외부 조회(첫 회)가 붙기 때문이다. 조사 파이프라인 연결(PR5)이 들어오면 그쪽이 본 경로다."""
+    if (os.getenv("CITY_BRIEF_PROMPT") or "").strip() != "1":
+        return {"status": "unavailable", "reason": "city_brief_prompt_off"}
+    try:
+        from .agents import city_research
+        if not city_research.enabled():
+            return {"status": "unavailable", "reason": "city_brief_disabled"}
+        return city_research.prompt_facts(country, city)
+    except Exception as exc:                                   # noqa: BLE001
+        logging.getLogger("app.research").warning("city brief error %s", type(exc).__name__)
+        return {"status": "unavailable", "reason": "research_error"}
+
+
+def city_facts_clause(brief: dict[str, Any] | None) -> str:
+    """CITY_CONTEXT: 출처 붙은 도시 사실만 배경으로. 없으면 아무것도 붙이지 않는다('verified 만 사실' 규약과 같은 문법)."""
+    if not brief or brief.get("status") not in ("verified", "partial") or not brief.get("items"):
+        return ""
+    items = [f"- [{i['kind']}] {i['text']} (source: {i['url']})" for i in brief["items"][:6]]
+    return ("\n\nCITY_CONTEXT (sourced, may be used as background only):\n" + "\n".join(items)
+            + f"\nAttribution: {brief.get('attribution', '')}"
+            + "\nUse these only as background. Do not add facts that are not listed here.")
 
 
 @app.get("/auth/config")

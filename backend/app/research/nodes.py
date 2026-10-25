@@ -1,7 +1,7 @@
 """조사 노드(에이전트) 함수 — LangGraph 를 몰라도 되게 (state, deps) 만 받는다. graph.py 가 이어 붙인다.
 
 - planner: 여행 입력 해석 + 섹션별 캐시 확인 → 새로 조사할 나라·도시만 남긴다
-- country agent: Wikidata 사실 → (통화가 나오면) Frankfurter 환율, GOV.UK 여행 권고
+- country agent: Wikidata 사실 → (통화가 나오면) Frankfurter 환율. 안전 권고는 외교부 키가 생기면(영국 FCDO 는 쓰지 않는다)
 - city agents: guide(Wikidata 다리 → 위키보이지) ∥ climate(Open-Meteo) → finalize(검증·저장)
 모든 소스 실패는 status 로 남고 예외를 올리지 않는다.
 """
@@ -16,7 +16,7 @@ from typing import Any, Callable, Optional
 from . import config
 from .cache import ResearchCache
 from .net import SafeHttp
-from .sources import fcdo, frankfurter, openmeteo, wikidata, wikivoyage
+from .sources import frankfurter, openmeteo, wikidata, wikivoyage
 
 DAY = 86400
 UNRESOLVED_TTL = 7 * DAY
@@ -57,7 +57,7 @@ def plan(deps: Deps, resolved: dict) -> dict:
     for c in resolved["countries"]:
         if not c["iso2"]:
             continue
-        cached = {s: deps.cache.get("research_countries", c["iso2"], s) for s in ("facts", "advisory", "fx")}
+        cached = {s: deps.cache.get("research_countries", c["iso2"], s) for s in ("facts", "fx")}
         need = [s for s, v in cached.items() if v is None]
         countries.append({"country": c, "need": need, "cached": {s: v for s, v in cached.items() if v}})
     for tc in resolved["cities"]:
@@ -93,12 +93,6 @@ def run_country(deps: Deps, item: dict) -> dict:
         if r["status"] == "ok":
             out["fx"] = r["data"]
             deps.cache.put("research_countries", iso2, "fx", r["data"], config.volatile_hours() * 3600, [_src(r)])
-    if "advisory" in need:
-        r = fcdo.advisory(deps.http, iso2, c["name_en"])
-        sources.append(_src(r))
-        if r["status"] == "ok":
-            out["advisory"] = r["data"]
-            deps.cache.put("research_countries", iso2, "advisory", r["data"], config.volatile_hours() * 3600, [_src(r)])
     out["sources"] = sources
     deps.progress(c["name"], "country", "done")
     return out

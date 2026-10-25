@@ -2143,3 +2143,25 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .rinfo-topic > summary { cursor: pointer; font-weight: 600; font-size: 0.875rem; }
 .rinfo-topic p { margin: 6px 0; color: var(--text-soft); font-size: 0.875rem; line-height: 1.55; overflow-wrap: anywhere; }
 .rinfo-credits { margin-top: 18px; color: var(--text-3); line-height: 1.5; }
+/* 도시 브리프(백업 경로) — 조사 파이프라인이 꺼졌거나 실패한 보고서의 '이 도시 알아두기' (app.js briefCard) */
+.brief-card { margin-bottom: 14px; }
+.brief-card.loading { color: var(--text-3); }
+.brief-h { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.brief-h b { font-size: 0.9375rem; color: var(--text); }
+.brief-tag { font-size: var(--fs-caption); font-weight: 600; color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: var(--r-chip); padding: 2px 7px; }
+.brief-tag.none { color: var(--text-3); background: color-mix(in srgb, var(--text) 8%, transparent); }
+.brief-retry { margin-left: auto; min-height: 44px; min-width: 44px; border: 0; background: none; color: var(--text-3); font-size: 0.875rem; }
+.brief-retry:hover { color: var(--text); }
+.brief-row { padding: 6px 0; border-top: 1px solid var(--border); }
+.brief-row:first-of-type { border-top: 0; }
+.brief-k { display: inline-block; font-size: var(--fs-caption); font-weight: 700; color: var(--text-3); margin-right: 6px; }
+.brief-t { display: inline; margin: 0; font-size: 0.875rem; line-height: 1.55; color: var(--text-2); overflow-wrap: anywhere; }
+.brief-src { font-size: var(--fs-caption); color: var(--accent-text); text-decoration: underline; margin-left: 4px; }
+.brief-gap, .brief-attr, .brief-none { margin: 6px 0 0; font-size: var(--fs-caption); color: var(--text-3); }
+.brief-sk { height: 10px; border-radius: var(--r-chip); margin-top: 6px;
+  background: linear-gradient(90deg, var(--surface-seg) 25%, color-mix(in srgb, var(--text) 8%, var(--surface-seg)) 50%, var(--surface-seg) 75%);
+  background-size: 200% 100%; animation: briefsk 1.2s linear infinite; }
+.brief-sk.w2 { width: 60%; }
+@keyframes briefsk { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .brief-sk { animation: none; } }

@@ -6,9 +6,11 @@ from __future__ import annotations
 
 import os
 
-ALL_SOURCES = ("wikivoyage", "wikidata", "openmeteo", "fcdo", "frankfurter", "geoapify", "google", "tavily")
+# 영국 외무부(FCDO) 권고는 쓰지 않는다 — 영국 국적자 기준(영국 대사관 연락처 등)이라 한국 사용자에게는 오정보다(10/25 결정).
+# 안전 정보는 외교부 해외안전여행(0404.go.kr) 공공데이터 API 키가 생기면 붙인다.
+ALL_SOURCES = ("wikivoyage", "wikidata", "openmeteo", "frankfurter", "geoapify", "google", "tavily")
 # 이번 단계(PR1)에 구현된 소스. 나머지는 후속 PR 에서 붙는다.
-KEYLESS_SOURCES = ("wikivoyage", "wikidata", "openmeteo", "fcdo", "frankfurter")
+KEYLESS_SOURCES = ("wikivoyage", "wikidata", "openmeteo", "frankfurter")
 DEFAULT_CONTACT = "https://github.com/01044402345o-beep/codyssey_final"
 
 
@@ -34,6 +36,11 @@ def sources_enabled() -> set[str]:
 
 def source_on(name: str) -> bool:
     return name in sources_enabled()
+
+
+def use_graph() -> bool:
+    """1(기본)이면 LangGraph 로, 0 이면 같은 노드를 스레드로 순서대로 돌린다(같은 결과). 그래프가 실패해도 자동으로 0 경로."""
+    return (os.getenv("RESEARCH_USE_GRAPH") or "1").strip() != "0"
 
 
 def max_jobs() -> int:

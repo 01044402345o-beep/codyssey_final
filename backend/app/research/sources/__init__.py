@@ -12,7 +12,6 @@ LICENSES = {
     "wikivoyage": ("CC BY-SA 4.0", "Wikivoyage contributors (CC BY-SA 4.0)"),
     "wikidata": ("CC0", "Wikidata (CC0)"),
     "openmeteo": ("CC BY 4.0", "Weather data by Open-Meteo.com (CC BY 4.0)"),
-    "fcdo": ("OGL v3", "Contains public sector information licensed under the Open Government Licence v3.0 (GOV.UK FCDO)"),
     "frankfurter": ("ECB reference rates", "Exchange rates: Frankfurter (ECB reference rates)"),
     "geonames": ("CC BY 4.0", "GeoNames (CC BY 4.0)"),
 }

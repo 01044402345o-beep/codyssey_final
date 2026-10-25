@@ -1,7 +1,7 @@
 """조사 결과 캐시 — Firestore(서비스 계정, 규칙을 거치지 않는다). 설정이 없으면 프로세스 메모리.
 
 research_cities/{ISO2}_{gid|n<sha1-12>}/sections/{guide|climate_MMDD_N}
-research_countries/{ISO2}/sections/{facts|advisory|fx}
+research_countries/{ISO2}/sections/{facts|fx}
 섹션 문서: data(gzip JSON → bytes) · fetched_at · valid_until · expire_at(TTL 정책용) · schema · sources(JSON 문자열).
 같은 도시를 고른 다음 사용자는 바로 받는다. 오래된 섹션(valid_until 지남·schema 다름)은 없는 것으로 본다.
 Firestore 문서 상한(1MiB) 때문에 900KB 넘는 데이터는 쓰지 않는다.
