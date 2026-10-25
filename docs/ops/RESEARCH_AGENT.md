@@ -16,6 +16,8 @@
 | `WIKIMEDIA_CONTACT` | 저장소 URL | 위키미디어 User-Agent 연락처 |
 | `LANGSMITH_TRACING` | `false` | 코드가 강제로 끈다(langchain-core 의존성) |
 | `RESEARCH_USE_GRAPH` | `1` | 0 이면 LangGraph 없이 같은 노드를 스레드 4개로(같은 결과). 그래프가 실패해도 자동으로 이 경로 |
+| `RESEARCH_PLACE_CHAIN` | `wikidata_places,overpass,google` | 위키보이지 장소가 모자랄 때 차례로 묻는 대체 소스. `none` 이면 끔(위키보이지만). 어댑터가 없는 이름은 무시(이 PR 은 골격만 — 소스는 다음 PR) |
+| `RESEARCH_PLACE_MIN_EXTRA` | `2` | 종류별 목표 = 일정이 정한 장소 수 + 이만큼(화면 '후보' 몫) |
 | `RESEARCH_LLM` | `1` | 0 이면 LLM 추출(여행 조건 순위·한국어 요약)을 끈다. Gemini 키가 없으면 저절로 꺼진다 — 보고서는 listing 순서·영어 원문 |
 | `RESEARCH_LLM_CONCURRENCY` | `2` | 조사 잡 안에서 동시에 부르는 Gemini 수(도시 5곳이어도 2개씩) |
 | `CITY_BRIEF_ENABLED` | `1` | 백업 경로 `GET /city-brief` 끄기 |
@@ -38,6 +40,23 @@ POST /research {countries:[{name, iso2?}], cities:[{name, gid?, ci, start, end, 
 - 장소는 위키보이지 listing 템플릿에서만 나온다(코드 파싱). 도시 중심 50km 밖·이상한 이름은 버린다.
 - 소스 실패는 status(`unavailable`·`rate_limited`·`empty`·`disabled`)로 남고 보고서는 계속 만들어진다(`quality: full|reduced|failed`).
 - 같은 요청은 같은 잡(single-flight). 화면이 기다리기를 멈춰도 잡은 끝까지 돌아 캐시를 데운다. 서버 재시작 시 잡은 사라진다(404 → 다시 요청, 끝난 도시는 캐시).
+
+## 장소 대체 체인·복구 (`research/chain.py`)
+
+도시마다 위키보이지 장소를 종류별(관광지 / 식당·카페)로 세어, 목표(`caps + RESEARCH_PLACE_MIN_EXTRA`)에 모자라면 `RESEARCH_PLACE_CHAIN` 순서로 대체 소스에 **모자란 종류만** 묻는다. 채우면 멈춘다.
+
+| 실패 | 예 | 처리 |
+|---|---|---|
+| exhaust | 401·403·한도(capped) | 6시간 쿨다운 |
+| rate_limited | 429 | 5분 쿨다운, 이번 요청은 다음 소스로 |
+| transient | 5xx·시간 초과·어댑터 예외 | 1분 쿨다운, 다음 소스로 |
+| nodata | 정상인데 결과 없음 | 다음 소스로(쿨다운 없음) |
+
+- 연속 실패 5번이면 회로 열림(쿨다운 4배). 성공하면 바로 복구. 체인의 모든 소스가 쿨다운이면 가장 빨리 풀리는 하나는 시도한다. 상태는 프로세스 메모리(`/health` research `place_sources`).
+- 같은 장소 합치기: wikidata id 같음 → 아니면 정규화 이름 + 150m 이내. 앞 소스를 남기고 뒤 소스는 빈 설명·홈페이지만 채우고 출처를 합친다.
+- **마지막 정상 캐시**: 대체 결과는 `places_extra` 섹션(30일, 장애가 섞이면 1일). 새 결과가 기존의 절반 미만이고 원인이 장애면 덮어쓰지 않고 기존(만료돼도)을 `stale: true` 로 쓴다. 만료 문서는 `get(..., allow_stale=True)` 로만 읽히고, Firestore `expire_at` 은 `valid_until + 30일`이라 TTL 정책을 걸어도 그동안 남는다.
+- **문서 없음도 기억**: 위키보이지에 문서가 정말 없으면(`empty`) `guide` 에 `{wikivoyage: null, reason}` 을 7일 저장한다(매번 다시 묻지 않고 `cache_only` 도 바로 답한다). 장애(`unavailable`·`rate_limited`)는 저장하지 않는다.
+- 보고서 도시: `place_status` = `ok`(일정 수 채움)·`thin`(일부)·`none`(0곳), `none_reason` = `outage`(소스 장애)·`no_coords`(좌표 모름)·`no_sources`(정상인데 자료 없음), `stale`, `chain`(소스별 status·outcome·count).
 
 ## LLM 추출 (PR3, `research/extract.py`)
 

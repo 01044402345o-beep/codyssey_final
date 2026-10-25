@@ -5,6 +5,8 @@ research_countries/{ISO2}/sections/{facts|fx}
 섹션 문서: data(gzip JSON → bytes) · fetched_at · valid_until · expire_at(TTL 정책용) · schema · sources(JSON 문자열).
 같은 도시를 고른 다음 사용자는 바로 받는다. 오래된 섹션(valid_until 지남·schema 다름)은 없는 것으로 본다.
 Firestore 문서 상한(1MiB) 때문에 900KB 넘는 데이터는 쓰지 않는다.
+마지막 정상 캐시(복구): get(..., allow_stale=True) 는 valid_until 이 지난 문서도 stale=True 로 돌려준다 — 소스가 죽었을 때
+옛 결과라도 보여 주기 위해서다. 그래서 expire_at(TTL 정책 삭제 시각)은 valid_until + STALE_GRACE 다.
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ from typing import Any, Callable, Optional
 
 SCHEMA = 1
 MAX_BYTES = 900 * 1024
+STALE_GRACE = 30 * 86400
 COLLECTIONS = ("research_cities", "research_countries")
 KEY = re.compile(r"^[A-Z]{2}(_(\d{1,10}|n[0-9a-f]{12}))?$")
 SECTION = re.compile(r"^[a-z0-9_]{1,40}$")
@@ -61,14 +64,14 @@ class ResearchCache:
             raise ValueError("bad cache path")
         return f"{collection}/{key}/sections/{section}"
 
-    def get(self, collection: str, key: str, section: str) -> Optional[dict]:
+    def get(self, collection: str, key: str, section: str, allow_stale: bool = False) -> Optional[dict]:
         path = self._path(collection, key, section)
         now = self._now()
         with self._lock:
             hit = self._mem.get(path)
-            if hit and hit[1]["valid_until"] > now:
+            if hit and (hit[1]["valid_until"] > now or allow_stale):
                 self._mem.move_to_end(path)
-                return hit[1]
+                return {**hit[1], "stale": hit[1]["valid_until"] <= now}
         store = self._store()
         if store is None:
             return None
@@ -78,10 +81,10 @@ class ResearchCache:
             log.warning("research cache read failed %s", type(exc).__name__)
             return None
         entry = self._decode(doc)
-        if not entry or entry["valid_until"] <= now or entry["schema"] != SCHEMA:
+        if not entry or entry["schema"] != SCHEMA or (entry["valid_until"] <= now and not allow_stale):
             return None
         self._remember(path, entry)
-        return entry
+        return {**entry, "stale": entry["valid_until"] <= now}
 
     def put(self, collection: str, key: str, section: str, data: Any, ttl_s: int, sources: list[dict]) -> bool:
         path = self._path(collection, key, section)
@@ -96,7 +99,7 @@ class ResearchCache:
         store = self._store()
         if store is None:
             return True
-        expire = dt.datetime.fromtimestamp(now + int(ttl_s), dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        expire = dt.datetime.fromtimestamp(now + int(ttl_s) + STALE_GRACE, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         body = {"fields": {
             "data": {"bytesValue": base64.b64encode(raw).decode("ascii")},
             "fetched_at": {"integerValue": str(now)}, "valid_until": {"integerValue": str(now + int(ttl_s))},

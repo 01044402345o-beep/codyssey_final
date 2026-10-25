@@ -10,7 +10,7 @@ import re
 import time
 from typing import Any, Optional
 
-from . import extract, verify
+from . import chain, extract, verify
 from .sources import LICENSES
 from .sources.wikivoyage import page_url
 
@@ -87,12 +87,21 @@ def practical_from(guide: dict) -> list[dict]:
 def city_report(tc: dict, res: dict) -> dict:
     ref, guide = tc["ref"], ((res.get("guide") or {}).get("wikivoyage") or {})
     ext = res.get("extract")
-    places = extract.apply_places(places_from(ref, guide), ext) if guide.get("listings") else []
+    base = places_from(ref, guide) if guide.get("listings") else []
+    places = extract.apply_places(chain.merge(base, res.get("extra_places") or []), ext)
     clim = res.get("climate") or {}
     status = "ok" if places else ("partial" if guide.get("sections") else "empty")
+    # ok = 종류별로 일정이 정한 수는 채움, thin = 일부만, none = 0곳(화면이 브리프·직접 추가를 보인다)
+    place_status = "none" if not places else ("ok" if chain.enough(places, tc["caps"]) else "thin")
+    none_reason = ""
+    if not places:
+        down = any(s.get("status") in ("unavailable", "rate_limited") for s in res.get("sources") or []) or res.get("chain_outage")             or any(v.get("outcome") in ("exhaust", "rate_limited", "transient", "cooldown") for v in (res.get("chain") or {}).values())
+        none_reason = "outage" if down else ("no_coords" if ref.get("lat") is None else "no_sources")
     return {
         "key": ref["key"], "idx": tc["idx"], "name": ref["name"], "input": ref["input"], "ko": ref["ko"],
         "iso2": ref["iso2"], "resolved": ref["resolved"], "status": status,
+        "place_status": place_status, "none_reason": none_reason, "stale": bool(res.get("places_stale")),
+        "chain": {n: {k: v.get(k) for k in ("status", "outcome", "count")} for n, v in (res.get("chain") or {}).items()},
         "wikivoyage": {"title": guide.get("title") or "", "url": page_url(guide["title"]) if guide.get("title") else ""},
         "places": places, "practical": extract.apply_practical(practical_from(guide), ext) if guide else [],
         "extract": {"status": res.get("extract_status") or "none"},

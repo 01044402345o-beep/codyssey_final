@@ -122,7 +122,10 @@ class FakeStore:
     CITIES = {("JP", 1850147): {"gid": 1850147, "name": "Tokyo", "ascii": "Tokyo", "ko": "도쿄", "lat": 35.6895,
                                 "lon": 139.6917, "population": 8336599, "region": "Tokyo"},
               ("JP", 1853909): {"gid": 1853909, "name": "Osaka", "ascii": "Osaka", "ko": "오사카", "lat": 34.6937,
-                                "lon": 135.5022, "population": 2592413, "region": "Osaka"}}
+                                "lon": 135.5022, "population": 2592413, "region": "Osaka"},
+              # 위키보이지 문서가 없는 도시(대체 소스 체인 시험용)
+              ("JP", 1855612): {"gid": 1855612, "name": "Nara", "ascii": "Nara", "ko": "나라", "lat": 34.685,
+                                "lon": 135.805, "population": 367353, "region": "Nara"}}
 
     def country(self, iso2):
         from app.geo import GeoError
