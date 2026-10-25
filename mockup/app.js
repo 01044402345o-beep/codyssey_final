@@ -2736,7 +2736,8 @@ function scrReport() {
   return frame(inner, { appbar: appbar('보고서 · 장소 선택', { step: 'STEP 2/3' }), bottom });
 }
 /* 조사한 도시의 '현지 정보' — 여행 날짜 날씨·통화·긴급번호·전기·여행 권고, 도착/이동/출국일에 필요한 교통 정보.
-   본문은 출처의 영어 원문 발췌다(한국어 요약은 다음 단계). 줄마다 출처로 이어진다. */
+   한국어 요약이 있으면(LLM 추출이 검증을 통과한 것만) 요약 + 그 근거인 영어 원문 인용을, 없으면 영어 원문 발췌를 보인다.
+   줄마다 출처로 이어진다. */
 const RESEARCH_TOPIC_KO = { transport_airport: '공항·도착', transport_local: '시내 교통', etiquette: '예절', safety: '안전',
   health: '건강', language: '언어', connect: '통신·인터넷', cope: '생활 팁', tipping: '팁' };
 const RESEARCH_ROLE_KO = { arrival: '도착일', departure: '출국일', transfer_out: '이동일(떠남)', transfer_in: '이동일(도착)' };
@@ -2760,7 +2761,8 @@ function researchInfo(city) {
   const roles = (inf.days || []).filter(d => RESEARCH_ROLE_KO[d.role]);
   const tips = roles.length ? `<div class="small rinfo-days">${roles.map(d => `${esc(RESEARCH_ROLE_KO[d.role])} ${esc(Dt.md(d.date))}${d.topics && d.topics.length ? ` — ${d.topics.map(t => esc(RESEARCH_TOPIC_KO[t] || t)).join('·')} 정보를 먼저 보세요` : ''}`).join('<br>')}</div>` : '';
   const practical = (inf.practical || []).map(p => `<details class="rinfo-topic"><summary>${esc(RESEARCH_TOPIC_KO[p.topic] || p.topic)}</summary>
-      <p lang="en">${esc(p.text_en || '')}</p>${p.source ? `<div class="small">${link(p.source.url, '원문 · Wikivoyage')}</div>` : ''}</details>`).join('');
+      ${p.summary_ko && p.quote_en ? `<p>${esc(p.summary_ko)}</p><blockquote class="rinfo-quote" lang="en">${esc(p.quote_en)}</blockquote>`
+        : `<p lang="en">${esc(p.text_en || '')}</p>`}${p.source ? `<div class="small">${link(p.source.url, '원문 · Wikivoyage')}</div>` : ''}</details>`).join('');
   if (!rows.length && !practical) return '';
   return `<details class="card rinfo" open><summary><b>${esc(city)} 현지 정보</b> <span class="small">여행 날짜에 맞춰 조사했어요</span></summary>
     ${rows.length ? `<ul class="rinfo-rows">${rows.join('')}</ul>` : ''}${tips}${practical}</details>`;
@@ -2826,7 +2828,8 @@ function placeCard(p, locked) {
       <div class="check">${p.selected ? I.check : ''}</div>
       <div><div class="nm"><span class="kind ${tone}">${esc(p.primaryType)}</span>${esc(p.name)}${p.isCandidate ? '<span class="badge b-only">후보</span>' : ''}</div>
         ${p.area ? `<div class="meta">${esc(p.area)}</div>` : ''}
-        ${p.descEn ? `<div class="desc" lang="en">${esc(p.descEn)}</div>` : ''}
+        ${p.desc ? `<div class="desc">${esc(p.desc)}${p.reason ? ` <span class="why">— ${esc(p.reason)}</span>` : ''}</div>` : ''}
+        ${p.descEn ? `<div class="desc${p.desc ? ' en-sub' : ''}" lang="en">${esc(p.descEn)}</div>` : ''}
         <div class="src">${links}${links ? ' · ' : ''}${esc(p.attribution)}</div></div></div>`;
   }
   if (p.live) {

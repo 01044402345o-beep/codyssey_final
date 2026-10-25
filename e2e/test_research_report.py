@@ -56,6 +56,10 @@ REPORT = {
     "attributions": [{"provider": "wikivoyage", "text": "Wikivoyage contributors (CC BY-SA 4.0)"},
                      {"provider": "openmeteo", "text": "Weather data by Open-Meteo.com (CC BY 4.0)"}],
 }
+# LLM 추출(PR3)이 검증을 통과한 항목: 첫 장소의 한국어 요약·이유, 공항 주제의 한국어 요약 + 영어 원문 인용
+REPORT["cities"][0]["places"][0].update(summary_ko="일왕이 사는 궁과 넓은 정원이에요.", why_ko="첫날 가볍게 둘러보기 좋아요", rank=1)
+REPORT["cities"][0]["practical"][0].update(summary_ko="나리타와 하네다 두 공항이 도쿄로 이어져요.",
+                                           quote_en="Narita and Haneda serve Tokyo.", situations=["transfer_route"])
 COUNTRIES = [{"iso2": "JP", "name": "Japan", "ko": "일본", "capital": "Tokyo", "population": 1, "continent": "AS"}]
 seen = {"post": [], "get": 0}
 
@@ -137,12 +141,22 @@ with sync_playwright() as p:
     card = page.locator(".place", has_text="Imperial Palace").first.inner_text()
     check("장소 카드: 영어 원문 설명·출처·홈페이지·라이선스", "worth a visit" in card and "Wikivoyage · Tokyo/Chiyoda" in card
           and "홈페이지" in card and "CC BY-SA" in card, card)
+    check("장소 카드: 한국어 요약·추천 이유가 영어 원문 위에", card.index("일왕이 사는 궁") < card.index("worth a visit")
+          and "첫날 가볍게 둘러보기 좋아요" in card, card)
+    tower = page.locator(".place", has_text="Tokyo Tower").first
+    check("요약이 없는 장소는 영어 원문만(빈 한국어 줄 없음)", tower.locator(".why").count() == 0
+          and tower.locator(".desc.en-sub").count() == 0 and "worth a visit" in tower.inner_text())
     check("위험한 홈페이지 링크는 그리지 않는다", page.locator('a[href^="javascript"]').count() == 0)
     info = page.inner_text(".rinfo")
     check("현지 정보: 날씨(평년값)·통화 원화 환율·긴급 전화·전기", "평년값" in info and "14.6" in info and "8.43원" in info
           and "110" in info and "100V" in info, info[:300])
     check("현지 정보: 영국 권고는 없고 외교부 해외안전여행 안내·좌측 통행·도착일 교통 안내", "FCDO" not in info
           and "외교부 해외안전여행" in info and "좌측" in info and "도착일" in info, info[:400])
+    page.locator(".rinfo-topic summary", has_text="공항").click()
+    air = page.locator(".rinfo-topic[open]").first
+    check("실용 정보: 한국어 요약 + 근거 영어 원문 인용", air.locator("p").first.inner_text() == "나리타와 하네다 두 공항이 도쿄로 이어져요."
+          and air.locator("blockquote.rinfo-quote").inner_text() == "Narita and Haneda serve Tokyo.", air.inner_text())
+    air.locator("summary").click()
     page.locator(".rinfo-topic summary", has_text="팁").click()
     check("실용 정보 주제를 펼치면 영어 원문", page.locator(".rinfo-topic[open] p").first.inner_text() == "Tipping is not customary.")
     check("출처 표기(위키보이지 CC BY-SA·Open-Meteo)", "Wikivoyage contributors (CC BY-SA 4.0)" in page.inner_text(".rinfo-credits")

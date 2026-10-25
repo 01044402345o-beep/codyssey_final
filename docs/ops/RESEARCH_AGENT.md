@@ -1,7 +1,7 @@
 # 도시 조사 에이전트 (운영)
 
 사용자가 고른 나라·도시를 여행 조건(날짜·체류·도착/이동/출국일·여러 나라)에 맞게 실제 소스에서 조사한다.
-코드: `backend/app/research/` (LangGraph). 단계별 PR: PR0 도시 정체성 → **PR1 백엔드(키 없는 소스)** → PR2 보고서 화면 → PR3 LLM 추출 → PR4 Geoapify·Google·Tavily → PR5 `/generate` 연결.
+코드: `backend/app/research/` (LangGraph). 단계별 PR: PR0 도시 정체성 → PR1 백엔드(키 없는 소스) → PR2 보고서 화면 → **PR3 LLM 추출** → PR4 Geoapify·Google·Tavily → PR5 `/generate` 연결.
 
 ## 켜기 / 끄기
 
@@ -16,11 +16,13 @@
 | `WIKIMEDIA_CONTACT` | 저장소 URL | 위키미디어 User-Agent 연락처 |
 | `LANGSMITH_TRACING` | `false` | 코드가 강제로 끈다(langchain-core 의존성) |
 | `RESEARCH_USE_GRAPH` | `1` | 0 이면 LangGraph 없이 같은 노드를 스레드 4개로(같은 결과). 그래프가 실패해도 자동으로 이 경로 |
+| `RESEARCH_LLM` | `1` | 0 이면 LLM 추출(여행 조건 순위·한국어 요약)을 끈다. Gemini 키가 없으면 저절로 꺼진다 — 보고서는 listing 순서·영어 원문 |
+| `RESEARCH_LLM_CONCURRENCY` | `2` | 조사 잡 안에서 동시에 부르는 Gemini 수(도시 5곳이어도 2개씩) |
 | `CITY_BRIEF_ENABLED` | `1` | 백업 경로 `GET /city-brief` 끄기 |
 | `CITY_BRIEF_PROMPT` | `0` | 1 이면 `/generate` 프롬프트에 도시 브리프(출처 붙은 문단)를 배경으로 넣는다(첫 회 외부 조회가 붙어 기본 꺼짐) |
 
 값은 호출마다 읽으므로 재시작 없이 바뀐다. opsarchive 의 `policy-set`/자동 반영으로 Render 에 넣어도 된다(임의 키 지원).
-`/health` 상세(`HEALTH_DETAIL_TOKEN`)의 `research` 블록: 켜짐·LangGraph 설치·소스·잡 수·최대 RSS(MB).
+`/health` 상세(`HEALTH_DETAIL_TOKEN`)의 `research` 블록: 켜짐·LangGraph 설치·LLM 추출 켜짐·소스·잡 수·최대 RSS(MB).
 
 ## 흐름
 
@@ -32,10 +34,22 @@ POST /research {countries:[{name, iso2?}], cities:[{name, gid?, ci, start, end, 
   → 그 밖: 202 {status: running, job_id}   → GET /research/{job_id}: {status, progress, report?}
 ```
 
-그래프: `planner → (country × 나라, city × 도시) → writer`, 도시 안은 `guide(Wikidata → 위키보이지) ∥ climate(Open-Meteo) → finalize`.
+그래프: `planner → (country × 나라, city × 도시) → writer`, 도시 안은 `guide(Wikidata → 위키보이지) ∥ climate(Open-Meteo) → extract(LLM) → finalize`.
 - 장소는 위키보이지 listing 템플릿에서만 나온다(코드 파싱). 도시 중심 50km 밖·이상한 이름은 버린다.
 - 소스 실패는 status(`unavailable`·`rate_limited`·`empty`·`disabled`)로 남고 보고서는 계속 만들어진다(`quality: full|reduced|failed`).
 - 같은 요청은 같은 잡(single-flight). 화면이 기다리기를 멈춰도 잡은 끝까지 돌아 캐시를 데운다. 서버 재시작 시 잡은 사라진다(404 → 다시 요청, 끝난 도시는 캐시).
+
+## LLM 추출 (PR3, `research/extract.py`)
+
+도시당 Gemini 1회(기존 `gemini.run` — 키 순환·모델 회전·최소 시도 규칙 그대로). 비용 예산은 `research` 한 묶음으로 센다:
+조사 잡이 사용자의 `/generate` IP 예산을 먹지 않고, 조사 전체가 `AI_IP_ATTEMPTS_PER_HOUR`(기본 150/시) 안에 머문다. `paid_slot` 이 차 있으면 건너뛴다(`busy`).
+
+- 모델에게 주는 것: 여행 조건(도시·나라·날짜·박 수·달·도착/출국/이동 여부·원하는 장소 수·날씨 평년값), 후보 listing(최대 40, URL·HTML 제거), 실용 정보 원문 + 주제별 허용 상황 id. 사용자 정보는 없다.
+- 모델이 하는 일: 순위·한국어 한 줄 요약·추천 이유, 실용 정보 한국어 요약 + **영어 원문 인용**, 상황 id 고르기. 장소·URL·출처는 만들지 않는다.
+- 코드 검증: 모르는 id·중복 → 버림 / 인용은 원문 부분 문자열(공백·따옴표 정규화) / 요약의 숫자는 원문(장소 설명·인용)에 있어야 함 / `<>{}[]`·URL·@·한글 없는 요약·다른 후보 이름을 섞은 요약 → 버림 / 상황 id 는 주제별 허용 목록(`agent_contract/categories`) 안에서만. 검증을 통과한 장소가 하나도 없으면 그 시도는 실패로 보고 다음 모델로 다시 한다.
+- 출처 URL 은 코드가 원래 listing 기록에서 붙인다(모델 출력 URL 은 쓰지 않는다).
+- 실패·꺼짐·마감(`RESEARCH_SOFT_DEADLINE_S`)이면 보고서는 listing 순서·영어 원문 그대로(`cities[].extract.status`: ok·failed·busy·disabled·deadline·empty). 실패는 캐시하지 않는다. 마감에 걸린 추출은 뒤에서 끝까지 돌아 캐시만 데운다(Gemini 장애 때 최소 시도 규칙으로 몇 분 걸려도 화면은 150초 안에 listing 보고서를 받는다).
+- 화면: 장소 카드에 한국어 요약 — 이유, 그 아래 영어 원문(작게). 실용 정보는 한국어 요약 + 인용(blockquote).
 
 ## 캐시 (Firestore, 서비스 계정 전용 — 클라이언트 규칙은 그대로 전부 거부)
 
@@ -43,6 +57,7 @@ POST /research {countries:[{name, iso2?}], cities:[{name, gid?, ci, start, end, 
 |---|---|---|---|
 | `research_cities/{ISO2}_{gid}/sections/guide` | 위키보이지 listing·섹션 평문, revid | 30일(미해결 도시 `{ISO2}_n<해시>` 7일) | CC BY-SA 4.0 — 출처·링크 표시 |
 | `research_cities/{key}/sections/climate_MMDD_N` | 여행 날짜 평년값(최근 5년) / 16일 안 예보 | 30일 / 1일 | CC BY 4.0 |
+| `research_cities/{key}/sections/extract_mMM_{s\|m\|l}` | LLM 추출: 장소 id 순위·한국어 요약·이유, 실용 정보 한국어 요약·영어 인용·상황 id, 위키보이지 revid | 30일, revid 가 바뀌면 다시 | 우리 요약(원문 인용은 CC BY-SA) |
 | `research_countries/{ISO2}/sections/facts` | 통화·긴급번호·플러그·전압·운전 방향·언어 | 30일 | CC0 |
 | `research_countries/{ISO2}/sections/fx` | 1단위 = ?원 | 1일 | Frankfurter |
 

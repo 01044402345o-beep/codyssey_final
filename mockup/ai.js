@@ -589,7 +589,9 @@
       id: 'r' + n, providerId: String(raw.id || ''), city: cityName, kind: RESEARCH_KIND_KO[raw.kind] ? raw.kind : 'attraction',
       live: true, research: true, name, en: name,
       area: typeof raw.area === 'string' ? raw.area : '',                 // R.placeByCode 가 localeCompare 한다 — 늘 문자열
-      desc: '', descEn: typeof raw.desc_en === 'string' ? raw.desc_en : '', reason: '',
+      // 한국어 요약·이유는 LLM 추출이 검증을 통과했을 때만 온다(없으면 영어 원문만)
+      desc: typeof raw.summary_ko === 'string' ? raw.summary_ko : '', descEn: typeof raw.desc_en === 'string' ? raw.desc_en : '',
+      reason: typeof raw.why_ko === 'string' ? raw.why_ko : '', rank: Number.isInteger(raw.rank) ? raw.rank : 0,
       cuisine: null, menuEn: null, menuKo: null, sources: src, homepage: home,
       attribution: 'Wikivoyage (CC BY-SA 4.0)', primaryType: RESEARCH_KIND_KO[raw.kind] || '관광지',
       isCandidate: false, selected: false, visitDate: null, visitOrder: null, count: 0,

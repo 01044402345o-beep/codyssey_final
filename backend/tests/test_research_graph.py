@@ -12,7 +12,7 @@ from app.research import graph, identity, jobs, net, nodes, service
 from app.research.cache import ResearchCache
 from tests.research_fakes import FakeServer, FakeStore, trip
 
-ENV = {"RESEARCH_ENABLED": "1", "RESEARCH_SOURCES": "", "RESEARCH_MAX_JOBS": "1"}
+ENV = {"RESEARCH_ENABLED": "1", "RESEARCH_SOURCES": "", "RESEARCH_MAX_JOBS": "1", "RESEARCH_LLM": "0"}  # LLM 추출은 test_research_extract
 TODAY = dt.date(2026, 10, 25)
 
 
