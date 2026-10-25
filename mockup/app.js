@@ -2707,7 +2707,11 @@ function scrReport() {
     lead += notice('이 장소 목록은 <b>미리 준비한 예시 데이터</b>예요. (AI 웹 검색은 아직 연결 전이에요) 영업시간과 메뉴는 바뀔 수 있으니 방문 전에 확인해 주세요.');
     if (meta.found < meta.base) lead += notice(`추천할 장소를 충분히 찾지 못했어요. 기본 ${meta.base}곳 중 ${meta.found}곳만 찾았어요. 후보로 채울 수 있어요.`, 'warn');
   } else if (meta.mode === 'research') {
-    lead += notice(`여행 가이드(위키보이지)에서 <b>실제로 조사한 장소</b>예요 — 이 도시 ${meta.total}곳 중 여행 일정에 맞춰 골랐어요. 설명은 영어 원문 발췌이고, 영업시간·가격은 방문 전에 확인해 주세요.`);
+    lead += notice(`공개 여행 자료(위키보이지·위키데이터 등)에서 <b>실제로 조사한 장소</b>예요 — 이 도시 ${meta.total}곳 중 여행 일정에 맞춰 골랐어요. 영업시간·가격은 방문 전에 확인해 주세요.`);
+    if (meta.stale) lead += notice('자료 서버가 지금 응답하지 않아 <b>지난번에 조사한 장소</b>를 보여 드려요.', 'warn');
+  } else if (S.research) {
+    // 조사는 됐지만 이 도시만 장소 0곳 — 예시로 채우지 않고, 이유를 알리고 도시 브리프·직접 추가를 보인다
+    lead += notice(PLACE_NONE_KO[meta.reason] || PLACE_NONE_KO.no_sources, 'warn');
   } else if (meta.mode === 'live') {
     lead += notice('Google Maps에서 확인한 장소예요. 한국어 설명, 메뉴, 영업시간, 평점, 가격은 없어요.');
     const failed = (meta.queries || []).filter(q => q && q.status && q.status !== 'verified');
@@ -2723,9 +2727,12 @@ function scrReport() {
       ${lead}
     </div>
     ${S.research ? researchInfo(city) : briefCard(city)}
+    ${S.research && meta.mode === 'empty' ? briefCard(city) : ''}
+    ${S.research && meta.mode === 'empty' && meta.reason === 'outage' && !locked ? `<button class="btn soft block" data-act="research-retry">다시 조사하기</button>` : ''}
     <div class="city-head"><h3>${esc(city)}</h3><span class="cnt"><b>${sel}</b> / 최대 ${meta.base}곳</span></div>
     ${base.map(p => placeCard(p, locked)).join('')}
     ${cands.length ? `<button class="cand-toggle" data-act="cand" data-city="${esc(city)}">${open ? '후보 접기' : `후보 더 보기 (${cands.length})`}</button>${open ? cands.map(p => placeCard(p, locked)).join('') : ''}` : ''}
+    ${S.research && meta.mode === 'empty' && !locked ? addPlaceForm(city) : ''}
     ${researchCredits()}
   </div>`;
   const left = 3 - t.regenerateCount;
@@ -2813,6 +2820,21 @@ function briefCard(cityName) {
   return `<div class="card brief-card"><div class="brief-h"><b>${esc(city)} 알아두기</b><span class="brief-tag">${conf}</span>
       <button type="button" class="brief-retry" data-act="brief-retry" data-city="${esc(cityName)}" title="다시 조사" aria-label="다시 조사">↻</button></div>
     ${rows}${gaps}<p class="brief-attr">${esc(d.attribution || '')}</p></div>`;
+}
+/* 장소 0곳 도시(조사 모드): 이유별 안내와 '장소 직접 추가'. 예시(가짜) 장소로 채우지 않는다(10/26 결정). */
+const PLACE_NONE_KO = {
+  outage: '자료 서버가 지금 응답하지 않아 이 도시의 장소를 가져오지 못했어요. 잠시 뒤 다시 조사하거나, 가 보고 싶은 곳을 직접 추가해 주세요.',
+  no_coords: '이 도시의 위치를 찾지 못해 주변 장소를 조사하지 못했어요. 가 보고 싶은 곳을 직접 추가해 주세요.',
+  no_sources: '공개 여행 자료에 이 도시의 장소가 거의 없어요. 예시 장소로 채우지 않아요 — 가 보고 싶은 곳을 직접 추가해 주세요.',
+};
+PLACE_NONE_KO.no_places = PLACE_NONE_KO.no_article = PLACE_NONE_KO.no_sources;
+const ADD_KIND = { attraction: '관광지', restaurant: '맛집', cafe: '카페' };
+function addPlaceForm(city) {
+  return `<div class="card add-place"><b>장소 직접 추가</b>
+    <div class="add-place-row"><input id="add-place-name" type="text" maxlength="60" autocomplete="off" placeholder="장소 이름 (영어로 적으면 문장에 그대로 써요)" aria-label="장소 이름">
+    <select id="add-place-kind" aria-label="장소 종류">${Object.entries(ADD_KIND).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+    <button type="button" class="btn primary" data-act="add-place" data-city="${esc(city)}">추가</button></div>
+    <div class="small">직접 추가한 장소는 출처가 없어요. 방문 전에 위치·영업 여부를 확인해 주세요.</div></div>`;
 }
 function researchCredits() {
   const a = S.reportMode === 'research' && S.research ? S.research.attributions || [] : [];
@@ -4882,6 +4904,21 @@ const ACT = {
 
   'geo-more': el => geoMore(el.dataset.geoKey || (GEO.open && GEO.open.key)),
   'brief-retry': el => { briefLoad(el.dataset.city, true); render(); },
+  'research-retry': () => { if (S.trip && S.trip.status === 'report_done') request('report', false); },
+  'add-place': el => {
+    const city = el.dataset.city, input = document.getElementById('add-place-name'), kindEl = document.getElementById('add-place-kind');
+    const name = String(input && input.value || '').replace(/\s+/g, ' ').trim();
+    const kind = ADD_KIND[kindEl && kindEl.value] ? kindEl.value : 'attraction';
+    if (!name || name.length > 60 || /[<>{}]/.test(name)) { toast('장소 이름을 1~60자로 적어 주세요.'); return; }
+    if (S.places.some(p => p.city === city && p.name.toLowerCase() === name.toLowerCase())) { toast('이미 목록에 있는 장소예요.'); return; }
+    const meta = S.reportMeta[city] || (S.reportMeta[city] = { base: 0, found: 0, mode: 'empty' });
+    const seq = S.places.length + 1;
+    const p = AI.researchPlace({ id: 'user:' + seq, name, kind, sources: [] }, city, 'u' + seq);
+    Object.assign(p, { attribution: '직접 추가', user: true, selected: selCount(city) < meta.base, isCandidate: false });
+    S.places.push(p);
+    meta.found = (meta.found || 0) + 1;
+    render();
+  },
   'add-country': () => {
     if (S.draft.countries.length >= 4) { toast('국가는 최대 4개까지 입력할 수 있어요.'); return; }
     S.draft.countries.push('');
