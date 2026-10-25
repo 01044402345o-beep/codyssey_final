@@ -138,6 +138,17 @@ INTL = {
 }
 
 
+TOUR = {"response": {"header": {"resultCode": "0000", "resultMsg": "OK"}, "body": {"items": {"item": [
+    {"contentid": "126508", "contenttypeid": "76", "title": "Gunsan Modern History Museum", "addr1": "240, Haemang-ro, Gunsan-si",
+     "mapx": "126.7110", "mapy": "35.9890", "cat3": "A02010700", "firstimage": "http://tong.visitkorea.or.kr/x.jpg"},
+    {"contentid": "2700001", "contenttypeid": "82", "title": "Lee Sung Dang", "addr1": "177, Jungang-ro, Gunsan-si",
+     "mapx": "126.7120", "mapy": "35.9870", "cat3": "A05020700"},
+    {"contentid": "2700002", "contenttypeid": "82", "title": "Cafe Gyeongamdong", "addr1": "Gunsan-si", "mapx": "126.7300",
+     "mapy": "35.9800", "cat3": "A05020900"},
+    {"contentid": "2700003", "contenttypeid": "80", "title": "Some Hotel", "mapx": "126.71", "mapy": "35.98"},
+    {"contentid": "bad", "contenttypeid": "76", "title": "Bad id", "mapx": "126.71", "mapy": "35.98"}]}, "totalCount": 5}}}
+
+
 def google_places(body):
     t = body.get("includedType")
     rows = {"restaurant": [("g1", "Kamameshi Shizuka", 34.684, 135.83), ("g2", "Mellow Cafe Diner", 34.682, 135.828)],
@@ -166,6 +177,7 @@ class FakeServer:
         self.fail = fail or {}
         self.calls = []
         self.google = []                         # Places 요청 본문(locationBias 확인용)
+        self.tour, self.tour_body = [], None     # TourAPI 요청 URL, 대신 줄 본문(dict 또는 bytes)
 
     def __call__(self, method, url, body, headers, timeout):
         p = urllib.parse.urlparse(url)
@@ -198,6 +210,11 @@ class FakeServer:
                               if "Tōdai-ji" in titles else []}}
         elif p.hostname == "overpass-api.de":
             data = OVERPASS
+        elif p.hostname == "apis.data.go.kr":
+            self.tour.append(url)
+            data = TOUR if self.tour_body is None else self.tour_body
+            if isinstance(data, bytes):
+                return 200, data, {}
         elif p.hostname == "places.googleapis.com":
             self.google.append(json.loads(body.decode()))
             data = google_places(self.google[-1])
@@ -213,12 +230,15 @@ class FakeServer:
 
 class FakeStore:
     COUNTRIES = {"JP": {"iso2": "JP", "name": "Japan", "ko": "일본"},
-                 "FR": {"iso2": "FR", "name": "France", "ko": "프랑스"}}
+                 "FR": {"iso2": "FR", "name": "France", "ko": "프랑스"},
+                 "KR": {"iso2": "KR", "name": "South Korea", "ko": "대한민국"}}
     CITIES = {("JP", 1850147): {"gid": 1850147, "name": "Tokyo", "ascii": "Tokyo", "ko": "도쿄", "lat": 35.6895,
                                 "lon": 139.6917, "population": 8336599, "region": "Tokyo"},
               ("JP", 1853909): {"gid": 1853909, "name": "Osaka", "ascii": "Osaka", "ko": "오사카", "lat": 34.6937,
                                 "lon": 135.5022, "population": 2592413, "region": "Osaka"},
               # 위키보이지 문서가 없는 도시(대체 소스 체인 시험용)
+              ("KR", 1842025): {"gid": 1842025, "name": "Gunsan", "ascii": "Gunsan", "ko": "군산", "lat": 35.9786,
+                                "lon": 126.7114, "population": 264091, "region": "Jeollabuk-do"},
               ("JP", 1855612): {"gid": 1855612, "name": "Nara", "ascii": "Nara", "ko": "나라", "lat": 34.685,
                                 "lon": 135.805, "population": 367353, "region": "Nara"}}
 

@@ -16,6 +16,7 @@ LICENSES = {
     "geonames": ("CC BY 4.0", "GeoNames (CC BY 4.0)"),
     "wikipedia": ("CC BY-SA 4.0", "Wikipedia contributors (CC BY-SA 4.0)"),
     "osm": ("ODbL 1.0", "© OpenStreetMap contributors (ODbL)"),
+    "tourapi": ("공공데이터(이용허락범위 제한 없음)", "한국관광공사 TourAPI"),
 }
 
 

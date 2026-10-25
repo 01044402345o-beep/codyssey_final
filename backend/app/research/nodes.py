@@ -18,10 +18,12 @@ from . import config
 from .cache import ResearchCache
 from .net import SafeHttp
 from . import chain, extract
-from .sources import frankfurter, google_places, openmeteo, overpass, wikidata, wikidata_places, wikivoyage, wikivoyage_intl
+from .sources import (frankfurter, google_places, openmeteo, overpass, tourapi, wikidata, wikidata_places, wikivoyage,
+                      wikivoyage_intl)
 
 # 장소 대체 체인에 쓸 수 있는 소스(순서·끄기는 RESEARCH_PLACE_CHAIN). google 은 키가 있을 때만, 결과는 저장하지 않는다.
-chain.ADAPTERS.update({"wikivoyage_intl": wikivoyage_intl.adapter, "wikidata_places": wikidata_places.adapter,
+chain.ADAPTERS.update({"wikivoyage_intl": wikivoyage_intl.adapter, "tourapi": tourapi.adapter,
+                       "wikidata_places": wikidata_places.adapter,
                        "overpass": overpass.adapter, "google": google_places.adapter})
 
 
