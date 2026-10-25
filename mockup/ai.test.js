@@ -178,6 +178,12 @@ test('여행 입력: 규칙 밖이면 null, 저장·읽기 왕복, 계정 칸마
   assert.equal(AI.cleanTrip({ ...multi, countries: ['미국', '캐나다', '일본', '영국', '독일'] }), null);   // 5개국
   assert.equal(AI.cleanTrip({ ...multi, cities: [{ ...multi.cities[0], ci: 2 }, multi.cities[1]] }), null);   // 없는 나라
   assert.equal(AI.cleanTrip({ ...multi, cities: [multi.cities[0], { ...multi.cities[1], ci: 0 }] }), null);   // 도시 없는 나라
+  // 목록에서 고른 도시의 GeoNames id(gid) 는 지키고, 규칙 밖이면 여행을 버리지 않고 그 칸만 뺀다
+  assert.equal(AI.cleanTrip({ ...good, cities: [{ ...good.cities[0], gid: 5128581 }] }).cities[0].gid, 5128581);
+  for (const bad of [0, -3, 2 ** 31, '5128581', 1.5, null]) {
+    const t = AI.cleanTrip({ ...good, cities: [{ ...good.cities[0], gid: bad }] });
+    assert.ok(t && !('gid' in t.cities[0]), String(bad));
+  }
 
   const mem = new Map();
   const storage = { getItem: k => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: k => mem.delete(k) };

@@ -304,6 +304,13 @@ class T(unittest.TestCase):
         ):
             self.assertEqual(self.put(claims_for("uid-1"), {**BODY, "trip": bad}).status_code, 400, bad)
 
+    def test_city_geonames_id_is_kept_and_validated(self):
+        with_gid = {**TRIP, "cities": [{**TRIP["cities"][0], "gid": 5128581}] + TRIP["cities"][1:]}
+        self.assertEqual(user_state.parse_state({**BODY, "trip": with_gid})["trip"], with_gid)
+        for bad in (0, -1, 2 ** 31, "5128581", True, 1.5):
+            trip = {**TRIP, "cities": [{**TRIP["cities"][0], "gid": bad}] + TRIP["cities"][1:]}
+            self.assertEqual(self.put(claims_for("uid-1"), {**BODY, "trip": trip}).status_code, 400, bad)
+
     def test_malformed_trip_is_rejected(self):
         for bad_trip in (
             {"country": "미국", "cities": [], "studyStart": "2026-10-01"},          # 도시 0곳

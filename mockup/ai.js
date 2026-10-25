@@ -228,7 +228,10 @@
       if (typeof c.end !== 'string' || !TRIP_DATE.test(c.end)) return null;
       const ci = c.ci === undefined ? 0 : c.ci;
       if (!Number.isInteger(ci) || ci < 0 || ci >= countries.length) return null;
-      cities.push(multi ? { name: name, start: c.start, end: c.end, ci: ci } : { name: name, start: c.start, end: c.end });
+      const city = multi ? { name: name, start: c.start, end: c.end, ci: ci } : { name: name, start: c.start, end: c.end };
+      // GeoNames id(목록에서 고른 도시) — 있으면 지킨다. 규칙 밖이면 여행을 버리지 않고 이 칸만 뺀다(이름으로도 찾을 수 있다)
+      if (Number.isInteger(c.gid) && c.gid > 0 && c.gid < 2 ** 31) city.gid = c.gid;
+      cities.push(city);
     }
     if (multi && countries.some((_, i) => !cities.some(c => c.ci === i))) return null;   // 도시 없는 나라는 없다
     const studyStart = trip.studyStart;

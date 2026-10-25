@@ -132,6 +132,10 @@ with sync_playwright() as p:
     page.keyboard.press("ArrowDown"); page.keyboard.press("Enter"); page.wait_for_timeout(200)
     check("도시를 고르면 칸이 채워진다", city.input_value() == "보스턴" and page.evaluate("S.draft.cities[0].name") == "보스턴")
     check("도시 검색은 고른 나라 코드로 서버에 묻는다", any("/geo/cities?country=US" in c for c in calls))
+    check("목록에서 고른 도시는 GeoNames id(gid)를 함께 기억한다", page.evaluate("S.draft.cities[0].gid") == 3)
+    city.fill("보스턴 시내"); page.wait_for_timeout(250)
+    check("이름을 손으로 고치면 gid 를 버린다(다른 곳일 수 있다)", page.evaluate("S.draft.cities[0].gid === undefined"))
+    page.keyboard.press("Escape")
 
     country.fill("아틀란티스"); page.wait_for_timeout(250)
     check("목록에 없는 나라도 그대로 쓸 수 있다는 안내", "적은 그대로 써도 돼요" in page.inner_text("#geo-list-country"))

@@ -122,6 +122,56 @@ class GeoStore:
                 return c
         raise GeoError(404, "unknown_country")
 
+    def country_by_name(self, name: str) -> Optional[dict]:
+        """적힌 나라 이름(한국어·영문·ISO2)으로 목록의 나라를 찾는다. 못 찾으면 None(자유 입력)."""
+        k = _norm(name)
+        if not k:
+            return None
+        for c in self.countries():
+            if k in (_norm(c["iso2"]), _norm(c["ko"]), _norm(c["name"])):
+                return c
+        return None
+
+    # -------------------------------------------------------------- 도시 정체성(조사 단계)
+    def _identity(self, iso2: str, c: dict) -> dict:
+        lat, lon = c["_ll"]
+        return {"gid": c["id"], "iso2": iso2, "name": c["name"], "ascii": c["_ascii"], "ko": c["ko"],
+                "region": c["region"], "population": c["population"], "lat": lat, "lon": lon}
+
+    def city_by_id(self, iso2: str, gid: int, max_shards: int = 3) -> Optional[dict]:
+        """GeoNames id 로 도시를 찾는다(좌표 포함). 첫 샤드(인구 상위)부터 최대 max_shards 개까지만 본다."""
+        iso2 = (iso2 or "").strip().upper()
+        if not ISO2.match(iso2) or type(gid) is not int or gid <= 0:
+            return None
+        try:
+            meta = self.country(iso2)
+        except GeoError:
+            return None
+        for c in self._load_cities(iso2):
+            if c["id"] == gid:
+                return self._identity(iso2, c)
+        for k in range(1, min(meta["shards"], max_shards)):
+            for r in self._shard_raw(iso2, k):
+                if r[0] == gid:
+                    c = self._city(meta["admin1"], r)
+                    c["_ll"], c["_ascii"] = (r[6], r[7]), r[2]
+                    return self._identity(iso2, c)
+        return None
+
+    def match_city(self, iso2: str, name: str) -> Optional[dict]:
+        """이름(영문·ASCII·한국어, 띄어쓰기 무시)이 정확히 같은 도시 중 인구가 가장 많은 곳. 없으면 None."""
+        iso2, k = (iso2 or "").strip().upper(), _norm(ko_label(name))
+        if not ISO2.match(iso2) or not k:
+            return None
+        try:
+            rows = self._load_cities(iso2)                 # 인구 내림차순이라 처음 맞는 것이 가장 큰 도시
+        except GeoError:
+            return None
+        for c in rows:
+            if k in c["_k"]:
+                return self._identity(iso2, c)
+        return None
+
     # -------------------------------------------------------------- 도시
     @staticmethod
     def _city(admin1: dict, r: list) -> dict:
@@ -191,6 +241,8 @@ class GeoStore:
         for r in rows:
             c = self._city(admin1, r)
             c["_k"] = (_norm(r[1]), _norm(r[2]), _norm(c["ko"]))
+            c["_ll"] = (r[6], r[7])                        # 좌표·ASCII 이름은 응답에 안 나간다('_' 키는 걷어 낸다) — 조사 단계가 쓴다
+            c["_ascii"] = r[2]
             cities.append(c)
         with self._lock:
             self._cities[iso2] = (self._now(), cities)
