@@ -23,3 +23,8 @@ azure-cognitiveservices-speech==1.52.0
 # 자체 통역 엔진(app/interp_local.py)의 Argos 번역 모델 토크나이저. 번역 실행은 이미 있는 ctranslate2(faster-whisper 의존)를 쓴다.
 # argostranslate 패키지는 넣지 않는다 — 문장 분리용 stanza·torch 가 무거워 빌드를 깨뜨릴 수 있다. 0.2.2(2026-07-12) 확인.
 sentencepiece==0.2.2
+# 도시 조사 다중 에이전트(app/research, RESEARCH_ENABLED=1 일 때만 불러온다). 10/25 확인:
+# langgraph 1.2.14(2026-10-06)·langchain-core 1.6.9(2026-10-08). 기존 고정 버전을 하나도 바꾸지 않는다(pip --dry-run 대조).
+# langchain-core 가 langsmith 를 끌고 오지만 app/research/__init__.py 가 추적을 강제로 끈다.
+langgraph==1.2.14
+langchain-core==1.6.9
