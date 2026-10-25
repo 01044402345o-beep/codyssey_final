@@ -12,7 +12,7 @@ from app.research.cache import ResearchCache
 from app.research.sources import google_places
 from tests.research_fakes import FakeServer, FakeStore, trip
 
-ENV = {"RESEARCH_ENABLED": "1", "RESEARCH_SOURCES": "", "RESEARCH_LLM": "0", "RESEARCH_PLACE_CHAIN": "",
+ENV = {"RESEARCH_ENABLED": "1", "RESEARCH_SOURCES": "", "RESEARCH_LLM": "0", "RESEARCH_PLACE_CHAIN": "wikidata_places,google",
        "GOOGLE_MAPS_API_KEY": "test-key-not-real", "ITINERARY_DAILY_CAP": "50"}
 TODAY = dt.date(2026, 10, 25)
 NARA_REQ = trip(cities=[{"name": "나라", "gid": 1855612, "ci": 0, "start": "2027-03-20", "end": "2027-03-22", "attr": 2, "rest": 2}])

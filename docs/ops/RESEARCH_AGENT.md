@@ -16,7 +16,7 @@
 | `WIKIMEDIA_CONTACT` | 저장소 URL | 위키미디어 User-Agent 연락처 |
 | `LANGSMITH_TRACING` | `false` | 코드가 강제로 끈다(langchain-core 의존성) |
 | `RESEARCH_USE_GRAPH` | `1` | 0 이면 LangGraph 없이 같은 노드를 스레드 4개로(같은 결과). 그래프가 실패해도 자동으로 이 경로 |
-| `RESEARCH_PLACE_CHAIN` | `wikidata_places,google` | 위키보이지 장소가 모자랄 때 차례로 묻는 대체 소스. `none` 이면 끔(위키보이지만). `google` 은 `GOOGLE_MAPS_API_KEY` 가 있을 때만. `overpass` 는 넣어야 켜진다 |
+| `RESEARCH_PLACE_CHAIN` | `wikivoyage_intl,wikidata_places,google` | 위키보이지 장소가 모자랄 때 차례로 묻는 대체 소스. `none` 이면 끔(위키보이지만). `google` 은 `GOOGLE_MAPS_API_KEY` 가 있을 때만. `overpass` 는 넣어야 켜진다 |
 | `GOOGLE_MAPS_API_KEY` / `ITINERARY_DAILY_CAP` | 없음 / `20` | Google Places 실시간 보충(일정 에이전트와 한도 공유, 프로세스·UTC 하루). 다 쓰면 `capped` → 체인이 6시간 쉼 |
 | `RESEARCH_PLACE_MIN_EXTRA` | `2` | 종류별 목표 = 일정이 정한 장소 수 + 이만큼(화면 '후보' 몫) |
 | `RESEARCH_LLM` | `1` | 0 이면 LLM 추출(여행 조건 순위·한국어 요약)을 끈다. Gemini 키가 없으면 저절로 꺼진다 — 보고서는 listing 순서·영어 원문 |
@@ -63,6 +63,7 @@ POST /research {countries:[{name, iso2?}], cities:[{name, gid?, ci, start, end, 
 
 | 이름 | 무엇 | 라이선스 | 비고 |
 |---|---|---|---|
+| `wikivoyage_intl` | 다른 언어판 위키보이지(de·it·fr·es·ja·zh) — 도시 Wikidata 항목의 사이트링크로 문서를 찾고 나라별 우선 판(일본·독일어권 de, 이탈리아·페루 it, 프랑스 fr, 스페인어권 es, 중화권 zh)부터 최대 2개. 언어별 템플릿(de·ja `vCard`, fr `voir`…·`nom`·`latitude`, es `listado`·`nombre`·`latitud`, it `nome`·`descrizione`) | CC BY-SA | 키 없음. 설명은 그 언어 원문(`desc_lang`), 한국어 요약은 LLM 추출. **한국어판은 없다**(인큐베이터뿐) |
 | `wikidata_places` | Wikidata 주변 명소(SPARQL `wikibase:around`, 인구 비례 반경 4/6/10km, 종류 21개, 사이트링크 수 = 인지도 순 최대 30) + 영어 위키백과 첫 두 문장(설명) | CC0 / CC BY-SA | 관광지만. 기본 켜짐 |
 | `overpass` | OSM 식당·카페·관광지(도심 반경, 태그로 순위, 설명은 요리 종류·영업시간 태그만) | ODbL | **기본 꺼짐** — 10/26 공용 overpass-api.de 가 포화(502)·"자동화 사용은 자체 인스턴스" 안내, 다른 공용 인스턴스도 무응답 |
 
@@ -71,6 +72,14 @@ POST /research {countries:[{name, iso2?}], cities:[{name, gid?, ci, start, end, 
 
 - **Google 은 저장하지 않는다**(약관: place_id 외 저장 금지). Google 장소는 `places_extra` 캐시·LLM 추출 캐시에 들어가지 않는다. 캐시된 대체 결과를 더해도 모자라면 계획이 `need: live` 를 남겨 **Google 만** 다시 묻는다(캐시된 Wikidata 등은 다시 안 부름). 저장된 여행 복원(`cache_only`)은 `live` 만 빠졌으면 캐시로 바로 답한다(외부 호출 0, Google 장소 없이). 키가 없으면 체인에서 빠져 `live` 가 생기지 않는다.
 - 식당·카페 대체: Google 키가 있으면 Google, 없으면 위키보이지·Wikidata 뿐(관광지 위주). Geoapify 는 같은 체인에 이어 붙인다(키·저장 조건 확인 후).
+
+### 좌표 복구·지도 표시
+
+- 영어판도 `{{marker}}`(지도 표시)를 읽는다 — 로텐부르크 영어판은 명소가 전부 marker 였다. 같은 이름의 listing 이 있으면 marker 는 뺀다.
+- 좌표 없는 listing 중 `wikidata=` 가 있으면 Wikidata P625 로 좌표를 채운다(한 번에 최대 50개, 실패하면 그대로).
+- 같은 장소 합치기에 '관광지끼리 60m 이내'를 더했다(언어판마다 이름이 달라서 — 예: Kinkaku-ji / Goldener Pavillon).
+
+실측(10/26, 영어판 장소 → 합친 뒤): 로텐부르크 16 → 56, 가나자와 44 → 97, 마테라 13 → 75, 다카야마 28 → 79(다른 언어판 2~4.5초).
 
 ### 이름만 있는 도시 보강
 

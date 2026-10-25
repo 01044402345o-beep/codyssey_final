@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import re
 import urllib.parse
 from typing import Optional
 
@@ -21,15 +22,65 @@ PRACTICAL = ("Understand", "Talk", "Get in", "Get around", "See", "Do", "Eat", "
 DISTRICT_IF_FEWER = 8          # 본문 listing(장소형)이 이보다 적고 구역이 있으면 구역 문서를 더 본다
 
 
-def page_url(title: str) -> str:
-    return PAGE + urllib.parse.quote(title.replace(" ", "_"), safe="/()_,'")
+LANGS = ("en", "de", "it", "fr", "es", "ja", "zh")
+WIKIDATA_API = "https://www.wikidata.org/w/api.php"
 
 
-def _query(http: SafeHttp, titles: list[str]) -> "tuple[object, list[dict]]":
+def page_url(title: str, lang: str = "en") -> str:
+    base = PAGE if lang == "en" else f"https://{lang}.wikivoyage.org/wiki/"
+    return base + urllib.parse.quote(title.replace(" ", "_"), safe="/()_,'")
+
+
+def api(lang: str) -> str:
+    if lang not in LANGS:
+        raise ValueError("unknown wikivoyage edition")
+    return API if lang == "en" else f"https://{lang}.wikivoyage.org/w/api.php"
+
+
+def dedupe(ls: list[dict]) -> list[dict]:
+    """지도 표시(marker)는 같은 이름의 listing 이 있으면 뺀다(설명 있는 쪽을 남긴다)."""
+    named = {re.sub(r"\W+", "", x["name"].casefold()) for x in ls if not x.get("marker")}
+    out, seen = [], set()
+    for x in ls:
+        k = re.sub(r"\W+", "", x["name"].casefold())
+        if x.get("marker") and k in named:
+            continue
+        if (k, x.get("page")) in seen:
+            continue
+        seen.add((k, x.get("page")))
+        out.append(x)
+    return out
+
+
+def repair_coords(http: SafeHttp, ls: list[dict], limit: int = 50) -> int:
+    """좌표 없는 listing 중 wikidata= 가 있는 것은 Wikidata P625 로 좌표를 채운다(한 번에 최대 50개). → 채운 수.
+    실패해도 그대로(좌표 없는 장소는 거리 검사만 빠진다)."""
+    need = list(dict.fromkeys(x["wikidata"] for x in ls if x.get("wikidata") and (x.get("lat") is None or x.get("lon") is None)))[:limit]
+    if not need:
+        return 0
+    q = urllib.parse.urlencode({"action": "wbgetentities", "ids": "|".join(need), "props": "claims", "format": "json"})
+    res, data = http.get_json(WIKIDATA_API + "?" + q, timeout=8)
+    if not res.ok:
+        return 0
+    coords = {}
+    for qid, ent in ((data or {}).get("entities") or {}).items():
+        v = ((((ent.get("claims") or {}).get("P625") or [{}])[0].get("mainsnak") or {}).get("datavalue") or {}).get("value") or {}
+        if isinstance(v.get("latitude"), (int, float)) and isinstance(v.get("longitude"), (int, float)):
+            coords[qid] = (float(v["latitude"]), float(v["longitude"]))
+    n = 0
+    for x in ls:
+        c = coords.get(x.get("wikidata"))
+        if c and (x.get("lat") is None or x.get("lon") is None):
+            x["lat"], x["lon"], x["coord_src"] = c[0], c[1], "wikidata"
+            n += 1
+    return n
+
+
+def _query(http: SafeHttp, titles: list[str], lang: str = "en") -> "tuple[object, list[dict]]":
     q = urllib.parse.urlencode({"action": "query", "prop": "revisions", "rvprop": "content|ids", "rvslots": "main",
                                 "titles": "|".join(titles[:3]), "format": "json", "formatversion": "2",
                                 "redirects": "1"})
-    res, data = http.get_json(API + "?" + q)
+    res, data = http.get_json(api(lang) + "?" + q)
     pages = []
     for p in ((data or {}).get("query") or {}).get("pages") or []:
         revs = p.get("revisions") or []
@@ -75,6 +126,29 @@ def fetch(http: SafeHttp, candidates: list[str], known_revid: Optional[int] = No
                 for sp in sub_pages:
                     ls += wp.listings(sp["text"], sp["title"])
                     sources.append(sp["title"])
+    ls = dedupe(ls)
+    repaired = repair_coords(http, ls)
     data = {"title": page["title"], "revid": page["revid"], "unchanged": False, "pages": sources,
-            "listings": ls, "sections": {k: v for k, v in secs.items() if v}}
+            "listings": ls, "sections": {k: v for k, v in secs.items() if v}, "coords_repaired": repaired}
     return result("wikivoyage", "ok" if (ls or data["sections"]) else "empty", data, url=page_url(page["title"]))
+
+
+def fetch_edition(http: SafeHttp, lang: str, title: str) -> dict:
+    """다른 언어판 위키보이지 한 문서의 listing(언어별 템플릿) → data {lang, title, revid, listings}. 좌표 복구 포함."""
+    if not config.source_on("wikivoyage"):
+        return disabled("wikivoyage")
+    if lang not in LANGS or not title.strip():
+        return result("wikivoyage", "empty", reason="bad_edition")
+    res, pages = _query(http, [title], lang)
+    if not res.ok:
+        return result("wikivoyage", status_of(res), reason=res.error)
+    if not pages:
+        return result("wikivoyage", "empty", reason="no_article")
+    page = pages[0]
+    ls = dedupe(wp.listings(page["text"], page["title"], lang))
+    for x in ls:
+        x["lang"] = lang
+    repair_coords(http, ls)
+    return result("wikivoyage", "ok" if ls else "empty",
+                  {"lang": lang, "title": page["title"], "revid": page["revid"], "listings": ls},
+                  url=page_url(page["title"], lang))

@@ -18,10 +18,11 @@ from . import config
 from .cache import ResearchCache
 from .net import SafeHttp
 from . import chain, extract
-from .sources import frankfurter, google_places, openmeteo, overpass, wikidata, wikidata_places, wikivoyage
+from .sources import frankfurter, google_places, openmeteo, overpass, wikidata, wikidata_places, wikivoyage, wikivoyage_intl
 
 # 장소 대체 체인에 쓸 수 있는 소스(순서·끄기는 RESEARCH_PLACE_CHAIN). google 은 키가 있을 때만, 결과는 저장하지 않는다.
-chain.ADAPTERS.update({"wikidata_places": wikidata_places.adapter, "overpass": overpass.adapter, "google": google_places.adapter})
+chain.ADAPTERS.update({"wikivoyage_intl": wikivoyage_intl.adapter, "wikidata_places": wikidata_places.adapter,
+                       "overpass": overpass.adapter, "google": google_places.adapter})
 
 
 def _storable(places: Optional[list]) -> list:
@@ -121,7 +122,7 @@ def enrich_unresolved(deps: Deps, resolved: dict, network: bool = True) -> list[
         if data.get("lat") is None:
             continue
         en = data.get("name_en") or ""
-        ref.update(lat=data["lat"], lon=data["lon"], population=int(data.get("population") or 0),
+        ref.update(lat=data["lat"], lon=data["lon"], population=int(data.get("population") or 0), qid=data.get("qid") or "",
                    wv_title=data.get("wikivoyage") or "", ascii=ref["ascii"] or (en if en.isascii() else ""),
                    name=en or ref["name"])
     return pending
@@ -222,26 +223,28 @@ def city_guide(deps: Deps, tc: dict, need: list, cached: dict) -> dict:
     if "guide" not in need:
         return {"guide": cached["guide"]["data"], "guide_sources": cached["guide"].get("sources") or []}
     deps.progress(ref["input"], "guide")
-    sources, candidates = [], []
+    sources, candidates, qid = [], [], ref.get("qid") or ""
     if ref["gid"]:
         b = wikidata.city_bridge(deps.http, ref["gid"])
         sources.append(_src(b))
-        if b["status"] == "ok" and b["data"]["wikivoyage"]:
-            candidates.append(b["data"]["wikivoyage"])
+        if b["status"] == "ok":
+            qid = b["data"].get("qid") or qid
+            if b["data"]["wikivoyage"]:
+                candidates.append(b["data"]["wikivoyage"])
     if ref.get("wv_title"):
         candidates.append(ref["wv_title"])
     if ref["ascii"]:
         candidates.append(ref["ascii"])
     r = wikivoyage.fetch(deps.http, candidates)
     sources.append(_src(r))
-    guide = {"wikivoyage": r["data"] if r["status"] == "ok" else None}
+    guide = {"wikivoyage": r["data"] if r["status"] == "ok" else None, "qid": qid}
     if r["status"] == "ok":
         ttl = config.cache_days() * DAY if ref["resolved"] else UNRESOLVED_TTL
         deps.cache.put("research_cities", ref["key"], "guide", guide, ttl, sources)
     elif r["status"] == "empty":
         # 문서가 정말 없음(장애 아님)도 7일 기억한다 — 매번 다시 묻지 않고, 캐시만으로 보고서를 만들 수 있게.
         # 장애(unavailable·rate_limited)는 기억하지 않는다(다음 요청이 다시 시도).
-        guide = {"wikivoyage": None, "reason": r.get("reason") or "empty"}
+        guide = {"wikivoyage": None, "reason": r.get("reason") or "empty", "qid": qid}
         deps.cache.put("research_cities", ref["key"], "guide", guide, UNRESOLVED_TTL, sources)
     deps.progress(ref["input"], "guide", "done" if r["status"] == "ok" else r["status"])
     return {"guide": guide, "guide_sources": sources}
@@ -266,6 +269,8 @@ def city_places(deps: Deps, tc: dict, need: list, cached: dict, guide: Optional[
     → {extra_places, places_stale, chain(소스별 결과), chain_outage}. 장애로 크게 줄면 마지막 정상 결과를 쓴다."""
     from . import report
     ref = tc["ref"]
+    if not ref.get("qid") and (guide or {}).get("qid"):
+        ref["qid"] = guide["qid"]                     # 다른 언어판 위키보이지 사이트링크용(wikivoyage_intl)
     px = cached.get("places_extra")
     old = (px or {}).get("data")
     cached_out = {"extra_places": (old or {}).get("places") or [], "places_stale": bool(px and px.get("stale")),

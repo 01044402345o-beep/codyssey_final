@@ -599,6 +599,7 @@
       area: typeof raw.area === 'string' ? raw.area : '',                 // R.placeByCode 가 localeCompare 한다 — 늘 문자열
       // 한국어 요약·이유는 LLM 추출이 검증을 통과했을 때만 온다(없으면 영어 원문만)
       desc: typeof raw.summary_ko === 'string' ? raw.summary_ko : '', descEn: typeof raw.desc_en === 'string' ? raw.desc_en : '',
+      descLang: /^[a-z]{2}$/.test(raw.desc_lang || '') ? raw.desc_lang : 'en',          // 다른 언어판 위키보이지 원문이면 그 언어
       reason: typeof raw.why_ko === 'string' ? raw.why_ko : '', rank: Number.isInteger(raw.rank) ? raw.rank : 0,
       cuisine: null, menuEn: null, menuKo: null, sources: src, homepage: home,
       attribution, primaryType: RESEARCH_KIND_KO[raw.kind] || '관광지',

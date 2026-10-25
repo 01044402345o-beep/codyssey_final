@@ -27,6 +27,7 @@ COOLDOWN_S = {"exhaust": 6 * 3600, "rate_limited": 300, "transient": 60}
 CIRCUIT_AFTER = 5
 CIRCUIT_FACTOR = 4
 SAME_PLACE_M = 150
+SAME_SIGHT_M = 60              # 언어판마다 이름이 다른 같은 명소(예: Kinkaku-ji / Goldener Pavillon) — 관광지끼리만
 
 # 결과를 저장하면 안 되는 실시간 소스(Google 약관). 캐시된 대체 결과가 있어도 모자라면 이것만 다시 묻는다.
 LIVE_ONLY = frozenset({"google"})
@@ -133,6 +134,9 @@ def _same(a: dict, b: dict) -> bool:
     if a.get("wikidata") and a.get("wikidata") == b.get("wikidata"):
         return True
     if _norm_name(a.get("name", "")) != _norm_name(b.get("name", "")):
+        both_sights = a.get("kind") == b.get("kind") == "attraction"
+        if both_sights and None not in (a.get("lat"), a.get("lon"), b.get("lat"), b.get("lon")):
+            return verify.km(a["lat"], a["lon"], b["lat"], b["lon"]) * 1000 <= SAME_SIGHT_M
         return False
     if None in (a.get("lat"), a.get("lon"), b.get("lat"), b.get("lon")):
         return True

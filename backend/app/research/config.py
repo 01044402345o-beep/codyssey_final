@@ -46,7 +46,7 @@ def use_graph() -> bool:
 
 # overpass 는 기본에서 뺀다: 공용 서버(overpass-api.de)가 10/26 "자동화 사용은 자체 인스턴스로" 안내 + 포화(502),
 # 다른 공용 인스턴스도 응답 없음. 어댑터는 남겨 두고 RESEARCH_PLACE_CHAIN 에 넣으면 켜진다.
-DEFAULT_PLACE_CHAIN = ("wikidata_places", "google")
+DEFAULT_PLACE_CHAIN = ("wikivoyage_intl", "wikidata_places", "google")
 
 
 def place_chain() -> list[str]:

@@ -33,24 +33,30 @@ def _kind(l: dict) -> Optional[str]:
     if t == "eat":
         return "restaurant"
     if t == "drink":
+        if l.get("subtype") in ("cafe", "café", "coffee", "teahouse", "tea house", "konditorei"):
+            return "cafe"
         text = (l.get("name", "") + " " + l.get("content", "")).lower()
-        return "cafe" if re.search(r"caf[eé]|coffee|tea\b|tea house|teahouse|bakery|patisserie", text) else "restaurant"
+        return "cafe" if re.search(r"caf[eéè]|coffee|kaffee|tea\b|tea house|teahouse|bakery|patisserie|konditorei|カフェ|喫茶|咖啡",
+                                   text) else "restaurant"
     return None
 
 
 def places_from(ref: dict, guide: dict) -> list[dict]:
+    """위키보이지 listing → 장소. 다른 언어판(guide["lang"] 또는 listing["lang"])이면 id·출처 URL·설명 언어를 그 판으로."""
     out = []
     for n, l in enumerate(guide.get("listings") or []):
         kind = _kind(l)
         if not kind:
             continue
+        lang = l.get("lang") or guide.get("lang") or "en"
         page = l.get("page") or guide.get("title") or ""
         area = page.split("/", 1)[1] if "/" in page else ""
         p = verify.place({
-            "id": f"wv:{ref['key']}:{n}", "name": l["name"], "kind": kind, "lat": l.get("lat"), "lon": l.get("lon"),
-            "area": area, "desc_en": l.get("content", ""), "section": l.get("section", ""),
+            "id": f"wv{'' if lang == 'en' else lang}:{ref['key']}:{n}", "name": l["name"], "kind": kind,
+            "lat": l.get("lat"), "lon": l.get("lon"),
+            "area": area, "desc_en": l.get("content", ""), "desc_lang": lang, "section": l.get("section", ""),
             "homepage": l.get("url", ""), "wikidata": l.get("wikidata", ""),
-            "sources": [{"provider": "wikivoyage", "url": page_url(page), "title": page,
+            "sources": [{"provider": "wikivoyage", "url": page_url(page, lang), "title": page if lang == "en" else f"{page} ({lang})",
                          "license": LICENSES["wikivoyage"][0]}],
         }, ref.get("lat"), ref.get("lon"))
         if p:

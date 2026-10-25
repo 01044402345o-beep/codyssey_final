@@ -244,7 +244,7 @@ class ChainGraphTest(unittest.TestCase):
         self.assertEqual((len(self.srv.calls), len(self.calls)), (n_http, n_calls))
         self.assertEqual(rep["cities"][0]["places"][1]["name"], "Nara Park")
         guide = self.cache.get("research_cities", resolved["cities"][0]["ref"]["key"], "guide")
-        self.assertEqual(guide["data"], {"wikivoyage": None, "reason": "no_article"})
+        self.assertEqual(guide["data"], {"wikivoyage": None, "reason": "no_article", "qid": "Q169134"})
 
     def test_wikivoyage_outage_is_not_remembered(self):
         self.srv.fail = {"en.wikivoyage.org": 503}
