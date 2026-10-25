@@ -43,6 +43,18 @@ def use_graph() -> bool:
     return (os.getenv("RESEARCH_USE_GRAPH") or "1").strip() != "0"
 
 
+def llm_enabled() -> bool:
+    """LLM 추출(한국어 요약·순위). RESEARCH_LLM=0 이면 끈다. Gemini 키가 없으면 저절로 꺼진다(listing 그대로)."""
+    if (os.getenv("RESEARCH_LLM") or "1").strip() == "0":
+        return False
+    from .. import gemini
+    return bool(gemini.api_keys())
+
+
+def llm_concurrency() -> int:
+    return _int("RESEARCH_LLM_CONCURRENCY", 2, 1, 4)
+
+
 def max_jobs() -> int:
     return _int("RESEARCH_MAX_JOBS", 1, 1, 4)
 

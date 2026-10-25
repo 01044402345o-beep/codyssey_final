@@ -85,6 +85,10 @@ def health() -> dict:
         rss = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
     except Exception:  # noqa: BLE001 — 윈도우 등
         rss = None
-    return {"enabled": config.research_enabled(), "langgraph": lg, "sources": sorted(config.sources_enabled()),
+    try:
+        llm = config.llm_enabled()
+    except Exception:  # noqa: BLE001
+        llm = False
+    return {"enabled": config.research_enabled(), "langgraph": lg, "llm": llm, "sources": sorted(config.sources_enabled()),
             "implemented": list(config.KEYLESS_SOURCES), "jobs_active": JOBS.active(), "max_jobs": config.max_jobs(),
             "max_rss_mb": rss}

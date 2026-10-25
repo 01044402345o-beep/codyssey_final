@@ -1,6 +1,7 @@
 """조사 결과 → 화면 보고서 JSON(schema research.v1). 코드로만 조립한다.
 
-이번 단계(PR1)는 위키보이지 원문(영어)을 그대로 싣는다. 한국어 요약·여행 조건별 순위는 후속 LLM 단계(PR3)가 더한다.
+위키보이지 원문(영어)은 늘 싣는다. LLM 추출(extract.py)이 성공하면 장소를 여행 조건 순위로 앞에 세우고
+한국어 요약(summary_ko·why_ko)을, 실용 정보에는 한국어 요약 + 그 근거인 영어 원문 인용(quote_en)을 더한다.
 출처 URL 은 코드가 소스 기록에서 붙인다 — 외부 문서 속 링크는 '홈페이지'로 표시만 한다.
 """
 from __future__ import annotations
@@ -9,7 +10,7 @@ import re
 import time
 from typing import Any, Optional
 
-from . import verify
+from . import extract, verify
 from .sources import LICENSES
 from .sources.wikivoyage import page_url
 
@@ -85,14 +86,16 @@ def practical_from(guide: dict) -> list[dict]:
 
 def city_report(tc: dict, res: dict) -> dict:
     ref, guide = tc["ref"], ((res.get("guide") or {}).get("wikivoyage") or {})
-    places = places_from(ref, guide) if guide.get("listings") else []
+    ext = res.get("extract")
+    places = extract.apply_places(places_from(ref, guide), ext) if guide.get("listings") else []
     clim = res.get("climate") or {}
     status = "ok" if places else ("partial" if guide.get("sections") else "empty")
     return {
         "key": ref["key"], "idx": tc["idx"], "name": ref["name"], "input": ref["input"], "ko": ref["ko"],
         "iso2": ref["iso2"], "resolved": ref["resolved"], "status": status,
         "wikivoyage": {"title": guide.get("title") or "", "url": page_url(guide["title"]) if guide.get("title") else ""},
-        "places": places, "practical": practical_from(guide) if guide else [],
+        "places": places, "practical": extract.apply_practical(practical_from(guide), ext) if guide else [],
+        "extract": {"status": res.get("extract_status") or "none"},
         "climate": ({**clim, "source": {"provider": "openmeteo", "url": "https://open-meteo.com/"}} if clim else None),
         "days": [{"date": r["date"], "role": r["role"], "topics": ROLE_TOPICS.get(r["role"], [])} for r in tc["roles"]],
         "cross_border_next": tc.get("cross_border_next", False),

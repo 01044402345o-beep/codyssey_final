@@ -2142,6 +2142,9 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .rinfo-topic { border-top: 1px solid var(--border); padding: 8px 0; }
 .rinfo-topic > summary { cursor: pointer; font-weight: 600; font-size: 0.875rem; }
 .rinfo-topic p { margin: 6px 0; color: var(--text-soft); font-size: 0.875rem; line-height: 1.55; overflow-wrap: anywhere; }
+.rinfo-quote { margin: 4px 0 6px; padding-left: 10px; border-left: 2px solid var(--border); color: var(--text-3); font-size: 0.8125rem; line-height: 1.5; overflow-wrap: anywhere; }
+.place .desc .why { color: var(--text-3); }
+.place .desc.en-sub { color: var(--text-3); font-size: 0.8125rem; }
 .rinfo-credits { margin-top: 18px; color: var(--text-3); line-height: 1.5; }
 /* 도시 브리프(백업 경로) — 조사 파이프라인이 꺼졌거나 실패한 보고서의 '이 도시 알아두기' (app.js briefCard) */
 .brief-card { margin-bottom: 14px; }

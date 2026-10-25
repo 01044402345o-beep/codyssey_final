@@ -2,7 +2,7 @@
 
     START → planner ─Send→ country (나라마다)  ─┐
                     └Send→ city   (도시마다)  ─┴→ writer → END
-    city(서브그래프): START → guide ∥ climate → finalize → END
+    city(서브그래프): START → guide ∥ climate → extract(LLM, 선택) → finalize → END
 
 langgraph 는 처음 쓸 때 불러온다(플래그가 꺼진 서버는 메모리에 올리지 않는다).
 """
@@ -35,6 +35,8 @@ class CityState(TypedDict, total=False):
     guide_sources: list
     climate: Any
     climate_sources: list
+    extract: Any
+    extract_status: str
     out: dict
 
 
@@ -46,11 +48,14 @@ def build(deps: nodes.Deps):
     cg = StateGraph(CityState)
     cg.add_node("guide", lambda s: nodes.city_guide(deps, s["tc"], s["need"], s["cached"]))
     cg.add_node("climate", lambda s: nodes.city_climate(deps, s["tc"], s["need"], s["cached"]))
+    cg.add_node("extract", lambda s: nodes.city_extract(deps, s["tc"], s["need"], s["cached"], s.get("guide"), s.get("climate")))
     cg.add_node("finalize", lambda s: {"out": nodes.city_finalize(
-        s["tc"], s.get("guide"), s.get("climate"), (s.get("guide_sources") or []) + (s.get("climate_sources") or []))})
+        s["tc"], s.get("guide"), s.get("climate"), (s.get("guide_sources") or []) + (s.get("climate_sources") or []),
+        s.get("extract"), s.get("extract_status") or "none")})
     cg.add_edge(START, "guide")
     cg.add_edge(START, "climate")
-    cg.add_edge(["guide", "climate"], "finalize")
+    cg.add_edge(["guide", "climate"], "extract")
+    cg.add_edge("extract", "finalize")
     cg.add_edge("finalize", END)
     city_graph = cg.compile()
 
@@ -105,7 +110,9 @@ def _city_plain(deps: nodes.Deps, item: dict) -> dict:
     tc, need, cached = item["tc"], item["need"], item["cached"]
     g = nodes.city_guide(deps, tc, need, cached)
     c = nodes.city_climate(deps, tc, need, cached)
-    return nodes.city_finalize(tc, g.get("guide"), c.get("climate"), (g.get("guide_sources") or []) + (c.get("climate_sources") or []))
+    e = nodes.city_extract(deps, tc, need, cached, g.get("guide"), c.get("climate"))
+    return nodes.city_finalize(tc, g.get("guide"), c.get("climate"), (g.get("guide_sources") or []) + (c.get("climate_sources") or []),
+                               e.get("extract"), e.get("extract_status") or "none")
 
 
 def run_plain(deps: nodes.Deps, resolved: dict, plan: Optional[dict] = None) -> dict:
@@ -153,7 +160,8 @@ def from_cache(resolved: dict, plan: dict) -> dict:
                    for x in plan["countries"]}
     city_out = {}
     for x in plan["cities"]:
-        g, c = x["cached"].get("guide"), x["cached"].get("climate")
+        g, c, e = x["cached"].get("guide"), x["cached"].get("climate"), x["cached"].get("extract")
         city_out[x["tc"]["ref"]["key"]] = {"guide": g["data"] if g else {}, "climate": c["data"] if c else None,
-                                           "sources": (g or {}).get("sources", []) + (c or {}).get("sources", [])}
+                                           "sources": (g or {}).get("sources", []) + (c or {}).get("sources", []),
+                                           "extract": e["data"] if e else None, "extract_status": "ok" if e else "none"}
     return report.build(resolved, country_out, city_out)

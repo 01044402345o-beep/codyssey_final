@@ -637,3 +637,11 @@ test('도시 조사 접기: 종류별 기본 caps + 후보 2, 다시 생성은 2
   const none = AI.foldResearch(cities, { status: 'done', report: { ...report, cities: [{ idx: 0, status: 'empty', places: [] }] } }, {});
   assert.equal(none.mode, 'empty');
 });
+
+test('도시 조사 장소: LLM 추출 한국어 요약·이유·순위가 있으면 싣고, 없거나 이상한 값이면 비운다', () => {
+  const p = AI.researchPlace({ id: 'wv:JP_1:2', name: 'Kitanomaru Park', kind: 'attraction', desc_en: 'Cherry blossoms in spring.',
+    summary_ko: '봄에 벚꽃이 피는 공원이에요.', why_ko: '3월 여행에 맞아요', rank: 1 }, '도쿄', 1);
+  assert.deepEqual([p.desc, p.reason, p.rank, p.descEn], ['봄에 벚꽃이 피는 공원이에요.', '3월 여행에 맞아요', 1, 'Cherry blossoms in spring.']);
+  const q = AI.researchPlace({ id: 'x', name: 'Q', kind: 'attraction', summary_ko: { bad: 1 }, why_ko: 5, rank: '1' }, '도쿄', 2);
+  assert.deepEqual([q.desc, q.reason, q.rank], ['', '', 0]);
+});
