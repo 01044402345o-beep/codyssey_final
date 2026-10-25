@@ -75,6 +75,11 @@ services:
         sync: false
       - key: ITINERARY_DAILY_CAP
         sync: false
+      # 한국관광공사 TourAPI(한국 도시 장소 — 저장 가능). 공공데이터포털 일반 인증키, 서비스 기본 EngService2(영문)
+      - key: TOURAPI_SERVICE_KEY
+        sync: false
+      - key: TOURAPI_SERVICE
+        sync: false
       - key: RESEARCH_LLM_CONCURRENCY
         sync: false
       # 백업 경로(도시 브리프 GET /city-brief) 끄기(기본 켜짐), /generate 프롬프트에 브리프 넣기(기본 꺼짐)
