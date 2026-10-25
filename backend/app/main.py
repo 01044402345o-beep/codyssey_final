@@ -77,6 +77,7 @@ from .agents.itinerary import (
     google_maps_configured,
     itinerary_enabled,
 )
+from .research import service as research
 
 from .validators import (
     SCHEMA_CHECKER_AVAILABLE,
@@ -141,6 +142,7 @@ app.add_middleware(body_limit.BodyLimitMiddleware, default=64 * 1024, limits={
     "/user/state": 128 * 1024,
     "/user/interp-log": 96 * 1024,
     "/generate": 64 * 1024,
+    "/research": 16 * 1024,      # 나라 4 × 80자 + 도시 5 × (80자 + 날짜·숫자) — 2KB 안팎
 })
 app.add_middleware(
     CORSMiddleware,
@@ -263,6 +265,32 @@ class ItineraryRequest(BaseModel):
     days: int | None = None
     start_date: str | None = Field(default=None, max_length=10)
     itinerary_kinds: list[str] = Field(default_factory=list, max_length=4)
+
+
+class ResearchCountry(BaseModel):
+    model_config = {"extra": "forbid"}
+    name: str = Field(min_length=1, max_length=80)
+    iso2: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
+
+
+class ResearchCity(BaseModel):
+    """도시 하나. gid 는 목록에서 고른 도시의 GeoNames id(없으면 이름으로 찾는다). attr·rest 는 화면이 그 도시에 둘 장소 수."""
+    model_config = {"extra": "forbid"}
+    name: str = Field(min_length=1, max_length=80)
+    gid: int | None = Field(default=None, ge=1, le=2 ** 31 - 1)
+    ci: int = Field(default=0, ge=0, le=3)
+    start: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    attr: int = Field(default=2, ge=0, le=12)
+    rest: int = Field(default=2, ge=0, le=12)
+
+
+class ResearchRequest(BaseModel):
+    """조사 요청 — 나라·도시·날짜만. 사용자 정보(uid·이메일)는 없다. cache_only 면 캐시에 있을 때만 준다(복원용)."""
+    model_config = {"extra": "forbid"}
+    countries: list[ResearchCountry] = Field(min_length=1, max_length=4)
+    cities: list[ResearchCity] = Field(min_length=1, max_length=5)
+    cache_only: bool = False
 
 
 class WithdrawReport(BaseModel):
@@ -517,6 +545,8 @@ def health_detail() -> dict[str, Any]:
         # 사실 경로의 구글 장소 검색은 붙이지 않았다. google_places 는 그 의미로 남긴다.
         # 일정 플래그와 키는 호출 때마다 읽는다. 임포트 때 고정하지 않는다.
         "itinerary_enabled": itinerary_enabled(),
+        # 도시 조사 에이전트(키 없는 공개 소스): 켜짐·LangGraph 설치·소스·잡 수. 키 값은 없다.
+        "research": research.health(),
         "fact_agents": {
             "kakao": kakao_configured(),
             "osm": "no-key",
@@ -590,6 +620,55 @@ def post_itinerary(req: ItineraryRequest, request: Request) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001 — 수집 실패는 화면이 예시로 돌아갈 수 있게 unavailable
         logging.getLogger("app.itinerary").warning("itinerary error %s", type(exc).__name__)
         return {"status": "unavailable", "reason": "itinerary_error"}
+
+
+_polls: dict[str, deque[float]] = defaultdict(deque)
+_polls_lock = threading.Lock()
+POLL_LIMIT, POLL_WINDOW = 60, 60
+
+
+def _poll_limit(request: Request) -> None:
+    """조사 진행 폴링 전용 제한(2.5~5초 간격 폴링이 공용 rate_limit 20/분을 다 쓰지 않게)."""
+    ip = client_ip(request)
+    with _polls_lock:
+        now = time.time()
+        if len(_polls) > 5_000:
+            for k in [k for k, v in _polls.items() if not v or now - v[-1] > POLL_WINDOW]:
+                del _polls[k]
+        q = _polls[ip]
+        while q and now - q[0] > POLL_WINDOW:
+            q.popleft()
+        if len(q) >= POLL_LIMIT:
+            raise HTTPException(status_code=429, detail="too_many_polls", headers={"Retry-After": "5"})
+        q.append(now)
+
+
+@app.post("/research")
+def post_research(req: ResearchRequest, request: Request) -> Any:
+    """사용자가 고른 나라·도시를 여행 조건에 맞게 조사한다(backend/app/research).
+
+    꺼져 있으면 외부 호출 없이 unavailable. 전부 캐시에 있으면 바로 done+report, 아니면 잡을 시작하고 202 job_id.
+    """
+    rate_limit(request)
+    try:
+        res = research.submit(req.model_dump(), ai_client_key(request))
+    except research.Busy:
+        raise HTTPException(status_code=503, detail="busy", headers={"Retry-After": "15"})
+    except Exception as exc:  # noqa: BLE001 — 조사 실패는 화면이 예시로 돌아가게 unavailable
+        logging.getLogger("app.research").warning("research error %s", type(exc).__name__)
+        return {"status": "unavailable", "reason": "research_error"}
+    return JSONResponse(res, status_code=202) if res.get("status") == "running" else res
+
+
+@app.get("/research/{job_id}")
+def get_research(job_id: str, request: Request) -> dict[str, Any]:
+    _poll_limit(request)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{16,32}", job_id):
+        raise HTTPException(status_code=404, detail="unknown_job")
+    got = research.poll(job_id)
+    if got is None:
+        raise HTTPException(status_code=404, detail="unknown_job")
+    return got
 
 
 def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:

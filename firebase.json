@@ -121,6 +121,20 @@
         }
       },
       {
+        "source": "/research",
+        "run": {
+          "serviceId": "codyssey-api",
+          "region": "asia-northeast3"
+        }
+      },
+      {
+        "source": "/research/**",
+        "run": {
+          "serviceId": "codyssey-api",
+          "region": "asia-northeast3"
+        }
+      },
+      {
         "source": "/user/**",
         "run": {
           "serviceId": "codyssey-api",

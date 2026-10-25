@@ -49,3 +49,13 @@ services:
       # 절대 저장소에 두지 않는다(docs/deploy/DEPLOY_RUNBOOK.md E).
       - key: FIREBASE_SERVICE_ACCOUNT_JSON
         sync: false
+      # 도시 조사 에이전트(app/research, docs/ops/RESEARCH_AGENT.md). 기본 꺼짐 — 1 이면 POST /research 가 키 없는 공개 소스
+      # (위키보이지·위키데이터·Open-Meteo·GOV.UK·Frankfurter)를 조사한다. 결과 캐시는 위 서비스 계정으로 Firestore 에 쓴다.
+      - key: RESEARCH_ENABLED
+        sync: false
+      # 위키미디어 User-Agent 연락처(선택, 기본은 저장소 URL). 없으면 공유 IP 가 익명 한도(10회/분)로 묶일 수 있다.
+      - key: WIKIMEDIA_CONTACT
+        sync: false
+      # langchain-core 가 끌고 오는 langsmith 로 아무것도 나가지 않게(코드도 강제로 끈다).
+      - key: LANGSMITH_TRACING
+        value: "false"
