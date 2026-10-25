@@ -70,6 +70,11 @@ services:
         sync: false
       - key: RESEARCH_PLACE_MIN_EXTRA
         sync: false
+      # Google Places(New): 일정 에이전트와 조사의 실시간 보충이 함께 쓴다. 결과는 저장하지 않는다. 한도는 프로세스·UTC 하루
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: ITINERARY_DAILY_CAP
+        sync: false
       - key: RESEARCH_LLM_CONCURRENCY
         sync: false
       # 백업 경로(도시 브리프 GET /city-brief) 끄기(기본 켜짐), /generate 프롬프트에 브리프 넣기(기본 꺼짐)
