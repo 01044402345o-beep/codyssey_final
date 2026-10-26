@@ -77,7 +77,9 @@ def fetch(http: SafeHttp, ref: dict, key: str, limit: int = MAX_PLACES) -> dict:
     if lat is None or lon is None:
         return result("wikidata", "empty", reason="no_coords")
     pop = int(ref.get("population") or 0)
-    query = _AROUND % (float(lon), float(lat), radius_km(pop), " ".join("wd:" + c for c in CLASSES), 3 if pop >= 200_000 else 2)
+    from .. import chain
+    query = _AROUND % (float(lon), float(lat), min(30.0, radius_km(pop) * chain.scale(ref)), " ".join("wd:" + c for c in CLASSES),
+                       3 if pop >= 200_000 else 2)
     res, rows = _run(http, query)
     if not res.ok:
         return result("wikidata", status_of(res), reason=res.error)

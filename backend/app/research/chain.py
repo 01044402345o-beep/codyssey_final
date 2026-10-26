@@ -27,7 +27,16 @@ COOLDOWN_S = {"exhaust": 6 * 3600, "rate_limited": 300, "transient": 60}
 CIRCUIT_AFTER = 5
 CIRCUIT_FACTOR = 4
 SAME_PLACE_M = 150
-SAME_SIGHT_M = 60              # 언어판마다 이름이 다른 같은 명소(예: Kinkaku-ji / Goldener Pavillon) — 관광지끼리만
+SAME_SIGHT_M = 60
+WIDER_SCALE = 2.5              # 반경을 넓혀 다시 찾을 때(주변 검색형 소스만)
+NEARBY = frozenset({"tourapi", "wikidata_places", "overpass", "google"})   # 좌표 반경으로 찾는 소스
+
+
+def scale(ref: dict) -> float:
+    try:
+        return max(1.0, min(4.0, float(ref.get("radius_scale") or 1.0)))
+    except (TypeError, ValueError):
+        return 1.0              # 언어판마다 이름이 다른 같은 명소(예: Kinkaku-ji / Goldener Pavillon) — 관광지끼리만
 
 # 결과를 저장하면 안 되는 실시간 소스(Google 약관). 캐시된 대체 결과가 있어도 모자라면 이것만 다시 묻는다.
 LIVE_ONLY = frozenset({"google"})

@@ -121,8 +121,51 @@ def _claim_ids(claims: dict, pid: str) -> list[str]:
             if isinstance(((c.get("mainsnak") or {}).get("datavalue") or {}).get("value"), dict)]
 
 
+def _value(cl: dict, pid: str) -> dict:
+    v = (((cl.get(pid) or [{}])[0].get("mainsnak") or {}).get("datavalue") or {}).get("value")
+    return v if isinstance(v, dict) else {}
+
+
+def _current_ids(cl: dict, pid: str) -> list[str]:
+    """끝난(P582 종료 시점) 진술은 빼고, 우선 순위(preferred) 진술을 앞에."""
+    rows = [c for c in cl.get(pid) or [] if not (c.get("qualifiers") or {}).get("P582") and c.get("rank") != "deprecated"]
+    rows.sort(key=lambda c: c.get("rank") != "preferred")
+    return [((c.get("mainsnak") or {}).get("datavalue") or {}).get("value", {}).get("id") for c in rows
+            if isinstance(((c.get("mainsnak") or {}).get("datavalue") or {}).get("value"), dict)]
+
+
+def _pop(cl: dict) -> int:
+    try:
+        return max(0, int(float(str(_value(cl, "P1082").get("amount", "0")))))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _entities(http: SafeHttp, ids: list[str]) -> "tuple[object, dict]":
+    res, e = http.get_json(ACTION_API + "?" + urllib.parse.urlencode({
+        "action": "wbgetentities", "ids": "|".join(ids), "props": "claims|sitelinks|labels", "languages": "en",
+        "sitefilter": "enwikivoyage", "format": "json"}), timeout=8)
+    return res, ((e or {}).get("entities") or {}) if res.ok else {}
+
+
+def _city_data(q: str, ent: dict, via: dict | None = None) -> dict:
+    cl = ent.get("claims") or {}
+    coord = _value(cl, "P625")
+    return {"qid": q, "lat": float(coord["latitude"]), "lon": float(coord["longitude"]),
+            "name_en": str(((ent.get("labels") or {}).get("en") or {}).get("value") or "")[:80], "population": _pop(cl),
+            "wikivoyage": str(((ent.get("sitelinks") or {}).get("enwikivoyage") or {}).get("title") or "")[:120],
+            **({"via": via} if via else {})}
+
+
 def city_by_name(http: SafeHttp, country_qid: str, name: str) -> dict:
-    """→ data {qid, lat, lon, name_en, population, wikivoyage}. country_qid 는 나라 사실(country_facts)의 qid."""
+    """→ data {qid, lat, lon, name_en, population, wikivoyage, via?}. country_qid 는 나라 사실(country_facts)의 qid.
+
+    같은 나라 항목 중에서 고른다:
+      1) 좌표가 있으면 그대로(인구가 있는 항목 → 검색 순서).
+      2) 좌표가 없고 해산된(P576) 옛 행정구역이면 '통합됨'(P7888)·'대체됨'(P1366)이 가리키는 지금의 도시로
+         — 예: 옥구군(1995 해산) → 군산시. via = {kind: "merged", from: 옛 항목}.
+      3) 좌표가 없고 상위 행정구역(P131)만 있으면(신생 구역 등) 그 상위 구역 좌표로 — via = {kind: "parent"}.
+    2)·3)은 호출이 한 번 더 든다."""
     if not config.source_on("wikidata"):
         return disabled("wikidata")
     name = (name or "").strip()
@@ -137,29 +180,41 @@ def city_by_name(http: SafeHttp, country_qid: str, name: str) -> dict:
     ids = [x.get("id") for x in (s or {}).get("search") or [] if re.fullmatch(r"Q\d+", str(x.get("id")))]
     if not ids:
         return result("wikidata", "empty", reason="no_item")
-    res, e = http.get_json(ACTION_API + "?" + urllib.parse.urlencode({
-        "action": "wbgetentities", "ids": "|".join(ids), "props": "claims|sitelinks|labels", "languages": "en",
-        "sitefilter": "enwikivoyage", "format": "json"}), timeout=8)
+    res, ents = _entities(http, ids)
     if not res.ok:
         return result("wikidata", status_of(res), reason=res.error)
-    ents = (e or {}).get("entities") or {}
-    hits = []
+    direct, merged, parent = [], [], []
     for order, q in enumerate(ids):
         ent = ents.get(q) or {}
         cl = ent.get("claims") or {}
-        coord = (((cl.get("P625") or [{}])[0].get("mainsnak") or {}).get("datavalue") or {}).get("value") or {}
-        if country_qid not in _claim_ids(cl, "P17") or "latitude" not in coord:
+        if country_qid not in _claim_ids(cl, "P17"):
             continue
-        try:
-            pop = int(float(str((((cl.get("P1082") or [{}])[0].get("mainsnak") or {}).get("datavalue") or {}).get("value", {}).get("amount", "0"))))
-        except (TypeError, ValueError, AttributeError):
-            pop = 0
-        hits.append((pop == 0, order, q, ent, coord, pop))      # 인구가 있는(사람이 사는 곳) 항목을 앞에, 그다음 검색 순서
-    if not hits:
-        return result("wikidata", "empty", reason="no_item")
-    _, _, q, ent, coord, pop = min(hits, key=lambda h: (h[0], h[1]))
-    return result("wikidata", "ok", {
-        "qid": q, "lat": float(coord["latitude"]), "lon": float(coord["longitude"]),
-        "name_en": str(((ent.get("labels") or {}).get("en") or {}).get("value") or "")[:80], "population": max(0, pop),
-        "wikivoyage": str(((ent.get("sitelinks") or {}).get("enwikivoyage") or {}).get("title") or "")[:120]},
-        url="https://www.wikidata.org/wiki/" + q)
+        if "latitude" in _value(cl, "P625"):
+            direct.append((_pop(cl) == 0, order, q, ent))
+            continue
+        succ = _claim_ids(cl, "P7888") or _claim_ids(cl, "P1366")
+        if cl.get("P576") and succ:
+            merged.append((order, q, succ[0]))
+            continue
+        up = _current_ids(cl, "P131")
+        if up:
+            parent.append((order, q, up[0]))
+    if direct:
+        _, _, q, ent = min(direct, key=lambda h: (h[0], h[1]))
+        return result("wikidata", "ok", _city_data(q, ent), url="https://www.wikidata.org/wiki/" + q)
+    for kind, rows in (("merged", merged), ("parent", parent)):
+        if not rows:
+            continue
+        _, old, target = rows[0]
+        if not re.fullmatch(r"Q\d+", target or ""):
+            continue
+        res, more = _entities(http, [target])
+        if not res.ok:
+            return result("wikidata", status_of(res), reason=res.error)
+        ent = more.get(target) or {}
+        if "latitude" not in _value(ent.get("claims") or {}, "P625"):
+            continue
+        label = str(((ent.get("labels") or {}).get("en") or {}).get("value") or "")[:80]
+        return result("wikidata", "ok", _city_data(target, ent, {"kind": kind, "from": old, "label": label}),
+                      url="https://www.wikidata.org/wiki/" + target)
+    return result("wikidata", "empty", reason="no_item")

@@ -107,6 +107,8 @@ def city_report(tc: dict, res: dict) -> dict:
         "key": ref["key"], "idx": tc["idx"], "name": ref["name"], "input": ref["input"], "ko": ref["ko"],
         "iso2": ref["iso2"], "resolved": ref["resolved"], "status": status,
         "place_status": place_status, "none_reason": none_reason, "stale": bool(res.get("places_stale")),
+        # 후퇴(복구) 표시: merged 옛 지명 → 지금 도시 · parent 상위 구역 기준 · wider 반경을 넓혀 찾음
+        "fallback": _fallback(ref, res),
         "chain": {n: {k: v.get(k) for k in ("status", "outcome", "count")} for n, v in (res.get("chain") or {}).items()},
         "wikivoyage": {"title": guide.get("title") or "", "url": page_url(guide["title"]) if guide.get("title") else ""},
         "places": places, "practical": extract.apply_practical(practical_from(guide), ext) if guide else [],
@@ -116,6 +118,14 @@ def city_report(tc: dict, res: dict) -> dict:
         "cross_border_next": tc.get("cross_border_next", False),
         "sources": res.get("sources") or [],
     }
+
+
+def _fallback(ref: dict, res: dict) -> Optional[dict]:
+    fb = ref.get("area_fallback") or res.get("fallback")
+    if not isinstance(fb, dict) or fb.get("kind") not in ("merged", "parent", "wider"):
+        return None
+    label = verify.safe_text(str(fb.get("label") or ""), 80)
+    return {"kind": fb["kind"], "label": label}
 
 
 def country_report(c: dict, res: dict) -> dict:

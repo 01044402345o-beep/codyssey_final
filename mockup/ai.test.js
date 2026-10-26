@@ -670,3 +670,13 @@ test('도시 조사 접기: 장소 0곳 도시는 서버가 준 이유(none_reas
   assert.deepEqual(f.meta['나라'], { base: 4, found: 0, mode: 'empty', stale: false, reason: 'outage' });
   assert.equal(f.meta['교토'].reason, 'no_places');                                // 예전 보고서(none_reason 없음)
 });
+
+test('도시 조사 접기: 후퇴 표시(merged·parent·wider)만 meta 로 넘기고 모르는 값은 버린다', () => {
+  const mk = fb => ({ quality: 'full', countries: {}, attributions: [],
+    cities: [{ idx: 0, status: 'ok', fallback: fb, places: [{ id: 'a', name: 'A', kind: 'attraction', sources: [] }] }] });
+  const caps = { '군산': { attr: 1, rest: 0 } };
+  assert.deepEqual(AI.foldResearch([{ name: '군산' }], { status: 'done', report: mk({ kind: 'merged', label: 'Gunsan' }) }, caps).meta['군산'].fallback,
+    { kind: 'merged', label: 'Gunsan' });
+  assert.equal(AI.foldResearch([{ name: '군산' }], { status: 'done', report: mk({ kind: 'evil', label: 'x' }) }, caps).meta['군산'].fallback, undefined);
+  assert.equal(AI.foldResearch([{ name: '군산' }], { status: 'done', report: mk(null) }, caps).meta['군산'].fallback, undefined);
+});

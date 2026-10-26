@@ -124,6 +124,8 @@ def enrich_unresolved(deps: Deps, resolved: dict, network: bool = True) -> list[
         if data.get("lat") is None:
             continue
         en = data.get("name_en") or ""
+        if data.get("via"):
+            ref["area_fallback"] = {"kind": data["via"].get("kind"), "label": data["via"].get("label") or ""}
         ref.update(lat=data["lat"], lon=data["lon"], population=int(data.get("population") or 0), qid=data.get("qid") or "",
                    wv_title=data.get("wikivoyage") or "", ascii=ref["ascii"] or (en if en.isascii() else ""),
                    name=en or ref["name"])
@@ -276,7 +278,7 @@ def city_places(deps: Deps, tc: dict, need: list, cached: dict, guide: Optional[
     px = cached.get("places_extra")
     old = (px or {}).get("data")
     cached_out = {"extra_places": (old or {}).get("places") or [], "places_stale": bool(px and px.get("stale")),
-                  "chain": (old or {}).get("by_source") or {}, "chain_outage": False}
+                  "chain": (old or {}).get("by_source") or {}, "chain_outage": False, "fallback": (old or {}).get("fallback")}
     if "places" not in need and "live" not in need:
         return cached_out
     wv = (guide or {}).get("wikivoyage") or {}
@@ -293,9 +295,18 @@ def city_places(deps: Deps, tc: dict, need: list, cached: dict, guide: Optional[
         return {"extra_places": [], "places_stale": False, "chain": {}, "chain_outage": False}
     deps.progress(ref["input"], "places")
     res = chain.run(deps, tc, have)
+    fallback = None
+    if not have and not res["places"] and ref.get("lat") is not None and not deps.past_deadline():
+        # 도시 가까이에 공개 자료가 하나도 없다 → 주변 검색형 소스로 반경을 넓혀 한 번 더(장애로 비었으면 넓혀도 같으니 건너뜀)
+        if not res["outage"]:
+            wide = chain.run(deps, {**tc, "ref": {**ref, "radius_scale": chain.WIDER_SCALE}}, [], only=chain.NEARBY)
+            if wide["places"]:
+                fallback = {"kind": "wider", "label": ""}
+                res = {**wide, "places": [{**p, "area_fallback": "wider"} for p in wide["places"]],
+                       "by_source": {**res["by_source"], **{f"{n}~wide": v for n, v in wide["by_source"].items()}}}
     store = _storable(res["places"])
     live = [p for p in res["places"] if p not in store]
-    new = {"places": store, "by_source": res["by_source"], "want": w, "outage": res["outage"]}
+    new = {"places": store, "by_source": res["by_source"], "want": w, "outage": res["outage"], "fallback": fallback}
     use, kept_old = chain.keep_last_good(new, old)
     if not kept_old:
         # 장애가 섞인 결과는 짧게(곧 다시), 정상 결과는 30일(미해결 도시 7일)
@@ -305,7 +316,7 @@ def city_places(deps: Deps, tc: dict, need: list, cached: dict, guide: Optional[
         deps.cache.put("research_cities", ref["key"], "places_extra", new, ttl, srcs)
     deps.progress(ref["input"], "places", "stale" if kept_old else ("partial" if res["outage"] else "done"))
     return {"extra_places": (use.get("places") or []) + live, "places_stale": kept_old,
-            "chain": use.get("by_source") or {}, "chain_outage": res["outage"]}
+            "chain": use.get("by_source") or {}, "chain_outage": res["outage"], "fallback": use.get("fallback")}
 
 
 def city_extract(deps: Deps, tc: dict, need: list, cached: dict, guide: Optional[dict], climate: Optional[dict],
@@ -355,4 +366,4 @@ def city_finalize(tc: dict, guide: dict, climate: Optional[dict], sources: list,
     pl = places or {}
     return {"guide": guide or {}, "climate": climate, "sources": sources, "extract": ext, "extract_status": ext_status,
             "extra_places": pl.get("extra_places") or [], "places_stale": bool(pl.get("places_stale")),
-            "chain": pl.get("chain") or {}, "chain_outage": bool(pl.get("chain_outage"))}
+            "chain": pl.get("chain") or {}, "chain_outage": bool(pl.get("chain_outage")), "fallback": pl.get("fallback")}

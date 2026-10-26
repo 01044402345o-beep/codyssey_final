@@ -34,7 +34,7 @@ REPORT = {
                          "driving_side": "left", "languages": [], "advisory": None}},
     "cities": [
         {"key": "JP_1850147", "idx": 0, "name": "Tokyo", "iso2": "JP", "resolved": True, "status": "ok",
-         "place_status": "ok", "none_reason": "", "stale": True,
+         "place_status": "ok", "none_reason": "", "stale": True, "fallback": {"kind": "wider", "label": ""},
          "wikivoyage": {"title": "", "url": ""},
          "places": [wd_place(1, "Sensō-ji"), wd_place(2, "Meiji Shrine"), wd_place(3, "Ueno Park"), wd_place(4, "Tokyo Tower"),
                     wd_place(5, "Sushi Dai", "restaurant"), wd_place(6, "Blue Bottle", "cafe"), wd_place(7, "Afuri", "restaurant")],
@@ -93,6 +93,7 @@ with sync_playwright() as p:
     check("조사 모드(한 도시가 0곳이어도 여행 전체는 조사 결과)", page.evaluate("S.reportMode") == "research")
     text = page.inner_text(".app")
     check("도쿄: 소스 장애로 지난 결과 안내", "지난번에 조사한 장소" in text, text[:300])
+    check("도쿄: 반경을 넓혀 찾은 장소라는 안내(후퇴 표시)", "반경을 넓혀" in text, text[:400])
     card = page.locator(".place", has_text="Sensō-ji").first.inner_text()
     check("도쿄: 대체 소스 출처 이름·라이선스(Wikidata·Wikipedia)", "Wikidata · Sensō-ji" in card and "Wikipedia · Sensō-ji" in card
           and "Wikidata (CC0)" in card and "Wikipedia (CC BY-SA 4.0)" in card, card)

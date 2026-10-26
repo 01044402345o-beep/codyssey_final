@@ -2709,6 +2709,7 @@ function scrReport() {
   } else if (meta.mode === 'research') {
     lead += notice(`공개 여행 자료(위키보이지·위키데이터 등)에서 <b>실제로 조사한 장소</b>예요 — 이 도시 ${meta.total}곳 중 여행 일정에 맞춰 골랐어요. 영업시간·가격은 방문 전에 확인해 주세요.`);
     if (meta.stale) lead += notice('자료 서버가 지금 응답하지 않아 <b>지난번에 조사한 장소</b>를 보여 드려요.', 'warn');
+    if (meta.fallback) lead += notice(fallbackNotice(city, meta.fallback), 'warn');
   } else if (S.research) {
     // 조사는 됐지만 이 도시만 장소 0곳 — 예시로 채우지 않고, 이유를 알리고 도시 브리프·직접 추가를 보인다
     lead += notice(PLACE_NONE_KO[meta.reason] || PLACE_NONE_KO.no_sources, 'warn');
@@ -2820,6 +2821,13 @@ function briefCard(cityName) {
   return `<div class="card brief-card"><div class="brief-h"><b>${esc(city)} 알아두기</b><span class="brief-tag">${conf}</span>
       <button type="button" class="brief-retry" data-act="brief-retry" data-city="${esc(cityName)}" title="다시 조사" aria-label="다시 조사">↻</button></div>
     ${rows}${gaps}<p class="brief-attr">${esc(d.attribution || '')}</p></div>`;
+}
+/* 후퇴(복구)로 찾은 장소 안내: 옛 지명 → 지금 도시, 상위 구역 기준, 반경을 넓혀 찾음 */
+function fallbackNotice(city, fb) {
+  const label = fb.label ? `'${esc(fb.label)}'` : '';
+  if (fb.kind === 'merged') return `${esc(josa(city, '은', '는'))} 지금은 ${label || '다른 도시'}${label ? '(으)로' : '로'} 통합된 지명이라, 그 도시 기준으로 조사했어요.`;
+  if (fb.kind === 'parent') return `${esc(city)}의 정확한 위치를 찾지 못해 상위 지역 ${label} 기준으로 조사했어요. 실제 위치와 떨어진 장소가 섞일 수 있어요.`;
+  return `${esc(city)} 가까이에는 공개 자료가 적어 <b>반경을 넓혀</b> 찾은 장소예요. 이동 거리를 확인해 주세요.`;
 }
 /* 장소 0곳 도시(조사 모드): 이유별 안내와 '장소 직접 추가'. 예시(가짜) 장소로 채우지 않는다(10/26 결정). */
 const PLACE_NONE_KO = {
