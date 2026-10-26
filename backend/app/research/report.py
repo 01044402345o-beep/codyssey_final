@@ -10,7 +10,7 @@ import re
 import time
 from typing import Any, Optional
 
-from . import chain, extract, verify
+from . import chain, extract, verify, vocab
 from .sources import LICENSES
 from .sources.wikivoyage import page_url
 
@@ -94,7 +94,7 @@ def city_report(tc: dict, res: dict) -> dict:
     ref, guide = tc["ref"], ((res.get("guide") or {}).get("wikivoyage") or {})
     ext = res.get("extract")
     base = places_from(ref, guide) if guide.get("listings") else []
-    places = extract.apply_places(chain.merge(base, res.get("extra_places") or []), ext)
+    places = vocab.for_places(extract.apply_places(chain.merge(base, res.get("extra_places") or []), ext))
     clim = res.get("climate") or {}
     status = "ok" if places else ("partial" if guide.get("sections") else "empty")
     # ok = 종류별로 일정이 정한 수는 채움, thin = 일부만, none = 0곳(화면이 브리프·직접 추가를 보인다)

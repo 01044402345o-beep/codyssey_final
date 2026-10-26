@@ -126,6 +126,16 @@ GeoNames 에서 못 찾은 도시(좌표 없음 → 날씨·주변 검색 불가
 - 실패·꺼짐·마감(`RESEARCH_SOFT_DEADLINE_S`)이면 보고서는 listing 순서·영어 원문 그대로(`cities[].extract.status`: ok·failed·busy·disabled·deadline·empty). 실패는 캐시하지 않는다. 마감에 걸린 추출은 뒤에서 끝까지 돌아 캐시만 데운다(Gemini 장애 때 최소 시도 규칙으로 몇 분 걸려도 화면은 150초 안에 listing 보고서를 받는다).
 - 화면: 장소 카드에 한국어 요약 — 이유, 그 아래 영어 원문(작게). 실용 정보는 한국어 요약 + 인용(blockquote).
 
+## 장소 어휘 (`research/vocab.py`)
+
+보고서의 장소마다 `vocab: [{en, kind: dish|feature|type, src}]`(최대 4개) — 문장 슬롯·문장 생성 제약에 쓴다.
+
+- 코드(결정적·무료): 여행 어휘 사전(음식·볼거리·종류) + 패턴("specializes in X", "famous for X", "serves X", "houses a X" …, 원문 그대로 1~3 낱말, 꾸밈말 제거) + OSM cuisine·TourAPI 신분류 매핑 + 이름의 머리 명사(Market Square → square, 독일어·이탈리아어·일본어 이름의 종류 낱말).
+- LLM(PR3 추출, 도시당 1회): `places[].vocab` 최대 3개 — 이름·설명에 **그대로 있는** 낱말만 통과.
+- 영어 설명만 읽는다(다른 언어 설명이면 이름의 종류만).
+- **골든 코퍼스**: `backend/tests/fixtures/research_golden/` — 실제 8개 도시(도쿄·나라·군산·로텐부르크·마테라·쿠스코·호이안·뉴욕, 2026-10-26 수집, CC BY-SA/CC0) 장소 301곳 → `expected/vocab.json`. 규칙을 바꾸면 `python scripts/update_research_golden.py`(확인만: `--check`) 후 diff 를 보고 커밋.
+- **속성 테스트**: 무작위·악의적 입력 800건 — 낱말은 짧고 숫자·기호·URL 없음, 패턴·LLM 낱말은 원문에 있음, 중복 없음, 최대 4개.
+
 ## 문장 생성 연결 (PR5, `research/grounding.py`)
 
 화면은 조사 모드일 때 `/generate` 에 도시 키 `research_key`(보고서 `cities[].key`)를 싣고, 직접 추가·실시간(Google) 장소엔 `user: true` 를 붙인다.

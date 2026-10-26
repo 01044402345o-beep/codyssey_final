@@ -1,0 +1,368 @@
+{
+ "city": "Rothenburg ob der Tauber",
+ "iso2": "DE",
+ "captured": "2026-10-26",
+ "license": "Wikivoyage/Wikipedia text CC BY-SA 4.0, Wikidata CC0 — test fixture, attribution: Wikivoyage & Wikipedia contributors",
+ "places": [
+  {
+   "id": "wv:XX_1:5",
+   "name": "Market Square",
+   "kind": "attraction",
+   "desc_en": "Historischer Weihnachtsschmuck (teilweise auch Herstellung), Ausstellungen: Nussknacker, Weihnachtsbäume, Weihnachtsmänner. Angeschlossener Laden für Weihnachtszubehör.",
+   "desc_lang": "en",
+   "wikidata": "Q60853341",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:7",
+   "name": "Medieval Crime and Punishment Museum",
+   "kind": "attraction",
+   "desc_en": "Katholische Kirche im spätgotischen Stil. Die Kirche wurde im Anschluss an die Johanniterkommende gebaut. In der angrenzenden Schmiedgasse war früher das Tor des inneren Stadtmauerrings.",
+   "desc_lang": "en",
+   "wikidata": "Q41425157",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:8",
+   "name": "Plönlein",
+   "kind": "attraction",
+   "desc_en": "public square in Rothenburg ob der Tauber, Germany",
+   "desc_lang": "en",
+   "wikidata": "Q60853296",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:10",
+   "name": "St. Jakobskirche",
+   "kind": "attraction",
+   "desc_en": "Heilig-Blut-Altar von Tilman Riemenschneider, Zwölfbotenaltar von Friedrich Herlin, Glasfenster des Ostchores. Gottesdienste: So 9.30 Uhr evangelischer Gottesdienst, anschließend kostenlose Kirchenführung; Im Sommer Frühgottesdienst 7.30 Uhr; So 11 Uhr Spätgottesdienst in der Friedhofskapelle vor…",
+   "desc_lang": "en",
+   "wikidata": "Q880354",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:18",
+   "name": "Altfränkische Weinstube",
+   "kind": "restaurant",
+   "desc_en": "On Wednesday nights at 20:00, the English Speakers' Club meets. All are welcome.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:19",
+   "name": "Baumeisterhaus",
+   "kind": "restaurant",
+   "desc_en": "Housed in a Renaissance styled residence built in 1596 by the town master mason (Stadtbaumeister) Leonhard Weidmann.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:20",
+   "name": "Louvre",
+   "kind": "restaurant",
+   "desc_en": "Japanese cuisine.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:21",
+   "name": "Ratsstube",
+   "kind": "restaurant",
+   "desc_en": "A true tavern atmosphere.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:22",
+   "name": "Zur Höll",
+   "kind": "restaurant",
+   "desc_en": "Inn (Gasthaus) in a 1100-year-old building. Cash only.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:23",
+   "name": "Unter den Linden",
+   "kind": "cafe",
+   "desc_en": "A cafe-bar on the River Tauber. It is quite the hike down and up but, the beer is nice and cold.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:24",
+   "name": "Cafe einzigARTig",
+   "kind": "cafe",
+   "desc_en": "Cozy cafe. Nice cakes. Beautiful decorations.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:12",
+   "name": "Franziskanerkirche",
+   "kind": "attraction",
+   "desc_en": "Älteste Kirche Rothenburgs, Franziskusaltar (1490) von Tilman Riemenschneider, Lettner. Gottesdienste: So 11.00-11.30 Uhr; im Sommer Do 18.15 Uhr: Wort und Musik zur Abendzeit; jeden Samstag 18:00 Uhr Gottesdienst oder Orgelkonzert.",
+   "desc_lang": "de",
+   "wikidata": "Q884008",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:14",
+   "name": "St. Wolfgangskirche",
+   "kind": "attraction",
+   "desc_en": "Ehemalige Wehrkirche mit Kasematten im Festungsbereich des Klingentores, Schäfertanzkabinett.",
+   "desc_lang": "de",
+   "wikidata": "Q41425334",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:15",
+   "name": "Heilig-Geist-Kirche",
+   "kind": "attraction",
+   "desc_en": "Die Rothenburger Spitalkirche am äußeren Ende des Kappenzipfels.",
+   "desc_lang": "de",
+   "wikidata": "Q41425017",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:16",
+   "name": "St. Peter und Paul-Kirche",
+   "kind": "attraction",
+   "desc_en": "Kreuz-Altar von Riemenschneider, Seitenaltäre, Reliquienkreuz, Totenleuchte am Gebeinhaus. Gottesdienste: So 9 Uhr, im Sommer anschließend kostenlose Kirchenführung.",
+   "desc_lang": "de",
+   "wikidata": "Q1668828",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:17",
+   "name": "Burgruine Endsee",
+   "kind": "attraction",
+   "desc_en": "Die Burgruine Endsee ist eine historische Festung, deren Überreste malerisch in der Nähe des Ortes Endsee in Mittelfranken liegen.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:18",
+   "name": "Burgruine Nordenberg",
+   "kind": "attraction",
+   "desc_en": "Diese Ruine, die einst eine stolze Burg im heutigen Nordenberg war, bietet Einblicke in mittelalterliche Baukunst und eine reizvolle Aussicht über das Umland.",
+   "desc_lang": "de",
+   "wikidata": "Q1013346",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:19",
+   "name": "Burgruine Seldeneck",
+   "kind": "attraction",
+   "desc_en": "Die Burgruine Seldeneck, die nur noch spärliche Überreste aufweist, ist ein Überbleibsel einer früheren Adelsburg und liegt versteckt inmitten der idyllischen fränkischen Natur.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:20",
+   "name": "Alt-Rothenburger Handwerkerhaus",
+   "kind": "attraction",
+   "desc_en": "Ehemalige Lebensweise von Handwerkern.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:22",
+   "name": "Fuchsmühle",
+   "kind": "attraction",
+   "desc_en": "Alte Mühle mit funktionsfähigem Wasserrad, Getriebe von 1906, historischer Mahlbühne und Walzboden mit sechs Walzstühlen und Steinmahlgang.",
+   "desc_lang": "de",
+   "wikidata": "Q76629382",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:25",
+   "name": "RothenburgMuseum",
+   "kind": "attraction",
+   "desc_en": "Bis 2018 Reichsstadtmuseum. Ehemaliges Dominikanerinnenkloster, erhaltene Klosterküche, Objekte des mittelalterlichen Klosterlebens, Tafeln der Rothenburger Passion, Waffen- und Kunstsammlung Baumann, Gemäldegalerie mit Künstlern des 19. Jahrhunderts, Judaika-Abteilung.",
+   "desc_lang": "de",
+   "wikidata": "Q76629376",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:27",
+   "name": "Alte Burg",
+   "kind": "attraction",
+   "desc_en": "Der Standort der alten Burg mit wunderschönen Aussichtspunkten mit Blick auf die, auf das Topplerschlösschen und tauberabwärts auf",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:28",
+   "name": "Athis-Mons-Anlage",
+   "kind": "attraction",
+   "desc_en": "Athis Mons ist eine französische Partnerstadt Rothenburgs und liegt bei Paris. Im Burggraben befindet sich ein Spielplatz. Während der Reichstadttage kann man einen Geheimgang zwischen der Anlage und dem Burggraben begehen.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:29",
+   "name": "Hornburgweganlage",
+   "kind": "attraction",
+   "desc_en": "Auf der Wiese lagern während der Reichstadttage die Truppen. Es existiert ein Spielplatz.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:30",
+   "name": "Klostergarten",
+   "kind": "attraction",
+   "desc_en": "Der ehemalige Garten des Dominikanerinnenklosters. Ein ruhiger Park im Inneren der Stadtmauer, neben dem RothenburgMuseum. Geöffnet tagsüber von April bis Oktober.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:31",
+   "name": "Neue Burg",
+   "kind": "attraction",
+   "desc_en": "Eine langgezogene Grünanlage auf der Außenseite der Stadtmauer, die an die Alte Burg anschließt. Die Anlage besitzt einen wunderschönen Spielplatz.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:32",
+   "name": "Riviera",
+   "kind": "attraction",
+   "desc_en": "Ein ganzes System von Wegen durch und oberhalb des Rothenburger Weinbergs. Sitzbänke laden zum Sonnen ein. Es gibt dort eine Kneippbecken.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:33",
+   "name": "Spitalbasteigraben",
+   "kind": "attraction",
+   "desc_en": "Direkt vor der Spitalbastei befindet sich diese Anlage im Burggraben.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:34",
+   "name": "Sterngarten",
+   "kind": "attraction",
+   "desc_en": "Dieser kleine Park liegt auf dem direkten Weg vom Parkplatz P1 in die Stadt.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:37",
+   "name": "Kletterwald Rothenburg",
+   "kind": "attraction",
+   "desc_en": "Der Kletterwald liegt auf der anderen Seite des Taubertals. Am einfachsten kommt man mit dem Auto hin, kann aber auch hinwandern.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:43",
+   "name": "Alter Bahnhof Bockenfeld",
+   "kind": "restaurant",
+   "desc_en": "Die Gartenwirtschaft am alten Bahnhof ist nur von Mai bis September am Mittwoch, Sonntag und an Feiertagen geöffnet. Geschlossen bei schlechtem Wetter. Der Biergarten liegt am Radweg Alte Bahnlinie.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:44",
+   "name": "Gasthof Rödertor",
+   "kind": "restaurant",
+   "desc_en": "Der schattige Biergarten liegt gleich außerhalb des Rödertors und ist nur in der warmen Jahreszeit geöffnet.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:45",
+   "name": "Hotel Eisenhut",
+   "kind": "restaurant",
+   "desc_en": "Seit 2017 ist der terrassenförmig angelegte Biergarten auf der Rückseite des 4-Sterne-Hotels wieder geöffnet.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:46",
+   "name": "Rappenbiergarten",
+   "kind": "restaurant",
+   "desc_en": "Der schattige, kleine Biergarten liegt gleich außerhalb des Würzburger Tors.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:47",
+   "name": "Unter den Linden",
+   "kind": "restaurant",
+   "desc_en": "Malerische Wiesenwirtschaft unterhalb von Rothenburg, direkt an der Tauber. Im Sommer kann man die Füße in den Fluss stecken.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:52",
+   "name": "Hotel-Gasthof Goldener Greifen",
+   "kind": "restaurant",
+   "desc_en": "Uriges, typisch fränkisches Lokal mit regionaler Küche, beliebt bei Einheimischen, ruhiger gemütlicher Biergarten hinter dem Haus.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:60",
+   "name": "Restaurant Topinambur",
+   "kind": "restaurant",
+   "desc_en": "Restaurant im Prinzhotel mit moderner deutscher und europäischer Küche sowie regionalen und saisonalen Einflüssen. Moderne Gasträume und ruhige Terrasse nahe der Stadtmauer. Angeschlossen ist die Cocktailbar TopinamBAR. Online Reservierung über OpenTable möglich. Besonders am Wochenende…",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:63",
+   "name": "Club23",
+   "kind": "restaurant",
+   "desc_en": "Ab 2 Uhr nachts, günstige Getränke, viele Jugendliche.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:64",
+   "name": "Pub & Diner Liquid Corner",
+   "kind": "restaurant",
+   "desc_en": "Guinness und Kilkenny vom Fass, sowie eine große Auswahl an Whisk(e)y, edle Destillate wie verschiedene Rums, Grappa usw. Weine aus Franken und dem Rest der Welt, Cocktails und alkoholische- und nicht alkoholische Getränke. Bis 22.00 Uhr gibt es leckere Burger, sowie weitere Diner-Spezialitäten.",
+   "desc_lang": "de",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wd:XX_1:Q41297912",
+   "name": "St. Laurentius",
+   "kind": "attraction",
+   "desc_en": "church building in Gebsattel, Middle Franconia, Germany",
+   "desc_lang": "",
+   "wikidata": "Q41297912",
+   "provider": "wikidata"
+  }
+ ]
+}

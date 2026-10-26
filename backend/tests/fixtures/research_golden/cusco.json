@@ -1,0 +1,368 @@
+{
+ "city": "Cusco",
+ "iso2": "PE",
+ "captured": "2026-10-26",
+ "license": "Wikivoyage/Wikipedia text CC BY-SA 4.0, Wikidata CC0 — test fixture, attribution: Wikivoyage & Wikipedia contributors",
+ "places": [
+  {
+   "id": "wv:XX_1:9",
+   "name": "Museo Municipal de Arte Contemporáneo",
+   "kind": "attraction",
+   "desc_en": "In the Municipal Palace at Plaza Regocijo, this museum has exhibitions of contemporary art. Admission with the boleto turistico",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:10",
+   "name": "Museo Histórico Regional",
+   "kind": "attraction",
+   "desc_en": "In the home of the Inca historian Garcilaso de la Vega, this 2-story museum has many paintings from the 17th and 18th century as well as historical displays chronicling the pre-Hispanic Inca civilization, the invasion of the Spanish and the role of Christianity in the post-conquest era. A tour is…",
+   "desc_lang": "en",
+   "wikidata": "Q54800990",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:11",
+   "name": "Machu Picchu Museum",
+   "kind": "attraction",
+   "desc_en": "The largest collection of Machu Picchu artifacts in the world. These artifacts were collected by Yale University researcher Hiram Bingham beginning in 1912 and returned to Peru in 2011. The museum is housed in a late 18th-century house called Casa Concha.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:12",
+   "name": "Museo del Centro de Textiles Tradicionales de Cusco",
+   "kind": "attraction",
+   "desc_en": "A beautiful (and free) museum inside El Centro's textile store, featuring a gallery containing displays of traditional Quechuan and Andean textiles. The museum explains the historical significance of textiles and the techniques by which they are made. A must-see, and visitors can buy the…",
+   "desc_lang": "en",
+   "wikidata": "Q30594928",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:13",
+   "name": "Museo del Sitio del Qoricancha",
+   "kind": "attraction",
+   "desc_en": "With information about the different pre-Columbian cultures and fragments of ceramics and textiles of the Inca culture. A very small museum, the showcase room includes three mummies and skulls modified by the Incas with holes or sloped foreheads. Allow an hour to an hour and a half. English…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:14",
+   "name": "Museo de Arte Popular",
+   "kind": "attraction",
+   "desc_en": "Displays a collection of popular art featuring handcrafts of the modern era.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:15",
+   "name": "Santa Catalina Convent",
+   "kind": "attraction",
+   "desc_en": "Also a collection of religious art. Admission with the boleto turistico.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:16",
+   "name": "Qoricancha",
+   "kind": "attraction",
+   "desc_en": "The central site of worship for the Incas. Like so many other testimonies of fantastic Inca architecture, it was severely devastated by the conquistadores, the Spanish conquerors, who built their Christian church, Santo Domingo, on top of the ruins. Yet most of the bottom part of the temple is…",
+   "desc_lang": "en",
+   "wikidata": "Q817594",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:17",
+   "name": "ChocoMuseo",
+   "kind": "attraction",
+   "desc_en": "A shop (\"museum\") explaining the history of cacao (free) and offering chocolate workshops (not free) as well as cacao farm tours (not free). Different recipes from around the world are available all made with chocolate from the factory inside the cacao and chocolate museum. Great artisanal and…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:18",
+   "name": "Museo Inka",
+   "kind": "attraction",
+   "desc_en": "Extensive museum of pre-Inca, Inca, and colonial artifacts. Labels in English and Spanish, though the descriptions in English are sometimes pretty different from the ones in Spanish.",
+   "desc_lang": "en",
+   "wikidata": "Q40159162",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:20",
+   "name": "Piedra de los doce ángulos",
+   "kind": "attraction",
+   "desc_en": "A large stone in one wall has 12 sides and 12 angles. This one has become almost a symbol of Cusco and is a striking example of the precision of Inca architecture and stonework.",
+   "desc_lang": "en",
+   "wikidata": "Q16618903",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:22",
+   "name": "Cusco Cathedral",
+   "kind": "attraction",
+   "desc_en": "Elaborate large cathedral full of colonial-era religious paintings. The biggest church in Cuzco, in front of Plaza de Armas. As a tourist the entrance is S/25. If you go in a \"misa\" (mass) between 06:30–09:00, it is free. No photography allowed.",
+   "desc_lang": "en",
+   "wikidata": "Q2942242",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:23",
+   "name": "Palacio Inka del Kusikancha",
+   "kind": "attraction",
+   "desc_en": "The ruins of an Inca palace, the home of 15th-century Inca emperor Pachakuti Inka Yupanki, which you can walk around in. The Inca and colonial stonework and architecture is interesting.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:24",
+   "name": "Plaza de Armas",
+   "kind": "attraction",
+   "desc_en": "The park square has churches, shops, restaurants and bars surrounding it, and is a great place to spend an afternoon. The historical center of Cuzco is beautiful, but you will have to deal with all the street vendors and hawkers of cheap paintings and other souvenirs. They are everywhere in and…",
+   "desc_lang": "en",
+   "wikidata": "Q9060929",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:25",
+   "name": "Plaza de San Francisco,",
+   "kind": "attraction",
+   "desc_en": "A great place to visit one of Cuzco's many great coffee shops. Next to the Plaza is the main market, which is fairly traditional and is a worthwhile visit. The market has a mix of stalls selling food and other household items as well as clothing and souvenirs.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:26",
+   "name": "Salseros Cusco",
+   "kind": "attraction",
+   "desc_en": "Take a Salsa class, or three. This is a fabulous little salsa school offering private and group classes at minimal price in two central locations. With enthusiastic teachers and a number of styles taught, this is the perfect time to polish your moves and get ready to shine on the dance floor. Ask…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:27",
+   "name": "Planetario Cuzco",
+   "kind": "attraction",
+   "desc_en": "Information about Inka astronomy, projection and explanation of the southern sky in the dome, observing stars, planets and other objects with telescopes.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:28",
+   "name": "Sacsayhuamán",
+   "kind": "attraction",
+   "desc_en": "The closest and largest of these ruins is the amazing Sacsayhuamán (sometimes called Saqsaywaman and pronounced \"Sock-say-wah-mun\"), the ruins of an Inca fortress high above Cuzco. It is a steep climb from the Plaza de Armas up Plateros street which changes to Saphi. Look for the long staircase on…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:29",
+   "name": "Qenko",
+   "kind": "attraction",
+   "desc_en": "The second site up the road from Sacsayhuamán. Take the combi shared buses up the hill for S/1 or take a walk of about 0.5–1&nbsp;km up a gradual incline to visit the site. Its name means \"Zig-Zag\" in Quechua, and probably refers to the Zig-Zag channels carved into a rock. Explore the pass through…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:30",
+   "name": "Pukapukara",
+   "kind": "attraction",
+   "desc_en": "Named after the red hue of the hillsides nearby. The third site along the route, even heartier walkers will find the walk a bit long and a bit steep despite the paved and well traveled road. However, the views along the walk are great and small mud brick bars are intermittent between the sites.…",
+   "desc_lang": "en",
+   "wikidata": "Q2390374",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:31",
+   "name": "Tambomachay",
+   "kind": "attraction",
+   "desc_en": "The most distant ruin on the route from Cuzco. It is a small site with an ornamental fountain whose source is unknown as reportedly archaeologists lack the tools necessary to determine the source without damaging the site. Likely it is an underground spring. In several Incan sites such as…",
+   "desc_lang": "en",
+   "wikidata": "Q1360456",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:34",
+   "name": "Cochahuasi Animal Sanctuary",
+   "kind": "attraction",
+   "desc_en": "A one-of-a-kind rehabilitation center started by a family of biologists, which provides shelter to animals injured or victimized by poaching. It's a happy place where animals get better and those able are re-released. In 2012, there were three condors, llamas, alpacas, vicunas, macaws, pumas, an…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:35",
+   "name": "Rainbow Mountain",
+   "kind": "attraction",
+   "desc_en": "A challenging early-morning, high-altitude hike to a beautiful multicolored mountain. Tours usually start around 04:00 with a breakfast break near or in Cusipata at around 07:00. Now there's a new path leading to the mountain from the west, the former 3-hour hike (from the east) is more a 90-minute…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:42",
+   "name": "Los Angeles",
+   "kind": "restaurant",
+   "desc_en": "For late night food after clubbing, a very good fast food-type restaurant.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:43",
+   "name": "Chifa Status",
+   "kind": "restaurant",
+   "desc_en": "Good quality Chifa. Dishes for S/2-3. Ample portions invite sharing. Credit cards accepted.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:44",
+   "name": "El Encuentro",
+   "kind": "restaurant",
+   "desc_en": "Reasonably priced vegetarian restaurant with good portions. The S/10 dinner includes soup, main course and mate. Free salads with lunch. They also do soy meat very well. There are two of these restaurants but the one in Calle Tigre near Plaza de Armas is S/8 for exactly the same menu.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:45",
+   "name": "El Fogon",
+   "kind": "restaurant",
+   "desc_en": "Nothing fancy but great cheap food: for S/10 you get a meal deal that includes a plate from the salad bar, a selection of soup, a selection of main dish, a dessert and a beverage. Or splurge with their more expensive menu offer for S/20. Very tasty Peruvian food. Friendly staff.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:46",
+   "name": "Victor Victoria",
+   "kind": "restaurant",
+   "desc_en": "Friendly service. Great salad bar buffet included in all main dishes. Gorgeous garlic trout with rice or potatoes for S/10 (including the salad bar buffet and lovely fresh bread) but only for lunch. Great value breakfasts. Regular glasses of freshly squeezed juice for S/6. Also they have a proper…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:47",
+   "name": "Chia Vegan Kitchen",
+   "kind": "restaurant",
+   "desc_en": "Arguably the best vegan place in Cusco, and very good value for money. Looks good, smells good, tastes good, and the staff is super friendly. Lunchtime offer includes drink and salad buffet for S/15. À la carte dishes are more expensive, but worth it. If you're up for a hot drink and/or something…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:48",
+   "name": "Bagdad Cafe",
+   "kind": "restaurant",
+   "desc_en": "This small restaurant seems to produce everything themselves. Local food is extremely good, in the evening small performance groups enter the restaurant and give excellent performances. The prices are mid-range, but it is sure worth it. The daily menu lunch special is more like a snack.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:49",
+   "name": "Jack's Cafe",
+   "kind": "restaurant",
+   "desc_en": "This is a great place to get a big breakfast complete with eggs, bacon, avocado, toast and fantastic thick shakes. Very popular with tourists. Try the homemade lemonades. Right outside of Jack's is an empanada stand which has great rocoto salsa, a spicy salsa that goes well on the cheese or…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:50",
+   "name": "Cicciolinia",
+   "kind": "restaurant",
+   "desc_en": "This is a very tasty place to go for breakfast. Another location, Cicciolinia Café, is on Ruinas, which is open from 7:00 AM and good for brunch.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:51",
+   "name": "Emperador",
+   "kind": "restaurant",
+   "desc_en": "They have a 13-page menu with all sorts of foods from around the world. Try the pisco sour tall.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:52",
+   "name": "Encantasq'a",
+   "kind": "restaurant",
+   "desc_en": "A nice place to have a break with coffee and a snack. Especially the chocolate cupcakes are delicious and make up for half a lunch. They also have fresh cakes, quiches and juices.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:53",
+   "name": "Green Point",
+   "kind": "restaurant",
+   "desc_en": "Vegan restaurant popular with tourists, serving breakfast, lunch, and dinner. Various international dishes, and some Peruvian food. Gluten-free and raw options. Menu in English and Spanish. Wifi available.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:54",
+   "name": "Inka Grill",
+   "kind": "restaurant",
+   "desc_en": "Well-known and frequented by tourists but not a trap. Excellent food. Good place to try cuy (guinea pig); some people have reported mud butt after eating it, it is tastily done and served without the head so eating doesn't remind you of your pet hamster. Try the appetizer tiradito de trucha. Alpaca…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:55",
+   "name": "Restaurant Inkazuela",
+   "kind": "restaurant",
+   "desc_en": "This place specializes in stews. Food is delicious and friendly waitresses will take good care of you. Well chosen music and a fireplace create a romantic atmosphere.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:56",
+   "name": "Tunupa",
+   "kind": "restaurant",
+   "desc_en": "They offer some of the best guinea pig or alpaca dishes from the local Novo Andino cuisine as well as other local specialties, including cuy; it's served here without the head (but with the feet).",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:58",
+   "name": "Gato's Market",
+   "kind": "restaurant",
+   "desc_en": "Small and a bit pricey.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:59",
+   "name": "La Canasta",
+   "kind": "restaurant",
+   "desc_en": "Well-stocked.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  }
+ ]
+}

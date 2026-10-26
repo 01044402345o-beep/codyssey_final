@@ -1,0 +1,368 @@
+{
+ "city": "Nara",
+ "iso2": "JP",
+ "captured": "2026-10-26",
+ "license": "Wikivoyage/Wikipedia text CC BY-SA 4.0, Wikidata CC0 — test fixture, attribution: Wikivoyage & Wikipedia contributors",
+ "places": [
+  {
+   "id": "wv:XX_1:3",
+   "name": "Tōdai-ji",
+   "kind": "attraction",
+   "desc_en": "Home to the famous Great Buddha (Daibutsu, 大仏), the largest Buddha statue in Japan and one of the largest in the world. The Daibutsu-den, which houses it, is said to be the largest wooden building in the world and is a UNESCO World Heritage site. The giant front gate, Nandai-mon, is guarded by two…",
+   "desc_lang": "en",
+   "wikidata": "Q460367",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:4",
+   "name": "Kōfuku-ji",
+   "kind": "attraction",
+   "desc_en": "This temple has a three-story and a five-story pagoda; historically, the latter has contended with Kyoto's Toji for the title of Tallest Pagoda in Japan, although Kofuku-ji seems to have surrendered for now.",
+   "desc_lang": "en",
+   "wikidata": "Q1070863",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:5",
+   "name": "Sarusawa Pond",
+   "kind": "attraction",
+   "desc_en": "This small pond at the east end of Sanjō-dōri with Nara Park behind or Naramachi to its south is a very popular viewing spot for Kōfukuji.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:6",
+   "name": "Nara National Museum",
+   "kind": "attraction",
+   "desc_en": "This museum has one of the world's best collections of Buddhist art and changing exhibitions. The National Treasure Hall has an impressive collection of statues. There are \"English Guides\" inside the museum however, they do not guide you through the museum; instead they are there to answer…",
+   "desc_lang": "en",
+   "wikidata": "Q147312",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:7",
+   "name": "Himuro Shrine",
+   "kind": "attraction",
+   "desc_en": "A shrine dating from 1217 and home to several fine cherry trees. Although the architecture is unremarkable, the trees in front of the shrine explode into beautiful clouds of pale pink and white blossoms in spring (late March-early April).",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:8",
+   "name": "Ukimidō",
+   "kind": "attraction",
+   "desc_en": "A hexagonal building built on Sagiike Pond in Nara Park so that it appears to float on water.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:9",
+   "name": "Kasuga Taisha",
+   "kind": "attraction",
+   "desc_en": "Worth a visit for the beautiful approach, through the Kasuga-yama Primeval Forest (see below), more than the temple itself. What Kyoto's Fushimi Inari Taisha is for torii, Kasuga Taisha is for stone lanterns. Notice the giant rack of sake barrels near the front gate and the fountain-statue of a…",
+   "desc_lang": "en",
+   "wikidata": "Q714559",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:10",
+   "name": "Kasuga-yama Primeval Forest",
+   "kind": "attraction",
+   "desc_en": "A gorgeous hill of wild, undeveloped forest leading to Kasuga Taisha and some of the other sights in Nara Koen. The path is clearly marked, though, so don't worry about getting lost. It's a quiet walk at any time of day. If you're determined to feed some deer, save your biscuits for the ones out…",
+   "desc_lang": "en",
+   "wikidata": "Q5367406",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:11",
+   "name": "Isui-en Garden",
+   "kind": "attraction",
+   "desc_en": "Enjoy the magnificently arranged garden with full of flowers, surrounded by all the rest of Nara Park. Restaurant on site.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:12",
+   "name": "Yoshikien Garden",
+   "kind": "attraction",
+   "desc_en": "Really nice garden that is worth a visit because it is free. Can be coupled with the Isui-en Garden as the entrances are right beside each other.",
+   "desc_lang": "en",
+   "wikidata": "Q23825091",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:13",
+   "name": "Shin-Yakushi-ji",
+   "kind": "attraction",
+   "desc_en": "It's a single hall with twelve ferocious warrior statues (each with his own collection plate) standing guard by a Buddha of healing. The statues are quite impressive &mdash; this is as well-protected a Buddha as you're likely to find.",
+   "desc_lang": "en",
+   "wikidata": "Q3080305",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:14",
+   "name": "Nara City Museum of Photography",
+   "kind": "attraction",
+   "desc_en": "The steel-and-glass building sits as if reflected upon the linear pond that surrounds it. Inside, there are reasonably interesting exhibits of photography on local subjects like the Mount Wakakusa Fire Festival (see below).",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:15",
+   "name": "Yakushi-ji",
+   "kind": "attraction",
+   "desc_en": "Although most of the temple was reconstructed in the 1970s after a fire, Yakushi-ji is still worth the visit. The Buddhist Yakushi trinity housed in the hondo is a great work, and the two pagodas on each side of the temple make it a unique and recognizable complex. The east pagoda has survived and…",
+   "desc_lang": "en",
+   "wikidata": "Q945913",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:16",
+   "name": "Gangō-ji",
+   "kind": "attraction",
+   "desc_en": "It was considered to be one of the seven most important temples in Nara when Nara was the nation's capital. The original temple burned down in the 18th century, but the architectural style remains true to the original, with its unique Korean-style roof. The mandala within the temple is one of the…",
+   "desc_lang": "en",
+   "wikidata": "Q1203099",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:17",
+   "name": "Heijōkyū Palace Site",
+   "kind": "attraction",
+   "desc_en": "The Suzaku Gate (朱雀門) is a replica, along with the newly built Daigoku-den (大極殿). In the center of this large expanse of land you'll find the best preserved excavation area, with some foundation structures on the site. On the rest of the grounds, you can still see where structures once stood by…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:18",
+   "name": "Tōshōdai-ji",
+   "kind": "attraction",
+   "desc_en": "A temple that was important in helping to spread Buddhist teachings in Japan, Toshodai-ji is where the great Chinese priest Ganjin preached. His grave is within the precincts of the temple.",
+   "desc_lang": "en",
+   "wikidata": "Q973175",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:19",
+   "name": "Nara Centennial Hall",
+   "kind": "attraction",
+   "desc_en": "Hosts a variety of events, concerts, and musicals. Sometimes a flea market is held in front of the hall.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:20",
+   "name": "Japanese Tattoo Art Gallery",
+   "kind": "attraction",
+   "desc_en": "A little gallery with photos of traditional Japanese tattoos, run by a tattoo artist who will talk to visitors about the difficult social and legal status of tattoos in modern Japan.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:21",
+   "name": "Mount Wakakusa Fire Festival",
+   "kind": "attraction",
+   "desc_en": "Great fireworks and the dry grass on the slopes of this mountain is set on fire by two temples. The size of the burn depends on how dry the grass is.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:22",
+   "name": "Nara Visitor Center & Inn",
+   "kind": "attraction",
+   "desc_en": "Learn basic Japanese calligraphy or origami. They'll pick out kanji that match the sound of your name so you can learn to write them with a calligraphy brush pen. Or you can learn to make an origami deer, something you're not likely to find outside of Nara. The teachers are charming, and the center…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:23",
+   "name": "Shuni-e (Omizu-tori)",
+   "kind": "attraction",
+   "desc_en": "An annual Buddhist memorial service that has been carried out first in 752 AD and continues today without a year off. Priests run around the Nigatsu-dō carrying large flaming torches.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:24",
+   "name": "Nara Tōka-e",
+   "kind": "attraction",
+   "desc_en": "An annual light festival. 10,000 candles illuminate the area around Nara Park and major temples.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:25",
+   "name": "Deer-horn Cutting Ceremony",
+   "kind": "attraction",
+   "desc_en": "Deer have their horns cut to prevent people from being injured.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:26",
+   "name": "Naramachi",
+   "kind": "attraction",
+   "desc_en": "The neighborhood, founded in the 8th century when Heijōkyō was the capital of Japan, today contains several small museums, machiya (町家) (traditional Japanese merchant houses from Edo Period), unique cafes and restaurants. (David Bowie is rumored to have owned a house here.) It's well worth the time…",
+   "desc_lang": "en",
+   "wikidata": "Q11274524",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:27",
+   "name": "Saturday Walking Tour",
+   "kind": "attraction",
+   "desc_en": "This tour is led by a professional English-speaking local guide. You will see old \"machiya\" houses and lively local alleys full of interesting sights. The tour ends near Kasuga Shrine and Todai-ji Temple so that you can visit these major sights of Nara afterwards.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:28",
+   "name": "Nara Walk",
+   "kind": "attraction",
+   "desc_en": "Tour covers popular destinations around Nara Park: Great Buddha, Todaiji Temple, Kofukuji Temple, Deer Park and Kasuga Grand Shrine. Reservations not necessary for regular tours. Private tours or tours in French available with reservation.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:38",
+   "name": "Sanshū-tei",
+   "kind": "restaurant",
+   "desc_en": "It's worth a visit more for the attractive old house and garden than the menu, which consists of two very traditional dishes: mugi tororo (plain rice with ground yam, &yen;1200), and unagi tororo (the same with grilled eel, &yen;2500).",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:39",
+   "name": "Hiraso",
+   "kind": "restaurant",
+   "desc_en": "A nice sampling of local foods such as kakinohazushi and chagayu (tea gruel, which tastes better than it sounds) are included in dinner sets miyoshino and heijou. An English picture menu available.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:40",
+   "name": "Okaru",
+   "kind": "restaurant",
+   "desc_en": "A restaurant specialized in okonomiyaki (お好み焼き), a pan-fried cabbage cake with selection of meat. Okonomiyaki is definitely shortlisted on Kansai people's most beloved dishes. A choice of western or traditional Japanese tables are available. English menu available.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:41",
+   "name": "Totogin",
+   "kind": "restaurant",
+   "desc_en": "A conveyor-belt sushi restaurant that won't break your wallet. Sushi is handmade and prepared fresh; just watch out as the different plates correspond to different prices so read the menu (both sides) carefully before chowing down.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:42",
+   "name": "Yatagarasu",
+   "kind": "restaurant",
+   "desc_en": "Fresh poultry from local farms cooked and served in many different ways (eg. grilled, fried, even raw) with a variety of either local or other regional sake available.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:43",
+   "name": "Maguro Koya",
+   "kind": "restaurant",
+   "desc_en": "A tiny hole-in-the-wall place that specializes in tuna. Tekka-don (rice bowl with raw slices of tuna and thinly sliced nori), tuna karaage (breaded deep fried pieces of tuna), tataki (seared on the outside, raw on the inside slices of tuna), and many other methods of preparations. For most meals…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:44",
+   "name": "Senjuan Yoshimune",
+   "kind": "restaurant",
+   "desc_en": "On your way back from Todaiji, stop for a snack in the traditional tatami-matted tea room of this lovely little Japanese confectionery shop famous for two things. One is very traditional: warabimochi (わらび餅), a gooey jelly painstakingly prepared the old way from bracken (fern) roots and served with…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:45",
+   "name": "Kuramoto Hoshuku",
+   "kind": "restaurant",
+   "desc_en": "Operated by a local brewery, Nara Toyosawa. A popular drop-by place for people commuting back home on Kintetsu lines.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:46",
+   "name": "Harushika Brewery",
+   "kind": "restaurant",
+   "desc_en": "A highlight of Naramachi neighbourhood. Taste six sake flavors distilled here with accompanying narazuke for ¥500. The brewery will guide you through the different taste profiles (with varying dryness and fruitiness).",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:47",
+   "name": "Nara Izumi Yūsai",
+   "kind": "restaurant",
+   "desc_en": "A small sake bar/liquor store where you can stand at the counter and join the Japanese businessmen coming in for after-work drinks. English menu available.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wd:XX_1:Q1203935",
+   "name": "Saidai-ji Temple",
+   "kind": "attraction",
+   "desc_en": "Saidai-ji (西大寺) is a Buddhist temple located in the Saidaiji-Shiba neighborhood of the city of Nara, Nara Prefecture, Japan. It became the head temple of the Shingon Risshu (真言律宗) sect after the sect's founder, Eison (叡尊), took over administration in 1238.",
+   "desc_lang": "",
+   "wikidata": "Q1203935",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q1044009",
+   "name": "Daian-ji Temple",
+   "kind": "attraction",
+   "desc_en": "Daian-ji (大安寺) is a Buddhist temple located in the city of Nara, Nara Prefecture, Japan. It was founded by Emperor Jomei in 639 as one of the first official temples in Japan at the capital of Asuka-kyō and was subsequent relocated to Heijō-kyō with the relocation of the capital, where it became one of the Seven Great Temples of Nara, Japan.",
+   "desc_lang": "",
+   "wikidata": "Q1044009",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q4301475",
+   "name": "Akishino-dera Temple",
+   "kind": "attraction",
+   "desc_en": "Akishino-dera (秋篠寺) is a Buddhist temple located in the city of Nara, Nara Prefecture Japan. It does not belong to any sect of Japanese Buddhism and has no \"mountain name\".",
+   "desc_lang": "",
+   "wikidata": "Q4301475",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q3329639",
+   "name": "Museum Yamato Bunkakan",
+   "kind": "attraction",
+   "desc_en": "The Museum of Japanese Art Yamato Bunkakan (大和文華館, Yamato bunkakan) is a museum of Asian art in Nara, Nara. The museum was established in 1960 to preserve and display the private collection of Kintetsu Corporation (named Kinki Nippon Railway Co., Ltd.",
+   "desc_lang": "",
+   "wikidata": "Q3329639",
+   "provider": "wikidata"
+  }
+ ]
+}

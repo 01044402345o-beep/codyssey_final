@@ -1,0 +1,260 @@
+{
+ "city": "New York City",
+ "iso2": "US",
+ "captured": "2026-10-26",
+ "license": "Wikivoyage/Wikipedia text CC BY-SA 4.0, Wikidata CC0 — test fixture, attribution: Wikivoyage & Wikipedia contributors",
+ "places": [
+  {
+   "id": "wv:XX_1:45",
+   "name": "GoCity Pass",
+   "kind": "attraction",
+   "desc_en": "2 passes are available from GoCity. The Explorer pass lets you can visit a set number of attractions, while the All-Inclusive pass which allows unlimited attractions for a set number of days. The Explorer pass cardholders have 30 days to use the card after visiting the first attraction; the…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:46",
+   "name": "New York Pass",
+   "kind": "attraction",
+   "desc_en": "Also from GoCity. Grants access to over 50 top attractions with line skipping privileges. Passes are available for 1, 2, 3, 4, 5, 7, or 10 days. You must obtain a ticket in each attraction. You can visit as many attractions as you want in the time period. Also includes a 140-page guide book, but is…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:47",
+   "name": "New York CityPASS",
+   "kind": "attraction",
+   "desc_en": "Grants admission to 6 New York attractions within 9 days of first use for a much reduced rate. The attractions are the Empire State Building, the Metropolitan Museum of Art & same-day admission to The Cloisters, the American Museum of Natural History, Top of the Rock or the Guggenheim Museum…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:48",
+   "name": "Brooklyn Cyclones",
+   "kind": "attraction",
+   "desc_en": "Play Minor League Baseball (South Atlantic League- North Division) at Maimonides Park (Subway: D, F, Fd, N, Q at Coney Island–Stilwell Avenue). They are an owned and opereated High-A affiliate of the Mets, one of the surviving Short Season A teams that moved to full-season play in 2021.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:18",
+   "name": "Giovanni da Verrazzano-Statue",
+   "kind": "attraction",
+   "desc_en": "im Süden von Manhattan mit sehr gutem Blick auf die Freiheitsstatue.",
+   "desc_lang": "de",
+   "wikidata": "Q13689",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:66",
+   "name": "Statue of Liberty",
+   "kind": "attraction",
+   "desc_en": "The Statue of Liberty (Liberty Enlightening the World, French: La Liberté éclairant le monde; colloquially known as Lady Liberty) is a colossal neoclassical sculpture of a robed and crowned woman on Liberty Island, part of New York City, in New York Harbor. The copper-clad statue, a gift to the United States from the people of France, was designed by French sculptor Frédéric Auguste Bartholdi, and",
+   "desc_lang": "de",
+   "wikidata": "Q359939",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:69",
+   "name": "Metropolitan Museum of Art",
+   "kind": "attraction",
+   "desc_en": "The Metropolitan Museum of Art, colloquially referred to as the Met, is an encyclopedic art museum in New York City. By floor area, it is the fourth-largest museum in the world and the largest art museum in the Americas.",
+   "desc_lang": "de",
+   "wikidata": "Q160236",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:70",
+   "name": "Solomon R. Guggenheim Museum",
+   "kind": "attraction",
+   "desc_en": "The Solomon R. Guggenheim Museum, often referred to as The Guggenheim, is an art museum at 1071 Fifth Avenue between 88th and 89th Streets on the Upper East Side of Manhattan in New York City. It hosts a permanent collection of Impressionist, Post-Impressionist, early Modern and contemporary art and also features special exhibitions throughout the year.",
+   "desc_lang": "de",
+   "wikidata": "Q201469",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:74",
+   "name": "Brooklyn Museum",
+   "kind": "attraction",
+   "desc_en": "The Brooklyn Museum is an art museum in the New York City borough of Brooklyn. At 560,000 square feet (52,000 m2), the museum is New York City's second largest and contains an art collection with around 500,000 objects.",
+   "desc_lang": "de",
+   "wikidata": "Q632682",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:95",
+   "name": "Bronx Zoo",
+   "kind": "attraction",
+   "desc_en": "der größte und attraktivste Zoo der Stadt",
+   "desc_lang": "de",
+   "wikidata": "Q739792",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:100",
+   "name": "American Museum of Natural History",
+   "kind": "attraction",
+   "desc_en": "in der Upper West Side von Manhattan besitzt ein Butterfly Conservatory (Schmetterlingshaus). Gänzlich umsonst kann man Tiere im Zoogeschäft ansehen. Viele Zoofachhandlungen bieten eine reiche Auswahl von Krabbeltieren, Fischen, Amphibien, Reptilien, Vögeln und kleinen Säugetieren und sind ähnlich…",
+   "desc_lang": "de",
+   "wikidata": "Q217717",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:101",
+   "name": "Castle Clinton National Monument",
+   "kind": "attraction",
+   "desc_en": "Festungsanlage in Battery Park City",
+   "desc_lang": "de",
+   "wikidata": "Q1049423",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:102",
+   "name": "Governors Island National Monument",
+   "kind": "attraction",
+   "desc_en": "Festungsanlagen auf der Insel Governors Island",
+   "desc_lang": "de",
+   "wikidata": "Q5589777",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:103",
+   "name": "African Burial Ground",
+   "kind": "attraction",
+   "desc_en": "historische Begräbnisstätte im Stadtteil Civic Center",
+   "desc_lang": "de",
+   "wikidata": "Q383996",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:104",
+   "name": "Federal Hall",
+   "kind": "attraction",
+   "desc_en": "Hier legte George Washington seinen Amtseid ab, hier wurde die Bill of Rights verabschiedet.",
+   "desc_lang": "de",
+   "wikidata": "Q858689",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:105",
+   "name": "General Grant National Memorial",
+   "kind": "attraction",
+   "desc_en": "Mausoleum des 18. Präsidenten der USA im Stadtteil Morningside Heights",
+   "desc_lang": "de",
+   "wikidata": "Q1025105",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:106",
+   "name": "Hamilton Grange National Memorial",
+   "kind": "attraction",
+   "desc_en": "Haus von Alexander Hamilton, einer der Gründerväter der USA, Hamilton Heights",
+   "desc_lang": "de",
+   "wikidata": "Q1542563",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:107",
+   "name": "Times Square",
+   "kind": "attraction",
+   "desc_en": "Times Square is one of the world's busiest pedestrian intersections, tourist destinations, and entertainment hubs. It is formed by the junction of Broadway, Seventh Avenue, and 42nd Street in Midtown Manhattan, New York City.",
+   "desc_lang": "de",
+   "wikidata": "Q11259",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvde:XX_1:113",
+   "name": "Brooklyn Academy of Music",
+   "kind": "attraction",
+   "desc_en": "Sede della Brooklyn Philarmonic, BAM uno dei posti migliori del paese per assistere a spettacoli nuovi. Il Next Wave Festival ogni autunno è uno degli eventi più attesi di New York.",
+   "desc_lang": "de",
+   "wikidata": "Q72912",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:14",
+   "name": "OnBoard New York Tours",
+   "kind": "attraction",
+   "desc_en": "Bus panoramici e tour a piedi di New York City.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:15",
+   "name": "Zip Aviation Helicopter Tours",
+   "kind": "attraction",
+   "desc_en": "Zip Aviation offre tre diversi giri in elicottero di New York City e parte dal Downtown Manhattan Heliport sul Pier 6, lato East River.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wd:XX_1:Q188740",
+   "name": "Museum of Modern Art",
+   "kind": "attraction",
+   "desc_en": "The Museum of Modern Art (MoMA) is an art museum located in Midtown Manhattan, New York City, on 53rd Street between Fifth and Sixth Avenues. MoMA's collection spans the late 19th century to the present, and includes over 200,000 works of architecture and design, drawing, painting, sculpture, photography, prints, illustrated and artist's books, film, as well as electronic media.",
+   "desc_lang": "",
+   "wikidata": "Q188740",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q1136137",
+   "name": "National September 11 Memorial & Museum",
+   "kind": "attraction",
+   "desc_en": "The National September 11 Memorial & Museum (also known as the 9/11 Memorial & Museum) is a memorial and museum that are part of the World Trade Center complex, in New York City, created for remembering the September 11, 2001, terrorist attacks which killed 2,977 people, as well as the February 26, 1993, World Trade Center bombing which killed six. The memorial is located at the World Trade Center",
+   "desc_lang": "",
+   "wikidata": "Q1136137",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q110000",
+   "name": "Madison Square and Madison Square Park",
+   "kind": "attraction",
+   "desc_en": "Madison Square is a public square formed by the intersection of Fifth Avenue and Broadway at 23rd Street in the New York City borough of Manhattan. The square was named for Founding Father James Madison, the fourth president of the United States.",
+   "desc_lang": "",
+   "wikidata": "Q110000",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q866896",
+   "name": "Trinity Church",
+   "kind": "attraction",
+   "desc_en": "Trinity Church is a historic parish in the Episcopal Diocese of New York. The church is located at 89 Broadway opposite Wall Street, in the Financial District of Lower Manhattan in New York City.",
+   "desc_lang": "",
+   "wikidata": "Q866896",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q1049632",
+   "name": "Prospect Park",
+   "kind": "attraction",
+   "desc_en": "Prospect Park is a 526-acre (2.13 km2) urban park in the New York City borough of Brooklyn. The park is situated between the neighborhoods of Park Slope, Prospect Heights, Crown Heights, Prospect Lefferts Gardens, Flatbush, and Windsor Terrace, and is adjacent to the Brooklyn Museum, Grand Army Plaza, and the Brooklyn Botanic Garden.",
+   "desc_lang": "",
+   "wikidata": "Q1049632",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q639791",
+   "name": "Whitney Museum of American Art",
+   "kind": "attraction",
+   "desc_en": "The Whitney Museum of American Art (known informally as \"The Whitney\") is a modern and contemporary American art museum in the Meatpacking District and West Village neighborhoods of Manhattan in New York City, New York, United States. The institution was founded in 1930 by Gertrude Vanderbilt Whitney (1875–1942), a prominent American socialite, sculptor, and art patron after whom it is named.",
+   "desc_lang": "",
+   "wikidata": "Q639791",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q682827",
+   "name": "The Frick Collection",
+   "kind": "attraction",
+   "desc_en": "The Frick Collection (colloquially known as the Frick) is an art museum on the Upper East Side of Manhattan in New York City. It was established in 1935 to preserve the collection of the industrialist Henry Clay Frick.",
+   "desc_lang": "",
+   "wikidata": "Q682827",
+   "provider": "wikidata"
+  }
+ ]
+}

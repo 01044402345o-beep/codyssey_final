@@ -1,0 +1,2571 @@
+{
+ "cusco": {
+  "00 Museo Municipal de Arte Contemporáneo": [
+   [
+    "exhibitions",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "01 Museo Histórico Regional": [
+   [
+    "paintings",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "02 Machu Picchu Museum": [
+   [
+    "collection",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "artifacts",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "03 Museo del Centro de Textiles Tradicionales de Cusco": [
+   [
+    "textiles",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "04 Museo del Sitio del Qoricancha": [
+   [
+    "ceramics",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "textiles",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "05 Museo de Arte Popular": [
+   [
+    "collection",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "06 Santa Catalina Convent": [
+   [
+    "collection",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "convent",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "07 Qoricancha": [
+   [
+    "ruins",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "08 ChocoMuseo": [
+   [
+    "workshops",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "09 Museo Inka": [
+   [
+    "artifacts",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "10 Piedra de los doce ángulos": [],
+  "11 Cusco Cathedral": [
+   [
+    "paintings",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "cathedral",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "12 Palacio Inka del Kusikancha": [
+   [
+    "ruins",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "palace",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "13 Plaza de Armas": [
+   [
+    "paintings",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "souvenirs",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "square",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "14 Plaza de San Francisco,": [
+   [
+    "souvenirs",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "square",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "15 Salseros Cusco": [],
+  "16 Planetario Cuzco": [
+   [
+    "dome",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "telescopes",
+    "feature",
+    "lexicon"
+   ]
+  ],
+  "17 Sacsayhuamán": [
+   [
+    "ruins",
+    "feature",
+    "lexicon"
+   ]
+  ],
+  "18 Qenko": [
+   [
+    "hill",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "19 Pukapukara": [],
+  "20 Tambomachay": [
+   [
+    "fountain",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "21 Cochahuasi Animal Sanctuary": [
+   [
+    "sanctuary",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "22 Rainbow Mountain": [
+   [
+    "mountain",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "23 Los Angeles": [
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "24 Chifa Status": [
+   [
+    "chifa",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "25 El Encuentro": [
+   [
+    "soup",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "26 El Fogon": [
+   [
+    "Peruvian food",
+    "dish",
+    "pattern"
+   ],
+   [
+    "salad bar",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "soup",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "bar",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "27 Victor Victoria": [
+   [
+    "salad bar",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "buffet",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "bread",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "bar",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "28 Chia Vegan Kitchen": [
+   [
+    "buffet",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "29 Bagdad Cafe": [
+   [
+    "cafe",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "30 Jack's Cafe": [
+   [
+    "lemonades",
+    "dish",
+    "pattern"
+   ],
+   [
+    "breakfast",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "cafe",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "31 Cicciolinia": [
+   [
+    "breakfast",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "brunch",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "café",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "32 Emperador": [
+   [
+    "pisco sour tall",
+    "dish",
+    "pattern"
+   ]
+  ],
+  "33 Encantasq'a": [
+   [
+    "coffee",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "chocolate",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "cakes",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "34 Green Point": [
+   [
+    "breakfast",
+    "dish",
+    "pattern"
+   ],
+   [
+    "Peruvian food",
+    "dish",
+    "pattern"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "35 Inka Grill": [
+   [
+    "cuy",
+    "dish",
+    "pattern"
+   ],
+   [
+    "without",
+    "dish",
+    "pattern"
+   ],
+   [
+    "appetizer tiradito de",
+    "dish",
+    "pattern"
+   ],
+   [
+    "alpaca",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "36 Restaurant Inkazuela": [
+   [
+    "stews",
+    "dish",
+    "pattern"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "37 Tunupa": [
+   [
+    "alpaca",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "cuy",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "38 Gato's Market": [
+   [
+    "market",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "39 La Canasta": []
+ },
+ "gunsan": {
+  "00 Gunsan Modern History Museum": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "01 Modern Art Museum": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "02 Dongguksa Temple": [
+   [
+    "temple",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "03 Gunsan Impi Station": [
+   [
+    "station",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "04 Marine Monument": [
+   [
+    "monument",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "05 Chae Man-Sik Literature Museum": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "06 Jinpo Marine Park": [
+   [
+    "park",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "07 Gunsan Modern Architecture Museum": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "08 Wolmyeong Park": [
+   [
+    "harbor",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "park",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "09 Chowon Photo Studio": [
+   [
+    "studio",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "10 Geumgang Migratory Bird Observatory": [
+   [
+    "observatory",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "11 Saemangeum New Year Festival": [
+   [
+    "festival",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "12 Seonyudo Island": [
+   [
+    "island",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "13 Gunsan Country Club": [
+   [
+    "golf course",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "14 Gunsan TimeTravelFestival": [
+   [
+    "rickshaw stamp tour",
+    "feature",
+    "pattern"
+   ],
+   [
+    "festival",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "15 Ggongdang Barley Festival": [
+   [
+    "festival",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "16 Gunsan Insect Experience Learning Farm": [
+   [
+    "farm",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "17 Miz Cafe": [
+   [
+    "cafe",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "18 Ilhaeog": [
+   [
+    "Kong-namul-gukbap",
+    "dish",
+    "pattern"
+   ],
+   [
+    "soup",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "19 Lee Sung Dang": [
+   [
+    "bread",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "bakery",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "20 Sweet India": [
+   [
+    "Indian food",
+    "dish",
+    "pattern"
+   ]
+  ],
+  "21 Mulgogi Jari": [
+   [
+    "seafood",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "sashimi",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "22 Hansoggeum": [
+   [
+    "Seafood Stew",
+    "dish",
+    "pattern"
+   ],
+   [
+    "hot pot",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "23 Wangsan Chinese Dishes": [
+   [
+    "Chinese Dishes",
+    "dish",
+    "pattern"
+   ],
+   [
+    "noodles",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "seafood",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "24 Jirinseong": [
+   [
+    "hot pepper jajangmyeon",
+    "dish",
+    "pattern"
+   ],
+   [
+    "noodles",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "25 Hanilok": [
+   [
+    "soup",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "bibimbap",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "26 Bokseongru": [
+   [
+    "noodles",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "seafood",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "soup",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "japchae",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "27 Rose hotel": [
+   [
+    "pretzel",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "tteokbokki",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "28 Yukgabeochi": [
+   [
+    "yukhoe",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "29 Cheongdamisang Gunsasusong": [
+   [
+    "soup",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "30 Rose manshon": [
+   [
+    "one",
+    "dish",
+    "pattern"
+   ],
+   [
+    "set menu",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "pasta",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "31 Soju-jip": [
+   [
+    "soju",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "whelk soup",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "pasta",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "makchang",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "32 Simyasikdang Jyulai (Izakaya)": [
+   [
+    "tuna",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "izakaya",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "33 Mechanic (Bar)": [
+   [
+    "bar",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "34 Wolmyeongdong Whigalley (Izakaya)": [
+   [
+    "sake",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "izakaya",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "35 Gureumgongbang Eunpalakepark": [
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "36 Geobuki Siktak": [
+   [
+    "Braised Spicy Chicken",
+    "dish",
+    "pattern"
+   ]
+  ]
+ },
+ "hoi_an": {
+  "00 Japanese Covered Bridge": [
+   [
+    "bridge",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "01 Quan Cong Temple": [
+   [
+    "temple",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "02 Thanh Ha pottery village": [
+   [
+    "village",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "03 Museum of Hoi An History and Culture": [
+   [
+    "old cannon",
+    "feature",
+    "pattern"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "04 Museum of Folk Culture": [
+   [
+    "sculptures",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "05 Museum of Sa Huynh Culture": [
+   [
+    "collection",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "06 Museum of Trade Ceramics": [
+   [
+    "ceramics",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "07 Old house of Phung Hung": [
+   [
+    "old house",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "08 Old house of Tan Ky": [
+   [
+    "old house",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "09 Chinese Assembly Hall": [
+   [
+    "assembly hall",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "10 Quang Trieu Assembly Hall": [
+   [
+    "assembly hall",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "11 Phuc Kien Meeting Hall": [
+   [
+    "hall",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "12 Trieu Chau Meeting Hall": [
+   [
+    "hall",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "13 Hai Nam Assembly Hall": [
+   [
+    "assembly hall",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "14 Minh Huong Communal House": [
+   [
+    "house",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "15 Hoi An Art Craft Manufacturing Workshop": [],
+  "16 Bamboo Circus": [
+   [
+    "theatre",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "17 Hoi An memories show": [
+   [
+    "island",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "18 Hoi An Silk Village": [
+   [
+    "village",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "19 An Bang Beach": [
+   [
+    "soft white sand",
+    "feature",
+    "pattern"
+   ],
+   [
+    "beach",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "village",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "20 Non Nuoc Beach": [
+   [
+    "beach",
+    "feature",
+    "lexicon"
+   ]
+  ],
+  "21 Dong Duong": [
+   [
+    "tower",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "22 Tháp Bằng An": [
+   [
+    "tower",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "23 Tháp Khương Mỹ": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "24 Banana fritters stall": [
+   [
+    "banana fritters",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "stall",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "25 Thiên Bảo Quán": [
+   [
+    "meat sticks",
+    "dish",
+    "pattern"
+   ],
+   [
+    "bánh xèo",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "26 Cao lầu Không Gian Xanh": [
+   [
+    "Cao lầu",
+    "dish",
+    "pattern"
+   ],
+   [
+    "wonton",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "27 Ba Dam Vegetarian Restaurant": [
+   [
+    "Vietnamese food",
+    "dish",
+    "pattern"
+   ],
+   [
+    "pho",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "28 Phở Tùng": [
+   [
+    "Pho Bo",
+    "dish",
+    "pattern"
+   ]
+  ],
+  "29 Madam Khanh - The Banh Mi Queen": [
+   [
+    "banh mi",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "30 White Rose": [
+   [
+    "around town",
+    "dish",
+    "pattern"
+   ],
+   [
+    "dumplings",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "31 Quán Mười": [
+   [
+    "Cao lầu",
+    "dish",
+    "pattern"
+   ],
+   [
+    "mì quảng",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "32 Quán Cô Mai": [
+   [
+    "mì quảng",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "33 Bale Well Restaurant": [
+   [
+    "set menu",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "bánh xèo",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "34 Bazar Cafe & Restaurant": [
+   [
+    "Vietnamese",
+    "dish",
+    "pattern"
+   ],
+   [
+    "cocktails",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "35 Dingo Deli": [
+   [
+    "coffee",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "36 Red Bridge Restaurant & Cooking School": [
+   [
+    "Vietnamese Food",
+    "dish",
+    "pattern"
+   ],
+   [
+    "coffee",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "37 Son Hoian": [],
+  "38 Temari": [
+   [
+    "Japanese cuisine",
+    "dish",
+    "pattern"
+   ]
+  ],
+  "39 Thành Nam Quán": [
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ]
+ },
+ "matera": {
+  "00 Matera Cathedral": [
+   [
+    "spire",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "skyline",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "cathedral",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "01 San Pietro Caveoso": [
+   [
+    "Sassi",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "02 Church of San Giovanni Battista": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "03 Church of San Francesco d'Assisi": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "04 Church of Purgatorio": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "05 Church of San Domenico": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "06 Church of Santa Lucia": [
+   [
+    "Sassi",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "07 Guided tours": [
+   [
+    "guided tours",
+    "feature",
+    "lexicon"
+   ]
+  ],
+  "08 Ape nei Sassi": [
+   [
+    "Sassi",
+    "feature",
+    "lexicon"
+   ]
+  ],
+  "09 Park of the Rupestrian Churches of Matera": [
+   [
+    "Sassi",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "park",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "10 Chiesa di San Francesco da Paola": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "11 Cappella di Sant'Andrea": [],
+  "12 Chiesa di San Leonardo": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "13 Cripta degli Evangelisti": [],
+  "14 Chiesa di Santa Barbara": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "15 Palazzo dell'Annunziata": [
+   [
+    "palace",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "16 Palazzo di Castro Vetere": [
+   [
+    "palace",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "17 Fontana ferdinandea": [],
+  "18 Villa Longo": [],
+  "19 Castello Tramontano": [
+   [
+    "castle",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "20 Museo archeologico nazionale Domenico Ridola": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "21 Parco del Castello": [
+   [
+    "castle",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "22 Ponte Tibetano della Gravina": [],
+  "23 Veduta dal Parco della Murgia Materana": [],
+  "24 Guide turistiche": [],
+  "25 Visita guidata": [],
+  "26 Visite guidate": [],
+  "27 Ape Matera Tour": [],
+  "28 Ape Vito": [],
+  "29 Morgan": [],
+  "30 Antico Forno a Legna": [],
+  "31 Stano Ristorazione": [],
+  "32 Sassi di Matera": [
+   [
+    "ancient cave dwellings",
+    "feature",
+    "pattern"
+   ],
+   [
+    "Sassi",
+    "feature",
+    "lexicon"
+   ]
+  ],
+  "33 National Museum of Medieval and Modern Art of Basilicata": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "34 convento di Sant'Agostino": [
+   [
+    "convent",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "35 Palazzo Bronzini": [
+   [
+    "palace",
+    "type",
+    "lexicon"
+   ]
+  ]
+ },
+ "nara": {
+  "00 Tōdai-ji": [
+   [
+    "Great Buddha",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "Buddha statue",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "temple",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "01 Kōfuku-ji": [
+   [
+    "pagoda",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "temple",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "02 Sarusawa Pond": [
+   [
+    "pond",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "park",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "03 Nara National Museum": [
+   [
+    "exhibitions",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "collection",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "04 Himuro Shrine": [
+   [
+    "shrine",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "05 Ukimidō": [
+   [
+    "pond",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "park",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "06 Kasuga Taisha": [
+   [
+    "torii",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "lanterns",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "statue",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "shrine",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "07 Kasuga-yama Primeval Forest": [
+   [
+    "deer",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "hill",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "08 Isui-en Garden": [
+   [
+    "garden",
+    "feature",
+    "lexicon"
+   ]
+  ],
+  "09 Yoshikien Garden": [
+   [
+    "garden",
+    "feature",
+    "lexicon"
+   ]
+  ],
+  "10 Shin-Yakushi-ji": [
+   [
+    "collection",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "temple",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "11 Nara City Museum of Photography": [
+   [
+    "pond",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "exhibits",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "12 Yakushi-ji": [
+   [
+    "pagoda",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "temple",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "13 Gangō-ji": [
+   [
+    "temple",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "14 Heijōkyū Palace Site": [
+   [
+    "palace",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "15 Tōshōdai-ji": [
+   [
+    "temple",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "16 Nara Centennial Hall": [
+   [
+    "hall",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "17 Japanese Tattoo Art Gallery": [
+   [
+    "gallery",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "18 Mount Wakakusa Fire Festival": [
+   [
+    "fireworks",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "festival",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "19 Nara Visitor Center & Inn": [
+   [
+    "deer",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "inn",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "20 Shuni-e (Omizu-tori)": [
+   [
+    "memorial",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "21 Nara Tōka-e": [
+   [
+    "festival",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "22 Deer-horn Cutting Ceremony": [
+   [
+    "deer",
+    "feature",
+    "lexicon"
+   ]
+  ],
+  "23 Naramachi": [
+   [
+    "house",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "24 Saturday Walking Tour": [
+   [
+    "shrine",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "25 Nara Walk": [
+   [
+    "Great Buddha",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "deer",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "park",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "26 Sanshū-tei": [
+   [
+    "old house",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "27 Hiraso": [
+   [
+    "kakinohazushi",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "tea",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "28 Okaru": [
+   [
+    "okonomiyaki",
+    "dish",
+    "pattern"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "29 Totogin": [
+   [
+    "sushi",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "30 Yatagarasu": [
+   [
+    "sake",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "31 Maguro Koya": [
+   [
+    "tuna",
+    "dish",
+    "pattern"
+   ],
+   [
+    "tekka-don",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "32 Senjuan Yoshimune": [
+   [
+    "two",
+    "dish",
+    "pattern"
+   ],
+   [
+    "tea",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "33 Kuramoto Hoshuku": [
+   [
+    "brewery",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "34 Harushika Brewery": [
+   [
+    "sake",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "brewery",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "35 Nara Izumi Yūsai": [
+   [
+    "sake",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "bar",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "36 Saidai-ji Temple": [
+   [
+    "temple",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "37 Daian-ji Temple": [
+   [
+    "temple",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "38 Akishino-dera Temple": [
+   [
+    "temple",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "39 Museum Yamato Bunkakan": [
+   [
+    "collection",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ]
+ },
+ "new_york": {
+  "00 GoCity Pass": [],
+  "01 New York Pass": [],
+  "02 New York CityPASS": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "03 Brooklyn Cyclones": [
+   [
+    "park",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "04 Giovanni da Verrazzano-Statue": [
+   [
+    "statue",
+    "feature",
+    "lexicon"
+   ]
+  ],
+  "05 Statue of Liberty": [
+   [
+    "statue",
+    "feature",
+    "lexicon"
+   ]
+  ],
+  "06 Metropolitan Museum of Art": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "07 Solomon R. Guggenheim Museum": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "08 Brooklyn Museum": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "09 Bronx Zoo": [
+   [
+    "zoo",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "10 American Museum of Natural History": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "11 Castle Clinton National Monument": [
+   [
+    "monument",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "12 Governors Island National Monument": [
+   [
+    "monument",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "13 African Burial Ground": [],
+  "14 Federal Hall": [
+   [
+    "hall",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "15 General Grant National Memorial": [
+   [
+    "memorial",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "16 Hamilton Grange National Memorial": [
+   [
+    "memorial",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "17 Times Square": [
+   [
+    "square",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "18 Brooklyn Academy of Music": [],
+  "19 OnBoard New York Tours": [],
+  "20 Zip Aviation Helicopter Tours": [],
+  "21 Museum of Modern Art": [
+   [
+    "collection",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "22 National September 11 Memorial & Museum": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "23 Madison Square and Madison Square Park": [
+   [
+    "park",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "24 Trinity Church": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "25 Prospect Park": [
+   [
+    "gardens",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "park",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "26 Whitney Museum of American Art": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "27 The Frick Collection": [
+   [
+    "collection",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ]
+ },
+ "rothenburg": {
+  "00 Market Square": [
+   [
+    "square",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "01 Medieval Crime and Punishment Museum": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "02 Plönlein": [
+   [
+    "square",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "03 St. Jakobskirche": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "04 Altfränkische Weinstube": [
+   [
+    "tavern",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "05 Baumeisterhaus": [],
+  "06 Louvre": [
+   [
+    "Japanese cuisine",
+    "dish",
+    "pattern"
+   ]
+  ],
+  "07 Ratsstube": [
+   [
+    "tavern",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "08 Zur Höll": [
+   [
+    "inn",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "09 Unter den Linden": [
+   [
+    "beer",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "cafe",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "10 Cafe einzigARTig": [
+   [
+    "cakes",
+    "dish",
+    "lexicon"
+   ],
+   [
+    "cafe",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "11 Franziskanerkirche": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "12 St. Wolfgangskirche": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "13 Heilig-Geist-Kirche": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "14 St. Peter und Paul-Kirche": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "15 Burgruine Endsee": [],
+  "16 Burgruine Nordenberg": [],
+  "17 Burgruine Seldeneck": [],
+  "18 Alt-Rothenburger Handwerkerhaus": [],
+  "19 Fuchsmühle": [],
+  "20 RothenburgMuseum": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "21 Alte Burg": [
+   [
+    "castle",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "22 Athis-Mons-Anlage": [],
+  "23 Hornburgweganlage": [],
+  "24 Klostergarten": [],
+  "25 Neue Burg": [
+   [
+    "castle",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "26 Riviera": [],
+  "27 Spitalbasteigraben": [],
+  "28 Sterngarten": [],
+  "29 Kletterwald Rothenburg": [
+   [
+    "castle",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "30 Alter Bahnhof Bockenfeld": [],
+  "31 Gasthof Rödertor": [
+   [
+    "tavern",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "32 Hotel Eisenhut": [],
+  "33 Rappenbiergarten": [],
+  "34 Unter den Linden": [],
+  "35 Hotel-Gasthof Goldener Greifen": [
+   [
+    "tavern",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "36 Restaurant Topinambur": [
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "37 Club23": [],
+  "38 Pub & Diner Liquid Corner": [
+   [
+    "diner",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "39 St. Laurentius": [
+   [
+    "church",
+    "type",
+    "lexicon"
+   ]
+  ]
+ },
+ "tokyo": {
+  "00 Tokyo International Forum": [
+   [
+    "exhibition centre",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "01 mAAch ecute Kanda Manseibashi": [
+   [
+    "exhibits",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "station",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "02 National Diet Building": [
+   [
+    "pyramidal roof",
+    "feature",
+    "pattern"
+   ]
+  ],
+  "03 Imperial Palace": [
+   [
+    "palace",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "04 Imperial Palace East Garden": [
+   [
+    "garden",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "palace",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "05 Kitanomaru Park": [
+   [
+    "Nippon Budōkan",
+    "feature",
+    "pattern"
+   ],
+   [
+    "gardens",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "park",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "06 Chidoriga-fuchi Moat": [
+   [
+    "moat",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "07 Yūshūkan War Memorial Museum": [
+   [
+    "collection",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "08 Holy Resurrection Cathedral": [
+   [
+    "cathedral",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "09 Kanda Shrine": [
+   [
+    "shrine",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "10 Hie Shrine": [
+   [
+    "torii",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "shrine",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "11 Yasukuni Shrine": [
+   [
+    "shrine",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "12 Tokyo National Museum of Modern Art": [
+   [
+    "collection",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "exhibitions",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "13 Idemitsu Museum of Arts": [
+   [
+    "collection",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "14 National Theatre of Japan": [
+   [
+    "Kabuki",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "Noh",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "Bunraku",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "puppet theatre",
+    "feature",
+    "lexicon"
+   ]
+  ],
+  "15 Peter": [
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "16 Yamaya": [
+   [
+    "mentaiko",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "17 Kanda Yabu soba": [
+   [
+    "soba",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "18 RyuGin": [
+   [
+    "daily-changing fix",
+    "dish",
+    "pattern"
+   ],
+   [
+    "market",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "19 Tsukiji Outer Market": [
+   [
+    "market",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "20 Tsukiji Hongwanji": [
+   [
+    "temple",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "21 Nihonbashi Bridge": [
+   [
+    "bridge",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "22 Tokyo Stock Exchange": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "23 Hama-rikyū Gardens": [
+   [
+    "gardens",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "pond",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "house",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "24 Mitsui Memorial Museum": [
+   [
+    "collection",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "tea ceremony",
+    "feature",
+    "lexicon"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "25 Ramen Cooking Tokyo": [
+   [
+    "district",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "26 Oshio Honten": [
+   [
+    "mentaiko-shiso monja",
+    "dish",
+    "pattern"
+   ]
+  ],
+  "27 Sushisay Main Store": [],
+  "28 Sushizanmai": [
+   [
+    "tuna",
+    "dish",
+    "lexicon"
+   ]
+  ],
+  "29 Tamahide": [
+   [
+    "Oyakodon",
+    "dish",
+    "pattern"
+   ],
+   [
+    "restaurant",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "30 Tsujihan": [
+   [
+    "station",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "31 Tokyo Tower": [
+   [
+    "tower",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "32 National Museum of Western Art": [
+   [
+    "art",
+    "feature",
+    "pattern"
+   ],
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "33 Meiji Jingū": [
+   [
+    "shrine",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "34 Sensō-ji Temple": [
+   [
+    "temple",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "35 Tokyo Mosque": [
+   [
+    "mosque",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "36 St. Mary's Cathedral": [
+   [
+    "cathedral",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "37 National Art Center, Tokyo": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "38 Ueno Zoo": [
+   [
+    "zoo",
+    "type",
+    "lexicon"
+   ]
+  ],
+  "39 Tokyo Metropolitan Art Museum": [
+   [
+    "museum",
+    "type",
+    "lexicon"
+   ]
+  ]
+ }
+}

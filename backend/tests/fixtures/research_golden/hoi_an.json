@@ -1,0 +1,368 @@
+{
+ "city": "Hoi An",
+ "iso2": "VN",
+ "captured": "2026-10-26",
+ "license": "Wikivoyage/Wikipedia text CC BY-SA 4.0, Wikidata CC0 — test fixture, attribution: Wikivoyage & Wikipedia contributors",
+ "places": [
+  {
+   "id": "wv:XX_1:4",
+   "name": "Japanese Covered Bridge",
+   "kind": "attraction",
+   "desc_en": "The bridge was constructed in the early 1600s by the Japanese community, roughly 40 years before they left the city to return to Japan under the strict policy of sakoku enforced by the Tokugawa Shogunate, and renovated in 1986. Today, it's the symbol of Hoi An. Entry is one coupon, but it's…",
+   "desc_lang": "en",
+   "wikidata": "Q1091054",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:5",
+   "name": "Quan Cong Temple",
+   "kind": "attraction",
+   "desc_en": "Founded in the 15th century, this temple is dedicated to Quan Cong, a Chinese general who is remembered and worshipped for his qualities of loyalty, integrity and justice. Statues of him and several others are inside the temple.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:6",
+   "name": "Thanh Ha pottery village",
+   "kind": "attraction",
+   "desc_en": "Formed in the sixteenth century, Thanh Ha Pottery Village is one of the oldest pottery villages in Vietnam. This village is located right on the banks of Thu Bon River, about 3 km from Hoi An ancient town. Over five centuries, Thanh Ha pottery village still preserves its traditional pottery-making…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:7",
+   "name": "Museum of Hoi An History and Culture",
+   "kind": "attraction",
+   "desc_en": "The museum contains some old black and white photos of Hoi An taken in the early 20th century. It also houses an old cannon, some two-thousand year old pots from the Sa Huynh period, and a case full of 9th-century bricks and tiles from the Champa period.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:8",
+   "name": "Museum of Folk Culture",
+   "kind": "attraction",
+   "desc_en": "Some may be put off by the bizarre-looking plaster sculptures of Vietnamese peasants, but this museum documents the dress and culture of rural Vietnam.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:9",
+   "name": "Museum of Sa Huynh Culture",
+   "kind": "attraction",
+   "desc_en": "The museum's main collection consists of pottery and urns from the 1st and 2nd centuries. Upstairs is another museum, the Museum of the Revolution. Its main collection consists of pictures from war heroes and a collection of weapons such as grenade launchers, machine guns and AK 47s.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:10",
+   "name": "Museum of Trade Ceramics",
+   "kind": "attraction",
+   "desc_en": "The dusty, unlabeled displays of broken pottery are eminently forgettable, but the house itself is nice enough, and it provides a good opportunity to explore the shape and layout of an old Hoi An home.",
+   "desc_lang": "en",
+   "wikidata": "Q6941034",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:11",
+   "name": "Old house of Phung Hung",
+   "kind": "attraction",
+   "desc_en": "Traditional two-story wooden house, inhabited over 100 years by eight generations; and the current one guides you around in hope of a tip.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:14",
+   "name": "Old house of Tan Ky",
+   "kind": "attraction",
+   "desc_en": "As above, a younger member of the family will provide a cup of tea and a \"tour\" that doesn't stray from the front room of the house, as you'd need to step over sleeping members of the older generation to go anywhere else. The design of the house shows how local architecture incorporated Japanese…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:16",
+   "name": "Chinese Assembly Hall",
+   "kind": "attraction",
+   "desc_en": "Pan-Chinese assembly hall jointly built by the Cantonese, Teochew, Hokkien (Fujian), Hainanese and Hakka communities.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:17",
+   "name": "Quang Trieu Assembly Hall",
+   "kind": "attraction",
+   "desc_en": "Built in 1885 for the Cantonese community, it has a calm courtyard with ornate statuary. Take a peek at the half-hidden back yard and its kitschy pastel dragon statues.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:18",
+   "name": "Phuc Kien Meeting Hall",
+   "kind": "attraction",
+   "desc_en": "Hokien (Fujian) meeting hall built in 1757.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:19",
+   "name": "Trieu Chau Meeting Hall",
+   "kind": "attraction",
+   "desc_en": "Teochew community meeting hall built in 1887. It's near the Fujian hall, also occupying the block.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:20",
+   "name": "Hai Nam Assembly Hall",
+   "kind": "attraction",
+   "desc_en": "Hainanese community meeting hall built in 1875.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:21",
+   "name": "Minh Huong Communal House",
+   "kind": "attraction",
+   "desc_en": "Built by the Minh Huong, Chinese Ming Dynasty loyalists who were given refuge in Vietnam after refusing to submit to the new Manchu Qing rulers of China. Their descendants are today assimilated into the ethnic Vietnamese and no longer identify as ethnic Chinese.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:22",
+   "name": "Hoi An Art Craft Manufacturing Workshop",
+   "kind": "attraction",
+   "desc_en": "Folk music performances are offered Tu-Su at 10:15 and 15:15.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:24",
+   "name": "Bamboo Circus",
+   "kind": "attraction",
+   "desc_en": "A small-scale Cirque du Soleil-style show of acrobatics and dance with traditional and modern Vietnamese themes in a 300-seat theatre. Excellent visuals and choreography, enthusiastic young performers. Buy tickets online, at the theatre, or at many hotels. It's a small theatre, so the cheap seats…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:25",
+   "name": "Hoi An memories show",
+   "kind": "attraction",
+   "desc_en": "A big musical-esque show on the history of Hoi An, from early settlers until the golden era as an important trading port. Huge stage, very good lighting effects and several hundred actors active at the same time. Situated on an island in the river. The whole island area surrounding the stage is a…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:26",
+   "name": "Hoi An Silk Village",
+   "kind": "attraction",
+   "desc_en": "Revived 300-year-old Champa silk traditions. Half day tours encompassing the entire silk process, from silkworms to dressmaking. Showroom in a converted Quang Nam-style house with 100 different ao dai, representing all of the 54 different minority groups in Vietnam. Also a spacious colonial-style…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:27",
+   "name": "An Bang Beach",
+   "kind": "attraction",
+   "desc_en": "An Bang Beach is a relaxed stretch of coastline just a few kilometres north of Hoi An’s ancient town. Known for its soft white sand and relatively calm waters, it offers a quieter alternative to the busier nearby beaches, with a laid-back village atmosphere.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:28",
+   "name": "Non Nuoc Beach",
+   "kind": "attraction",
+   "desc_en": "Opposite the Marble Mountains and accessible by motorbike. There are beaches closer to Hoi An accessible by bicycle or motorbike, with parking near the beach. A Grab should be 50,000 dong one way.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:29",
+   "name": "Dong Duong",
+   "kind": "attraction",
+   "desc_en": "Ruined Cham tower, the sole major remnant of a large Buddhist Cham period (9th century, 875-915 under Indravarman II) temple-complex that was originally 155x326 m. Other minor remnants are also visible.",
+   "desc_lang": "en",
+   "wikidata": "Q10825862",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:30",
+   "name": "Tháp Bằng An",
+   "kind": "attraction",
+   "desc_en": "Twelfth-century Cham octagonal tower dedicated to Shiva. By motorbike, about 30 minutes northwest of Hoi An. There may be a someone on the site who will sell you a ticket for 10,000 dong. Can be combined with a day trip to Tháp Khương Mỹ.",
+   "desc_lang": "en",
+   "wikidata": "Q10825831",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:31",
+   "name": "Tháp Khương Mỹ",
+   "kind": "attraction",
+   "desc_en": "Three Cham towers, contemporaneous with Bagan in Burma. Small museum on premises. There may be someone at the site who will sell you a ticket for 10,000 dong. By motorbike, a half hour south of Hoi An. Can be combined in a day trip with Tháp Bằng An for about 120,000 dong.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:45",
+   "name": "Banana fritters stall",
+   "kind": "restaurant",
+   "desc_en": "Delicious banana fritters in dough. They squish the banana, then dip it into liquid dough and finally fry it. Freshly made, and not lying around the whole day like you often see in the center — many locals stop by with the motorbike, so they are constantly making new ones.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:46",
+   "name": "Thiên Bảo Quán",
+   "kind": "restaurant",
+   "desc_en": "Serves the probably most inexpensive Bánh Xèo in all Vietnam, and is very authentic in addition. It actually seems to be vegan, but they also serve meat sticks if you are looking for additional taste. You won't find any fancy lighting or comfortable Western sized chairs here, just the regular tiny…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:47",
+   "name": "Cao lầu Không Gian Xanh",
+   "kind": "restaurant",
+   "desc_en": "They serve Cao lầu, Hoành Thánh Mỳ (Wonton), Bánh Bao Bánh Vạc (White Rose) and Cơm Gà. However, the portion size can be disappointing and they are very pushy about ordering drinks.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:48",
+   "name": "Ba Dam Vegetarian Restaurant",
+   "kind": "restaurant",
+   "desc_en": "Great vegan Vietnamese food selection, there are so many options to choose from. The vegetarian Pho is amazing. Family restaurant hidden in an alley. Very friendly staff.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:49",
+   "name": "Phở Tùng",
+   "kind": "restaurant",
+   "desc_en": "They serve super nice Pho Bo, for many who may not know how to eat their side dish vegetable, the boss can teach you how to blend with the sauce prepared for it. The owners are super lovely.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:50",
+   "name": "Madam Khanh - The Banh Mi Queen",
+   "kind": "restaurant",
+   "desc_en": "How they prepared the meat is different to elsewhere. The chili sauce and pate are so unique. Delicious and fresh. The vegetarian option is fire.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:51",
+   "name": "White Rose",
+   "kind": "restaurant",
+   "desc_en": "The shop that makes most of the \"white rose\" dumplings served all around town.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:52",
+   "name": "Quán Mười",
+   "kind": "restaurant",
+   "desc_en": "Besides Mì Quảng, they also serve delicious Cao lầu.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:53",
+   "name": "Quán Cô Mai",
+   "kind": "restaurant",
+   "desc_en": "They offer Mì Quảng and Mì Ga. Watch out though, they might claim that eggs are extra, which they are not — just point to the picture of the menu.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:54",
+   "name": "Bale Well Restaurant",
+   "kind": "restaurant",
+   "desc_en": "Set menu: bánh xèo, pork savoury pancakes; barbecued satay pork loin, wrapped in a lettuce leaf, with side salad. Steep price for a few rice pancakes.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:55",
+   "name": "Bazar Cafe & Restaurant",
+   "kind": "restaurant",
+   "desc_en": "New in town, serves the best Vietnamese and Mediterranean barbeque in the garden. Comfortable lounge, cocktails and shisha inside the traditional wooden house.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:56",
+   "name": "Dingo Deli",
+   "kind": "restaurant",
+   "desc_en": "This delicatessen offers an extensive selection of gourmet foods through the restaurant and European grocery store. Attractive ambience, and the aroma of freshly brewed coffee. A wooden constructed adventure play ground for children to play on overlooks paddocks with buffalo and the Thu Bon River.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:57",
+   "name": "Red Bridge Restaurant & Cooking School",
+   "kind": "restaurant",
+   "desc_en": "Next to the Thu Bon River within 2 acres of tropical gardens. Offers a wide range of Vietnamese Food, in an open air restaurant. Cooking Classes begin around 08:00 at the Hai Scout Cafe for an Italian-style coffee then a tour of the market to shop for fruit & veg. Booking for dinner is essential.…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:58",
+   "name": "Son Hoian",
+   "kind": "restaurant",
+   "desc_en": "Very popular stopping point for those cycling back from the beach.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:59",
+   "name": "Temari",
+   "kind": "restaurant",
+   "desc_en": "Authentic Japanese cuisine from the Kobe area, using high-quality ingredients.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:60",
+   "name": "Thành Nam Quán",
+   "kind": "restaurant",
+   "desc_en": "Tiny Vietnamese restaurant where everything is delicious.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  }
+ ]
+}
