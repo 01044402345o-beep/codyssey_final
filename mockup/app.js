@@ -729,11 +729,14 @@ function placeSentences(p, n) {
     ai: s.kind === 'ai', sample: s.kind === 'sample',
   }));
   const used = new Set(ai.map(s => s.en.toLowerCase()));
+  // 조사한 장소면 그 장소 어휘(대표 음식·볼거리·종류)로 만든 슬롯 문장을 범용 틀보다 먼저(AI 호출 없음)
+  const slot = AI.vocabSentences(p, Math.max(0, n - ai.length)).filter(s => !used.has(s.en.toLowerCase()));
+  slot.forEach(s => used.add(s.en.toLowerCase()));
   const bank = PLACE_TEMPLATES[p.kind] || (p.kind === 'cafe' ? PLACE_TEMPLATES.restaurant : []);
   const usable = bank.filter(t => !p.live || !(t.en + t.ko).includes('{menu'));
   const rest = usable.map(t => ({ situation: t.situation, en: fill(t.en), ko: fill(t.ko) }))
-    .filter(t => !used.has(t.en.toLowerCase())).slice(0, Math.max(0, n - ai.length));
-  return [...ai, ...rest];
+    .filter(t => !used.has(t.en.toLowerCase())).slice(0, Math.max(0, n - ai.length - slot.length));
+  return [...ai, ...slot.map(s => ({ situation: s.situation, en: s.en, ko: s.ko, vocab: s.vocab })), ...rest];
 }
 
 /* AI 풀 키: 도시 + 카테고리 (카테고리가 없으면 AI 대상 아님) */
@@ -869,7 +872,8 @@ function tick(tok, stage) {
 /* 실제 장소는 맛집만 /generate 로 보낸다. 카페·관광지는 문장 요청에 넣지 않는다.
    예시 장소는 기존과 같이 categoryOfKind 가 있는 종류만 보낸다. 관광지는 null 이라 빠진다. */
 function sentenceCategory(p) {
-  if (p.live && p.kind !== 'restaurant') return null;
+  // Google 일정 경로(설명 없음)의 관광지·카페는 범용 틀만. 도시 조사 장소는 관광지·카페도 AI 문장(관광지 계약·어휘 제약)
+  if (p.live && !p.research && p.kind !== 'restaurant') return null;
   return AI.categoryOfKind(p.kind);
 }
 /* 선택한 맛집의 문장만 /generate 로 만든다. 일정·문장 수 계산(R.counts)은 그대로 코드가 한다.

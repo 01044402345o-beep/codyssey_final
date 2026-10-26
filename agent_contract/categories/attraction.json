@@ -1,0 +1,51 @@
+{
+  "category_id": "attraction",
+  "category": "관광지·명소",
+  "owner": "도시 조사 에이전트(PR-V2)",
+  "place_types": ["attraction"],
+  "rules": {
+    "min_sentences_per_situation": 1,
+    "max_sentences_per_situation": 3,
+    "max_words_per_sentence": 15,
+    "min_sentences_per_category": 8,
+    "tone": "polite"
+  },
+  "situations": [
+    {"situation_id": "buy_ticket", "situation": "입장권 구매", "required_keywords": ["ticket", "tickets"]},
+    {"situation_id": "ask_hours", "situation": "운영 시간 문의", "required_keywords": ["open", "close"]},
+    {"situation_id": "find_entrance", "situation": "입구·출구 찾기", "required_keywords": ["entrance", "exit"]},
+    {"situation_id": "guided_tour", "situation": "가이드 투어·오디오 가이드 문의", "required_keywords": ["tour", "guide"]},
+    {"situation_id": "photo_request", "situation": "사진 부탁·촬영 가능 여부", "required_keywords": ["photo", "picture"]},
+    {"situation_id": "ask_way", "situation": "찾아가는 길 묻기"},
+    {"situation_id": "see_feature", "situation": "대표 볼거리 묻기"},
+    {"situation_id": "bag_storage", "situation": "짐 보관·반입 문의"},
+    {"situation_id": "ask_discount", "situation": "학생·어린이 할인 문의", "required_keywords": ["discount"]},
+    {"situation_id": "souvenir_shop", "situation": "기념품 가게 찾기"}
+  ],
+  "system_prompt": "You generate travel English practice sentences for the 'attraction / sightseeing' category.\n\nINPUT: city, a list of places (place_type in [attraction]), the situation list, and the learner's weak situations.\n\nRULES:\n- Output ONLY JSON matching the attached schema. No prose, no markdown fences.\n- Generate between {min_sentences_per_situation} and {max_sentences_per_situation} sentences for each situation_id.\n- English: polite register, at most {max_words_per_sentence} words, immediately usable on the spot.\n- Korean: natural translation, not word-for-word.\n- If a weak situation is given, it MUST have at least one sentence, and that sentence must contain the situation's required_keywords when provided.\n- Do NOT encourage trespassing, entering without a ticket, damaging property, touching exhibits that are off limits, politics, or religion.\n- Never repeat the same English sentence across situations.\n- For see_feature, name the place's main sight or feature only when it is given in the input facts; never invent one.\n- When a specific attraction is given, reference it only when natural.",
+  "good_examples": [
+    {"place": "Tōdai-ji", "place_type": "attraction", "situation_id": "see_feature", "situation": "대표 볼거리 묻기", "en": "Where can I see the Great Buddha?", "ko": "대불은 어디에서 볼 수 있나요?", "level": "basic", "tags": ["볼거리"]},
+    {"place_type": "attraction", "situation_id": "buy_ticket", "situation": "입장권 구매", "en": "Two adult tickets, please.", "ko": "성인 표 두 장 주세요.", "level": "basic", "tags": ["표", "입장"], "targets_weak": ["buy_ticket"]},
+    {"place_type": "attraction", "situation_id": "ask_hours", "situation": "운영 시간 문의", "en": "What time do you close today?", "ko": "오늘 몇 시에 닫나요?", "level": "basic", "tags": ["운영 시간"], "targets_weak": ["ask_hours"]},
+    {"place_type": "attraction", "situation_id": "find_entrance", "situation": "입구·출구 찾기", "en": "Excuse me, where is the main entrance?", "ko": "실례합니다, 정문이 어디예요?", "level": "basic", "tags": ["입구"], "targets_weak": ["find_entrance"]},
+    {"place_type": "attraction", "situation_id": "guided_tour", "situation": "가이드 투어·오디오 가이드 문의", "en": "Is there an audio guide in Korean?", "ko": "한국어 오디오 가이드가 있나요?", "level": "basic", "tags": ["가이드"], "targets_weak": ["guided_tour"]},
+    {"place_type": "attraction", "situation_id": "photo_request", "situation": "사진 부탁·촬영 가능 여부", "en": "Could you take a picture of us, please?", "ko": "저희 사진 좀 찍어 주시겠어요?", "level": "basic", "tags": ["사진"], "targets_weak": ["photo_request"]},
+    {"place_type": "attraction", "situation_id": "bag_storage", "situation": "짐 보관·반입 문의", "en": "Is there a locker where I can leave my bag?", "ko": "가방을 맡길 수 있는 사물함이 있나요?", "level": "intermediate", "tags": ["짐"]},
+    {"place_type": "attraction", "situation_id": "ask_discount", "situation": "학생·어린이 할인 문의", "en": "Do you have a student discount?", "ko": "학생 할인이 있나요?", "level": "basic", "tags": ["할인"], "targets_weak": ["ask_discount"]}
+  ],
+  "negative_cases": [
+    {"case_id": "forbidden_topic", "why": "무단 입장·훼손 권유", "expect": "forbidden_topic", "sentence": {"place_type": "attraction", "situation_id": "buy_ticket", "situation": "입장권 구매", "en": "How can I sneak in without a ticket?", "ko": "표 없이 몰래 들어가려면 어떻게 하나요?"}},
+    {"case_id": "place_mismatch", "why": "카테고리에 없는 상황 (관광지인데 항공편 지연)", "expect": "situation_not_in_config", "sentence": {"place_type": "attraction", "situation_id": "flight_delay", "situation": "항공편 지연·결항 문의", "en": "Has my flight been delayed?", "ko": "제 항공편이 지연됐나요?"}},
+    {"case_id": "too_long", "why": "15단어 초과", "expect": "too_long", "sentence": {"place_type": "attraction", "situation_id": "guided_tour", "situation": "가이드 투어·오디오 가이드 문의", "en": "Excuse me, could you please tell me whether there is any guided tour available in Korean this afternoon?", "ko": "실례합니다, 오늘 오후에 한국어 가이드 투어가 있는지 알려 주시겠어요?"}},
+    {"case_id": "duplicate", "why": "같은 팩 안에서 영문 중복", "expect": "duplicate_en", "sentence": {"place_type": "attraction", "situation_id": "buy_ticket", "situation": "입장권 구매", "en": "Two adult tickets, please.", "ko": "성인 표 두 장 주세요."}},
+    {"case_id": "not_polite", "why": "무례한 명령조", "expect": "not_polite", "sentence": {"place_type": "attraction", "situation_id": "find_entrance", "situation": "입구·출구 찾기", "en": "Show me the exit right now.", "ko": "지금 당장 출구 알려줘."}}
+  ],
+  "negative_case_patterns": {
+    "_note": "terms는 소문자 기준 부분일치. 실제 위해 행위·무례한 태도만 넣고, ticket·museum 같은 일반 명사는 넣지 않는다. severity=block은 재생성, warn은 검토 대상.",
+    "forbidden_topic": {"severity": "block", "match": "substring", "terms": ["sneak in", "without a ticket", "climb over the fence", "touch the exhibits", "carve my name", "talk about politics", "about religion"]},
+    "place_mismatch": {"severity": "block", "type": "situation_in_config"},
+    "too_long": {"severity": "warn", "type": "word_count", "max": 15},
+    "duplicate": {"severity": "warn", "type": "duplicate_en"},
+    "not_polite": {"severity": "warn", "match": "substring", "terms": ["gimme", "hurry up", "right now", "move it"]}
+  }
+}

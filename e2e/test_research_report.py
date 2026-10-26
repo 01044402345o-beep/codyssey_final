@@ -57,7 +57,11 @@ REPORT = {
                      {"provider": "openmeteo", "text": "Weather data by Open-Meteo.com (CC BY 4.0)"}],
 }
 # LLM 추출(PR3)이 검증을 통과한 항목: 첫 장소의 한국어 요약·이유, 공항 주제의 한국어 요약 + 영어 원문 인용
-REPORT["cities"][0]["places"][0].update(summary_ko="일왕이 사는 궁과 넓은 정원이에요.", why_ko="첫날 가볍게 둘러보기 좋아요", rank=1)
+REPORT["cities"][0]["places"][0].update(summary_ko="일왕이 사는 궁과 넓은 정원이에요.", why_ko="첫날 가볍게 둘러보기 좋아요", rank=1,
+                                         vocab=[{"en": "East Gardens", "kind": "feature", "src": "lexicon"},
+                                                {"en": "palace", "kind": "type", "src": "lexicon"}])
+# 장소 어휘(PR-V1): 맛집에 대표 음식 — 슬롯 문장(PR-V2)이 쓴다
+REPORT["cities"][0]["places"][5].update(vocab=[{"en": "sushi breakfast", "kind": "dish", "src": "pattern"}])
 REPORT["cities"][0]["practical"][0].update(summary_ko="나리타와 하네다 두 공항이 도쿄로 이어져요.",
                                            quote_en="Narita and Haneda serve Tokyo.", situations=["transfer_route"])
 COUNTRIES = [{"iso2": "JP", "name": "Japan", "ko": "일본", "capital": "Tokyo", "population": 1, "continent": "AS"}]
@@ -179,6 +183,13 @@ with sync_playwright() as p:
     page.evaluate("runAi(genToken)")
     page.wait_for_function("() => true", timeout=1000)
     page.wait_for_timeout(1500)
+    sents = page.evaluate("placeSentences(S.places.find(p => p.name === 'Imperial Palace'), 5).map(s => s.en)")
+    check("장소 어휘 슬롯 문장: 볼거리·종류 어휘로 만든 문장이 범용 틀보다 먼저(PR-V2)",
+          sents[:2] == ["Where can I see the East Gardens?", "Where is the entrance to the palace?"], str(sents))
+    sushi = page.evaluate("placeSentences(S.places.find(p => p.name === 'Sushi Dai'), 3).map(s => s.en)")
+    check("맛집 슬롯 문장: 대표 음식 어휘", "I'd like to try the sushi breakfast, please." in sushi, str(sushi))
+    cats = sorted({b.get("category_id") for b in gen_bodies})
+    check("관광지도 AI 문장 요청(관광지 계약)·조사 키 함께", "attraction" in cats and "restaurant" in cats, str(cats))
     check("문장 생성 요청에 도시 조사 키(research_key)가 실린다(PR5)",
           bool(gen_bodies) and all(b.get("research_key") == "JP_1850147" for b in gen_bodies)
           and all("user" not in pl for b in gen_bodies for pl in b.get("places", [])), str(gen_bodies)[:300])
