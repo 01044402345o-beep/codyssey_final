@@ -82,6 +82,20 @@ test('generateByCity: 서버가 유효하다고 알린 상황 id 만 취약 상�
   assert.deepEqual(bodies[0].weak_expressions, ['allergy_notice']);
 });
 
+test('generateByCity: 도시 조사 키가 있으면 research_key 를, 직접 추가·실시간 장소엔 user 를 싣는다(형식이 틀린 키는 안 보냄)', async () => {
+  const bodies = [];
+  const fetchImpl = async (url, opt) => {
+    if (url.endsWith('/health')) return { ok: true, json: async () => ({ situations: {} }) };
+    bodies.push(JSON.parse(opt.body)); return { ok: true, json: async () => res() };
+  };
+  await AI.generateByCity({ fetchImpl, base: '', weakIds: [], cities: [
+    { name: 'Tokyo', researchKey: 'JP_1850147', places: [{ name: 'Senso-ji', kind: 'attraction' }, { name: 'My Cafe', kind: 'cafe', user: true }] },
+    { name: 'Osaka', researchKey: '../x', places: [] }] });
+  assert.equal(bodies[0].research_key, 'JP_1850147');
+  assert.deepEqual(bodies[0].places, [{ name: 'Senso-ji', place_type: 'attraction' }, { name: 'My Cafe', place_type: 'cafe', user: true }]);
+  assert.equal('research_key' in bodies[1], false);
+});
+
 test('generateByCity: 카테고리는 묶음마다 따로, 장소 종류가 place_type 으로 간다', async () => {
   const bodies = [];
   const fetchImpl = async (url, opt) => {

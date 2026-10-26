@@ -86,6 +86,7 @@ BRIEF = {"ok": True, "confidence": "verified", "city": "도쿄", "gaps": [],
                        "url": "https://en.wikivoyage.org/wiki/Tokyo"}],
          "attribution": "위키백과·위키여행 CC BY-SA 4.0, 위키데이터 CC0"}
 brief_calls = []
+gen_bodies = []
 
 
 def brief_route(route):
@@ -96,7 +97,12 @@ def brief_route(route):
 def setup(page, research=True):
     page.route("**/geo/countries", lambda r: r.fulfill(status=200, content_type="application/json",
                                                      body=json.dumps({"countries": COUNTRIES, "attribution": "GeoNames"})))
-    page.route("**/generate", lambda r: r.fulfill(status=503, content_type="application/json", body='{"detail":"busy"}'))
+    gen_bodies.clear()
+
+    def gen_route(r):
+        gen_bodies.append(json.loads(r.request.post_data or "{}"))
+        r.fulfill(status=503, content_type="application/json", body='{"detail":"busy"}')
+    page.route("**/generate", gen_route)
     brief_calls.clear()
     page.route("**/city-brief**", brief_route)
     if research:
@@ -170,6 +176,12 @@ with sync_playwright() as p:
     page.evaluate("() => { S.modal = null; S.trip.status = 'route_requested'; request('route'); }")
     page.wait_for_function("() => S.screen === 'u-route'", timeout=40000)
     check("조사 장소로 방문 순서·일정표가 만들어진다", page.evaluate("S.days.some(d => d.placeIds.length)") and page.evaluate("!!S.plan"))
+    page.evaluate("runAi(genToken)")
+    page.wait_for_function("() => true", timeout=1000)
+    page.wait_for_timeout(1500)
+    check("문장 생성 요청에 도시 조사 키(research_key)가 실린다(PR5)",
+          bool(gen_bodies) and all(b.get("research_key") == "JP_1850147" for b in gen_bodies)
+          and all("user" not in pl for b in gen_bodies for pl in b.get("places", [])), str(gen_bodies)[:300])
     check("조사 모드에서는 백업 브리프를 부르지 않는다", not brief_calls and page.locator(".brief-card").count() == 0)
     check("JS 오류 없음", not errors, "; ".join(errors[:3]))
 

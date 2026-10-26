@@ -77,6 +77,7 @@ from .agents.itinerary import (
     google_maps_configured,
     itinerary_enabled,
 )
+from .research import config as research_config
 from .research import service as research
 
 from .validators import (
@@ -239,6 +240,8 @@ def rate_limit(request: Request) -> None:
 class Place(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     place_type: str | None = Field(default=None, max_length=40)
+    # 사용자가 직접 추가했거나 실시간(Google, 저장 안 함) 장소 — 조사 캐시와 맞춰 보지 않는다(research_key 가 있을 때)
+    user: bool = False
 
 
 # 계약의 id 형식(schema.json 의 situation_id 와 같다). category_id 는 파일 경로가 되므로 '../' 같은 값을 막는다.
@@ -256,6 +259,8 @@ class GenerateRequest(BaseModel):
     days: int | None = None
     start_date: str | None = Field(default=None, max_length=10)
     itinerary_kinds: list[str] = Field(default_factory=list, max_length=4)
+    # 도시 조사 보고서의 도시 키(cities[].key). 있으면 조사된 장소만 쓰고 그 사실만 근거로(research/grounding)
+    research_key: str | None = Field(default=None, pattern=r"^[A-Z]{2}_(\d{1,10}|n[0-9a-f]{12})$")
 
 
 class ItineraryRequest(BaseModel):
@@ -704,6 +709,19 @@ def post_place_check(req: PlaceCheckRequest, request: Request) -> dict[str, Any]
         return {"status": "unavailable", "reason": "place_check_error"}
 
 
+def research_grounding(req: GenerateRequest) -> dict[str, Any]:
+    """research_key 가 있으면 조사 캐시(외부 호출 없음)로 장소를 맞춰 본다. 조사가 꺼져 있거나 오류면 off(예전 동작)."""
+    off = {"status": "off", "places": [p.model_dump() for p in req.places], "filtered": [], "grounded": 0, "clause": ""}
+    if not req.research_key or not research_config.research_enabled():
+        return off
+    try:
+        from .research import grounding
+        return grounding.ground(req.research_key, [p.model_dump() for p in req.places], research.CACHE)
+    except Exception as exc:  # noqa: BLE001 — 조사 연결이 실패해도 문장 생성은 예전처럼
+        logging.getLogger("app.research").warning("grounding error %s", type(exc).__name__)
+        return off
+
+
 def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     rate_limit(request)
     ai.set_client(ai_client_key(request))   # AI 시도 예산을 IP 별로 센다(gemini.budget_reserve)
@@ -715,6 +733,10 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     cfg = load_category(req.category_id)
     check_place_types(cfg, req)
     schema = load_schema()
+    # 조사 연결(PR5): 조사 장소인데 캐시에 없는 것은 걸러 내고(422 아님), 남은 조사 장소엔 조사된 사실을 붙인다.
+    grounding = research_grounding(req)
+    if grounding["status"] == "ok" and len(grounding["places"]) != len(req.places):
+        req = req.model_copy(update={"places": [Place(**p) for p in grounding["places"]]})
     facts = collect_facts(
         category_id=req.category_id,
         city=req.city,
@@ -741,9 +763,12 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     th = threading.Thread(target=contextvars.copy_context().run, args=(_itinerary_side,), name="itinerary")   # IP 예산이 따라가게
     th.start()
     try:
-        body = _generate_sentences(req, cfg, schema, facts)
+        body = _generate_sentences(req, cfg, schema, facts, grounding["clause"])
     finally:
         th.join()
+    # 조사 연결 결과는 프롬프트의 VERIFIED_FACTS 에 섞지 않고(걸러진 이름이 모델에 가지 않게) 응답에만 싣는다
+    if isinstance(body.get("facts"), dict):
+        body["facts"] = {**body["facts"], "research": {k: grounding[k] for k in ("status", "filtered", "grounded")}}
     body["itinerary"] = box.get("itinerary") or {"status": "unavailable", "reason": "itinerary_error"}
     return body
 
@@ -753,6 +778,7 @@ def _generate_sentences(
     cfg: dict[str, Any],
     schema: dict[str, Any] | None,
     facts: dict[str, Any],
+    research_clause: str = "",
 ) -> dict[str, Any]:
     if not os.getenv("GEMINI_API_KEY"):
         pack = mock_pack(cfg, req)
@@ -770,7 +796,7 @@ def _generate_sentences(
             "facts": facts,
         }
 
-    prompt = build_prompt(cfg, req, facts) + city_facts_clause(facts.get("city_brief"))
+    prompt = build_prompt(cfg, req, facts) + city_facts_clause(facts.get("city_brief")) + research_clause
     state: dict[str, Any] = {"last_error": "", "last_pack": None, "last_issues": [], "attempt_ms": []}
 
     def once(client: Any, model: str, attempt: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -845,6 +871,11 @@ def _generate_sentences(
         }
 
     pack, issues = res.value
+    from .research import grounding
+    dropped = grounding.drop_unrequested(pack, [p.name for p in req.places])
+    if dropped:
+        issues = issues + [{"severity": "warn", "code": "place_not_in_request",
+                            "detail": f"요청하지 않은 장소 문장 {len(dropped)}개를 뺐다: {', '.join(sorted(set(dropped)))[:200]}"}]
     return {
         "pack": pack, "issues": issues, "attempts": res.attempts, "model": res.model,
         "failures": ai.public_failures(res.failures),   # 성공 전에 실패한 시도들 (원인 진단용, 공급자 원문 없음)
