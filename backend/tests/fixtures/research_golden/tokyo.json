@@ -1,0 +1,368 @@
+{
+ "city": "Tokyo",
+ "iso2": "JP",
+ "captured": "2026-10-26",
+ "license": "Wikivoyage/Wikipedia text CC BY-SA 4.0, Wikidata CC0 — test fixture, attribution: Wikivoyage & Wikipedia contributors",
+ "places": [
+  {
+   "id": "wv:XX_1:108",
+   "name": "Tokyo International Forum",
+   "kind": "attraction",
+   "desc_en": "A massive, modern exhibition centre used for concerts, conventions and the like. On weekdays there are usually several food wagons selling boxed lunches, but aside from this there may not be much of interest to the casual tourist — except, of course, the impressive design. The atrium may be the…",
+   "desc_lang": "en",
+   "wikidata": "Q1359892",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:109",
+   "name": "mAAch ecute Kanda Manseibashi",
+   "kind": "attraction",
+   "desc_en": "A historic train station that's been converted into a shopping mall. Besides interesting shops and cafes, there's also a library and history exhibits about the station, including a large diorama showing the area around the station as it was in 1912 when it opened.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:110",
+   "name": "National Diet Building",
+   "kind": "attraction",
+   "desc_en": "Housing Japan's bicameral legislature, it was built in the 1920s. The most recognizable symbol of the Japanese government, it was built from Japanese building materials, features a pyramidal roof and is surrounded with green areas. The nearby free Kensei Kinenkan (between the Diet and the water)…",
+   "desc_lang": "en",
+   "wikidata": "Q1338856",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:111",
+   "name": "Imperial Palace",
+   "kind": "attraction",
+   "desc_en": "Surrounded by a series of moats and high walls, the site of the former Edo Castle has been the official residence of the Japanese imperial family since 1868. Reputedly the most expensive square kilometre in the world, which during the height of Japan's bubble was estimated to be worth slightly more…",
+   "desc_lang": "en",
+   "wikidata": "Q500681",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:112",
+   "name": "Imperial Palace East Garden",
+   "kind": "attraction",
+   "desc_en": "Kept in impeccable shape, the gardens of the Imperial Palace are particularly beautiful during the March and April plum and cherry blossom seasons. During the Edo period, this was the heart of the Shogun's castle, and you can see the tenshudai, the raised platform where the tenshukaku (main keep)…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:113",
+   "name": "Kitanomaru Park",
+   "kind": "attraction",
+   "desc_en": "Connected to the East Gardens on the north side is this park. Offering much of the same, it is a convenient way to get to Yasukuni Shrine. The park also houses the Nippon Budōkan (日本武道館), which regularly stages martial arts competitions and live concerts, as well as the Kagaku Gijyutsukan (科学技術館…",
+   "desc_lang": "en",
+   "wikidata": "Q1075966",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:114",
+   "name": "Chidoriga-fuchi Moat",
+   "kind": "attraction",
+   "desc_en": "One of, if not the most prominent cherry blossom site in Tokyo, and attracts throngs of people in its March-to-April peak season. It is located just across the street from Yasukuni-shrine. Rowboats are also available for one to row along a limited portion of the moat at ¥500 for 30 minutes, ¥1000…",
+   "desc_lang": "en",
+   "wikidata": "Q4204321",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:115",
+   "name": "Yūshūkan War Memorial Museum",
+   "kind": "attraction",
+   "desc_en": "An odd collection of military paraphernalia (including human torpedoes and letters from kamikaze pilots) and one-sided (allegedly revisionist according to the Chinese, Koreans and other Asian countries except Taiwan) descriptions of Imperial Japan and World War II, but it can be pretty confronting…",
+   "desc_lang": "en",
+   "wikidata": "Q2855971",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:116",
+   "name": "Holy Resurrection Cathedral",
+   "kind": "attraction",
+   "desc_en": "A beautifully-restored 1800s-vintage Russian Orthodox cathedral located near Ochanomizu Station on the Chuo Line. Use the Hijiribashi exit. The Hijiribashi bridge by the exit is one of the better looking bridges in Tokyo and looks moderately attractive when lit-up at night.",
+   "desc_lang": "en",
+   "wikidata": "Q2660430",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:117",
+   "name": "Kanda Shrine",
+   "kind": "attraction",
+   "desc_en": "This shrine has a history dating back to the 8th century and had been highly regarded under the Edo shogunate. The current red-pillared structure has been rebuilt after being completely destroyed in the 1923 Great Kanto Earthquake. The Kanda Matsuri festival, which takes place in mid-May every…",
+   "desc_lang": "en",
+   "wikidata": "Q717682",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:118",
+   "name": "Hie Shrine",
+   "kind": "attraction",
+   "desc_en": "Another prominent shrine in Tokyo. Located atop a little hill at the edge of the area. Reached by a steep flight of stairs under a veritable tunnel of orange torii, the shrine grounds are an oasis of tranquility in the middle of Tokyo and, in good weather, a popular place for a lunchtime picnic.…",
+   "desc_lang": "en",
+   "wikidata": "Q702042",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:119",
+   "name": "Yasukuni Shrine",
+   "kind": "attraction",
+   "desc_en": "A controversial shrine to Japan's war dead, housing the souls of some 2.5 million people killed in Japan's wars &mdash; including convicted war criminals executed by the Allies. A favorite haunt of right-wing groups in black loudspeaker-equipped trucks, and often visited by Japanese and Taiwanese…",
+   "desc_lang": "en",
+   "wikidata": "Q242803",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:120",
+   "name": "Tokyo National Museum of Modern Art",
+   "kind": "attraction",
+   "desc_en": "With a modest permanent collection on display and regularly changing exhibitions, MOMAT is a nice place to kill a couple of hours after you've seen the Imperial Palace across the road. Entry to the nearby Crafts Gallery is included in the price.",
+   "desc_lang": "en",
+   "wikidata": "Q1359908",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:121",
+   "name": "Idemitsu Museum of Arts",
+   "kind": "attraction",
+   "desc_en": "Has a noteworthy collection centering on Japanese traditional arts.",
+   "desc_lang": "en",
+   "wikidata": "Q3076590",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:122",
+   "name": "National Theatre of Japan",
+   "kind": "attraction",
+   "desc_en": "For those interested in theatre arts, the Kokuritsu Gekijyo holds performances in traditional arts ranging from Kabuki, Noh drama, Bunraku puppet theatre, etc. You may want to check the schedule and make a reservation beforehand.",
+   "desc_lang": "en",
+   "wikidata": "Q1369225",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:126",
+   "name": "Peter",
+   "kind": "restaurant",
+   "desc_en": "Restaurant with amazing views of Imperial Palace and excellent service. Lunch seems the best value. Kobe beef from ¥23,500. Dress code: casual.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:127",
+   "name": "Yamaya",
+   "kind": "restaurant",
+   "desc_en": "For lunch you should get a bowl of rice with mentaiko (semi-spicy red fish eggs). Their specialty for dinner is motsunabe (tripe hotpot).",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:128",
+   "name": "Kanda Yabu soba",
+   "kind": "restaurant",
+   "desc_en": "Yabu Soba opened its doors for business in 1880.",
+   "desc_lang": "en",
+   "wikidata": "Q11264550",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:129",
+   "name": "RyuGin",
+   "kind": "restaurant",
+   "desc_en": "Moved from Roppongi in 2018. Combining a deep respect for the Japanese culinary heritage with a will to pushing boundaries has made Nihonryori RyuGin to regarded as one of the world's best restaurants. Serves a daily-changing fix menu based on what's available at the market.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:135",
+   "name": "Tsukiji Outer Market",
+   "kind": "attraction",
+   "desc_en": "For more than 80 years, Tsukiji was the world's largest wholesale fish market. Although the wholesale operations (including the famous tuna auctions) closed in 2018 and moved to Toyosu, the outer market remains in place and continues to welcome the public with stalls selling fresh fish, sushi…",
+   "desc_lang": "en",
+   "wikidata": "Q859471",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:136",
+   "name": "Tsukiji Hongwanji",
+   "kind": "attraction",
+   "desc_en": "A Jōdo Shinshū temple just a few blocks away from the fish market, worth seeing because of its unique, South Asian-inspired architecture. Buddhist services are held in English on Saturday evenings.",
+   "desc_lang": "en",
+   "wikidata": "Q943255",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:137",
+   "name": "Nihonbashi Bridge",
+   "kind": "attraction",
+   "desc_en": "Nihonbashi means Japan bridge. It is the most famous bridge in Japan and one of the very few historic bridges remaining in Tokyo. The current stone and steel bridge was built in 1911. It is the point from which all distances are measured to the capital. Since 1964 it is unfortunately overshadowed…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:138",
+   "name": "Tokyo Stock Exchange",
+   "kind": "attraction",
+   "desc_en": "Tokyo's stock exchange, while one of the largest in the world by capitalization, is now entirely automated, and the tiny building it resides in is mostly for show, featuring a small museum, exhibition hall, and broadcasting facilities. English tours can be booked in advance.",
+   "desc_lang": "en",
+   "wikidata": "Q217475",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:139",
+   "name": "Hama-rikyū Gardens",
+   "kind": "attraction",
+   "desc_en": "It was built by 17th-century shoguns for their private enjoyment. Hama-rikyu is now a public walking garden with an all-season range of flowers and flowering trees. The highlight is the tea house, picturesquely set on a small island in the middle of a pond, where green tea and sweets are available…",
+   "desc_lang": "en",
+   "wikidata": "Q1033333",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:140",
+   "name": "Mitsui Memorial Museum",
+   "kind": "attraction",
+   "desc_en": "Art museum, the collection includes items used in the Japanese tea ceremony as well as Eastern antiques. Housed in an historic building dating back to 1926.",
+   "desc_lang": "en",
+   "wikidata": "Q864700",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:141",
+   "name": "Ramen Cooking Tokyo",
+   "kind": "attraction",
+   "desc_en": "English-only small-group cooking class (maximum 8 participants) where visitors prepare ramen and sushi in a 3-hour session, with a sake pairing of three varieties. Located in Tsukishima, a short walk from the monja-yaki district.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:143",
+   "name": "Oshio Honten",
+   "kind": "restaurant",
+   "desc_en": "The original shop of one of the better-known chains here, with half a dozen restaurants. Try the mentaiko-shiso monja with cod roe and perilla, which tastes oh so much better than it looks.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:144",
+   "name": "Sushisay Main Store",
+   "kind": "restaurant",
+   "desc_en": "Over 120 years old, this is now a large chain, but the head shop is in Tsukiji and it is well-reputed.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:145",
+   "name": "Sushizanmai",
+   "kind": "restaurant",
+   "desc_en": "The self-proclaimed \"King Of Tuna\", this is now a large chain but they originate from here in Tsukiji, where they have at least 7 locations and this three-story Honten. Prices are per roll and range from &yen;100-500, or order a set meal for &yen;3000. They have an excellent English menu.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:146",
+   "name": "Tamahide",
+   "kind": "restaurant",
+   "desc_en": "In business since 1760, perhaps the oldest in Tokyo. This restaurant specialises in Oyakodon, literally \"parent-child bowl\", made from spiced chicken with scrambled eggs (hence the name) and sweet sauce on rice. A popular comfort food with surprising complexity. Expect long queues.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:147",
+   "name": "Tsujihan",
+   "kind": "restaurant",
+   "desc_en": "It is a Kaisen-dong store located near Tokyo Station. It is characterized by pouring stock with a little rice left.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wd:XX_1:Q183536",
+   "name": "Tokyo Tower",
+   "kind": "attraction",
+   "desc_en": "Tokyo Tower (東京タワー, Tōkyō Tawā; pronounced [toːkʲoː taꜜɰᵝaː] ), also known by its official name Japan Radio Tower (日本電波塔, Nippon denpatō) is a communications and observation tower in the district of Shiba-koen in Minato, Tokyo, Japan, completed in 1958. At 332.9 meters (1,092 feet), it was the tallest tower in Japan until the construction of Tokyo Skytree in 2012.",
+   "desc_lang": "",
+   "wikidata": "Q183536",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q1362629",
+   "name": "National Museum of Western Art",
+   "kind": "attraction",
+   "desc_en": "The National Museum of Western Art (国立西洋美術館, Kokuritsu Seiyō Bijutsukan; lit. \"National Western Art Museum\", NMWA) is the premier public art gallery in Japan specializing in art from the Western tradition.",
+   "desc_lang": "",
+   "wikidata": "Q1362629",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q287165",
+   "name": "Meiji Jingū",
+   "kind": "attraction",
+   "desc_en": "Meiji Shrine (明治神宮, Meiji Jingū) is a Shinto shrine in Shibuya, Tokyo, that is dedicated to the deified spirits of Emperor Meiji and his wife, Empress Shōken. The shrine does not contain the emperor's grave, which is located at Fushimi-momoyama, south of Kyoto.",
+   "desc_lang": "",
+   "wikidata": "Q287165",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q615183",
+   "name": "Sensō-ji Temple",
+   "kind": "attraction",
+   "desc_en": "Sensō-ji (浅草寺 [sẽ̞ꜜɰ̃so̞ːʑi] , Sensō-ji; officially Kinryū-zan Sensō-ji (金龍山浅草寺), also known as Asakusa Kannon (浅草観音)), is an ancient Buddhist temple in Asakusa, Tokyo, Japan. It is Tokyo's oldest-established temple, and one of its most significant.",
+   "desc_lang": "",
+   "wikidata": "Q615183",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q1710283",
+   "name": "Tokyo Mosque",
+   "kind": "attraction",
+   "desc_en": "The Tokyo Mosque (Japanese: 東京ジャーミイ, romanized: Tōkyō-jāmii), also known as Tokyo Camii (pronounced \"jamii\" in Turkish), is a mosque with an adjoining Turkish culture center located in the Ōyama-chō district of Shibuya ward in Tokyo, Japan. It is the largest mosque in Japan.",
+   "desc_lang": "",
+   "wikidata": "Q1710283",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q1193480",
+   "name": "St. Mary's Cathedral",
+   "kind": "attraction",
+   "desc_en": "St. Mary's Cathedral (in Japanese: 東京カテドラル聖マリア大聖堂, romanized: Tōkyō katedoraru sei Maria daiseidō) is the seat of the Roman Catholic Archdiocese of Tokyo.",
+   "desc_lang": "",
+   "wikidata": "Q1193480",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q1362638",
+   "name": "National Art Center, Tokyo",
+   "kind": "attraction",
+   "desc_en": "The National Art Center, Tokyo (国立新美術館, Kokuritsu Shin-Bijutsukan) (NACT) is a museum in Roppongi, Minato, Tokyo, Japan. Opened in January 2007, it is one of the five institutions of the Independent Administrative Institution National Museum of Art.",
+   "desc_lang": "",
+   "wikidata": "Q1362638",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q162722",
+   "name": "Ueno Zoo",
+   "kind": "attraction",
+   "desc_en": "The Ueno Zoo (恩賜上野動物園, Onshi Ueno Dōbutsuen) is a 14.3-hectare (35-acre) zoo, managed by the Tokyo Metropolitan Government, and located in Taitō, Tokyo, Japan. It is Japan's oldest zoo, opened on March 20, 1882.",
+   "desc_lang": "",
+   "wikidata": "Q162722",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q864957",
+   "name": "Tokyo Metropolitan Art Museum",
+   "kind": "attraction",
+   "desc_en": "The Tokyo Metropolitan Art Museum (東京都美術館, Tōkyōto Bijutsukan) is a museum of art located in Ueno Park, Tokyo, Japan. The first public art museum in Japan, it opened in 1926 as the Tokyo Prefectural Art Museum and was renamed in 1943 after Tokyo became a metropolitan prefecture.",
+   "desc_lang": "",
+   "wikidata": "Q864957",
+   "provider": "wikidata"
+  }
+ ]
+}

@@ -1,0 +1,341 @@
+{
+ "city": "Gunsan",
+ "iso2": "KR",
+ "captured": "2026-10-26",
+ "license": "Wikivoyage/Wikipedia text CC BY-SA 4.0, Wikidata CC0 — test fixture, attribution: Wikivoyage & Wikipedia contributors",
+ "places": [
+  {
+   "id": "wv:XX_1:2",
+   "name": "Gunsan Modern History Museum",
+   "kind": "attraction",
+   "desc_en": "History of the city, including its maritime heritage and the period of Japanese colonial rule.",
+   "desc_lang": "en",
+   "wikidata": "Q131763127",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:3",
+   "name": "Modern Art Museum",
+   "kind": "attraction",
+   "desc_en": "Housed in a former Japanese colonial bank building.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:4",
+   "name": "Dongguksa Temple",
+   "kind": "attraction",
+   "desc_en": "Probably the only remaining Buddhist temple in Korea that was constructed in the Japanese style.",
+   "desc_lang": "en",
+   "wikidata": "Q17564382",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:5",
+   "name": "Gunsan Impi Station",
+   "kind": "attraction",
+   "desc_en": "One of Korea's oldest stations, built in 1912 but no longer used as a railway station. It is a rail museum and sculpture gallery.",
+   "desc_lang": "en",
+   "wikidata": "Q1240011",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:6",
+   "name": "Marine Monument",
+   "kind": "attraction",
+   "desc_en": "Monument placed where South Korean marines held the line against overwhelming communist forces during the Korean War.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:7",
+   "name": "Chae Man-Sik Literature Museum",
+   "kind": "attraction",
+   "desc_en": "A museum to the famous Korean satirical writer during the Japanese occupation.",
+   "desc_lang": "en",
+   "wikidata": "Q44744596",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:8",
+   "name": "Jinpo Marine Park",
+   "kind": "attraction",
+   "desc_en": "Military museum with ships and planes.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:9",
+   "name": "Gunsan Modern Architecture Museum",
+   "kind": "attraction",
+   "desc_en": "Formerly the Gunsan branch of Joseon Bank built during the Japanese colonial period, this museum now displays the architectural history and modern heritage of Gunsan.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:10",
+   "name": "Wolmyeong Park",
+   "kind": "attraction",
+   "desc_en": "It is connected to Wolmyeong Mountain, which is a symbol of Gunsan City, as well as Changgye Mountain, Seollim Mountain, Mubangbang Mountain, and Mt. If you go up the park along the promenade between the ridge and valley, you can see the Gunsan city area, Geumgang Hagduk, West Sea, Outer Harbor…",
+   "desc_lang": "en",
+   "wikidata": "Q28405308",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:11",
+   "name": "Chowon Photo Studio",
+   "kind": "attraction",
+   "desc_en": "This studio is a film set of Christmas in August. This is not a real studio.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:12",
+   "name": "Geumgang Migratory Bird Observatory",
+   "kind": "attraction",
+   "desc_en": "Geumgang Migratory Bird Observatory is an eco-friendly park, where you can enjoy the nature of Geumgang estuary bank. Gunsan citizen can enter here by half of price.",
+   "desc_lang": "en",
+   "wikidata": "Q55727863",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:13",
+   "name": "Saemangeum New Year Festival",
+   "kind": "attraction",
+   "desc_en": "The Gunsan sea wall is the world's longest, and every January 1st there is a festival to celebrate the new year here.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:14",
+   "name": "Seonyudo Island",
+   "kind": "attraction",
+   "desc_en": "One of the most popular island destinations in the Gogunsan Archipelago. Connected by bridges to neighboring islands like Munyeodo and Jangjado, making it easy to explore on foot, by bike, or via electric vehicles. Features scenic beaches and dramatic coastal peaks like Mangjubong.",
+   "desc_lang": "en",
+   "wikidata": "Q12601737",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:15",
+   "name": "Gunsan Country Club",
+   "kind": "attraction",
+   "desc_en": "This is a famous golf course in Gunsan.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:16",
+   "name": "Gunsan TimeTravelFestival",
+   "kind": "attraction",
+   "desc_en": "This festival is held every October in Gunsan-si, using modern architectural heritage. The three-day street, where the Time Travel Festival takes place, features a rickshaw stamp tour to explore modern heritage facilities with a bicycle rickshaw, a Jangdol banger play yard, an experience yard for…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:17",
+   "name": "Ggongdang Barley Festival",
+   "kind": "attraction",
+   "desc_en": "This festival is held every May to promote regional specialty 'white rice barley'. This consists of 7 parts, ggongdang barley madam contest and recreation ground, performance ground, experience ground, marketplace ground, rest ground, and walk ground.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:18",
+   "name": "Gunsan Insect Experience Learning Farm",
+   "kind": "attraction",
+   "desc_en": "An educational farm offering hands-on experiences with insects for children and families. Visitors can learn about beetle life cycles, touch various specimens, and purchase live beetles or caterpillars.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:23",
+   "name": "Miz Cafe",
+   "kind": "restaurant",
+   "desc_en": "Former warehouse, and now a cafe and book shop.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:24",
+   "name": "Ilhaeog",
+   "kind": "restaurant",
+   "desc_en": "Classic Korean restaurant. This restaurant is famous for Kong-namul-gukbap (bean sprout and rice soup), and it costs ₩6,000.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:25",
+   "name": "Lee Sung Dang",
+   "kind": "restaurant",
+   "desc_en": "This is a famous bakery in Gunsan, and it is known as the oldest bakery in Korea. It traces its roots back to the 1920s when it was founded by a Japanese person under the name 'Izumoya', but it was renamed Leesungdang after Korea's independence in 1945. Their signature bread is danpatppang (단팥빵)…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:26",
+   "name": "Sweet India",
+   "kind": "restaurant",
+   "desc_en": "This place has some pretty good Indian food if you are looking for anything besides Korean.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:27",
+   "name": "Mulgogi Jari",
+   "kind": "restaurant",
+   "desc_en": "This is a seafood restaurant. And it is in front of the sea, so the landscape is great. The price of sashimi is little bit expensive.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:28",
+   "name": "Hansoggeum",
+   "kind": "restaurant",
+   "desc_en": "This restaurant is famous for Seafood Stew in a Hot Pot. And there are lots of seafood dishes. But price is little bit expensive.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:29",
+   "name": "Wangsan Chinese Dishes",
+   "kind": "restaurant",
+   "desc_en": "This is the most famous Chinese restaurant in the Gunsan-si. The price of hot-jjamppong (Chinese-style noodles with vegetables and seafood) and baek-jjamppong (not spicy jjampong) is ₩9,000. But you may have to wait because of lots of people.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:30",
+   "name": "Jirinseong",
+   "kind": "restaurant",
+   "desc_en": "This Chinese restaurant is famous for hot pepper jajangmyeon (black-bean-sauce noodles). But you should be careful. This one is really really rellay spicy.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:31",
+   "name": "Hanilok",
+   "kind": "restaurant",
+   "desc_en": "This is a restaurant of Korean-style dishes. Beef radish soup and Beef Tartare Bibimbap is the most famous.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:32",
+   "name": "Bokseongru",
+   "kind": "restaurant",
+   "desc_en": "1. jajangmyeon (black bean sauce noodles): ₩6,000. 2. jjamppong (spicy seafood noodle noodle soup): ₩9,000. 3. jjamppong bap (spicy seafood noodle soup with rice): ₩9,000. 4. fried rice: ₩9,000. 5. japchae bap (rice with stir-fried glass noodles and vegetables): ₩10,000.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:33",
+   "name": "Rose hotel",
+   "kind": "restaurant",
+   "desc_en": "It takes 5 minutes from Lee sung dang to here. It takes 5 seconds from Bean Haewon. It offers a free drink and pretzel for every visitor. Sausage Stew, Chicken ribs with shrimp and Tteokbokki made with oil are typical. After you finish drinking and finish the check, the owner of this store will…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:34",
+   "name": "Yukgabeochi",
+   "kind": "restaurant",
+   "desc_en": "Korean-style raw meat: ₩35,000. Yukhoe (Korean-style raw beef): ₩19,000. Yukhoe + small octopus + abalone: ₩55,000. Yukhoe + small octopus: ₩29,000. Yukhoe + abalone: ₩35,000.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:35",
+   "name": "Cheongdamisang Gunsasusong",
+   "kind": "restaurant",
+   "desc_en": "Butagagguni (Japanese home-style pork stew): ₩20,000. Butteriggafry (Japanese-style French fried potatoes): ₩15,000. Skiyaggi (Japanese-style pot food that tastes beef and green onion as soy sauce): ₩28,000. Tantannabe (a spicy Sichuan-style soup with beef and vegetables): ₩28,000. Urinegi…",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:36",
+   "name": "Rose manshon",
+   "kind": "restaurant",
+   "desc_en": "The set menu with pasta and chicken is the most famous. If your name is jamg-mi or rose, you can try one of the menus for free.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:37",
+   "name": "Soju-jip",
+   "kind": "restaurant",
+   "desc_en": "If you go for a drink here, you can get some light sweets and canned peaches for free. Whelk soup, pasta, spicy Makchang, fried chicken is representative menu.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:38",
+   "name": "Simyasikdang Jyulai (Izakaya)",
+   "kind": "restaurant",
+   "desc_en": "Signature menu: 1. Gambas: ₩20,000, 2. Tuna&Salmon: ₩25,000, 3. Salmon&avocado: ₩18,000. There are lots of delicious food and drinking.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:39",
+   "name": "Mechanic (Bar)",
+   "kind": "restaurant",
+   "desc_en": "Mechanic is a nice atmosphere rooftop bar. There are lots of drinkings (alcohols).",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:40",
+   "name": "Wolmyeongdong Whigalley (Izakaya)",
+   "kind": "restaurant",
+   "desc_en": "This store is in the wooden building built 100 years ago. There are many delicious food and alcohol. But Sake (Japanese alcohol) is little bit expensive.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:41",
+   "name": "Gureumgongbang Eunpalakepark",
+   "kind": "restaurant",
+   "desc_en": "This is a Western food restaurant.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:42",
+   "name": "Geobuki Siktak",
+   "kind": "restaurant",
+   "desc_en": "This store is famous for Braised Spicy Chicken.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  }
+ ]
+}

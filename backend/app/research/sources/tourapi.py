@@ -163,7 +163,7 @@ def fetch(http: SafeHttp, ref: dict, ckey: str, want: dict) -> dict:
         p = verify.place({"id": f"kto:{ckey}:{cid}", "name": name, "kind": kind, "lat": plat, "lon": plon, "area": "",
                           "desc_en": (f"Address: {addr}." if addr and svc == "EngService2" else ""), "section": "",
                           "homepage": "", "wikidata": "", "provider": "tourapi", "kto_id": cid, "address": addr,
-                          "name_ko": name_ko,
+                          "name_ko": name_ko, "category": str(it.get("lclsSystm3") or "")[:12],
                           "sources": [{"provider": "tourapi", "url": source_url(svc), "title": name,
                                        "license": LICENSES["tourapi"][0]}]},
                          lat, lon)

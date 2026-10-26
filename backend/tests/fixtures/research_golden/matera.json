@@ -1,0 +1,332 @@
+{
+ "city": "Matera",
+ "iso2": "IT",
+ "captured": "2026-10-26",
+ "license": "Wikivoyage/Wikipedia text CC BY-SA 4.0, Wikidata CC0 — test fixture, attribution: Wikivoyage & Wikipedia contributors",
+ "places": [
+  {
+   "id": "wv:XX_1:2",
+   "name": "Matera Cathedral",
+   "kind": "attraction",
+   "desc_en": "Roman Catholic church with a 90-m-high spire that stands out in the Matera skyline.",
+   "desc_lang": "en",
+   "wikidata": "Q2942710",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:3",
+   "name": "San Pietro Caveoso",
+   "kind": "attraction",
+   "desc_en": "San Pietro Caveoso, also known as \"Saint Peter and Saint Paul Church\", is a Catholic church situated in the Sassi of Matera. The front is in the baroque style and presents three portals.",
+   "desc_lang": "en",
+   "wikidata": "Q3668371",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:4",
+   "name": "Church of San Giovanni Battista",
+   "kind": "attraction",
+   "desc_en": "Costruita nel 1233, anch'essa in stile romanico. All'interno, a tre navate, vi è una grande volta a vele rifatta nel 1793, anno in cui furono effettuate diverse modifiche per preservare la staticità della chiesa, bei capitelli di tipo pugliese che ornano le colonne con figure antropomorfe, zoomorfe…",
+   "desc_lang": "en",
+   "wikidata": "Q3581896",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:5",
+   "name": "Church of San Francesco d'Assisi",
+   "kind": "attraction",
+   "desc_en": "Ricostruita quasi completamente nel 1670 in stile barocco. Rilevanti sono la facciata esterna in stile tardo barocco, mentre al suo interno vi è l'antica cripta dei Santi Pietro e Paolo, che conserva un affresco raffigurante la visita a Matera del papa Urbano II nel 1093. Rimarchevoli, inoltre…",
+   "desc_lang": "en",
+   "wikidata": "Q24694608",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:6",
+   "name": "Church of Purgatorio",
+   "kind": "attraction",
+   "desc_en": "Fu costruita alla fine del XVII secolo insieme agli attigui locali che ospitarono dapprima l'ospedale, poi il convento delle clarisse ed infine i locali del museo archeologico nazionale \"Domenico Ridola\". La facciata, ricca di decori, presenta un lunettone nella parte superiore ed in basso il…",
+   "desc_lang": "en",
+   "wikidata": "Q24805969",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:7",
+   "name": "Church of San Domenico",
+   "kind": "attraction",
+   "desc_en": "Fu costruita insieme al convento a partire dal 1230 in stile romanico pugliese. Molto bello il rosone con intorno quattro figure a rilievo raffiguranti un telamone, due figurine ai lati, ed in alto l'Arcangelo Michele. Al centro del rosone un cane con la fiaccola in bocca, simbolo dei domenicani.…",
+   "desc_lang": "en",
+   "wikidata": "Q24805179",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:8",
+   "name": "Church of Santa Lucia",
+   "kind": "attraction",
+   "desc_en": "La sua costruzione fu ultimata nel 1797, quando vi furono trasferite la chiesa ed il monastero delle benedettine, fino ad allora ospitate nel monastero di Santa Lucia alla Civita nei Sassi. Situata insieme all'attiguo monastero delle benedettine accanto alla fontana ferdinandea nella centrale…",
+   "desc_lang": "en",
+   "wikidata": "Q28016679",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:11",
+   "name": "Guided tours",
+   "kind": "attraction",
+   "desc_en": "Join a guided tour with a private guide or in a group",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:12",
+   "name": "Ape nei Sassi",
+   "kind": "attraction",
+   "desc_en": "Panoramic tour with Ape car.",
+   "desc_lang": "en",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wv:XX_1:13",
+   "name": "Park of the Rupestrian Churches of Matera",
+   "kind": "attraction",
+   "desc_en": "A protected natural area, part of the \"Sassi di Matera\" UNESCO site - but outside the city. In addition to about 150 rock churches scattered along Murgia and the ravines, the deep limestone groove Gravine di Matera can be visited.",
+   "desc_lang": "en",
+   "wikidata": "Q3895535",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:18",
+   "name": "Chiesa di San Francesco da Paola",
+   "kind": "attraction",
+   "desc_en": "Questa chiesa è posta all'esterno dell'antica cinta muraria. Ha una pianta a croce latina ed è il punto in cui il 2 luglio termina la Processione dei pastori con cui comincia la festa della Madonna della Bruna.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:20",
+   "name": "Cappella di Sant'Andrea",
+   "kind": "attraction",
+   "desc_en": "La cappella si inserisce in un complesso rupestre formato da alcune cavità rocciose, da ambienti di servizio alla masseria quali, ad esempio, lo jazzo ed il dormitorio dei pastori.",
+   "desc_lang": "it",
+   "wikidata": "Q16536554",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:21",
+   "name": "Chiesa di San Leonardo",
+   "kind": "attraction",
+   "desc_en": "La cripta, oggi murata, prende il nome dall'affresco raffigurante il santo. Una volta sconsacrata è stata adibita, fino a qualche tempo fa, a forno. Gli elementi architettonici appartenenti al primo impianto sono: un pilastro centrale, diverse nicchie ed archeggiature sulle pareti. Al suo interno…",
+   "desc_lang": "it",
+   "wikidata": "Q15907986",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:22",
+   "name": "Cripta degli Evangelisti",
+   "kind": "attraction",
+   "desc_en": "È una cappella a pianta rettangolare. Sui muri è interamente ricoperta di pitture risalenti al XVII secolo ben fatti e in buone condizioni. Sebbene l'uso cui è destinato l'interno della struttura (deposito di paglia) non consenta una perfetta analisi della struttura stessa, essa dispone di un ricco…",
+   "desc_lang": "it",
+   "wikidata": "Q16545623",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:23",
+   "name": "Chiesa di Santa Barbara",
+   "kind": "attraction",
+   "desc_en": "Un'importante chiesa che si affaccia direttamente sulla Gravina, con una facciata abbellita da colonne e due accessi. Di notevole fattura gli affreschi tra cui quello della Madonna con Bambino e Santa Barbara.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:24",
+   "name": "Palazzo dell'Annunziata",
+   "kind": "attraction",
+   "desc_en": "Palazzo del 1735, dopo il 1861 viene requisito all'autorità ecclesiastica per diventare Tribunale e degli uffici giudiziari e in parte sede della scuola media. Dopo un periodo di degrado a seguito dei danni del terremoto del 1980 oggi è sede della Biblioteca Provinciale \"Tommaso Stigliani\" e…",
+   "desc_lang": "it",
+   "wikidata": "Q3891391",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:25",
+   "name": "Palazzo di Castro Vetere",
+   "kind": "attraction",
+   "desc_en": "L'antico palazzo, nonostante i diversi passaggi di proprietà avvenuti nel corso degli anni conserva ancora tutta la sua antica struttura di vico campanile dove è situato assieme alla vecchia chiesa di San Nicola in Castiglione. Importante è notare lo stemma vicino alle scale probabilmente…",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:26",
+   "name": "Fontana ferdinandea",
+   "kind": "attraction",
+   "desc_en": "Restaurata dal re Ferdinando II di Borbone nel 1832, era originariamente posta ai piedi della collina del castello e raccoglieva le acque provenienti da quella collina. Dopo la seconda guerra mondiale, esaurita la sua funzione di approvvigionamento, fu trasferita all'interno della villa comunale.…",
+   "desc_lang": "it",
+   "wikidata": "Q27994804",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:27",
+   "name": "Villa Longo",
+   "kind": "attraction",
+   "desc_en": "Dimora del XIX secolo della nobile famiglia materana di antiche origini napoletane.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:28",
+   "name": "Castello Tramontano",
+   "kind": "attraction",
+   "desc_en": "Nato come residenza normanna era originariamente costituito da otto torri quadrate ed un ponte. In stile aragonese, il castello, con un maschio centrale e due torri laterali più basse, l'uno e le altre rotonde, smerlate e dotate di feritoie, fu fatto costruire a partire dal 1501 dal conte Giovan…",
+   "desc_lang": "it",
+   "wikidata": "Q2968007",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:31",
+   "name": "Museo archeologico nazionale Domenico Ridola",
+   "kind": "attraction",
+   "desc_en": "È il più antico museo della Basilicata. Istituito il 9 febbraio 1911 per volontà del senatore e medico Domenico Ridola, che donò allo Stato le sue importanti collezioni archeologiche, presenta le numerose testimonianze rinvenute nel territorio della provincia materana e delle Murge. Il Museo è…",
+   "desc_lang": "it",
+   "wikidata": "Q3867699",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:35",
+   "name": "Parco del Castello",
+   "kind": "attraction",
+   "desc_en": "Parco attorno al castello Tramontano.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:49",
+   "name": "Ponte Tibetano della Gravina",
+   "kind": "attraction",
+   "desc_en": "Questo ponte permette di superare il torrente Gravina e di andare sul lato opposto pressi il Parco delle Murge. Come tutti i ponti tibetani è molto instabile ed è consigliabile attraversarlo una persona per volta essendo soggetto a forti sobbalzi per ogni passo eseguito. Si può provare l'emozione…",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:50",
+   "name": "Veduta dal Parco della Murgia Materana",
+   "kind": "attraction",
+   "desc_en": "Da questo punto si gode un panorama frontale della città ma soprattutto dei Sassi di Matera, e si ottiene una splendida visione d'assieme. È molto consigliata la visione al tramonto quando le luci del crepuscolo si sostituiscono a quelle della città che sembra un presepe.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:51",
+   "name": "Guide turistiche",
+   "kind": "attraction",
+   "desc_en": "Visite guidate a Matera e dintorni organizzate dalle guide ufficiali.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:52",
+   "name": "Visita guidata",
+   "kind": "attraction",
+   "desc_en": "Tour e visite guidate ai Sassi di Matera e i dintorni della città in gruppo o personalizzata. Escursioni e trekking alle chiese rupestri.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:53",
+   "name": "Visite guidate",
+   "kind": "attraction",
+   "desc_en": "Partenza visite guidate private o in aggregazione.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:54",
+   "name": "Ape Matera Tour",
+   "kind": "attraction",
+   "desc_en": "Tour a Matera con gli ape calessini alla scoperta di scenari unici e viste panoramiche dei Sassi di Matera.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:55",
+   "name": "Ape Vito",
+   "kind": "attraction",
+   "desc_en": "Tour in Ape Calessino Piaggio a Matera e dintorni. Visite guidate ai Sassi e alla Murgia materana.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:60",
+   "name": "Morgan",
+   "kind": "restaurant",
+   "desc_en": "Ristorante-pizzeria.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:62",
+   "name": "Antico Forno a Legna",
+   "kind": "restaurant",
+   "desc_en": "Dove è possibile comprare dell'ottimo pane di Matera.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wvit:XX_1:66",
+   "name": "Stano Ristorazione",
+   "kind": "restaurant",
+   "desc_en": "Ristorante con ottimo rapporto qualità-prezzo.",
+   "desc_lang": "it",
+   "wikidata": "",
+   "provider": "wikivoyage"
+  },
+  {
+   "id": "wd:XX_1:Q2350404",
+   "name": "Sassi di Matera",
+   "kind": "attraction",
+   "desc_en": "The Sassi di Matera are two districts (Sasso Caveoso and Sasso Barisano) of the Italian city of Matera, Basilicata, well-known for their ancient cave dwellings inhabited since the Paleolithic period. The \"Sassi\" have been described by Fodor's as \"one of the most unique landscapes in Europe\".",
+   "desc_lang": "",
+   "wikidata": "Q2350404",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q3868416",
+   "name": "National Museum of Medieval and Modern Art of Basilicata",
+   "kind": "attraction",
+   "desc_en": "The Museo nazionale d'arte medievale e moderna della Basilicata (pronounced [pa'lattso laɱ'fraŋki]) is an art museum located inside the building Palazzo Lanfranchi, which is located in Piazzetta Pascoli, in the Historic Centre of Matera Basilicata, Italy. In front of the entrance, a sculpture by artist Kengiro Azuma titled La Goccia is exhibited.",
+   "desc_lang": "",
+   "wikidata": "Q3868416",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q3689590",
+   "name": "convento di Sant'Agostino",
+   "kind": "attraction",
+   "desc_en": "convent in Matera, Italy",
+   "desc_lang": "",
+   "wikidata": "Q3689590",
+   "provider": "wikidata"
+  },
+  {
+   "id": "wd:XX_1:Q27989503",
+   "name": "Palazzo Bronzini",
+   "kind": "attraction",
+   "desc_en": "building in Matera, Italy",
+   "desc_lang": "",
+   "wikidata": "Q27989503",
+   "provider": "wikidata"
+  }
+ ]
+}

@@ -590,6 +590,12 @@
     wikipedia: ['Wikipedia', 'Wikipedia (CC BY-SA 4.0)'], osm: ['OpenStreetMap', '© OpenStreetMap contributors (ODbL)'],
     google: ['Google 지도', 'Google Maps'], tourapi: ['한국관광공사', '한국관광공사 TourAPI'],                               // 실시간 보충(서버가 저장하지 않음)
   };
+  /* 서버가 준 장소 어휘를 화면용으로 다시 거른다: {en, kind: dish|feature|type} 최대 4개, 1~4 낱말·40자, 숫자·기호 없음 */
+  function placeVocab(list) {
+    return (Array.isArray(list) ? list : []).filter(v => v && typeof v.en === 'string' && ['dish', 'feature', 'type'].includes(v.kind))
+      .map(v => ({ en: v.en.replace(/\s+/g, ' ').trim(), kind: v.kind }))
+      .filter(v => v.en && v.en.length <= 40 && v.en.split(' ').length <= 4 && !/[<>{}\[\]@0-9]|https?:/.test(v.en)).slice(0, 4);
+  }
   function researchPlace(raw, cityName, n) {
     const name = String(raw.name || '').trim();
     const prov = s => RESEARCH_PROVIDER[s && s.provider] || RESEARCH_PROVIDER.wikivoyage;
@@ -604,6 +610,7 @@
       // 한국어 요약·이유는 LLM 추출이 검증을 통과했을 때만 온다(없으면 영어 원문만)
       desc: typeof raw.summary_ko === 'string' ? raw.summary_ko : '', descEn: typeof raw.desc_en === 'string' ? raw.desc_en : '',
       descLang: /^[a-z]{2}$/.test(raw.desc_lang || '') ? raw.desc_lang : 'en',          // 다른 언어판 위키보이지 원문이면 그 언어
+      vocab: placeVocab(raw.vocab),                                                  // 장소 어휘(서버 research/vocab.py) — 문장 슬롯용
       reason: typeof raw.why_ko === 'string' ? raw.why_ko : '', rank: Number.isInteger(raw.rank) ? raw.rank : 0,
       cuisine: null, menuEn: null, menuKo: null, sources: src, homepage: home,
       attribution, primaryType: RESEARCH_KIND_KO[raw.kind] || '관광지',

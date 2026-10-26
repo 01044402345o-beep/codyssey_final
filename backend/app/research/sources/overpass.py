@@ -107,6 +107,7 @@ def fetch(http: SafeHttp, ref: dict, key: str, want: dict) -> dict:
                           "area": "", "desc_en": _desc(tags), "section": "",
                           "homepage": site if re.fullmatch(r"https?://[^\s\"'<>]{4,300}", site) else "",
                           "wikidata": wd if re.fullmatch(r"Q\d+", wd) else "", "name_local": tags.get("name", "")[:120],
+                          "cuisine": (tags.get("cuisine") or "")[:80],
                           "provider": "osm",
                           "sources": [{"provider": "osm", "url": url, "title": name, "license": LICENSES["osm"][0]}]},
                          lat, lon)
