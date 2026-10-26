@@ -17,7 +17,7 @@
 | `LANGSMITH_TRACING` | `false` | 코드가 강제로 끈다(langchain-core 의존성) |
 | `RESEARCH_USE_GRAPH` | `1` | 0 이면 LangGraph 없이 같은 노드를 스레드 4개로(같은 결과). 그래프가 실패해도 자동으로 이 경로 |
 | `RESEARCH_PLACE_CHAIN` | `wikivoyage_intl,tourapi,wikidata_places,google` | 위키보이지 장소가 모자랄 때 차례로 묻는 대체 소스. `none` 이면 끔(위키보이지만). `google` 은 `GOOGLE_MAPS_API_KEY` 가 있을 때만. `overpass` 는 넣어야 켜진다 |
-| `TOURAPI_KEY_KOR`·`_ENG`·`_FRE`·`_JPN`·`_CHS` | 없음 | 언어(서비스)별 키 — 국문 `KorService2`·영문 `EngService2`·불어 `FreService2`·일문 `JpnService2`·중문 간체 `ChsService2`. 없으면 공통 `TOURAPI_SERVICE_KEY`. 조사는 영문 → 국문 순으로 키가 있는 것(불어·일문·중문은 지금 안 씀). Jpn·Chs 서비스 이름은 활용신청 화면 End Point 로 확인 |
+| `TOURAPI_KEY_KOR`·`_ENG`·`_FRE`·`_JPN`·`_CHS` | 없음 | 언어(서비스)별 키 — 국문 `KorService2`·영문 `EngService2`·불어 `FreService2`·일문 `JpnService2`·중문 간체 `ChsService2`. 없으면 공통 `TOURAPI_SERVICE_KEY`. 조사는 영문 → 국문 순으로 키가 있는 것(불어·일문·중문은 지금 안 씀). 서비스 이름은 활용매뉴얼 v4.3~4.4 로 확인 |
 | `TOURAPI_SERVICE_KEY` / `TOURAPI_SERVICE` | 없음 / (자동) | 한국관광공사 TourAPI(한국 도시). 공공데이터포털 일반 인증키(Encoding·Decoding 어느 쪽이든). 서비스마다 활용신청이 따로라 키에 승인된 서비스로(`KorService2` 가능). 개발계정 1,000회/일 → 운영계정은 활용사례 등록으로 늘림 |
 | `GOOGLE_MAPS_API_KEY` / `ITINERARY_DAILY_CAP` | 없음 / `20` | Google Places 실시간 보충(일정 에이전트와 한도 공유, 프로세스·UTC 하루). 다 쓰면 `capped` → 체인이 6시간 쉼 |
 | `RESEARCH_PLACE_MIN_EXTRA` | `2` | 종류별 목표 = 일정이 정한 장소 수 + 이만큼(화면 '후보' 몫) |
@@ -97,6 +97,14 @@ POST /research {countries:[{name, iso2?}], cities:[{name, gid?, ci, start, end, 
 ### 직접 추가한 장소 확인 (`POST /place-check`, `research/place_check.py`)
 
 사용자가 '장소 직접 추가'로 적은 이름을 도시 근처(40km)에서 찾아 출처를 붙인다. 순서: TourAPI 키워드 검색(한국·키 있을 때, 이름 일치 → 가까운 순) → Wikidata 검색(관련도 순으로 도시 근처 첫 항목 — '가장 가까운 것'으로 고르면 동명 유치원이 잡혔다) → Google Places(키 있을 때, 실시간·저장 안 함). 못 찾으면 `not_found` — 화면은 '직접 추가' 그대로(가짜로 바꾸지 않음). TourAPI·Wikidata 결과만 메모리 7일, 못 찾음은 기억하지 않는다. 요청은 장소 이름·종류·도시·나라만(`extra=forbid`). 화면: "공개 자료에서 확인했어요 · 도시 중심에서 약 N km" + 이름이 다르면 '‘찾은 이름’으로 바꾸기', 못 찾으면 "이름과 위치를 확인해 주세요". 실측: 나라 'Todaiji'·'도다이지' → Tōdai-ji Temple(3.2km).
+
+### TourAPI 키 발급 (한국관광공사 개방데이터 활용신청방법 매뉴얼 v3.3)
+
+1. 공공데이터포털에서 서비스마다 활용신청(개발계정) — 자동승인, 10~30분 뒤 사용 가능. 개발계정은 **오퍼레이션별 하루 1,000건**
+2. 인증키: 마이페이지 > 데이터활용 > Open API > 인증키 발급현황(일반 인증키는 계정당 하나 → `TOURAPI_SERVICE_KEY` 하나로 충분)
+3. 늘리려면 운영계정 신청 — 한국관광공사 승인 1~3일, 한국관광공사 [활용사례] 등록·개발계정 호출 이력·앱/웹 확인이 필요
+
+활용매뉴얼 v4.4(2026-02) 기준으로 코드가 맞춘 것: 서비스 이름 `KorService2`·`EngService2`·`FreService2`·`JpnService2`·`ChsService2`, `locationBasedList2` 의 `mapX`·`mapY`·`radius`(최대 20,000m)·`arrange=E`(거리순), 응답의 신분류체계 `lclsSystm1~3`(카페·찻집 = 중분류 `FD05`), 다국어 title 끝 괄호의 한국어 이름(→ `name_ko`).
 
 ### 이름만 있는 도시 보강
 

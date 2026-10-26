@@ -4,7 +4,9 @@
 - 영문 관광정보서비스(EngService2)를 기본으로 쓴다: 장소 이름이 영어라 영어 문장에 그대로 쓸 수 있다.
   TOURAPI_SERVICE=KorService2 로 국문 서비스도 쓸 수 있다(활용신청은 서비스마다 따로 — 키에 승인된 서비스로).
 - 도시당 한 번: locationBasedList2(도시 좌표, 인구 비례 반경 ≤20km, 거리순, 최대 100건, 종류 구분 없이) →
-  contenttypeid(국문 12·14 관광, 39 음식 / 영문 76·78 관광, 82 음식 — 둘 다 받아 준다)와 cat3(A05020900 카페)로 나눈다.
+  contenttypeid(국문 12·14 관광, 39 음식 / 다국어 76·78 관광, 82 음식 — 둘 다 받아 준다)와 신분류체계(lclsSystm2 FD05 카페·찻집)로 나눈다.
+  (활용매뉴얼 v4.4·신분류체계 연계 정의서, 2026-02: 응답에 cat1~3 대신 lclsSystm1~3. 옛 cat3 A05020900 도 받아 준다.)
+- 영문 등 다국어 서비스의 title 은 "HiKR Ground (하이커 그라운드)" 처럼 끝 괄호에 한국어 이름이 붙는다 → 이름과 name_ko 로 나눈다.
 - 사진(firstimage)은 쓰지 않는다: 공공누리 3유형(변경 금지) 조건이 섞여 있다.
 - 오류: resultCode 22(일 한도) → capped(체인 6시간 쉼), 23(초당 한도) → rate_limited, 20·30·31(키 미등록·만료·거부) → exhaust.
   게이트웨이 오류는 HTTP 200 에 XML(OpenAPI_ServiceResponse)로 오기도 해서 본문 글자로도 판정한다.
@@ -25,7 +27,7 @@ from ..net import SafeHttp
 from . import LICENSES, result
 
 ROOT = "https://apis.data.go.kr/B551011"
-# 언어 → (서비스 이름, 키 환경변수). Jpn·Chs 서비스 이름은 Kor·Eng·Fre 와 같은 규칙으로 둔 것 — 활용신청 화면의 End Point 로 확인.
+# 언어 → (서비스 이름, 키 환경변수). 서비스 이름은 활용매뉴얼(국문·영문·불어·일문·중문간체, v4.3~4.4)의 Call Back URL 로 확인.
 LANGS = {"kor": ("KorService2", "TOURAPI_KEY_KOR"), "eng": ("EngService2", "TOURAPI_KEY_ENG"),
          "fre": ("FreService2", "TOURAPI_KEY_FRE"), "jpn": ("JpnService2", "TOURAPI_KEY_JPN"),
          "chs": ("ChsService2", "TOURAPI_KEY_CHS")}
@@ -36,7 +38,23 @@ SOURCE_URL = {"EngService2": "https://www.data.go.kr/data/15101753/openapi.do",
 GENERIC_URL = "https://api.visitkorea.or.kr/"
 ATTRACTION_TYPES = {"12", "14", "76", "78"}
 FOOD_TYPES = {"39", "82"}
-CAFE_CAT3 = {"A05020900"}
+CAFE_CAT3 = {"A05020900"}                           # 옛 분류(cat3)
+CAFE_LCLS2 = {"FD05"}                               # 신분류체계 중분류: 카페/찻집(FD050100 카페 …)
+_KO_TAIL = re.compile(r"^(.*?)\s*[(（]([^()（）]*[가-힣][^()（）]*)[)）]\s*$")
+
+
+def split_title(title: str) -> "tuple[str, str]":
+    """다국어 title 끝의 한국어 괄호를 떼어 (이름, 한국어 이름). 괄호가 없거나 한글이 없으면 (원문, "")."""
+    t = re.sub(r"\s+", " ", title or "").strip()
+    m = _KO_TAIL.match(t)
+    if m and m.group(1).strip() and re.search(r"[A-Za-z\u3040-\u30ff\u4e00-\u9fff]", m.group(1)):
+        return m.group(1).strip(), m.group(2).strip()
+    return t, ""
+
+
+def food_kind(it: dict) -> str:
+    cafe = str(it.get("lclsSystm2") or "") in CAFE_LCLS2 or str(it.get("cat3") or "") in CAFE_CAT3
+    return "cafe" if cafe else "restaurant"
 MOBILE_APP = "MADI"
 
 
@@ -126,11 +144,11 @@ def fetch(http: SafeHttp, ref: dict, ckey: str, want: dict) -> dict:
     for it in _items(data):
         if not isinstance(it, dict):
             continue
-        t, cat3 = str(it.get("contenttypeid") or ""), str(it.get("cat3") or "")
+        t = str(it.get("contenttypeid") or "")
         if t in ATTRACTION_TYPES:
             kind = "attraction"
         elif t in FOOD_TYPES:
-            kind = "cafe" if cat3 in CAFE_CAT3 else "restaurant"
+            kind = food_kind(it)
         else:
             continue
         cid = str(it.get("contentid") or "")
@@ -140,11 +158,12 @@ def fetch(http: SafeHttp, ref: dict, ckey: str, want: dict) -> dict:
             continue
         if not re.fullmatch(r"\d{1,12}", cid):
             continue
-        name = re.sub(r"\s+", " ", str(it.get("title") or "")).strip()
+        name, name_ko = split_title(str(it.get("title") or ""))
         addr = re.sub(r"\s+", " ", str(it.get("addr1") or "")).strip()[:120]
         p = verify.place({"id": f"kto:{ckey}:{cid}", "name": name, "kind": kind, "lat": plat, "lon": plon, "area": "",
                           "desc_en": (f"Address: {addr}." if addr and svc == "EngService2" else ""), "section": "",
                           "homepage": "", "wikidata": "", "provider": "tourapi", "kto_id": cid, "address": addr,
+                          "name_ko": name_ko,
                           "sources": [{"provider": "tourapi", "url": source_url(svc), "title": name,
                                        "license": LICENSES["tourapi"][0]}]},
                          lat, lon)

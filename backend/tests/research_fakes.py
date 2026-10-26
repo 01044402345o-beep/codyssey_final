@@ -166,12 +166,14 @@ INTL = {
 
 
 TOUR = {"response": {"header": {"resultCode": "0000", "resultMsg": "OK"}, "body": {"items": {"item": [
-    {"contentid": "126508", "contenttypeid": "76", "title": "Gunsan Modern History Museum", "addr1": "240, Haemang-ro, Gunsan-si",
+    {"contentid": "126508", "contenttypeid": "76", "title": "Gunsan Modern History Museum (군산근대역사박물관)",
+     "addr1": "240, Haemang-ro, Gunsan-si",
      "mapx": "126.7110", "mapy": "35.9890", "cat3": "A02010700", "firstimage": "http://tong.visitkorea.or.kr/x.jpg"},
     {"contentid": "2700001", "contenttypeid": "82", "title": "Lee Sung Dang", "addr1": "177, Jungang-ro, Gunsan-si",
      "mapx": "126.7120", "mapy": "35.9870", "cat3": "A05020700"},
     {"contentid": "2700002", "contenttypeid": "82", "title": "Cafe Gyeongamdong", "addr1": "Gunsan-si", "mapx": "126.7300",
-     "mapy": "35.9800", "cat3": "A05020900"},
+     "mapy": "35.9800", "lclsSystm1": "FD", "lclsSystm2": "FD05", "lclsSystm3": "FD050100"},
+    {"contentid": "2700004", "contenttypeid": "82", "title": "Old Cafe", "mapx": "126.7310", "mapy": "35.9810", "cat3": "A05020900"},
     {"contentid": "2700003", "contenttypeid": "80", "title": "Some Hotel", "mapx": "126.71", "mapy": "35.98"},
     {"contentid": "bad", "contenttypeid": "76", "title": "Bad id", "mapx": "126.71", "mapy": "35.98"}]}, "totalCount": 5}}}
 
