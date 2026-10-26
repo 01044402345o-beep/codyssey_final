@@ -92,7 +92,8 @@ def _by_tourapi(http: SafeHttp, ref: dict, name: str) -> Optional[dict]:
         km = _near(ref, lat, lon)
         if km is None:
             continue
-        exact = _key(str(it.get("title") or "")) == _key(name)      # 이름이 같은 것을 먼저, 그다음 가까운 것
+        en, ko = tourapi.split_title(str(it.get("title") or ""))
+        exact = _key(name) in (_key(en), _key(ko))      # 이름이 같은 것을 먼저(영문·괄호 속 한국어 이름 둘 다), 그다음 가까운 것
         if best is None or (not exact, km) < (not best[4], best[0]):
             best = (km, it, lat, lon, exact)
     if not best:
@@ -100,8 +101,8 @@ def _by_tourapi(http: SafeHttp, ref: dict, name: str) -> Optional[dict]:
     km, it, lat, lon, _ = best
     t = str(it.get("contenttypeid") or "")
     kind = "attraction" if t in tourapi.ATTRACTION_TYPES else (
-        ("cafe" if str(it.get("cat3") or "") in tourapi.CAFE_CAT3 else "restaurant") if t in tourapi.FOOD_TYPES else "")
-    return _found("tourapi", _norm(str(it.get("title") or name)), lat, lon, tourapi.source_url(svc), km, kind)
+        tourapi.food_kind(it) if t in tourapi.FOOD_TYPES else "")
+    return _found("tourapi", tourapi.split_title(str(it.get("title") or name))[0], lat, lon, tourapi.source_url(svc), km, kind)
 
 
 def _by_wikidata(http: SafeHttp, ref: dict, name: str) -> Optional[dict]:

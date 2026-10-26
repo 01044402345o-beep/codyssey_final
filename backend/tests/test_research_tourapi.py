@@ -30,7 +30,9 @@ class TourApiSourceTest(unittest.TestCase):
         self.assertEqual(r["status"], "ok")
         got = [(p["name"], p["kind"], p["provider"]) for p in r["data"]]
         self.assertEqual(got, [("Gunsan Modern History Museum", "attraction", "tourapi"), ("Lee Sung Dang", "restaurant", "tourapi"),
-                               ("Cafe Gyeongamdong", "cafe", "tourapi")])                    # 숙박·잘못된 id 는 버림
+                               ("Cafe Gyeongamdong", "cafe", "tourapi"), ("Old Cafe", "cafe", "tourapi")])
+        # 숙박·잘못된 id 는 버림, 카페는 신분류체계 FD05(옛 cat3 도), 영문 title 의 한국어 괄호는 name_ko 로
+        self.assertEqual(r["data"][0]["name_ko"], "군산근대역사박물관")
         museum = r["data"][0]
         self.assertEqual((museum["id"], museum["desc_en"], museum["lat"]),
                          ("kto:KR_1842025:126508", "Address: 240, Haemang-ro, Gunsan-si.", 35.989))
@@ -79,6 +81,15 @@ class TourApiSourceTest(unittest.TestCase):
         self.assertIn("tourapi", chain.active())
 
 
+class TitleTest(unittest.TestCase):
+    def test_split_title(self):
+        self.assertEqual(tourapi.split_title("HiKR Ground (하이커 그라운드)"), ("HiKR Ground", "하이커 그라운드"))
+        self.assertEqual(tourapi.split_title("Bupyeong (Kkangtong) Market (부평깡통시장)"), ("Bupyeong (Kkangtong) Market", "부평깡통시장"))
+        self.assertEqual(tourapi.split_title("Namsan Tower"), ("Namsan Tower", ""))
+        self.assertEqual(tourapi.split_title("경복궁"), ("경복궁", ""))                       # 국문 서비스 title 은 그대로
+        self.assertEqual(tourapi.split_title("(군산)"), ("(군산)", ""))
+
+
 @mock.patch.dict(os.environ, ENV)
 class TourApiKeysTest(unittest.TestCase):
     CLEAR = {k: "" for k in ("TOURAPI_SERVICE_KEY", "TOURAPI_KEY_KOR", "TOURAPI_KEY_ENG", "TOURAPI_KEY_FRE", "TOURAPI_KEY_JPN",
@@ -114,7 +125,7 @@ class TourApiGraphTest(unittest.TestCase):
             rep = graph.run(d, identity.resolve(FakeStore(), req))
             gunsan = rep["cities"][0]
             self.assertEqual([p["name"] for p in gunsan["places"]],
-                             ["Gunsan Modern History Museum", "Lee Sung Dang", "Cafe Gyeongamdong"])
+                             ["Gunsan Modern History Museum", "Lee Sung Dang", "Cafe Gyeongamdong", "Old Cafe"])
             self.assertEqual(gunsan["place_status"], "ok")
             self.assertIn("tourapi", {a["provider"] for a in rep["attributions"]})
             px = cache.get("research_cities", "KR_1842025", "places_extra")

@@ -85,9 +85,9 @@ services:
         sync: false
       - key: TOURAPI_KEY_FRE        # 불어 관광정보서비스_GW (FreService2) — 지금은 안 씀
         sync: false
-      - key: TOURAPI_KEY_JPN        # 일문 관광정보서비스_GW (JpnService2) — 지금은 안 씀
+      - key: TOURAPI_KEY_JPN        # 일문 관광정보서비스_GW (JpnService2, 활용매뉴얼로 확인) — 지금은 안 씀
         sync: false
-      - key: TOURAPI_KEY_CHS        # 중문 간체 관광정보서비스_GW (ChsService2) — 지금은 안 씀
+      - key: TOURAPI_KEY_CHS        # 중문 간체 관광정보서비스_GW (ChsService2, 활용매뉴얼로 확인) — 지금은 안 씀
         sync: false
       - key: TOURAPI_SERVICE
         sync: false
