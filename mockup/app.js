@@ -2844,6 +2844,39 @@ function addPlaceForm(city) {
     <button type="button" class="btn primary" data-act="add-place" data-city="${esc(city)}">추가</button></div>
     <div class="small">직접 추가한 장소는 출처가 없어요. 방문 전에 위치·영업 여부를 확인해 주세요.</div></div>`;
 }
+/* 직접 추가한 장소 확인(POST /place-check): 도시 근처에서 이름을 찾아 출처를 붙인다. 못 찾아도 장소는 그대로 둔다. */
+async function placeCheck(p) {
+  if (API.base === null || !S.trip) return;
+  const { country } = briefCtx(p.city);
+  const c = S.trip.cities.find(x => x.name === p.city);
+  const iso2 = (countryByName(country) || {}).iso2;
+  p.check = { state: 'loading' };
+  if (S.screen === 'u-report') render();
+  let d = null;
+  try {
+    const r = await fetch(`${API.base}/place-check`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ country: { name: country || p.city, ...(iso2 ? { iso2 } : {}) },
+                             city: { name: p.city, ...(c && c.gid ? { gid: c.gid } : {}) }, place: { name: p.name, kind: p.kind } }) });
+    d = r.ok ? await r.json() : null;
+  } catch (e) { d = null; }
+  const res = AI.placeCheckResult(d);
+  if (res.state === 'found') {
+    p.sources = [{ url: res.url, title: `${res.label} · ${res.name}` }];
+    p.attribution = `직접 추가 · 출처 확인(${res.license})`;
+    res.suggest = res.name.toLowerCase() !== p.name.toLowerCase() ? res.name : '';
+  }
+  p.check = res;
+  if (S.screen === 'u-report') render();
+}
+function placeCheckLine(p) {
+  const c = p.check;
+  if (!c) return '';
+  if (c.state === 'loading') return '<div class="small check-line">공개 자료에서 확인하는 중…</div>';
+  if (c.state === 'not_found') return '<div class="small check-line warn">공개 자료에서 찾지 못했어요 — 이름과 위치를 확인해 주세요.</div>';
+  if (c.state !== 'found') return '';
+  return `<div class="small check-line ok">공개 자료에서 확인했어요${c.km != null ? ` · 도시 중심에서 약 ${esc(String(c.km))}km` : ''}${c.suggest
+    ? ` <button type="button" class="link-btn" data-act="place-rename" data-id="${esc(p.id)}">‘${esc(c.suggest)}’(으)로 바꾸기</button>` : ''}</div>`;
+}
 function researchCredits() {
   const a = S.reportMode === 'research' && S.research ? S.research.attributions || [] : [];
   if (!a.length) return '';
@@ -2860,7 +2893,7 @@ function placeCard(p, locked) {
         ${p.area ? `<div class="meta">${esc(p.area)}</div>` : ''}
         ${p.desc ? `<div class="desc">${esc(p.desc)}${p.reason ? ` <span class="why">— ${esc(p.reason)}</span>` : ''}</div>` : ''}
         ${p.descEn ? `<div class="desc${p.desc ? ' en-sub' : ''}" lang="${esc(p.descLang || 'en')}">${esc(p.descEn)}</div>` : ''}
-        <div class="src">${links}${links ? ' · ' : ''}${esc(p.attribution)}</div></div></div>`;
+        <div class="src">${links}${links ? ' · ' : ''}${esc(p.attribution)}</div>${p.user ? placeCheckLine(p) : ''}</div></div>`;
   }
   if (p.live) {
     const tone = p.kind === 'attraction' ? 'attraction' : 'restaurant';
@@ -4925,6 +4958,13 @@ const ACT = {
     Object.assign(p, { attribution: '직접 추가', user: true, selected: selCount(city) < meta.base, isCandidate: false });
     S.places.push(p);
     meta.found = (meta.found || 0) + 1;
+    render();
+    placeCheck(p);
+  },
+  'place-rename': el => {
+    const p = S.places.find(x => x.id === el.dataset.id);
+    if (!p || !p.check || !p.check.suggest) return;
+    p.name = p.en = p.check.suggest; p.check.suggest = '';
     render();
   },
   'add-country': () => {

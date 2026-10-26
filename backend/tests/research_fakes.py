@@ -129,8 +129,11 @@ def wikidata_api(q):
 
 SEARCH = {"가마쿠라": ["Q900001", "Q200267"],
           "옥구군": ["Q117433721", "Q16183663"],          # 선거구(좌표·상위 없음) → 옛 군(해산, 군산시로 통합)
-          "새빛동": ["Q900777"]}                           # 좌표 없는 신생 구역 → 상위 구역
+          "새빛동": ["Q900777"],
+          "Todaiji": ["Q186148"], "Far Shrine": ["Q999001"]}                           # 좌표 없는 신생 구역 → 상위 구역
 AREA_ENTS = {
+    "Q186148": {"labels": {"en": {"value": "Tōdai-ji"}}, "claims": _claim("P625", {"latitude": 34.6890, "longitude": 135.8398})},
+    "Q999001": {"labels": {"en": {"value": "Far Shrine"}}, "claims": _claim("P625", {"latitude": 35.68, "longitude": 139.70})},
     "Q117433721": {"claims": _claim("P17", {"id": "Q884"})},
     "Q16183663": {"labels": {"en": {"value": "Okgu-gun"}},
                   "claims": {**_claim("P17", {"id": "Q884"}), **_claim("P576", {"time": "+1995-00-00T00:00:00Z"}),
@@ -175,6 +178,10 @@ TOUR = {"response": {"header": {"resultCode": "0000", "resultMsg": "OK"}, "body"
 
 def google_places(body):
     t = body.get("includedType")
+    if t is None:                                   # 장소 확인(place_check): 종류 제한 없는 이름 검색
+        return {"places": [{"id": "gx", "displayName": {"text": "Sandy Coffee Naun"}, "location": {"latitude": 35.97, "longitude": 126.70},
+                            "businessStatus": "OPERATIONAL", "googleMapsUri": "https://maps.google.com/?cid=gx"}]
+                if "Sandy" in body.get("textQuery", "") else []}
     rows = {"restaurant": [("g1", "Kamameshi Shizuka", 34.684, 135.83), ("g2", "Mellow Cafe Diner", 34.682, 135.828)],
             "cafe": [("g3", "Rokumei Coffee", 34.681, 135.825)],
             "tourist_attraction": [("g4", "Isuien Garden", 34.686, 135.836)]}.get(t, [])

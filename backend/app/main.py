@@ -293,6 +293,26 @@ class ResearchRequest(BaseModel):
     cache_only: bool = False
 
 
+class PlaceCheckCity(BaseModel):
+    model_config = {"extra": "forbid"}
+    name: str = Field(min_length=1, max_length=80)
+    gid: int | None = Field(default=None, ge=1, le=2 ** 31 - 1)
+
+
+class PlaceCheckPlace(BaseModel):
+    model_config = {"extra": "forbid"}
+    name: str = Field(min_length=1, max_length=60)
+    kind: str = Field(default="attraction", pattern=r"^(attraction|restaurant|cafe)$")
+
+
+class PlaceCheckRequest(BaseModel):
+    """직접 추가한 장소 확인 — 장소 이름·도시·나라만(사용자 정보 없음)."""
+    model_config = {"extra": "forbid"}
+    country: ResearchCountry
+    city: PlaceCheckCity
+    place: PlaceCheckPlace
+
+
 class WithdrawReport(BaseModel):
     """화면이 보내는 탈퇴 불일치 보고. 개인정보·토큰은 담지 않는다(상태 코드만)."""
 
@@ -669,6 +689,19 @@ def get_research(job_id: str, request: Request) -> dict[str, Any]:
     if got is None:
         raise HTTPException(status_code=404, detail="unknown_job")
     return got
+
+
+@app.post("/place-check")
+def post_place_check(req: PlaceCheckRequest, request: Request) -> dict[str, Any]:
+    """사용자가 직접 추가한 장소를 도시 근처에서 찾아 좌표·출처를 붙인다(research/place_check).
+    TourAPI(한국) → Wikidata → Google(실시간, 저장 안 함). 못 찾으면 not_found — 화면은 '직접 추가' 그대로."""
+    rate_limit(request)
+    from .research import place_check
+    try:
+        return place_check.check(req.model_dump())
+    except Exception as exc:  # noqa: BLE001 — 확인 실패는 화면에 영향이 없다(직접 추가 그대로)
+        logging.getLogger("app.research").warning("place-check error %s", type(exc).__name__)
+        return {"status": "unavailable", "reason": "place_check_error"}
 
 
 def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:

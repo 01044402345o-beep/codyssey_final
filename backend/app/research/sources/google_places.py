@@ -80,6 +80,28 @@ def adapter(deps: Any, tc: dict, want: dict) -> dict:
     return fetch(deps.http, tc["ref"], tc["ref"]["key"], want)
 
 
+def find(http: SafeHttp, ref: dict, name: str) -> "dict | None":
+    """사용자가 적은 장소 이름 하나를 도시 근처에서 찾는다(place_check). 종류 제한 없이, 결과는 저장하지 않는다.
+    → {name, lat, lon, url} 또는 None. 일 한도(ITINERARY_DAILY_CAP)를 1 쓴다."""
+    from ...agents import itinerary
+    if not available() or ref.get("lat") is None or itinerary._reserve(1) <= 0:
+        return None
+    from .. import chain
+    body = {"textQuery": name, "languageCode": "en", "maxResultCount": 3,
+            "locationBias": {"circle": {"center": {"latitude": float(ref["lat"]), "longitude": float(ref["lon"])},
+                                        "radius": float(min(50000, radius_m(int(ref.get("population") or 0)) * chain.scale(ref)))}}}
+    headers = {"Content-Type": "application/json", "X-Goog-Api-Key": (os.getenv("GOOGLE_MAPS_API_KEY") or "").strip(),
+               "X-Goog-FieldMask": itinerary.FIELD_MASK}
+    res = http.request("POST", itinerary.SEARCH_URL, body=json.dumps(body).encode("utf-8"), headers=headers, timeout=8)
+    data = res.json() if res.ok else None
+    fetched = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for item in (data or {}).get("places") or []:
+        p = itinerary._place_from(item, fetched)
+        if p:
+            return {"name": p["name"], "lat": p["lat"], "lon": p["lon"], "url": p["source_url"]}
+    return None
+
+
 def available() -> bool:
     """키가 있고 소스가 켜져 있을 때만 체인에 들어간다(없으면 '실시간 보충 필요'로 캐시 응답을 막지 않게)."""
     from ...agents import itinerary

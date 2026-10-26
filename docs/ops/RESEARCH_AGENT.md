@@ -93,6 +93,10 @@ POST /research {countries:[{name, iso2?}], cities:[{name, gid?, ci, start, end, 
 
 장애로 비었으면 넓혀도 같아서 넓히지 않는다(`outage` 안내). 실측(10/26): 옥구군 → Gunsan(Q42074) 1.8초.
 
+### 직접 추가한 장소 확인 (`POST /place-check`, `research/place_check.py`)
+
+사용자가 '장소 직접 추가'로 적은 이름을 도시 근처(40km)에서 찾아 출처를 붙인다. 순서: TourAPI 키워드 검색(한국·키 있을 때, 이름 일치 → 가까운 순) → Wikidata 검색(관련도 순으로 도시 근처 첫 항목 — '가장 가까운 것'으로 고르면 동명 유치원이 잡혔다) → Google Places(키 있을 때, 실시간·저장 안 함). 못 찾으면 `not_found` — 화면은 '직접 추가' 그대로(가짜로 바꾸지 않음). TourAPI·Wikidata 결과만 메모리 7일, 못 찾음은 기억하지 않는다. 요청은 장소 이름·종류·도시·나라만(`extra=forbid`). 화면: "공개 자료에서 확인했어요 · 도시 중심에서 약 N km" + 이름이 다르면 '‘찾은 이름’으로 바꾸기', 못 찾으면 "이름과 위치를 확인해 주세요". 실측: 나라 'Todaiji'·'도다이지' → Tōdai-ji Temple(3.2km).
+
 ### 이름만 있는 도시 보강
 
 GeoNames 에서 못 찾은 도시(좌표 없음 → 날씨·주변 검색 불가)는 Wikidata 검색 API(`wbsearchentities` → `wbgetentities`)로 같은 나라(P17)·좌표(P625)가 있는 항목을 찾아 좌표·영어 이름·위키보이지 제목을 채운다(인구가 있는 항목 우선). 결과는 `research_cities/{ISO2}_n<해시>/sections/identity`(찾음 30일, 못 찾음 7일). POST 는 캐시만 보고 조회는 잡 안에서 한다. SPARQL 라벨 일치는 한국어 라벨이 '경주시'처럼 달라 놓치고 질의 서비스 지연이 2~25초로 들쭉날쭉해 쓰지 않는다. 실측(10/26): 가마쿠라·경주·전주·치앙마이·Cusco·Annecy 모두 약 2초에 찾음, 가마쿠라는 장소 0곳 → 위키보이지 26곳.
