@@ -126,6 +126,16 @@ GeoNames 에서 못 찾은 도시(좌표 없음 → 날씨·주변 검색 불가
 - 실패·꺼짐·마감(`RESEARCH_SOFT_DEADLINE_S`)이면 보고서는 listing 순서·영어 원문 그대로(`cities[].extract.status`: ok·failed·busy·disabled·deadline·empty). 실패는 캐시하지 않는다. 마감에 걸린 추출은 뒤에서 끝까지 돌아 캐시만 데운다(Gemini 장애 때 최소 시도 규칙으로 몇 분 걸려도 화면은 150초 안에 listing 보고서를 받는다).
 - 화면: 장소 카드에 한국어 요약 — 이유, 그 아래 영어 원문(작게). 실용 정보는 한국어 요약 + 인용(blockquote).
 
+## 문장 생성 연결 (PR5, `research/grounding.py`)
+
+화면은 조사 모드일 때 `/generate` 에 도시 키 `research_key`(보고서 `cities[].key`)를 싣고, 직접 추가·실시간(Google) 장소엔 `user: true` 를 붙인다.
+
+- 서버는 **캐시에서만** 그 도시의 조사 장소를 꺼낸다(외부 호출 0). 조사 장소(`user` 아님)인데 캐시에 없으면 **걸러 낸다**(422 아님). `user` 장소는 그대로, 사실은 안 붙임.
+- 남은 조사 장소의 영어 설명(원문 발췌 200자, URL·꺾쇠 제거, 최대 12곳)을 `RESEARCHED_PLACES` 로 프롬프트 끝에 붙인다. 기존 `VERIFIED_FACTS` 에는 섞지 않는다(걸러진 이름이 모델에 가지 않게).
+- 생성 뒤 요청하지 않은 장소 이름의 문장은 뺀다(`place_not_in_request` warn). 전부 빠지게 되면 빼지 않는다(화면이 거른다).
+- 응답 `facts.research = {status: off|miss|ok, filtered, grounded}`. 캐시가 없거나 만료면 `miss` — 예전과 같은 동작. 조사가 꺼져 있으면 `off`.
+- 설명 문서(과제용 Agent+RAG): [`docs/product/RESEARCH_AGENT.md`](../product/RESEARCH_AGENT.md).
+
 ## 캐시 (Firestore, 서비스 계정 전용 — 클라이언트 규칙은 그대로 전부 거부)
 
 | 경로 | 내용 | 수명 | 라이선스 |

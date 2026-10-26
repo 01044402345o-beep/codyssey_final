@@ -121,10 +121,13 @@
         const cat = c.categoryId || categoryId || categoryOfKind(c.placeType) || categoryOfKind(placeType) || 'restaurant';
         const valid = health && health.situations && Array.isArray(health.situations[cat]) ? health.situations[cat] : null;
         const weak = valid ? weakIds.filter(w => valid.includes(w)) : weakIds;
+        // 조사 연결(PR5): 도시 조사 키가 있으면 서버가 조사된 장소만 쓰고 그 사실을 근거로 삼는다.
+        // 사용자가 직접 추가했거나 실시간(Google) 장소는 user 로 표시 — 조사 캐시와 맞춰 보지 않는다.
         return postJson(fetchImpl, base + '/generate', {
           category_id: cat, city: c.name,
-          places: c.places.map(p => ({ name: p.en || p.name, place_type: p.kind || cat })),
+          places: c.places.map(p => ({ name: p.en || p.name, place_type: p.kind || cat, ...(p.user ? { user: true } : {}) })),
           weak_expressions: weak,
+          ...(RESEARCH_KEY_RE.test(c.researchKey || '') ? { research_key: c.researchKey } : {}),
         }, t.signal);
       });
       return collect(cities, await Promise.allSettled(jobs));
@@ -580,6 +583,7 @@
     } finally { t.done(); }
   }
   const RESEARCH_KIND_KO = { attraction: '관광지', restaurant: '맛집', cafe: '카페' };
+  const RESEARCH_KEY_RE = /^[A-Z]{2}_(\d{1,10}|n[0-9a-f]{12})$/;              // 서버 research_key 형식과 같다
   // 장소 출처(대체 소스 체인): 링크 앞 이름과 라이선스 표기. 모르는 값은 위키보이지로 본다(예전 보고서 호환).
   const RESEARCH_PROVIDER = {
     wikivoyage: ['Wikivoyage', 'Wikivoyage (CC BY-SA 4.0)'], wikidata: ['Wikidata', 'Wikidata (CC0)'],
@@ -603,6 +607,7 @@
       reason: typeof raw.why_ko === 'string' ? raw.why_ko : '', rank: Number.isInteger(raw.rank) ? raw.rank : 0,
       cuisine: null, menuEn: null, menuKo: null, sources: src, homepage: home,
       attribution, primaryType: RESEARCH_KIND_KO[raw.kind] || '관광지',
+      provider: (okSrc[0] && RESEARCH_PROVIDER[okSrc[0].provider]) ? okSrc[0].provider : (RESEARCH_PROVIDER[raw.provider] ? raw.provider : 'wikivoyage'),
       isCandidate: false, selected: false, visitDate: null, visitOrder: null, count: 0,
     };
   }
@@ -631,7 +636,8 @@
       const rc = rep.cities.find(x => x && x.idx === i) || rep.cities[i];
       const cap = (caps && caps[c.name]) || { attr: 0, rest: 0 };
       if (!rc) { meta[c.name] = { base: 0, found: 0, mode: 'empty', reason: 'no_city' }; return; }
-      info.cities[c.name] = { practical: rc.practical || [], climate: rc.climate || null, days: rc.days || [], iso2: rc.iso2 || '',
+      info.cities[c.name] = { key: RESEARCH_KEY_RE.test(rc.key || '') ? rc.key : '',
+        practical: rc.practical || [], climate: rc.climate || null, days: rc.days || [], iso2: rc.iso2 || '',
         wikivoyage: rc.wikivoyage || null, resolved: !!rc.resolved, crossBorder: !!rc.cross_border_next };
       const raw = (Array.isArray(rc.places) ? rc.places : []).filter(p => p && typeof p.name === 'string' && p.name.trim());
       let found = 0;

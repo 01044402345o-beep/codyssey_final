@@ -882,7 +882,8 @@ async function runAi(tok) {
   const groups = {};
   S.places.filter(p => p.selected && sentenceCategory(p)).forEach(p => {
     const cat = sentenceCategory(p);
-    (groups[aiKey(p.city, cat)] ??= { name: p.city, categoryId: cat, places: [] }).places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind });
+    (groups[aiKey(p.city, cat)] ??= { name: p.city, categoryId: cat, places: [], researchKey: researchKeyOf(p.city) })
+      .places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind, user: !!(p.user || (p.research && p.provider === 'google')) });
   });
   const cities = Object.values(groups);
   if (!cities.length) return;
@@ -911,7 +912,8 @@ async function refreshAiSentences() {
   const groups = {};
   S.places.filter(p => p.selected && sentenceCategory(p)).forEach(p => {
     const cat = sentenceCategory(p);
-    (groups[aiKey(p.city, cat)] ??= { name: p.city, categoryId: cat, places: [] }).places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind });
+    (groups[aiKey(p.city, cat)] ??= { name: p.city, categoryId: cat, places: [], researchKey: researchKeyOf(p.city) })
+      .places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind, user: !!(p.user || (p.research && p.provider === 'google')) });
   });
   const cities = Object.values(groups);
   let out;
@@ -2821,6 +2823,11 @@ function briefCard(cityName) {
   return `<div class="card brief-card"><div class="brief-h"><b>${esc(city)} 알아두기</b><span class="brief-tag">${conf}</span>
       <button type="button" class="brief-retry" data-act="brief-retry" data-city="${esc(cityName)}" title="다시 조사" aria-label="다시 조사">↻</button></div>
     ${rows}${gaps}<p class="brief-attr">${esc(d.attribution || '')}</p></div>`;
+}
+/* 문장 생성(/generate)에 보낼 도시 조사 키 — 조사 모드일 때만(예시·Google 일정 모드에서는 보내지 않는다) */
+function researchKeyOf(city) {
+  const inf = S.reportMode === 'research' && S.research && S.research.cities ? S.research.cities[city] : null;
+  return inf && inf.key ? inf.key : '';
 }
 /* 후퇴(복구)로 찾은 장소 안내: 옛 지명 → 지금 도시, 상위 구역 기준, 반경을 넓혀 찾음 */
 function fallbackNotice(city, fb) {
