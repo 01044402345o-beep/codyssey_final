@@ -8,7 +8,10 @@
 - 사진(firstimage)은 쓰지 않는다: 공공누리 3유형(변경 금지) 조건이 섞여 있다.
 - 오류: resultCode 22(일 한도) → capped(체인 6시간 쉼), 23(초당 한도) → rate_limited, 20·30·31(키 미등록·만료·거부) → exhaust.
   게이트웨이 오류는 HTTP 200 에 XML(OpenAPI_ServiceResponse)로 오기도 해서 본문 글자로도 판정한다.
-- 키: TOURAPI_SERVICE_KEY(공공데이터포털 '일반 인증키'). Encoding/Decoding 어느 쪽을 넣어도 된다. 키 값은 로그·응답에 남기지 않는다.
+- 키: 언어(서비스)별 TOURAPI_KEY_KOR·ENG·FRE·JPN·CHS, 없으면 공통 TOURAPI_SERVICE_KEY(공공데이터포털 '일반 인증키'는
+  계정당 하나라 보통 같은 값 — 서비스마다 활용신청만 따로). Encoding/Decoding 어느 쪽이든 된다. 키 값은 로그·응답에 남기지 않는다.
+- 장소 조사는 영문(ENG) 키가 있으면 영문, 없으면 국문(KOR). TOURAPI_SERVICE 로 강제할 수 있다. 불어·일문·중문은
+  키 이름만 받아 둔다(이 앱은 한국인 영어 학습용이라 지금은 쓰지 않는다).
 """
 from __future__ import annotations
 
@@ -22,26 +25,43 @@ from ..net import SafeHttp
 from . import LICENSES, result
 
 ROOT = "https://apis.data.go.kr/B551011"
-SERVICES = ("EngService2", "KorService2")
+# 언어 → (서비스 이름, 키 환경변수). Jpn·Chs 서비스 이름은 Kor·Eng·Fre 와 같은 규칙으로 둔 것 — 활용신청 화면의 End Point 로 확인.
+LANGS = {"kor": ("KorService2", "TOURAPI_KEY_KOR"), "eng": ("EngService2", "TOURAPI_KEY_ENG"),
+         "fre": ("FreService2", "TOURAPI_KEY_FRE"), "jpn": ("JpnService2", "TOURAPI_KEY_JPN"),
+         "chs": ("ChsService2", "TOURAPI_KEY_CHS")}
+SERVICES = tuple(v[0] for v in LANGS.values())
+RESEARCH_ORDER = ("EngService2", "KorService2")      # 장소 조사에 쓰는 순서(영어 이름 우선)
 SOURCE_URL = {"EngService2": "https://www.data.go.kr/data/15101753/openapi.do",
               "KorService2": "https://www.data.go.kr/data/15101578/openapi.do"}
+GENERIC_URL = "https://api.visitkorea.or.kr/"
 ATTRACTION_TYPES = {"12", "14", "76", "78"}
 FOOD_TYPES = {"39", "82"}
 CAFE_CAT3 = {"A05020900"}
 MOBILE_APP = "MADI"
 
 
-def key() -> str:
-    return (os.getenv("TOURAPI_SERVICE_KEY") or "").strip()
+def key(svc: str = "") -> str:
+    """그 서비스의 키: 언어별 변수 → 공통 TOURAPI_SERVICE_KEY. svc 를 안 주면 지금 쓸 서비스(service())의 키."""
+    svc = svc or service()
+    env = next((e for s, e in LANGS.values() if s == svc), "")
+    return ((os.getenv(env) if env else "") or os.getenv("TOURAPI_SERVICE_KEY") or "").strip()
 
 
 def service() -> str:
-    s = (os.getenv("TOURAPI_SERVICE") or "EngService2").strip()
-    return s if s in SERVICES else "EngService2"
+    """장소 조사에 쓸 서비스. TOURAPI_SERVICE(키가 있을 때) → 영문 → 국문 순으로 키가 있는 것."""
+    forced = (os.getenv("TOURAPI_SERVICE") or "").strip()
+    for svc in ((forced,) if forced in SERVICES else ()) + RESEARCH_ORDER:
+        if key(svc):
+            return svc
+    return "EngService2"
+
+
+def source_url(svc: str) -> str:
+    return SOURCE_URL.get(svc, GENERIC_URL)
 
 
 def available() -> bool:
-    return config.source_on("tourapi") and bool(key())
+    return config.source_on("tourapi") and bool(key(service()))
 
 
 def radius_m(population: int) -> int:
@@ -54,7 +74,7 @@ def _scale(ref: dict) -> float:
 
 
 def _url(svc: str, params: dict) -> str:
-    k = key()
+    k = key(svc)
     enc = k if "%" in k else urllib.parse.quote(k, safe="")       # Encoding 키는 그대로, Decoding 키는 인코딩
     base = {"MobileOS": "ETC", "MobileApp": MOBILE_APP, "_type": "json"}
     return f"{ROOT}/{svc}/locationBasedList2?serviceKey={enc}&" + urllib.parse.urlencode({**base, **params})
@@ -125,12 +145,12 @@ def fetch(http: SafeHttp, ref: dict, ckey: str, want: dict) -> dict:
         p = verify.place({"id": f"kto:{ckey}:{cid}", "name": name, "kind": kind, "lat": plat, "lon": plon, "area": "",
                           "desc_en": (f"Address: {addr}." if addr and svc == "EngService2" else ""), "section": "",
                           "homepage": "", "wikidata": "", "provider": "tourapi", "kto_id": cid, "address": addr,
-                          "sources": [{"provider": "tourapi", "url": SOURCE_URL[svc], "title": name,
+                          "sources": [{"provider": "tourapi", "url": source_url(svc), "title": name,
                                        "license": LICENSES["tourapi"][0]}]},
                          lat, lon)
         if p:
             out.append(p)
-    return result("tourapi", "ok" if out else "empty", out, url=SOURCE_URL[svc])
+    return result("tourapi", "ok" if out else "empty", out, url=source_url(svc))
 
 
 def adapter(deps: Any, tc: dict, want: dict) -> dict:
