@@ -172,5 +172,6 @@ def from_cache(resolved: dict, plan: dict) -> dict:
                                            "extract": e["data"] if e else None, "extract_status": "ok" if e else "none",
                                            "extra_places": ((px or {}).get("data") or {}).get("places") or [],
                                            "places_stale": bool(px and px.get("stale")),
-                                           "chain": ((px or {}).get("data") or {}).get("by_source") or {}}
+                                           "chain": ((px or {}).get("data") or {}).get("by_source") or {},
+                                           "fallback": ((px or {}).get("data") or {}).get("fallback")}
     return report.build(resolved, country_out, city_out)

@@ -48,7 +48,9 @@ def fetch(http: SafeHttp, ref: dict, key: str, want: dict) -> dict:
     if take <= 0:
         return result("google", "capped", reason="daily_cap")
     city = " ".join(x for x in (ref.get("name") or ref.get("input"), ref.get("country_name")) if x)
-    bias = {"lat": float(lat), "lon": float(lon), "radius_m": radius_m(int(ref.get("population") or 0))}
+    from .. import chain
+    bias = {"lat": float(lat), "lon": float(lon),
+            "radius_m": min(50000, int(radius_m(int(ref.get("population") or 0)) * chain.scale(ref)))}
     fetched_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     key_ = (os.getenv("GOOGLE_MAPS_API_KEY") or "").strip()
     out, statuses = [], []

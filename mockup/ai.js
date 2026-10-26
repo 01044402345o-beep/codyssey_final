@@ -635,7 +635,10 @@
       const base = (+cap.attr || 0) + (+cap.rest || 0);
       // 장소 0곳 도시: 이유(outage 소스 장애 · no_coords 위치 모름 · no_sources 자료 없음)를 서버가 알려 준다(예전 보고서는 status 로 추정).
       // base 는 일정이 정한 수 그대로 — 사용자가 직접 추가한 장소를 고를 수 있게.
-      meta[c.name] = raw.length ? { base, found, mode: 'research', total: raw.length, stale: !!rc.stale, placeStatus: rc.place_status || '' }
+      const fb = rc.fallback && ['merged', 'parent', 'wider'].includes(rc.fallback.kind)
+        ? { kind: rc.fallback.kind, label: String(rc.fallback.label || '').slice(0, 80) } : null;
+      meta[c.name] = raw.length ? { base, found, mode: 'research', total: raw.length, stale: !!rc.stale, placeStatus: rc.place_status || '',
+        ...(fb ? { fallback: fb } : {}) }
         : { base, found: 0, mode: 'empty', stale: !!rc.stale,
             reason: rc.none_reason || (rc.status === 'partial' ? 'no_places' : 'no_article') };
     });

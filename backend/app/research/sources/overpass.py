@@ -67,7 +67,8 @@ def fetch(http: SafeHttp, ref: dict, key: str, want: dict) -> dict:
     lat, lon = ref.get("lat"), ref.get("lon")
     if lat is None or lon is None:
         return result("osm", "empty", reason="no_coords")
-    rf, rs = radii_m(int(ref.get("population") or 0))
+    from .. import chain
+    rf, rs = (int(r * chain.scale(ref)) for r in radii_m(int(ref.get("population") or 0)))
     parts = ([_FOOD % (rf, lat, lon)] if want.get("food") else []) + ([_SIGHT % (rs, lat, lon)] if want.get("attraction") else [])
     if not parts:
         return result("osm", "empty", reason="not_needed")

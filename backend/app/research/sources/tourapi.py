@@ -48,6 +48,11 @@ def radius_m(population: int) -> int:
     return 10000 if population >= 1_000_000 else (6000 if population >= 200_000 else 4000)
 
 
+def _scale(ref: dict) -> float:
+    from .. import chain
+    return chain.scale(ref)
+
+
 def _url(svc: str, params: dict) -> str:
     k = key()
     enc = k if "%" in k else urllib.parse.quote(k, safe="")       # Encoding 키는 그대로, Decoding 키는 인코딩
@@ -86,7 +91,7 @@ def fetch(http: SafeHttp, ref: dict, ckey: str, want: dict) -> dict:
         return result("tourapi", "empty", reason="not_needed")
     svc = service()
     res = http.request("GET", _url(svc, {"mapX": f"{float(lon):.6f}", "mapY": f"{float(lat):.6f}",
-                                         "radius": radius_m(int(ref.get("population") or 0)),
+                                         "radius": min(20000, int(radius_m(int(ref.get("population") or 0)) * _scale(ref))),
                                          "arrange": "E", "numOfRows": 100, "pageNo": 1}), timeout=10)
     text = res.body[:2000].decode("utf-8", "replace") if res.body else ""
     if not res.ok:

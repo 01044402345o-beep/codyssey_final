@@ -86,6 +86,9 @@ def sparql(query):
             return {"results": {"bindings": [{"item": {"value": "http://www.wikidata.org/entity/Q35765"},
                                                "wv": {"value": "https://en.wikivoyage.org/wiki/Osaka"}}]}}
         return {"results": {"bindings": []}}
+    if '"KR"' in query:
+        return {"results": {"bindings": [{"country": {"value": "http://www.wikidata.org/entity/Q884"},
+                                           "currency": {"value": "KRW"}, "emergency": {"value": "112|119"}}]}}
     if '"JP"' in query:
         return {"results": {"bindings": [{"country": {"value": "http://www.wikidata.org/entity/Q17"},
                                            "currency": {"value": "JPY"}, "emergency": {"value": "110|119|<x>"},
@@ -110,7 +113,7 @@ def wikidata_api(q):
     """wbsearchentities / wbgetentities — '가마쿠라' 검색: 첫 결과는 동명 항목(다른 나라), 둘째가 일본의 가마쿠라시."""
     action = q["action"][0]
     if action == "wbsearchentities":
-        return {"search": [{"id": "Q900001"}, {"id": "Q200267"}] if q["search"][0] == "가마쿠라" else []}
+        return {"search": [{"id": i} for i in SEARCH.get(q["search"][0], [])]}
     if q.get("props", [""])[0] == "sitelinks":                    # 다른 언어판 위키보이지 사이트링크(나라)
         return {"entities": {"Q169134": {"sitelinks": {"dewikivoyage": {"title": "Nara"}, "jawikivoyage": {"title": "奈良市"},
                                                        "itwikivoyage": {"title": "Nara"}}}}}
@@ -120,7 +123,28 @@ def wikidata_api(q):
             "Q200267": {"labels": {"en": {"value": "Kamakura"}}, "sitelinks": {"enwikivoyage": {"title": "Kamakura"}},
                         "claims": {**_claim("P17", {"id": "Q17"}), **_claim("P625", {"latitude": 35.3192, "longitude": 139.5466}),
                                    **_claim("P1082", {"amount": "+172302"})}}}
+    ents.update(AREA_ENTS)
     return {"entities": {i: ents[i] for i in q["ids"][0].split("|") if i in ents}}
+
+
+SEARCH = {"가마쿠라": ["Q900001", "Q200267"],
+          "옥구군": ["Q117433721", "Q16183663"],          # 선거구(좌표·상위 없음) → 옛 군(해산, 군산시로 통합)
+          "새빛동": ["Q900777"]}                           # 좌표 없는 신생 구역 → 상위 구역
+AREA_ENTS = {
+    "Q117433721": {"claims": _claim("P17", {"id": "Q884"})},
+    "Q16183663": {"labels": {"en": {"value": "Okgu-gun"}},
+                  "claims": {**_claim("P17", {"id": "Q884"}), **_claim("P576", {"time": "+1995-00-00T00:00:00Z"}),
+                             **_claim("P7888", {"id": "Q42074"})}},
+    "Q42074": {"labels": {"en": {"value": "Gunsan"}}, "sitelinks": {"enwikivoyage": {"title": "Gunsan"}},
+               "claims": {**_claim("P17", {"id": "Q884"}), **_claim("P625", {"latitude": 35.9786, "longitude": 126.7114}),
+                          **_claim("P1082", {"amount": "+264091"})}},
+    "Q900777": {"claims": {**_claim("P17", {"id": "Q884"}),
+                           "P131": [{"rank": "normal", "qualifiers": {"P582": [{}]},
+                                     "mainsnak": {"datavalue": {"value": {"id": "Q1"}}}},              # 끝난 소속
+                                    {"rank": "preferred", "mainsnak": {"datavalue": {"value": {"id": "Q41157"}}}}]}},
+    "Q41157": {"labels": {"en": {"value": "North Jeolla"}},
+               "claims": {**_claim("P17", {"id": "Q884"}), **_claim("P625", {"latitude": 35.82, "longitude": 127.11})}},
+}
 
 
 INTL = {
