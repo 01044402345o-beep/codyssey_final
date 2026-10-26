@@ -17,7 +17,8 @@
 | `LANGSMITH_TRACING` | `false` | 코드가 강제로 끈다(langchain-core 의존성) |
 | `RESEARCH_USE_GRAPH` | `1` | 0 이면 LangGraph 없이 같은 노드를 스레드 4개로(같은 결과). 그래프가 실패해도 자동으로 이 경로 |
 | `RESEARCH_PLACE_CHAIN` | `wikivoyage_intl,tourapi,wikidata_places,google` | 위키보이지 장소가 모자랄 때 차례로 묻는 대체 소스. `none` 이면 끔(위키보이지만). `google` 은 `GOOGLE_MAPS_API_KEY` 가 있을 때만. `overpass` 는 넣어야 켜진다 |
-| `TOURAPI_SERVICE_KEY` / `TOURAPI_SERVICE` | 없음 / `EngService2` | 한국관광공사 TourAPI(한국 도시). 공공데이터포털 일반 인증키(Encoding·Decoding 어느 쪽이든). 서비스마다 활용신청이 따로라 키에 승인된 서비스로(`KorService2` 가능). 개발계정 1,000회/일 → 운영계정은 활용사례 등록으로 늘림 |
+| `TOURAPI_KEY_KOR`·`_ENG`·`_FRE`·`_JPN`·`_CHS` | 없음 | 언어(서비스)별 키 — 국문 `KorService2`·영문 `EngService2`·불어 `FreService2`·일문 `JpnService2`·중문 간체 `ChsService2`. 없으면 공통 `TOURAPI_SERVICE_KEY`. 조사는 영문 → 국문 순으로 키가 있는 것(불어·일문·중문은 지금 안 씀). Jpn·Chs 서비스 이름은 활용신청 화면 End Point 로 확인 |
+| `TOURAPI_SERVICE_KEY` / `TOURAPI_SERVICE` | 없음 / (자동) | 한국관광공사 TourAPI(한국 도시). 공공데이터포털 일반 인증키(Encoding·Decoding 어느 쪽이든). 서비스마다 활용신청이 따로라 키에 승인된 서비스로(`KorService2` 가능). 개발계정 1,000회/일 → 운영계정은 활용사례 등록으로 늘림 |
 | `GOOGLE_MAPS_API_KEY` / `ITINERARY_DAILY_CAP` | 없음 / `20` | Google Places 실시간 보충(일정 에이전트와 한도 공유, 프로세스·UTC 하루). 다 쓰면 `capped` → 체인이 6시간 쉼 |
 | `RESEARCH_PLACE_MIN_EXTRA` | `2` | 종류별 목표 = 일정이 정한 장소 수 + 이만큼(화면 '후보' 몫) |
 | `RESEARCH_LLM` | `1` | 0 이면 LLM 추출(여행 조건 순위·한국어 요약)을 끈다. Gemini 키가 없으면 저절로 꺼진다 — 보고서는 listing 순서·영어 원문 |

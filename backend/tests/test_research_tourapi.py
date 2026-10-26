@@ -80,6 +80,29 @@ class TourApiSourceTest(unittest.TestCase):
 
 
 @mock.patch.dict(os.environ, ENV)
+class TourApiKeysTest(unittest.TestCase):
+    CLEAR = {k: "" for k in ("TOURAPI_SERVICE_KEY", "TOURAPI_KEY_KOR", "TOURAPI_KEY_ENG", "TOURAPI_KEY_FRE", "TOURAPI_KEY_JPN",
+                              "TOURAPI_KEY_CHS", "TOURAPI_SERVICE")}
+
+    def test_language_keys_and_service_choice(self):
+        with mock.patch.dict(os.environ, {**self.CLEAR, "TOURAPI_KEY_KOR": "kor-only"}):
+            self.assertEqual((tourapi.service(), tourapi.key()), ("KorService2", "kor-only"))     # 영문 키 없으면 국문
+            srv = FakeServer()
+            tourapi.fetch(http(srv), GUNSAN, "k", {"food": 1})
+            self.assertIn("/KorService2/", srv.tour[0])
+        with mock.patch.dict(os.environ, {**self.CLEAR, "TOURAPI_KEY_KOR": "a", "TOURAPI_KEY_ENG": "b"}):
+            self.assertEqual((tourapi.service(), tourapi.key()), ("EngService2", "b"))           # 영문 우선
+        with mock.patch.dict(os.environ, {**self.CLEAR, "TOURAPI_SERVICE_KEY": "common", "TOURAPI_KEY_ENG": "eng"}):
+            self.assertEqual((tourapi.key("EngService2"), tourapi.key("KorService2")), ("eng", "common"))  # 공통 키로 채움
+        with mock.patch.dict(os.environ, {**self.CLEAR, "TOURAPI_SERVICE_KEY": "c", "TOURAPI_SERVICE": "KorService2"}):
+            self.assertEqual(tourapi.service(), "KorService2")                                   # 강제
+        with mock.patch.dict(os.environ, {**self.CLEAR, "TOURAPI_KEY_JPN": "j"}):
+            self.assertFalse(tourapi.available())                                                 # 일문 키만으로는 조사 안 함
+        self.assertEqual(sorted(e for _, e in tourapi.LANGS.values()),
+                         ["TOURAPI_KEY_CHS", "TOURAPI_KEY_ENG", "TOURAPI_KEY_FRE", "TOURAPI_KEY_JPN", "TOURAPI_KEY_KOR"])
+
+
+@mock.patch.dict(os.environ, ENV)
 class TourApiGraphTest(unittest.TestCase):
     def test_gunsan_filled_by_tourapi_and_cached(self):
         with mock.patch.object(chain, "HEALTH", chain.Health()):

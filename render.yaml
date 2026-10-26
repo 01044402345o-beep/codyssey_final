@@ -75,8 +75,19 @@ services:
         sync: false
       - key: ITINERARY_DAILY_CAP
         sync: false
-      # 한국관광공사 TourAPI(한국 도시 장소 — 저장 가능). 공공데이터포털 일반 인증키, 서비스 기본 EngService2(영문)
+      # 한국관광공사 TourAPI(한국 도시 장소 — 저장 가능). 언어별 키가 없으면 공통 TOURAPI_SERVICE_KEY.
+      # 일반 인증키는 계정당 하나라 보통 같은 값 — 서비스(언어)마다 활용신청만 따로. 조사는 영문 → 국문 순(TOURAPI_SERVICE 로 강제)
       - key: TOURAPI_SERVICE_KEY
+        sync: false
+      - key: TOURAPI_KEY_KOR        # 국문 관광정보 서비스_GW (KorService2)
+        sync: false
+      - key: TOURAPI_KEY_ENG        # 영문 관광정보서비스_GW (EngService2)
+        sync: false
+      - key: TOURAPI_KEY_FRE        # 불어 관광정보서비스_GW (FreService2) — 지금은 안 씀
+        sync: false
+      - key: TOURAPI_KEY_JPN        # 일문 관광정보서비스_GW (JpnService2) — 지금은 안 씀
+        sync: false
+      - key: TOURAPI_KEY_CHS        # 중문 간체 관광정보서비스_GW (ChsService2) — 지금은 안 씀
         sync: false
       - key: TOURAPI_SERVICE
         sync: false

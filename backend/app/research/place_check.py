@@ -74,7 +74,7 @@ def _by_tourapi(http: SafeHttp, ref: dict, name: str) -> Optional[dict]:
     if ref.get("iso2") != "KR" or not tourapi.available():
         return None
     svc = tourapi.service()
-    k = tourapi.key()
+    k = tourapi.key(svc)
     enc = k if "%" in k else urllib.parse.quote(k, safe="")
     url = (f"{tourapi.ROOT}/{svc}/searchKeyword2?serviceKey={enc}&" + urllib.parse.urlencode(
         {"MobileOS": "ETC", "MobileApp": tourapi.MOBILE_APP, "_type": "json", "keyword": name, "numOfRows": 10, "pageNo": 1,
@@ -101,7 +101,7 @@ def _by_tourapi(http: SafeHttp, ref: dict, name: str) -> Optional[dict]:
     t = str(it.get("contenttypeid") or "")
     kind = "attraction" if t in tourapi.ATTRACTION_TYPES else (
         ("cafe" if str(it.get("cat3") or "") in tourapi.CAFE_CAT3 else "restaurant") if t in tourapi.FOOD_TYPES else "")
-    return _found("tourapi", _norm(str(it.get("title") or name)), lat, lon, tourapi.SOURCE_URL[svc], km, kind)
+    return _found("tourapi", _norm(str(it.get("title") or name)), lat, lon, tourapi.source_url(svc), km, kind)
 
 
 def _by_wikidata(http: SafeHttp, ref: dict, name: str) -> Optional[dict]:
