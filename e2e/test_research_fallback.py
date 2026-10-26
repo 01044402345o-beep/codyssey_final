@@ -62,6 +62,19 @@ def research_route(route):
     route.fulfill(status=404, content_type="application/json", body="{}")
 
 
+check_calls = []
+
+
+def check_route(route):
+    body = json.loads(route.request.post_data or "{}")
+    check_calls.append(body)
+    name = (body.get("place") or {}).get("name", "")
+    out = ({"status": "found", "name": "Tōdai-ji Temple", "distance_km": 2.4,
+            "source": {"provider": "wikidata", "url": "https://www.wikidata.org/wiki/Q186148", "title": "Tōdai-ji Temple"}}
+           if name.lower().startswith("tōdai") else {"status": "not_found"})
+    route.fulfill(status=200, content_type="application/json", body=json.dumps(out, ensure_ascii=False))
+
+
 def brief_route(route):
     brief_calls.append(route.request.url)
     route.fulfill(status=200, content_type="application/json", body=json.dumps(BRIEF, ensure_ascii=False))
@@ -79,6 +92,7 @@ with sync_playwright() as p:
     page.route("**/generate", lambda r: r.fulfill(status=503, content_type="application/json", body='{"detail":"busy"}'))
     page.route("**/city-brief**", brief_route)
     page.route("**/research**", research_route)
+    page.route("**/place-check", check_route)
     page.goto(BASE + "/?demo=1", wait_until="domcontentloaded")
     page.wait_for_timeout(800)
     page.evaluate("""() => { S.user = DEMO_USER;
@@ -114,7 +128,8 @@ with sync_playwright() as p:
     page.click("[data-act=add-place]")
     page.wait_for_timeout(200)
     added = page.evaluate("S.places.filter(p => p.city === '나라').map(p => [p.name, p.kind, p.selected, p.attribution, p.research])")
-    check("직접 추가: 이름 정리·종류·선택됨·출처 '직접 추가'", added == [["Tōdai-ji", "attraction", True, "직접 추가", True]], str(added))
+    check("직접 추가: 이름 정리·종류·선택됨·출처 '직접 추가'", len(added) == 1 and added[0][:3] == ["Tōdai-ji", "attraction", True]
+          and added[0][3].startswith("직접 추가") and added[0][4] is True, str(added))       # 뒤이은 확인이 '출처 확인'을 붙일 수 있다
     check("직접 추가한 장소 카드가 그려진다", "직접 추가" in page.locator(".place", has_text="Tōdai-ji").first.inner_text())
     page.fill("#add-place-name", "tōdai-ji")
     page.click("[data-act=add-place]")
@@ -125,6 +140,18 @@ with sync_playwright() as p:
     page.click("[data-act=add-place]")
     names = page.evaluate("S.places.filter(p => p.city === '나라').map(p => p.name)")
     check("중복·위험한 이름은 막고 정상 이름은 추가", names == ["Tōdai-ji", "Kakinoha Sushi"], str(names))
+    page.wait_for_function("() => S.places.filter(p => p.user).every(p => p.check && p.check.state !== 'loading')", timeout=10000)
+    sent = check_calls[0] if check_calls else {}
+    check("장소 확인 요청: 나라 ISO2·도시 gid·장소 이름·종류(사용자 정보 없음)",
+          sent.get("country") == {"name": "일본", "iso2": "JP"} and sent.get("city") == {"name": "나라", "gid": 1855612}
+          and sent.get("place") == {"name": "Tōdai-ji", "kind": "attraction"} and "uid" not in json.dumps(sent), str(sent))
+    todai = page.locator(".place", has_text="Tōdai-ji").first.inner_text()
+    check("확인된 장소: 출처 링크·거리·이름 바꾸기 제안", "공개 자료에서 확인했어요" in todai and "Wikidata · Tōdai-ji Temple" in todai
+          and "2.4km" in todai and "바꾸기" in todai, todai)
+    check("못 찾은 장소: 안내만 하고 그대로 둔다", "찾지 못했어요" in page.locator(".place", has_text="Kakinoha").first.inner_text()
+          and page.evaluate("S.places.some(p => p.name === 'Kakinoha Sushi' && p.selected)"))
+    page.click("[data-act=place-rename]")
+    check("이름 바꾸기 → 찾은 이름으로", page.evaluate("S.places.some(p => p.name === 'Tōdai-ji Temple' && p.user)"))
     for w in (320, 390):
         page.set_viewport_size({"width": w, "height": 800}); page.wait_for_timeout(150)
         check(f"{w}px: 가로 넘침 없음", page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))

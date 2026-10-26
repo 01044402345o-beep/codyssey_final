@@ -680,3 +680,15 @@ test('도시 조사 접기: 후퇴 표시(merged·parent·wider)만 meta 로 넘
   assert.equal(AI.foldResearch([{ name: '군산' }], { status: 'done', report: mk({ kind: 'evil', label: 'x' }) }, caps).meta['군산'].fallback, undefined);
   assert.equal(AI.foldResearch([{ name: '군산' }], { status: 'done', report: mk(null) }, caps).meta['군산'].fallback, undefined);
 });
+
+test('직접 추가 장소 확인 응답: found 만 링크·이름을 싣고, http·주입·이상한 값은 버린다', () => {
+  const ok = AI.placeCheckResult({ status: 'found', name: ' Tōdai-ji ', distance_km: 2.1,
+    source: { provider: 'wikidata', url: 'https://www.wikidata.org/wiki/Q186148' } });
+  assert.deepEqual([ok.state, ok.name, ok.label, ok.km], ['found', 'Tōdai-ji', 'Wikidata', 2.1]);
+  assert.equal(AI.placeCheckResult({ status: 'not_found' }).state, 'not_found');
+  assert.equal(AI.placeCheckResult({ status: 'no_city' }).state, 'not_found');
+  assert.equal(AI.placeCheckResult({ status: 'found', name: 'X', source: { url: 'http://evil' } }).state, 'error');
+  assert.equal(AI.placeCheckResult({ status: 'found', name: '<b>', source: { url: 'https://a.b' } }).state, 'error');
+  assert.equal(AI.placeCheckResult(null).state, 'error');
+  assert.equal(AI.placeCheckResult({ status: 'found', name: 'G', source: { provider: 'google', url: 'https://maps.google.com/?cid=1' } }).label, 'Google 지도');
+});

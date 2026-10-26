@@ -606,6 +606,17 @@
       isCandidate: false, selected: false, visitDate: null, visitOrder: null, count: 0,
     };
   }
+  /* POST /place-check 응답 → 직접 추가 장소의 확인 상태(순수). 이상한 값·http 링크는 버린다. */
+  function placeCheckResult(d) {
+    if (!d || typeof d !== 'object') return { state: 'error' };
+    if (d.status === 'not_found' || d.status === 'no_city') return { state: 'not_found' };
+    const src = d.source && typeof d.source === 'object' ? d.source : {};
+    const name = typeof d.name === 'string' ? d.name.replace(/\s+/g, ' ').trim().slice(0, 120) : '';
+    if (d.status !== 'found' || !name || /[<>{}]/.test(name) || !/^https:\/\/[^\s"'<>]+$/.test(src.url || '')) return { state: 'error' };
+    const prov = RESEARCH_PROVIDER[src.provider] ? src.provider : 'wikidata';
+    return { state: 'found', name, url: src.url, provider: prov, label: RESEARCH_PROVIDER[prov][0], license: RESEARCH_PROVIDER[prov][1],
+             km: Number.isFinite(d.distance_km) ? d.distance_km : null };
+  }
   /* 조사 보고서 → 화면 장소. 종류(관광지 / 맛집·카페)마다 기본 caps 개 + 후보 2개(genReport 와 같은 규칙),
      '다시 생성'(round)은 순위를 2칸씩 돌린다(추가 호출 없음). 도시 순서는 요청 순서(idx)로 맞춘다. */
   function foldResearch(cities, result, caps, round = 0) {
@@ -715,7 +726,7 @@
     TRIP_KEY, cleanTrip, loadTrip, saveTrip, preferTrip,
     categoryOfKind,
     calendarToday, itineraryRequestBody, kindFromPrimary, foldItinerary, placeBlocksOnDays, collectItinerary,
-    RESEARCH_TIMEOUT_MS, researchRequestBody, collectResearch, researchPlace, foldResearch,
+    RESEARCH_TIMEOUT_MS, researchRequestBody, collectResearch, researchPlace, foldResearch, placeCheckResult,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, scopedStorage, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
   };
