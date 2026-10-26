@@ -2330,7 +2330,7 @@ function tripFields(d, E, v) {
         <div class="err" data-err="cities">${i === 0 ? (E.cities || '') : ''}</div>
       </div></div>`;
 
-  return `<div class="field"><label>국가와 도시</label>
+  return `<div class="field"><label>국가</label>
       ${multi ? `<div class="geo-par">${d.countries.map((_, i) => col(i)).join('')}</div>`
               : `${col(0)}`}
       ${addCountry}
