@@ -1,0 +1,4193 @@
+{
+ "cusco": {
+  "00 Museo Municipal de Arte Contemporáneo": [
+   [
+    "Where can I see the exhibitions?",
+    "‘exhibitions’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the exhibitions?",
+    "‘exhibitions’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the exhibitions?",
+    "‘exhibitions’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the exhibitions?",
+    "‘exhibitions’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "01 Museo Histórico Regional": [
+   [
+    "Where can I see the paintings?",
+    "‘paintings’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the paintings?",
+    "‘paintings’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the paintings?",
+    "‘paintings’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the paintings?",
+    "‘paintings’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "02 Machu Picchu Museum": [
+   [
+    "Where can I see the collection?",
+    "‘collection’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the artifacts?",
+    "‘artifacts’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Can I take photos of the collection?",
+    "‘collection’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the artifacts?",
+    "‘artifacts’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "03 Museo del Centro de Textiles Tradicionales de Cusco": [
+   [
+    "Where can I see the textiles?",
+    "‘textiles’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the textiles?",
+    "‘textiles’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the textiles?",
+    "‘textiles’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the textiles?",
+    "‘textiles’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "04 Museo del Sitio del Qoricancha": [
+   [
+    "Where can I see the ceramics?",
+    "‘ceramics’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the textiles?",
+    "‘textiles’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Can I take photos of the ceramics?",
+    "‘ceramics’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the textiles?",
+    "‘textiles’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "05 Museo de Arte Popular": [
+   [
+    "Where can I see the collection?",
+    "‘collection’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the collection?",
+    "‘collection’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the collection?",
+    "‘collection’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the collection?",
+    "‘collection’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "06 Santa Catalina Convent": [
+   [
+    "Where can I see the collection?",
+    "‘collection’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the convent?",
+    "수녀원 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the collection?",
+    "‘collection’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the convent close today?",
+    "수녀원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the collection?",
+    "‘collection’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the collection?",
+    "‘collection’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "07 Qoricancha": [
+   [
+    "Where can I see the ruins?",
+    "‘ruins’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the ruins?",
+    "‘ruins’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the ruins?",
+    "‘ruins’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the ruins?",
+    "‘ruins’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "08 ChocoMuseo": [
+   [
+    "Where can I see the workshops?",
+    "‘workshops’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the workshops?",
+    "‘workshops’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the workshops?",
+    "‘workshops’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the workshops?",
+    "‘workshops’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "09 Museo Inka": [
+   [
+    "Where can I see the artifacts?",
+    "‘artifacts’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the artifacts?",
+    "‘artifacts’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the artifacts?",
+    "‘artifacts’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the artifacts?",
+    "‘artifacts’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "10 Piedra de los doce ángulos": [],
+  "11 Cusco Cathedral": [
+   [
+    "Where can I see the paintings?",
+    "‘paintings’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the cathedral?",
+    "대성당 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the paintings?",
+    "‘paintings’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the cathedral close today?",
+    "대성당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the paintings?",
+    "‘paintings’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the paintings?",
+    "‘paintings’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "12 Palacio Inka del Kusikancha": [
+   [
+    "Where can I see the ruins?",
+    "‘ruins’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the palace?",
+    "궁전 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the ruins?",
+    "‘ruins’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the palace close today?",
+    "궁전은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the ruins?",
+    "‘ruins’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the ruins?",
+    "‘ruins’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "13 Plaza de Armas": [
+   [
+    "Where can I see the paintings?",
+    "‘paintings’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the souvenirs?",
+    "‘souvenirs’ 사진 찍어도 되나요?"
+   ],
+   [
+    "Is the square far from here?",
+    "광장은 여기서 멀어요?"
+   ],
+   [
+    "Can I take photos of the paintings?",
+    "‘paintings’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the souvenirs?",
+    "‘souvenirs’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "How long does it take to see the paintings?",
+    "‘paintings’ 다 보는 데 얼마나 걸려요?"
+   ]
+  ],
+  "14 Plaza de San Francisco,": [
+   [
+    "Where can I see the souvenirs?",
+    "‘souvenirs’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Is the square far from here?",
+    "광장은 여기서 멀어요?"
+   ],
+   [
+    "Can I take photos of the souvenirs?",
+    "‘souvenirs’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the souvenirs?",
+    "‘souvenirs’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the souvenirs?",
+    "‘souvenirs’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "15 Salseros Cusco": [],
+  "16 Planetario Cuzco": [
+   [
+    "Where can I see the dome?",
+    "‘dome’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the telescopes?",
+    "‘telescopes’ 사진 찍어도 되나요?"
+   ],
+   [
+    "Can I take photos of the dome?",
+    "‘dome’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the telescopes?",
+    "‘telescopes’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "How long does it take to see the dome?",
+    "‘dome’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the telescopes?",
+    "‘telescopes’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "17 Sacsayhuamán": [
+   [
+    "Where can I see the ruins?",
+    "‘ruins’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the ruins?",
+    "‘ruins’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the ruins?",
+    "‘ruins’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the ruins?",
+    "‘ruins’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "18 Qenko": [
+   [
+    "Is the hill far from here?",
+    "언덕은 여기서 멀어요?"
+   ]
+  ],
+  "19 Pukapukara": [],
+  "20 Tambomachay": [
+   [
+    "Is the fountain far from here?",
+    "분수는 여기서 멀어요?"
+   ]
+  ],
+  "21 Cochahuasi Animal Sanctuary": [
+   [
+    "What time does the sanctuary close today?",
+    "보호구역은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the sanctuary?",
+    "보호구역 입구가 어디예요?"
+   ]
+  ],
+  "22 Rainbow Mountain": [
+   [
+    "Is the mountain far from here?",
+    "산은 여기서 멀어요?"
+   ]
+  ],
+  "23 Los Angeles": [
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "24 Chifa Status": [
+   [
+    "I'd like to try the chifa, please.",
+    "‘chifa’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have chifa today?",
+    "오늘 ‘chifa’ 있어요?"
+   ],
+   [
+    "What kind of chifa do you recommend?",
+    "‘chifa’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the chifa take?",
+    "‘chifa’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "25 El Encuentro": [
+   [
+    "I'd like to try the soup, please.",
+    "‘soup’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have soup today?",
+    "오늘 ‘soup’ 있어요?"
+   ],
+   [
+    "What kind of soup do you recommend?",
+    "‘soup’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the soup take?",
+    "‘soup’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "26 El Fogon": [
+   [
+    "I'd like to try the Peruvian food, please.",
+    "‘Peruvian food’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have salad bar today?",
+    "오늘 ‘salad bar’ 있어요?"
+   ],
+   [
+    "What kind of soup do you recommend?",
+    "‘soup’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What time does the bar close today?",
+    "바는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have Peruvian food today?",
+    "오늘 ‘Peruvian food’ 있어요?"
+   ],
+   [
+    "What kind of salad bar do you recommend?",
+    "‘salad bar’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "27 Victor Victoria": [
+   [
+    "I'd like to try the salad bar, please.",
+    "‘salad bar’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have buffet today?",
+    "오늘 ‘buffet’ 있어요?"
+   ],
+   [
+    "What kind of bread do you recommend?",
+    "‘bread’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What time does the bar close today?",
+    "바는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have salad bar today?",
+    "오늘 ‘salad bar’ 있어요?"
+   ],
+   [
+    "What kind of buffet do you recommend?",
+    "‘buffet’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "28 Chia Vegan Kitchen": [
+   [
+    "I'd like to try the buffet, please.",
+    "‘buffet’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have buffet today?",
+    "오늘 ‘buffet’ 있어요?"
+   ],
+   [
+    "What kind of buffet do you recommend?",
+    "‘buffet’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the buffet take?",
+    "‘buffet’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "29 Bagdad Cafe": [
+   [
+    "What time does the cafe close today?",
+    "카페는 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "30 Jack's Cafe": [
+   [
+    "I'd like to try the lemonades, please.",
+    "‘lemonades’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have breakfast today?",
+    "오늘 ‘breakfast’ 있어요?"
+   ],
+   [
+    "What time does the cafe close today?",
+    "카페는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have lemonades today?",
+    "오늘 ‘lemonades’ 있어요?"
+   ],
+   [
+    "What kind of breakfast do you recommend?",
+    "‘breakfast’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of lemonades do you recommend?",
+    "‘lemonades’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "31 Cicciolinia": [
+   [
+    "I'd like to try the breakfast, please.",
+    "‘breakfast’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have brunch today?",
+    "오늘 ‘brunch’ 있어요?"
+   ],
+   [
+    "What time does the café close today?",
+    "카페는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have breakfast today?",
+    "오늘 ‘breakfast’ 있어요?"
+   ],
+   [
+    "What kind of brunch do you recommend?",
+    "‘brunch’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of breakfast do you recommend?",
+    "‘breakfast’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "32 Emperador": [
+   [
+    "I'd like to try the pisco sour tall, please.",
+    "‘pisco sour tall’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have pisco sour tall today?",
+    "오늘 ‘pisco sour tall’ 있어요?"
+   ],
+   [
+    "What kind of pisco sour tall do you recommend?",
+    "‘pisco sour tall’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the pisco sour tall take?",
+    "‘pisco sour tall’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "33 Encantasq'a": [
+   [
+    "I'd like to try the coffee, please.",
+    "‘coffee’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have chocolate today?",
+    "오늘 ‘chocolate’ 있어요?"
+   ],
+   [
+    "What kind of cakes do you recommend?",
+    "‘cakes’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "Do you have coffee today?",
+    "오늘 ‘coffee’ 있어요?"
+   ],
+   [
+    "What kind of chocolate do you recommend?",
+    "‘chocolate’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the cakes take?",
+    "‘cakes’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "34 Green Point": [
+   [
+    "I'd like to try the breakfast, please.",
+    "‘breakfast’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have Peruvian food today?",
+    "오늘 ‘Peruvian food’ 있어요?"
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have breakfast today?",
+    "오늘 ‘breakfast’ 있어요?"
+   ],
+   [
+    "What kind of Peruvian food do you recommend?",
+    "‘Peruvian food’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of breakfast do you recommend?",
+    "‘breakfast’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "35 Inka Grill": [
+   [
+    "I'd like to try the cuy, please.",
+    "‘cuy’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have without today?",
+    "오늘 ‘without’ 있어요?"
+   ],
+   [
+    "What kind of appetizer tiradito de do you recommend?",
+    "‘appetizer tiradito de’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the alpaca take?",
+    "‘alpaca’ 나오는 데 얼마나 걸려요?"
+   ],
+   [
+    "Do you have cuy today?",
+    "오늘 ‘cuy’ 있어요?"
+   ],
+   [
+    "What kind of without do you recommend?",
+    "‘without’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "36 Restaurant Inkazuela": [
+   [
+    "I'd like to try the stews, please.",
+    "‘stews’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have stews today?",
+    "오늘 ‘stews’ 있어요?"
+   ],
+   [
+    "What kind of stews do you recommend?",
+    "‘stews’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the stews take?",
+    "‘stews’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "37 Tunupa": [
+   [
+    "I'd like to try the alpaca, please.",
+    "‘alpaca’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have cuy today?",
+    "오늘 ‘cuy’ 있어요?"
+   ],
+   [
+    "Do you have alpaca today?",
+    "오늘 ‘alpaca’ 있어요?"
+   ],
+   [
+    "What kind of cuy do you recommend?",
+    "‘cuy’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of alpaca do you recommend?",
+    "‘alpaca’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the cuy take?",
+    "‘cuy’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "38 Gato's Market": [
+   [
+    "What time does the market close today?",
+    "시장은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "39 La Canasta": []
+ },
+ "gunsan": {
+  "00 Gunsan Modern History Museum": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "01 Modern Art Museum": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "02 Dongguksa Temple": [
+   [
+    "What time does the temple close today?",
+    "절은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the temple?",
+    "절 입구가 어디예요?"
+   ]
+  ],
+  "03 Gunsan Impi Station": [
+   [
+    "What time does the station close today?",
+    "역은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the station?",
+    "역 입구가 어디예요?"
+   ]
+  ],
+  "04 Marine Monument": [
+   [
+    "What time does the monument close today?",
+    "기념비는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the monument?",
+    "기념비 입구가 어디예요?"
+   ]
+  ],
+  "05 Chae Man-Sik Literature Museum": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "06 Jinpo Marine Park": [
+   [
+    "What time does the park close today?",
+    "공원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the park?",
+    "공원 입구가 어디예요?"
+   ]
+  ],
+  "07 Gunsan Modern Architecture Museum": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "08 Wolmyeong Park": [
+   [
+    "Where can I see the harbor?",
+    "‘harbor’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the park?",
+    "공원 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the harbor?",
+    "‘harbor’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the park close today?",
+    "공원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the harbor?",
+    "‘harbor’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the harbor?",
+    "‘harbor’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "09 Chowon Photo Studio": [
+   [
+    "What time does the studio close today?",
+    "스튜디오는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the studio?",
+    "스튜디오 입구가 어디예요?"
+   ]
+  ],
+  "10 Geumgang Migratory Bird Observatory": [
+   [
+    "What time does the observatory close today?",
+    "전망대는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the observatory?",
+    "전망대 입구가 어디예요?"
+   ]
+  ],
+  "11 Saemangeum New Year Festival": [],
+  "12 Seonyudo Island": [
+   [
+    "Is the island far from here?",
+    "섬은 여기서 멀어요?"
+   ]
+  ],
+  "13 Gunsan Country Club": [
+   [
+    "What time does the golf course close today?",
+    "골프장은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the golf course?",
+    "골프장 입구가 어디예요?"
+   ]
+  ],
+  "14 Gunsan TimeTravelFestival": [
+   [
+    "Where can I see the rickshaw stamp tour?",
+    "‘rickshaw stamp tour’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the rickshaw stamp tour?",
+    "‘rickshaw stamp tour’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the rickshaw stamp tour?",
+    "‘rickshaw stamp tour’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the rickshaw stamp tour?",
+    "‘rickshaw stamp tour’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "15 Ggongdang Barley Festival": [],
+  "16 Gunsan Insect Experience Learning Farm": [
+   [
+    "What time does the farm close today?",
+    "농장은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the farm?",
+    "농장 입구가 어디예요?"
+   ]
+  ],
+  "17 Miz Cafe": [
+   [
+    "What time does the cafe close today?",
+    "카페는 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "18 Ilhaeog": [
+   [
+    "I'd like to try the Kong-namul-gukbap, please.",
+    "‘Kong-namul-gukbap’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have soup today?",
+    "오늘 ‘soup’ 있어요?"
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have Kong-namul-gukbap today?",
+    "오늘 ‘Kong-namul-gukbap’ 있어요?"
+   ],
+   [
+    "What kind of soup do you recommend?",
+    "‘soup’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of Kong-namul-gukbap do you recommend?",
+    "‘Kong-namul-gukbap’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "19 Lee Sung Dang": [
+   [
+    "I'd like to try the bread, please.",
+    "‘bread’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the bakery close today?",
+    "빵집은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have bread today?",
+    "오늘 ‘bread’ 있어요?"
+   ],
+   [
+    "What kind of bread do you recommend?",
+    "‘bread’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the bread take?",
+    "‘bread’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "20 Sweet India": [
+   [
+    "I'd like to try the Indian food, please.",
+    "‘Indian food’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have Indian food today?",
+    "오늘 ‘Indian food’ 있어요?"
+   ],
+   [
+    "What kind of Indian food do you recommend?",
+    "‘Indian food’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the Indian food take?",
+    "‘Indian food’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "21 Mulgogi Jari": [
+   [
+    "I'd like to try the seafood, please.",
+    "‘seafood’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have sashimi today?",
+    "오늘 ‘sashimi’ 있어요?"
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have seafood today?",
+    "오늘 ‘seafood’ 있어요?"
+   ],
+   [
+    "What kind of sashimi do you recommend?",
+    "‘sashimi’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of seafood do you recommend?",
+    "‘seafood’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "22 Hansoggeum": [
+   [
+    "I'd like to try the Seafood Stew, please.",
+    "‘Seafood Stew’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have hot pot today?",
+    "오늘 ‘hot pot’ 있어요?"
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have Seafood Stew today?",
+    "오늘 ‘Seafood Stew’ 있어요?"
+   ],
+   [
+    "What kind of hot pot do you recommend?",
+    "‘hot pot’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of Seafood Stew do you recommend?",
+    "‘Seafood Stew’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "23 Wangsan Chinese Dishes": [
+   [
+    "I'd like to try the Chinese Dishes, please.",
+    "‘Chinese Dishes’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have noodles today?",
+    "오늘 ‘noodles’ 있어요?"
+   ],
+   [
+    "What kind of seafood do you recommend?",
+    "‘seafood’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have Chinese Dishes today?",
+    "오늘 ‘Chinese Dishes’ 있어요?"
+   ],
+   [
+    "What kind of noodles do you recommend?",
+    "‘noodles’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "24 Jirinseong": [
+   [
+    "I'd like to try the hot pepper jajangmyeon, please.",
+    "‘hot pepper jajangmyeon’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have noodles today?",
+    "오늘 ‘noodles’ 있어요?"
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have hot pepper jajangmyeon today?",
+    "오늘 ‘hot pepper jajangmyeon’ 있어요?"
+   ],
+   [
+    "What kind of noodles do you recommend?",
+    "‘noodles’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of hot pepper jajangmyeon do you recommend?",
+    "‘hot pepper jajangmyeon’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "25 Hanilok": [
+   [
+    "I'd like to try the soup, please.",
+    "‘soup’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have bibimbap today?",
+    "오늘 ‘bibimbap’ 있어요?"
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have soup today?",
+    "오늘 ‘soup’ 있어요?"
+   ],
+   [
+    "What kind of bibimbap do you recommend?",
+    "‘bibimbap’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of soup do you recommend?",
+    "‘soup’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "26 Bokseongru": [
+   [
+    "I'd like to try the noodles, please.",
+    "‘noodles’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have seafood today?",
+    "오늘 ‘seafood’ 있어요?"
+   ],
+   [
+    "What kind of soup do you recommend?",
+    "‘soup’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the japchae take?",
+    "‘japchae’ 나오는 데 얼마나 걸려요?"
+   ],
+   [
+    "Do you have noodles today?",
+    "오늘 ‘noodles’ 있어요?"
+   ],
+   [
+    "What kind of seafood do you recommend?",
+    "‘seafood’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "27 Rose hotel": [
+   [
+    "I'd like to try the pretzel, please.",
+    "‘pretzel’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have tteokbokki today?",
+    "오늘 ‘tteokbokki’ 있어요?"
+   ],
+   [
+    "Do you have pretzel today?",
+    "오늘 ‘pretzel’ 있어요?"
+   ],
+   [
+    "What kind of tteokbokki do you recommend?",
+    "‘tteokbokki’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of pretzel do you recommend?",
+    "‘pretzel’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the tteokbokki take?",
+    "‘tteokbokki’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "28 Yukgabeochi": [
+   [
+    "I'd like to try the yukhoe, please.",
+    "‘yukhoe’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have yukhoe today?",
+    "오늘 ‘yukhoe’ 있어요?"
+   ],
+   [
+    "What kind of yukhoe do you recommend?",
+    "‘yukhoe’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the yukhoe take?",
+    "‘yukhoe’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "29 Cheongdamisang Gunsasusong": [
+   [
+    "I'd like to try the soup, please.",
+    "‘soup’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have soup today?",
+    "오늘 ‘soup’ 있어요?"
+   ],
+   [
+    "What kind of soup do you recommend?",
+    "‘soup’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the soup take?",
+    "‘soup’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "30 Rose manshon": [
+   [
+    "I'd like to try the one, please.",
+    "‘one’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have set menu today?",
+    "오늘 ‘set menu’ 있어요?"
+   ],
+   [
+    "What kind of pasta do you recommend?",
+    "‘pasta’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "Do you have one today?",
+    "오늘 ‘one’ 있어요?"
+   ],
+   [
+    "What kind of set menu do you recommend?",
+    "‘set menu’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the pasta take?",
+    "‘pasta’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "31 Soju-jip": [
+   [
+    "I'd like to try the soju, please.",
+    "‘soju’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have whelk soup today?",
+    "오늘 ‘whelk soup’ 있어요?"
+   ],
+   [
+    "What kind of pasta do you recommend?",
+    "‘pasta’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the makchang take?",
+    "‘makchang’ 나오는 데 얼마나 걸려요?"
+   ],
+   [
+    "Do you have soju today?",
+    "오늘 ‘soju’ 있어요?"
+   ],
+   [
+    "What kind of whelk soup do you recommend?",
+    "‘whelk soup’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "32 Simyasikdang Jyulai (Izakaya)": [
+   [
+    "I'd like to try the tuna, please.",
+    "‘tuna’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the izakaya close today?",
+    "이자카야는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have tuna today?",
+    "오늘 ‘tuna’ 있어요?"
+   ],
+   [
+    "What kind of tuna do you recommend?",
+    "‘tuna’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the tuna take?",
+    "‘tuna’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "33 Mechanic (Bar)": [
+   [
+    "What time does the bar close today?",
+    "바는 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "34 Wolmyeongdong Whigalley (Izakaya)": [
+   [
+    "I'd like to try the sake, please.",
+    "‘sake’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the izakaya close today?",
+    "이자카야는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have sake today?",
+    "오늘 ‘sake’ 있어요?"
+   ],
+   [
+    "What kind of sake do you recommend?",
+    "‘sake’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the sake take?",
+    "‘sake’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "35 Gureumgongbang Eunpalakepark": [
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "36 Geobuki Siktak": [
+   [
+    "I'd like to try the Braised Spicy Chicken, please.",
+    "‘Braised Spicy Chicken’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have Braised Spicy Chicken today?",
+    "오늘 ‘Braised Spicy Chicken’ 있어요?"
+   ],
+   [
+    "What kind of Braised Spicy Chicken do you recommend?",
+    "‘Braised Spicy Chicken’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the Braised Spicy Chicken take?",
+    "‘Braised Spicy Chicken’ 나오는 데 얼마나 걸려요?"
+   ]
+  ]
+ },
+ "hoi_an": {
+  "00 Japanese Covered Bridge": [
+   [
+    "Is the bridge far from here?",
+    "다리는 여기서 멀어요?"
+   ]
+  ],
+  "01 Quan Cong Temple": [
+   [
+    "What time does the temple close today?",
+    "절은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the temple?",
+    "절 입구가 어디예요?"
+   ]
+  ],
+  "02 Thanh Ha pottery village": [
+   [
+    "Is the village far from here?",
+    "마을은 여기서 멀어요?"
+   ]
+  ],
+  "03 Museum of Hoi An History and Culture": [
+   [
+    "Where can I see the old cannon?",
+    "‘old cannon’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the old cannon?",
+    "‘old cannon’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the old cannon?",
+    "‘old cannon’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the old cannon?",
+    "‘old cannon’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "04 Museum of Folk Culture": [
+   [
+    "Where can I see the sculptures?",
+    "‘sculptures’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the sculptures?",
+    "‘sculptures’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the sculptures?",
+    "‘sculptures’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the sculptures?",
+    "‘sculptures’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "05 Museum of Sa Huynh Culture": [
+   [
+    "Where can I see the collection?",
+    "‘collection’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the collection?",
+    "‘collection’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the collection?",
+    "‘collection’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the collection?",
+    "‘collection’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "06 Museum of Trade Ceramics": [
+   [
+    "Where can I see the ceramics?",
+    "‘ceramics’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the ceramics?",
+    "‘ceramics’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the ceramics?",
+    "‘ceramics’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the ceramics?",
+    "‘ceramics’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "07 Old house of Phung Hung": [
+   [
+    "What time does the old house close today?",
+    "고택은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the old house?",
+    "고택 입구가 어디예요?"
+   ]
+  ],
+  "08 Old house of Tan Ky": [
+   [
+    "What time does the old house close today?",
+    "고택은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the old house?",
+    "고택 입구가 어디예요?"
+   ]
+  ],
+  "09 Chinese Assembly Hall": [
+   [
+    "What time does the assembly hall close today?",
+    "회관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the assembly hall?",
+    "회관 입구가 어디예요?"
+   ]
+  ],
+  "10 Quang Trieu Assembly Hall": [
+   [
+    "What time does the assembly hall close today?",
+    "회관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the assembly hall?",
+    "회관 입구가 어디예요?"
+   ]
+  ],
+  "11 Phuc Kien Meeting Hall": [
+   [
+    "What time does the hall close today?",
+    "회관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the hall?",
+    "회관 입구가 어디예요?"
+   ]
+  ],
+  "12 Trieu Chau Meeting Hall": [
+   [
+    "What time does the hall close today?",
+    "회관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the hall?",
+    "회관 입구가 어디예요?"
+   ]
+  ],
+  "13 Hai Nam Assembly Hall": [
+   [
+    "What time does the assembly hall close today?",
+    "회관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the assembly hall?",
+    "회관 입구가 어디예요?"
+   ]
+  ],
+  "14 Minh Huong Communal House": [
+   [
+    "What time does the house close today?",
+    "고택은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the house?",
+    "고택 입구가 어디예요?"
+   ]
+  ],
+  "15 Hoi An Art Craft Manufacturing Workshop": [],
+  "16 Bamboo Circus": [
+   [
+    "What time does the theatre close today?",
+    "극장은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the theatre?",
+    "극장 입구가 어디예요?"
+   ]
+  ],
+  "17 Hoi An memories show": [
+   [
+    "Is the island far from here?",
+    "섬은 여기서 멀어요?"
+   ]
+  ],
+  "18 Hoi An Silk Village": [
+   [
+    "Is the village far from here?",
+    "마을은 여기서 멀어요?"
+   ]
+  ],
+  "19 An Bang Beach": [
+   [
+    "Where can I see the soft white sand?",
+    "‘soft white sand’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the beach?",
+    "‘beach’ 사진 찍어도 되나요?"
+   ],
+   [
+    "Is the village far from here?",
+    "마을은 여기서 멀어요?"
+   ],
+   [
+    "Can I take photos of the soft white sand?",
+    "‘soft white sand’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the beach?",
+    "‘beach’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "How long does it take to see the soft white sand?",
+    "‘soft white sand’ 다 보는 데 얼마나 걸려요?"
+   ]
+  ],
+  "20 Non Nuoc Beach": [
+   [
+    "Where can I see the beach?",
+    "‘beach’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the beach?",
+    "‘beach’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the beach?",
+    "‘beach’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the beach?",
+    "‘beach’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "21 Dong Duong": [
+   [
+    "What time does the tower close today?",
+    "탑은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the tower?",
+    "탑 입구가 어디예요?"
+   ]
+  ],
+  "22 Tháp Bằng An": [
+   [
+    "What time does the tower close today?",
+    "탑은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the tower?",
+    "탑 입구가 어디예요?"
+   ]
+  ],
+  "23 Tháp Khương Mỹ": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "24 Banana fritters stall": [
+   [
+    "I'd like to try the banana fritters, please.",
+    "‘banana fritters’ 먹어 보고 싶어요."
+   ],
+   [
+    "Is the stall far from here?",
+    "노점은 여기서 멀어요?"
+   ],
+   [
+    "Do you have banana fritters today?",
+    "오늘 ‘banana fritters’ 있어요?"
+   ],
+   [
+    "What kind of banana fritters do you recommend?",
+    "‘banana fritters’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the banana fritters take?",
+    "‘banana fritters’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "25 Thiên Bảo Quán": [
+   [
+    "I'd like to try the meat sticks, please.",
+    "‘meat sticks’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have bánh xèo today?",
+    "오늘 ‘bánh xèo’ 있어요?"
+   ],
+   [
+    "Do you have meat sticks today?",
+    "오늘 ‘meat sticks’ 있어요?"
+   ],
+   [
+    "What kind of bánh xèo do you recommend?",
+    "‘bánh xèo’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of meat sticks do you recommend?",
+    "‘meat sticks’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the bánh xèo take?",
+    "‘bánh xèo’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "26 Cao lầu Không Gian Xanh": [
+   [
+    "I'd like to try the Cao lầu, please.",
+    "‘Cao lầu’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have wonton today?",
+    "오늘 ‘wonton’ 있어요?"
+   ],
+   [
+    "Do you have Cao lầu today?",
+    "오늘 ‘Cao lầu’ 있어요?"
+   ],
+   [
+    "What kind of wonton do you recommend?",
+    "‘wonton’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of Cao lầu do you recommend?",
+    "‘Cao lầu’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the wonton take?",
+    "‘wonton’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "27 Ba Dam Vegetarian Restaurant": [
+   [
+    "I'd like to try the Vietnamese food, please.",
+    "‘Vietnamese food’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have pho today?",
+    "오늘 ‘pho’ 있어요?"
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have Vietnamese food today?",
+    "오늘 ‘Vietnamese food’ 있어요?"
+   ],
+   [
+    "What kind of pho do you recommend?",
+    "‘pho’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of Vietnamese food do you recommend?",
+    "‘Vietnamese food’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "28 Phở Tùng": [
+   [
+    "I'd like to try the Pho Bo, please.",
+    "‘Pho Bo’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have Pho Bo today?",
+    "오늘 ‘Pho Bo’ 있어요?"
+   ],
+   [
+    "What kind of Pho Bo do you recommend?",
+    "‘Pho Bo’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the Pho Bo take?",
+    "‘Pho Bo’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "29 Madam Khanh - The Banh Mi Queen": [
+   [
+    "I'd like to try the banh mi, please.",
+    "‘banh mi’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have banh mi today?",
+    "오늘 ‘banh mi’ 있어요?"
+   ],
+   [
+    "What kind of banh mi do you recommend?",
+    "‘banh mi’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the banh mi take?",
+    "‘banh mi’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "30 White Rose": [
+   [
+    "I'd like to try the around town, please.",
+    "‘around town’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have dumplings today?",
+    "오늘 ‘dumplings’ 있어요?"
+   ],
+   [
+    "Do you have around town today?",
+    "오늘 ‘around town’ 있어요?"
+   ],
+   [
+    "What kind of dumplings do you recommend?",
+    "‘dumplings’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of around town do you recommend?",
+    "‘around town’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the dumplings take?",
+    "‘dumplings’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "31 Quán Mười": [
+   [
+    "I'd like to try the Cao lầu, please.",
+    "‘Cao lầu’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have mì quảng today?",
+    "오늘 ‘mì quảng’ 있어요?"
+   ],
+   [
+    "Do you have Cao lầu today?",
+    "오늘 ‘Cao lầu’ 있어요?"
+   ],
+   [
+    "What kind of mì quảng do you recommend?",
+    "‘mì quảng’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of Cao lầu do you recommend?",
+    "‘Cao lầu’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the mì quảng take?",
+    "‘mì quảng’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "32 Quán Cô Mai": [
+   [
+    "I'd like to try the mì quảng, please.",
+    "‘mì quảng’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have mì quảng today?",
+    "오늘 ‘mì quảng’ 있어요?"
+   ],
+   [
+    "What kind of mì quảng do you recommend?",
+    "‘mì quảng’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the mì quảng take?",
+    "‘mì quảng’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "33 Bale Well Restaurant": [
+   [
+    "I'd like to try the set menu, please.",
+    "‘set menu’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have bánh xèo today?",
+    "오늘 ‘bánh xèo’ 있어요?"
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have set menu today?",
+    "오늘 ‘set menu’ 있어요?"
+   ],
+   [
+    "What kind of bánh xèo do you recommend?",
+    "‘bánh xèo’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of set menu do you recommend?",
+    "‘set menu’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "34 Bazar Cafe & Restaurant": [
+   [
+    "I'd like to try the Vietnamese, please.",
+    "‘Vietnamese’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have cocktails today?",
+    "오늘 ‘cocktails’ 있어요?"
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have Vietnamese today?",
+    "오늘 ‘Vietnamese’ 있어요?"
+   ],
+   [
+    "What kind of cocktails do you recommend?",
+    "‘cocktails’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of Vietnamese do you recommend?",
+    "‘Vietnamese’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "35 Dingo Deli": [
+   [
+    "I'd like to try the coffee, please.",
+    "‘coffee’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have coffee today?",
+    "오늘 ‘coffee’ 있어요?"
+   ],
+   [
+    "What kind of coffee do you recommend?",
+    "‘coffee’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the coffee take?",
+    "‘coffee’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "36 Red Bridge Restaurant & Cooking School": [
+   [
+    "I'd like to try the Vietnamese Food, please.",
+    "‘Vietnamese Food’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have coffee today?",
+    "오늘 ‘coffee’ 있어요?"
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have Vietnamese Food today?",
+    "오늘 ‘Vietnamese Food’ 있어요?"
+   ],
+   [
+    "What kind of coffee do you recommend?",
+    "‘coffee’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of Vietnamese Food do you recommend?",
+    "‘Vietnamese Food’ 중에 뭘 추천하세요?"
+   ]
+  ],
+  "37 Son Hoian": [],
+  "38 Temari": [
+   [
+    "I'd like to try the Japanese cuisine, please.",
+    "‘Japanese cuisine’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have Japanese cuisine today?",
+    "오늘 ‘Japanese cuisine’ 있어요?"
+   ],
+   [
+    "What kind of Japanese cuisine do you recommend?",
+    "‘Japanese cuisine’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the Japanese cuisine take?",
+    "‘Japanese cuisine’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "39 Thành Nam Quán": [
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ]
+  ]
+ },
+ "matera": {
+  "00 Matera Cathedral": [
+   [
+    "Where can I see the spire?",
+    "‘spire’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the skyline?",
+    "‘skyline’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the cathedral close today?",
+    "대성당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Can I take photos of the spire?",
+    "‘spire’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the skyline?",
+    "‘skyline’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Where is the entrance to the cathedral?",
+    "대성당 입구가 어디예요?"
+   ]
+  ],
+  "01 San Pietro Caveoso": [
+   [
+    "Where can I see the Sassi?",
+    "‘Sassi’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the Sassi?",
+    "‘Sassi’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the Sassi?",
+    "‘Sassi’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the Sassi?",
+    "‘Sassi’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "02 Church of San Giovanni Battista": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ],
+  "03 Church of San Francesco d'Assisi": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ],
+  "04 Church of Purgatorio": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ],
+  "05 Church of San Domenico": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ],
+  "06 Church of Santa Lucia": [
+   [
+    "Where can I see the Sassi?",
+    "‘Sassi’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the Sassi?",
+    "‘Sassi’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the Sassi?",
+    "‘Sassi’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the Sassi?",
+    "‘Sassi’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "07 Guided tours": [
+   [
+    "Where can I see the guided tours?",
+    "‘guided tours’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the guided tours?",
+    "‘guided tours’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the guided tours?",
+    "‘guided tours’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the guided tours?",
+    "‘guided tours’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "08 Ape nei Sassi": [
+   [
+    "Where can I see the Sassi?",
+    "‘Sassi’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the Sassi?",
+    "‘Sassi’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the Sassi?",
+    "‘Sassi’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the Sassi?",
+    "‘Sassi’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "09 Park of the Rupestrian Churches of Matera": [
+   [
+    "Where can I see the Sassi?",
+    "‘Sassi’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the park?",
+    "공원 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the Sassi?",
+    "‘Sassi’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the park close today?",
+    "공원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the Sassi?",
+    "‘Sassi’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the Sassi?",
+    "‘Sassi’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "10 Chiesa di San Francesco da Paola": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ],
+  "11 Cappella di Sant'Andrea": [],
+  "12 Chiesa di San Leonardo": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ],
+  "13 Cripta degli Evangelisti": [],
+  "14 Chiesa di Santa Barbara": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ],
+  "15 Palazzo dell'Annunziata": [
+   [
+    "What time does the palace close today?",
+    "궁전은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the palace?",
+    "궁전 입구가 어디예요?"
+   ]
+  ],
+  "16 Palazzo di Castro Vetere": [
+   [
+    "What time does the palace close today?",
+    "궁전은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the palace?",
+    "궁전 입구가 어디예요?"
+   ]
+  ],
+  "17 Fontana ferdinandea": [],
+  "18 Villa Longo": [],
+  "19 Castello Tramontano": [
+   [
+    "What time does the castle close today?",
+    "성은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the castle?",
+    "성 입구가 어디예요?"
+   ]
+  ],
+  "20 Museo archeologico nazionale Domenico Ridola": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "21 Parco del Castello": [
+   [
+    "What time does the castle close today?",
+    "성은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the castle?",
+    "성 입구가 어디예요?"
+   ]
+  ],
+  "22 Ponte Tibetano della Gravina": [],
+  "23 Veduta dal Parco della Murgia Materana": [],
+  "24 Guide turistiche": [],
+  "25 Visita guidata": [],
+  "26 Visite guidate": [],
+  "27 Ape Matera Tour": [],
+  "28 Ape Vito": [],
+  "29 Morgan": [],
+  "30 Antico Forno a Legna": [],
+  "31 Stano Ristorazione": [],
+  "32 Sassi di Matera": [
+   [
+    "Where can I see the ancient cave dwellings?",
+    "‘ancient cave dwellings’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the Sassi?",
+    "‘Sassi’ 사진 찍어도 되나요?"
+   ],
+   [
+    "Can I take photos of the ancient cave dwellings?",
+    "‘ancient cave dwellings’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the Sassi?",
+    "‘Sassi’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "How long does it take to see the ancient cave dwellings?",
+    "‘ancient cave dwellings’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the Sassi?",
+    "‘Sassi’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "33 National Museum of Medieval and Modern Art of Basilicata": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "34 convento di Sant'Agostino": [
+   [
+    "What time does the convent close today?",
+    "수녀원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the convent?",
+    "수녀원 입구가 어디예요?"
+   ]
+  ],
+  "35 Palazzo Bronzini": [
+   [
+    "What time does the palace close today?",
+    "궁전은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the palace?",
+    "궁전 입구가 어디예요?"
+   ]
+  ]
+ },
+ "nara": {
+  "00 Tōdai-ji": [
+   [
+    "Where can I see the Great Buddha?",
+    "‘Great Buddha’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the Buddha statue?",
+    "‘Buddha statue’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the temple close today?",
+    "절은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Can I take photos of the Great Buddha?",
+    "‘Great Buddha’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the Buddha statue?",
+    "‘Buddha statue’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Where is the entrance to the temple?",
+    "절 입구가 어디예요?"
+   ]
+  ],
+  "01 Kōfuku-ji": [
+   [
+    "Where can I see the pagoda?",
+    "‘pagoda’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the temple?",
+    "절 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the pagoda?",
+    "‘pagoda’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the temple close today?",
+    "절은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the pagoda?",
+    "‘pagoda’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the pagoda?",
+    "‘pagoda’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "02 Sarusawa Pond": [
+   [
+    "Where can I see the pond?",
+    "‘pond’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the park?",
+    "공원 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the pond?",
+    "‘pond’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the park close today?",
+    "공원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the pond?",
+    "‘pond’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the pond?",
+    "‘pond’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "03 Nara National Museum": [
+   [
+    "Where can I see the exhibitions?",
+    "‘exhibitions’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the collection?",
+    "‘collection’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Can I take photos of the exhibitions?",
+    "‘exhibitions’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the collection?",
+    "‘collection’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "04 Himuro Shrine": [
+   [
+    "What time does the shrine close today?",
+    "신사는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the shrine?",
+    "신사 입구가 어디예요?"
+   ]
+  ],
+  "05 Ukimidō": [
+   [
+    "Where can I see the pond?",
+    "‘pond’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the park?",
+    "공원 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the pond?",
+    "‘pond’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the park close today?",
+    "공원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the pond?",
+    "‘pond’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the pond?",
+    "‘pond’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "06 Kasuga Taisha": [
+   [
+    "Where can I see the torii?",
+    "‘torii’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the lanterns?",
+    "‘lanterns’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the statue?",
+    "‘statue’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Where is the entrance to the shrine?",
+    "신사 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the torii?",
+    "‘torii’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the lanterns?",
+    "‘lanterns’ 다 보는 데 얼마나 걸려요?"
+   ]
+  ],
+  "07 Kasuga-yama Primeval Forest": [
+   [
+    "Where can I see the deer?",
+    "‘deer’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Is the hill far from here?",
+    "언덕은 여기서 멀어요?"
+   ],
+   [
+    "Can I take photos of the deer?",
+    "‘deer’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the deer?",
+    "‘deer’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the deer?",
+    "‘deer’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "08 Isui-en Garden": [
+   [
+    "Where can I see the garden?",
+    "‘garden’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the garden?",
+    "‘garden’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the garden?",
+    "‘garden’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the garden?",
+    "‘garden’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "09 Yoshikien Garden": [
+   [
+    "Where can I see the garden?",
+    "‘garden’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the garden?",
+    "‘garden’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the garden?",
+    "‘garden’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the garden?",
+    "‘garden’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "10 Shin-Yakushi-ji": [
+   [
+    "Where can I see the collection?",
+    "‘collection’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the temple?",
+    "절 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the collection?",
+    "‘collection’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the temple close today?",
+    "절은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the collection?",
+    "‘collection’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the collection?",
+    "‘collection’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "11 Nara City Museum of Photography": [
+   [
+    "Where can I see the pond?",
+    "‘pond’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the exhibits?",
+    "‘exhibits’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Can I take photos of the pond?",
+    "‘pond’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the exhibits?",
+    "‘exhibits’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "12 Yakushi-ji": [
+   [
+    "Where can I see the pagoda?",
+    "‘pagoda’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the temple?",
+    "절 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the pagoda?",
+    "‘pagoda’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the temple close today?",
+    "절은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the pagoda?",
+    "‘pagoda’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the pagoda?",
+    "‘pagoda’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "13 Gangō-ji": [
+   [
+    "What time does the temple close today?",
+    "절은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the temple?",
+    "절 입구가 어디예요?"
+   ]
+  ],
+  "14 Heijōkyū Palace Site": [
+   [
+    "What time does the palace close today?",
+    "궁전은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the palace?",
+    "궁전 입구가 어디예요?"
+   ]
+  ],
+  "15 Tōshōdai-ji": [
+   [
+    "What time does the temple close today?",
+    "절은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the temple?",
+    "절 입구가 어디예요?"
+   ]
+  ],
+  "16 Nara Centennial Hall": [
+   [
+    "What time does the hall close today?",
+    "회관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the hall?",
+    "회관 입구가 어디예요?"
+   ]
+  ],
+  "17 Japanese Tattoo Art Gallery": [
+   [
+    "What time does the gallery close today?",
+    "미술관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the gallery?",
+    "미술관 입구가 어디예요?"
+   ]
+  ],
+  "18 Mount Wakakusa Fire Festival": [
+   [
+    "Where can I see the fireworks?",
+    "‘fireworks’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the fireworks?",
+    "‘fireworks’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the fireworks?",
+    "‘fireworks’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the fireworks?",
+    "‘fireworks’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "19 Nara Visitor Center & Inn": [
+   [
+    "Where can I see the deer?",
+    "‘deer’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the inn?",
+    "여관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the deer?",
+    "‘deer’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the inn close today?",
+    "여관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the deer?",
+    "‘deer’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the deer?",
+    "‘deer’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "20 Shuni-e (Omizu-tori)": [
+   [
+    "What time does the memorial close today?",
+    "기념관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the memorial?",
+    "기념관 입구가 어디예요?"
+   ]
+  ],
+  "21 Nara Tōka-e": [],
+  "22 Deer-horn Cutting Ceremony": [
+   [
+    "Where can I see the deer?",
+    "‘deer’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the deer?",
+    "‘deer’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the deer?",
+    "‘deer’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the deer?",
+    "‘deer’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "23 Naramachi": [
+   [
+    "What time does the house close today?",
+    "고택은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the house?",
+    "고택 입구가 어디예요?"
+   ]
+  ],
+  "24 Saturday Walking Tour": [
+   [
+    "What time does the shrine close today?",
+    "신사는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the shrine?",
+    "신사 입구가 어디예요?"
+   ]
+  ],
+  "25 Nara Walk": [
+   [
+    "Where can I see the Great Buddha?",
+    "‘Great Buddha’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the deer?",
+    "‘deer’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the park close today?",
+    "공원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Can I take photos of the Great Buddha?",
+    "‘Great Buddha’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the deer?",
+    "‘deer’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Where is the entrance to the park?",
+    "공원 입구가 어디예요?"
+   ]
+  ],
+  "26 Sanshū-tei": [
+   [
+    "What time does the old house close today?",
+    "고택은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "27 Hiraso": [
+   [
+    "I'd like to try the kakinohazushi, please.",
+    "‘kakinohazushi’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have tea today?",
+    "오늘 ‘tea’ 있어요?"
+   ],
+   [
+    "Do you have kakinohazushi today?",
+    "오늘 ‘kakinohazushi’ 있어요?"
+   ],
+   [
+    "What kind of tea do you recommend?",
+    "‘tea’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of kakinohazushi do you recommend?",
+    "‘kakinohazushi’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the tea take?",
+    "‘tea’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "28 Okaru": [
+   [
+    "I'd like to try the okonomiyaki, please.",
+    "‘okonomiyaki’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have okonomiyaki today?",
+    "오늘 ‘okonomiyaki’ 있어요?"
+   ],
+   [
+    "What kind of okonomiyaki do you recommend?",
+    "‘okonomiyaki’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the okonomiyaki take?",
+    "‘okonomiyaki’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "29 Totogin": [
+   [
+    "I'd like to try the sushi, please.",
+    "‘sushi’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have sushi today?",
+    "오늘 ‘sushi’ 있어요?"
+   ],
+   [
+    "What kind of sushi do you recommend?",
+    "‘sushi’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the sushi take?",
+    "‘sushi’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "30 Yatagarasu": [
+   [
+    "I'd like to try the sake, please.",
+    "‘sake’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have sake today?",
+    "오늘 ‘sake’ 있어요?"
+   ],
+   [
+    "What kind of sake do you recommend?",
+    "‘sake’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the sake take?",
+    "‘sake’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "31 Maguro Koya": [
+   [
+    "I'd like to try the tuna, please.",
+    "‘tuna’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have tekka-don today?",
+    "오늘 ‘tekka-don’ 있어요?"
+   ],
+   [
+    "Do you have tuna today?",
+    "오늘 ‘tuna’ 있어요?"
+   ],
+   [
+    "What kind of tekka-don do you recommend?",
+    "‘tekka-don’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of tuna do you recommend?",
+    "‘tuna’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the tekka-don take?",
+    "‘tekka-don’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "32 Senjuan Yoshimune": [
+   [
+    "I'd like to try the two, please.",
+    "‘two’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have tea today?",
+    "오늘 ‘tea’ 있어요?"
+   ],
+   [
+    "Do you have two today?",
+    "오늘 ‘two’ 있어요?"
+   ],
+   [
+    "What kind of tea do you recommend?",
+    "‘tea’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "What kind of two do you recommend?",
+    "‘two’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the tea take?",
+    "‘tea’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "33 Kuramoto Hoshuku": [
+   [
+    "What time does the brewery close today?",
+    "양조장은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "34 Harushika Brewery": [
+   [
+    "I'd like to try the sake, please.",
+    "‘sake’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the brewery close today?",
+    "양조장은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have sake today?",
+    "오늘 ‘sake’ 있어요?"
+   ],
+   [
+    "What kind of sake do you recommend?",
+    "‘sake’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the sake take?",
+    "‘sake’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "35 Nara Izumi Yūsai": [
+   [
+    "I'd like to try the sake, please.",
+    "‘sake’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the bar close today?",
+    "바는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have sake today?",
+    "오늘 ‘sake’ 있어요?"
+   ],
+   [
+    "What kind of sake do you recommend?",
+    "‘sake’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the sake take?",
+    "‘sake’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "36 Saidai-ji Temple": [
+   [
+    "What time does the temple close today?",
+    "절은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the temple?",
+    "절 입구가 어디예요?"
+   ]
+  ],
+  "37 Daian-ji Temple": [
+   [
+    "What time does the temple close today?",
+    "절은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the temple?",
+    "절 입구가 어디예요?"
+   ]
+  ],
+  "38 Akishino-dera Temple": [
+   [
+    "What time does the temple close today?",
+    "절은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the temple?",
+    "절 입구가 어디예요?"
+   ]
+  ],
+  "39 Museum Yamato Bunkakan": [
+   [
+    "Where can I see the collection?",
+    "‘collection’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the collection?",
+    "‘collection’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the collection?",
+    "‘collection’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the collection?",
+    "‘collection’ 가이드 투어가 있나요?"
+   ]
+  ]
+ },
+ "new_york": {
+  "00 GoCity Pass": [],
+  "01 New York Pass": [],
+  "02 New York CityPASS": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "03 Brooklyn Cyclones": [
+   [
+    "What time does the park close today?",
+    "공원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the park?",
+    "공원 입구가 어디예요?"
+   ]
+  ],
+  "04 Giovanni da Verrazzano-Statue": [
+   [
+    "Where can I see the statue?",
+    "‘statue’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the statue?",
+    "‘statue’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the statue?",
+    "‘statue’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the statue?",
+    "‘statue’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "05 Statue of Liberty": [
+   [
+    "Where can I see the statue?",
+    "‘statue’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the statue?",
+    "‘statue’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the statue?",
+    "‘statue’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the statue?",
+    "‘statue’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "06 Metropolitan Museum of Art": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "07 Solomon R. Guggenheim Museum": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "08 Brooklyn Museum": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "09 Bronx Zoo": [
+   [
+    "What time does the zoo close today?",
+    "동물원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the zoo?",
+    "동물원 입구가 어디예요?"
+   ]
+  ],
+  "10 American Museum of Natural History": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "11 Castle Clinton National Monument": [
+   [
+    "What time does the monument close today?",
+    "기념비는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the monument?",
+    "기념비 입구가 어디예요?"
+   ]
+  ],
+  "12 Governors Island National Monument": [
+   [
+    "What time does the monument close today?",
+    "기념비는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the monument?",
+    "기념비 입구가 어디예요?"
+   ]
+  ],
+  "13 African Burial Ground": [],
+  "14 Federal Hall": [
+   [
+    "What time does the hall close today?",
+    "회관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the hall?",
+    "회관 입구가 어디예요?"
+   ]
+  ],
+  "15 General Grant National Memorial": [
+   [
+    "What time does the memorial close today?",
+    "기념관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the memorial?",
+    "기념관 입구가 어디예요?"
+   ]
+  ],
+  "16 Hamilton Grange National Memorial": [
+   [
+    "What time does the memorial close today?",
+    "기념관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the memorial?",
+    "기념관 입구가 어디예요?"
+   ]
+  ],
+  "17 Times Square": [
+   [
+    "Is the square far from here?",
+    "광장은 여기서 멀어요?"
+   ]
+  ],
+  "18 Brooklyn Academy of Music": [],
+  "19 OnBoard New York Tours": [],
+  "20 Zip Aviation Helicopter Tours": [],
+  "21 Museum of Modern Art": [
+   [
+    "Where can I see the collection?",
+    "‘collection’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the collection?",
+    "‘collection’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the collection?",
+    "‘collection’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the collection?",
+    "‘collection’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "22 National September 11 Memorial & Museum": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "23 Madison Square and Madison Square Park": [
+   [
+    "What time does the park close today?",
+    "공원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the park?",
+    "공원 입구가 어디예요?"
+   ]
+  ],
+  "24 Trinity Church": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ],
+  "25 Prospect Park": [
+   [
+    "Where can I see the gardens?",
+    "‘gardens’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the park?",
+    "공원 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the gardens?",
+    "‘gardens’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the park close today?",
+    "공원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the gardens?",
+    "‘gardens’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the gardens?",
+    "‘gardens’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "26 Whitney Museum of American Art": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "27 The Frick Collection": [
+   [
+    "Where can I see the collection?",
+    "‘collection’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the collection?",
+    "‘collection’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the collection?",
+    "‘collection’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the collection?",
+    "‘collection’ 가이드 투어가 있나요?"
+   ]
+  ]
+ },
+ "rothenburg": {
+  "00 Market Square": [
+   [
+    "Is the square far from here?",
+    "광장은 여기서 멀어요?"
+   ]
+  ],
+  "01 Medieval Crime and Punishment Museum": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "02 Plönlein": [
+   [
+    "Is the square far from here?",
+    "광장은 여기서 멀어요?"
+   ]
+  ],
+  "03 St. Jakobskirche": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ],
+  "04 Altfränkische Weinstube": [
+   [
+    "What time does the tavern close today?",
+    "선술집은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "05 Baumeisterhaus": [],
+  "06 Louvre": [
+   [
+    "I'd like to try the Japanese cuisine, please.",
+    "‘Japanese cuisine’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have Japanese cuisine today?",
+    "오늘 ‘Japanese cuisine’ 있어요?"
+   ],
+   [
+    "What kind of Japanese cuisine do you recommend?",
+    "‘Japanese cuisine’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the Japanese cuisine take?",
+    "‘Japanese cuisine’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "07 Ratsstube": [
+   [
+    "What time does the tavern close today?",
+    "선술집은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "08 Zur Höll": [
+   [
+    "What time does the inn close today?",
+    "여관은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "09 Unter den Linden": [
+   [
+    "I'd like to try the beer, please.",
+    "‘beer’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the cafe close today?",
+    "카페는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have beer today?",
+    "오늘 ‘beer’ 있어요?"
+   ],
+   [
+    "What kind of beer do you recommend?",
+    "‘beer’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the beer take?",
+    "‘beer’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "10 Cafe einzigARTig": [
+   [
+    "I'd like to try the cakes, please.",
+    "‘cakes’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the cafe close today?",
+    "카페는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have cakes today?",
+    "오늘 ‘cakes’ 있어요?"
+   ],
+   [
+    "What kind of cakes do you recommend?",
+    "‘cakes’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the cakes take?",
+    "‘cakes’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "11 Franziskanerkirche": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ],
+  "12 St. Wolfgangskirche": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ],
+  "13 Heilig-Geist-Kirche": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ],
+  "14 St. Peter und Paul-Kirche": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ],
+  "15 Burgruine Endsee": [],
+  "16 Burgruine Nordenberg": [],
+  "17 Burgruine Seldeneck": [],
+  "18 Alt-Rothenburger Handwerkerhaus": [],
+  "19 Fuchsmühle": [],
+  "20 RothenburgMuseum": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "21 Alte Burg": [
+   [
+    "What time does the castle close today?",
+    "성은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the castle?",
+    "성 입구가 어디예요?"
+   ]
+  ],
+  "22 Athis-Mons-Anlage": [],
+  "23 Hornburgweganlage": [],
+  "24 Klostergarten": [],
+  "25 Neue Burg": [
+   [
+    "What time does the castle close today?",
+    "성은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the castle?",
+    "성 입구가 어디예요?"
+   ]
+  ],
+  "26 Riviera": [],
+  "27 Spitalbasteigraben": [],
+  "28 Sterngarten": [],
+  "29 Kletterwald Rothenburg": [
+   [
+    "What time does the castle close today?",
+    "성은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the castle?",
+    "성 입구가 어디예요?"
+   ]
+  ],
+  "30 Alter Bahnhof Bockenfeld": [],
+  "31 Gasthof Rödertor": [
+   [
+    "What time does the tavern close today?",
+    "선술집은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "32 Hotel Eisenhut": [],
+  "33 Rappenbiergarten": [],
+  "34 Unter den Linden": [],
+  "35 Hotel-Gasthof Goldener Greifen": [
+   [
+    "What time does the tavern close today?",
+    "선술집은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "36 Restaurant Topinambur": [
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "37 Club23": [],
+  "38 Pub & Diner Liquid Corner": [
+   [
+    "What time does the diner close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "39 St. Laurentius": [
+   [
+    "What time does the church close today?",
+    "교회는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the church?",
+    "교회 입구가 어디예요?"
+   ]
+  ]
+ },
+ "tokyo": {
+  "00 Tokyo International Forum": [
+   [
+    "What time does the exhibition centre close today?",
+    "전시장은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the exhibition centre?",
+    "전시장 입구가 어디예요?"
+   ]
+  ],
+  "01 mAAch ecute Kanda Manseibashi": [
+   [
+    "Where can I see the exhibits?",
+    "‘exhibits’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the station?",
+    "역 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the exhibits?",
+    "‘exhibits’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the station close today?",
+    "역은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the exhibits?",
+    "‘exhibits’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the exhibits?",
+    "‘exhibits’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "02 National Diet Building": [
+   [
+    "Where can I see the pyramidal roof?",
+    "‘pyramidal roof’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the pyramidal roof?",
+    "‘pyramidal roof’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the pyramidal roof?",
+    "‘pyramidal roof’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the pyramidal roof?",
+    "‘pyramidal roof’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "03 Imperial Palace": [
+   [
+    "What time does the palace close today?",
+    "궁전은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the palace?",
+    "궁전 입구가 어디예요?"
+   ]
+  ],
+  "04 Imperial Palace East Garden": [
+   [
+    "Where can I see the garden?",
+    "‘garden’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the palace?",
+    "궁전 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the garden?",
+    "‘garden’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the palace close today?",
+    "궁전은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the garden?",
+    "‘garden’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the garden?",
+    "‘garden’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "05 Kitanomaru Park": [
+   [
+    "Where can I see the Nippon Budōkan?",
+    "‘Nippon Budōkan’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the gardens?",
+    "‘gardens’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the park close today?",
+    "공원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Can I take photos of the Nippon Budōkan?",
+    "‘Nippon Budōkan’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the gardens?",
+    "‘gardens’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Where is the entrance to the park?",
+    "공원 입구가 어디예요?"
+   ]
+  ],
+  "06 Chidoriga-fuchi Moat": [
+   [
+    "Is the moat far from here?",
+    "해자는 여기서 멀어요?"
+   ]
+  ],
+  "07 Yūshūkan War Memorial Museum": [
+   [
+    "Where can I see the collection?",
+    "‘collection’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the collection?",
+    "‘collection’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the collection?",
+    "‘collection’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the collection?",
+    "‘collection’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "08 Holy Resurrection Cathedral": [
+   [
+    "What time does the cathedral close today?",
+    "대성당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the cathedral?",
+    "대성당 입구가 어디예요?"
+   ]
+  ],
+  "09 Kanda Shrine": [
+   [
+    "What time does the shrine close today?",
+    "신사는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the shrine?",
+    "신사 입구가 어디예요?"
+   ]
+  ],
+  "10 Hie Shrine": [
+   [
+    "Where can I see the torii?",
+    "‘torii’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the shrine?",
+    "신사 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the torii?",
+    "‘torii’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the shrine close today?",
+    "신사는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the torii?",
+    "‘torii’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the torii?",
+    "‘torii’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "11 Yasukuni Shrine": [
+   [
+    "What time does the shrine close today?",
+    "신사는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the shrine?",
+    "신사 입구가 어디예요?"
+   ]
+  ],
+  "12 Tokyo National Museum of Modern Art": [
+   [
+    "Where can I see the collection?",
+    "‘collection’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the exhibitions?",
+    "‘exhibitions’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Can I take photos of the collection?",
+    "‘collection’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the exhibitions?",
+    "‘exhibitions’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "13 Idemitsu Museum of Arts": [
+   [
+    "Where can I see the collection?",
+    "‘collection’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the collection?",
+    "‘collection’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the collection?",
+    "‘collection’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the collection?",
+    "‘collection’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "14 National Theatre of Japan": [
+   [
+    "Where can I see the Kabuki?",
+    "‘Kabuki’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the Noh?",
+    "‘Noh’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the Bunraku?",
+    "‘Bunraku’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the puppet theatre?",
+    "‘puppet theatre’ 가이드 투어가 있나요?"
+   ],
+   [
+    "Can I take photos of the Kabuki?",
+    "‘Kabuki’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the Noh?",
+    "‘Noh’ 다 보는 데 얼마나 걸려요?"
+   ]
+  ],
+  "15 Peter": [
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "16 Yamaya": [
+   [
+    "I'd like to try the mentaiko, please.",
+    "‘mentaiko’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have mentaiko today?",
+    "오늘 ‘mentaiko’ 있어요?"
+   ],
+   [
+    "What kind of mentaiko do you recommend?",
+    "‘mentaiko’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the mentaiko take?",
+    "‘mentaiko’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "17 Kanda Yabu soba": [
+   [
+    "I'd like to try the soba, please.",
+    "‘soba’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have soba today?",
+    "오늘 ‘soba’ 있어요?"
+   ],
+   [
+    "What kind of soba do you recommend?",
+    "‘soba’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the soba take?",
+    "‘soba’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "18 RyuGin": [
+   [
+    "I'd like to try the daily-changing fix, please.",
+    "‘daily-changing fix’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the market close today?",
+    "시장은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have daily-changing fix today?",
+    "오늘 ‘daily-changing fix’ 있어요?"
+   ],
+   [
+    "What kind of daily-changing fix do you recommend?",
+    "‘daily-changing fix’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the daily-changing fix take?",
+    "‘daily-changing fix’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "19 Tsukiji Outer Market": [
+   [
+    "What time does the market close today?",
+    "시장은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the market?",
+    "시장 입구가 어디예요?"
+   ]
+  ],
+  "20 Tsukiji Hongwanji": [
+   [
+    "What time does the temple close today?",
+    "절은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the temple?",
+    "절 입구가 어디예요?"
+   ]
+  ],
+  "21 Nihonbashi Bridge": [
+   [
+    "Is the bridge far from here?",
+    "다리는 여기서 멀어요?"
+   ]
+  ],
+  "22 Tokyo Stock Exchange": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "23 Hama-rikyū Gardens": [
+   [
+    "Where can I see the gardens?",
+    "‘gardens’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the pond?",
+    "‘pond’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the house close today?",
+    "고택은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Can I take photos of the gardens?",
+    "‘gardens’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the pond?",
+    "‘pond’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Where is the entrance to the house?",
+    "고택 입구가 어디예요?"
+   ]
+  ],
+  "24 Mitsui Memorial Museum": [
+   [
+    "Where can I see the collection?",
+    "‘collection’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Can I take photos of the tea ceremony?",
+    "‘tea ceremony’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Can I take photos of the collection?",
+    "‘collection’ 사진 찍어도 되나요?"
+   ],
+   [
+    "How long does it take to see the tea ceremony?",
+    "‘tea ceremony’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "25 Ramen Cooking Tokyo": [
+   [
+    "Is the district far from here?",
+    "지구는 여기서 멀어요?"
+   ]
+  ],
+  "26 Oshio Honten": [
+   [
+    "I'd like to try the mentaiko-shiso monja, please.",
+    "‘mentaiko-shiso monja’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have mentaiko-shiso monja today?",
+    "오늘 ‘mentaiko-shiso monja’ 있어요?"
+   ],
+   [
+    "What kind of mentaiko-shiso monja do you recommend?",
+    "‘mentaiko-shiso monja’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the mentaiko-shiso monja take?",
+    "‘mentaiko-shiso monja’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "27 Sushisay Main Store": [],
+  "28 Sushizanmai": [
+   [
+    "I'd like to try the tuna, please.",
+    "‘tuna’ 먹어 보고 싶어요."
+   ],
+   [
+    "Do you have tuna today?",
+    "오늘 ‘tuna’ 있어요?"
+   ],
+   [
+    "What kind of tuna do you recommend?",
+    "‘tuna’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the tuna take?",
+    "‘tuna’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "29 Tamahide": [
+   [
+    "I'd like to try the Oyakodon, please.",
+    "‘Oyakodon’ 먹어 보고 싶어요."
+   ],
+   [
+    "What time does the restaurant close today?",
+    "식당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Do you have Oyakodon today?",
+    "오늘 ‘Oyakodon’ 있어요?"
+   ],
+   [
+    "What kind of Oyakodon do you recommend?",
+    "‘Oyakodon’ 중에 뭘 추천하세요?"
+   ],
+   [
+    "How long does the Oyakodon take?",
+    "‘Oyakodon’ 나오는 데 얼마나 걸려요?"
+   ]
+  ],
+  "30 Tsujihan": [
+   [
+    "What time does the station close today?",
+    "역은 오늘 몇 시에 닫아요?"
+   ]
+  ],
+  "31 Tokyo Tower": [
+   [
+    "What time does the tower close today?",
+    "탑은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the tower?",
+    "탑 입구가 어디예요?"
+   ]
+  ],
+  "32 National Museum of Western Art": [
+   [
+    "Where can I see the art?",
+    "‘art’ 어디에서 볼 수 있어요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ],
+   [
+    "Can I take photos of the art?",
+    "‘art’ 사진 찍어도 되나요?"
+   ],
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "How long does it take to see the art?",
+    "‘art’ 다 보는 데 얼마나 걸려요?"
+   ],
+   [
+    "Is there a guided tour of the art?",
+    "‘art’ 가이드 투어가 있나요?"
+   ]
+  ],
+  "33 Meiji Jingū": [
+   [
+    "What time does the shrine close today?",
+    "신사는 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the shrine?",
+    "신사 입구가 어디예요?"
+   ]
+  ],
+  "34 Sensō-ji Temple": [
+   [
+    "What time does the temple close today?",
+    "절은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the temple?",
+    "절 입구가 어디예요?"
+   ]
+  ],
+  "35 Tokyo Mosque": [
+   [
+    "What time does the mosque close today?",
+    "이곳은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the mosque?",
+    "이곳 입구가 어디예요?"
+   ]
+  ],
+  "36 St. Mary's Cathedral": [
+   [
+    "What time does the cathedral close today?",
+    "대성당은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the cathedral?",
+    "대성당 입구가 어디예요?"
+   ]
+  ],
+  "37 National Art Center, Tokyo": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ],
+  "38 Ueno Zoo": [
+   [
+    "What time does the zoo close today?",
+    "동물원은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the zoo?",
+    "동물원 입구가 어디예요?"
+   ]
+  ],
+  "39 Tokyo Metropolitan Art Museum": [
+   [
+    "What time does the museum close today?",
+    "박물관은 오늘 몇 시에 닫아요?"
+   ],
+   [
+    "Where is the entrance to the museum?",
+    "박물관 입구가 어디예요?"
+   ]
+  ]
+ }
+}

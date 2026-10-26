@@ -267,6 +267,7 @@
     airport: 'transport', train_station: 'transport', bus_station: 'transport',
     subway_station: 'transport', taxi_stand: 'transport',
     hotel: 'lodging', hostel: 'lodging', guesthouse: 'lodging', airbnb: 'lodging',
+    attraction: 'attraction',                                   // 관광지 계약(agent_contract/categories/attraction.json)
   };
   function categoryOfKind(kind) { return KIND_CATEGORY[String(kind == null ? '' : kind).trim().toLowerCase()] || null; }
 
@@ -590,6 +591,73 @@
     wikipedia: ['Wikipedia', 'Wikipedia (CC BY-SA 4.0)'], osm: ['OpenStreetMap', '© OpenStreetMap contributors (ODbL)'],
     google: ['Google 지도', 'Google Maps'], tourapi: ['한국관광공사', '한국관광공사 TourAPI'],                               // 실시간 보충(서버가 저장하지 않음)
   };
+  /* ---------- 장소 어휘 슬롯 문장(오프라인, AI 호출 0회) ----------
+     조사에서 뽑은 장소 어휘(research/vocab.py: 대표 음식·볼거리·종류)를 검수된 틀에 넣는다. Gemini 가 실패해도·키가 없어도
+     장소에 맞는 문장이 나온다. 틀은 15단어 이하·공손체, 한국어는 영어 낱말을 ‘ ’ 로 감싸 조사 없이 쓴다(종류는 한국어 낱말 + 조사). */
+  const VOCAB_TEMPLATES = {
+    feature: [
+      { situation: '대표 볼거리 묻기', en: 'Where can I see the {v}?', ko: '‘{v}’ 어디에서 볼 수 있어요?' },
+      { situation: '사진 부탁·촬영 가능 여부', en: 'Can I take photos of the {v}?', ko: '‘{v}’ 사진 찍어도 되나요?' },
+      { situation: '대표 볼거리 묻기', en: 'How long does it take to see the {v}?', ko: '‘{v}’ 다 보는 데 얼마나 걸려요?' },
+      { situation: '가이드 투어·오디오 가이드 문의', en: 'Is there a guided tour of the {v}?', ko: '‘{v}’ 가이드 투어가 있나요?' },
+    ],
+    dish: [
+      { situation: '대표 메뉴 주문', en: "I'd like to try the {v}, please.", ko: '‘{v}’ 먹어 보고 싶어요.' },
+      { situation: '메뉴 묻기', en: 'Do you have {v} today?', ko: '오늘 ‘{v}’ 있어요?' },
+      { situation: '추천 묻기', en: 'What kind of {v} do you recommend?', ko: '‘{v}’ 중에 뭘 추천하세요?' },
+      { situation: '대기', en: 'How long does the {v} take?', ko: '‘{v}’ 나오는 데 얼마나 걸려요?' },
+    ],
+    type: [
+      { situation: '운영 시간 문의', en: 'What time does the {v} close today?', ko: '{k} 오늘 몇 시에 닫아요?', josa: true },
+      { situation: '입구·출구 찾기', en: 'Where is the entrance to the {v}?', ko: '{k} 입구가 어디예요?', sight: true },
+    ],
+    // 문을 닫지 않는 곳(광장·거리·다리·구시가지…)은 닫는 시간·입구 대신 길 묻기
+    open: [
+      { situation: '찾아가는 길 묻기', en: 'Is the {v} far from here?', ko: '{k} 여기서 멀어요?', josa: true },
+    ],
+  };
+  const OPEN_AIR = new Set(['square', 'street', 'district', 'old town', 'bridge', 'gate', 'lake', 'island', 'mountain', 'hill',
+    'village', 'beach', 'harbor', 'harbour', 'pier', 'moat', 'sea wall', 'stall', 'food stall', 'ruins', 'fountain', 'cemetery']);
+  const TYPE_KO = { temple: '절', shrine: '신사', museum: '박물관', gallery: '미술관', castle: '성', palace: '궁전', park: '공원',
+    garden: '정원', market: '시장', cathedral: '대성당', church: '교회', basilica: '대성당', chapel: '예배당', monastery: '수도원',
+    tower: '탑', bridge: '다리', gate: '문', square: '광장', theatre: '극장', theater: '극장', zoo: '동물원', aquarium: '수족관',
+    fortress: '요새', fort: '요새', mall: '쇼핑몰', library: '도서관', station: '역', observatory: '전망대', memorial: '기념관',
+    monument: '기념비', 'old town': '구시가지', 'old house': '고택', house: '고택', village: '마을', festival: '축제', farm: '농장',
+    restaurant: '식당', cafe: '카페', 'café': '카페', bakery: '빵집', bar: '바', pub: '펍', teahouse: '찻집', tavern: '선술집',
+    pizzeria: '피자집', trattoria: '식당', osteria: '식당', izakaya: '이자카야', stall: '노점', 'food stall': '노점', inn: '여관',
+    island: '섬', lake: '호수', mountain: '산', hill: '언덕', beach: '해변', harbor: '항구', harbour: '항구', pier: '부두', moat: '해자',
+    'sea wall': '방조제', street: '거리', district: '지구', 'golf course': '골프장', studio: '스튜디오', 'film set': '촬영지',
+    sanctuary: '보호구역', fountain: '분수', 'exhibition centre': '전시장', hall: '회관', 'assembly hall': '회관', convent: '수녀원',
+    stadium: '경기장', arena: '경기장', cemetery: '묘지', ruins: '유적', diner: '식당', brewery: '양조장' };
+  const NO_TEMPLATE = new Set(['festival']);                  // 장소가 아니라 행사 — 틀 문장을 만들지 않는다
+  function josaKo(word, withB, withoutB) {
+    const c = String(word || '').charCodeAt(String(word || '').length - 1);
+    const hasB = c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0;
+    return word + (hasB ? withB : withoutB);
+  }
+  /* place.vocab(placeVocab 를 거친 것) → [{situation, en, ko, vocab, slot:true}] 최대 n개. 낱말마다 다른 틀을 돌아가며 쓴다. */
+  function vocabSentences(place, n) {
+    const out = [], seen = new Set();
+    const food = place && (place.kind === 'restaurant' || place.kind === 'cafe');
+    const words = placeVocab(place && place.vocab).filter(w => !NO_TEMPLATE.has(w.en.toLowerCase()));
+    const banks = words.map(w => {
+      const kind = w.kind === 'type' && OPEN_AIR.has(w.en.toLowerCase()) ? 'open' : w.kind;
+      return (VOCAB_TEMPLATES[kind] || []).filter(t => !(t.sight && food));
+    });
+    for (let round = 0; round < 4 && out.length < n; round++) {
+      words.forEach((w, i) => {
+        const bank = banks[i];
+        if (out.length >= n || round >= bank.length) return;
+        const t = bank[(i + round) % bank.length];          // 낱말마다 시작 틀을 달리해 같은 꼴이 줄줄이 나오지 않게
+        const ko = TYPE_KO[w.en.toLowerCase()] || (food ? '이 가게' : '이곳');
+        const s = { situation: t.situation, en: t.en.replace('{v}', w.en), ko: t.ko.replace('{v}', w.en).replace('{k}', t.josa ? josaKo(ko, '은', '는') : ko),
+                    vocab: w.en, slot: true };
+        const key = s.en.toLowerCase();
+        if (!seen.has(key) && s.en.split(/\s+/).length <= 15) { seen.add(key); out.push(s); }
+      });
+    }
+    return out;
+  }
   /* 서버가 준 장소 어휘를 화면용으로 다시 거른다: {en, kind: dish|feature|type} 최대 4개, 1~4 낱말·40자, 숫자·기호 없음 */
   function placeVocab(list) {
     return (Array.isArray(list) ? list : []).filter(v => v && typeof v.en === 'string' && ['dish', 'feature', 'type'].includes(v.kind))
@@ -739,7 +807,7 @@
     TRIP_KEY, cleanTrip, loadTrip, saveTrip, preferTrip,
     categoryOfKind,
     calendarToday, itineraryRequestBody, kindFromPrimary, foldItinerary, placeBlocksOnDays, collectItinerary,
-    RESEARCH_TIMEOUT_MS, researchRequestBody, collectResearch, researchPlace, foldResearch, placeCheckResult,
+    RESEARCH_TIMEOUT_MS, researchRequestBody, collectResearch, researchPlace, foldResearch, placeCheckResult, vocabSentences, placeVocab,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, scopedStorage, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
   };

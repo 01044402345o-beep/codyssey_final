@@ -115,7 +115,7 @@ test('generateByCity: 카테고리는 묶음마다 따로, 장소 종류가 plac
 test('categoryOfKind·weakIdsFor: 계약의 place_types 로 카테고리를 찾고 여러 카테고리를 합친다', () => {
   assert.equal(AI.categoryOfKind('Hotel '), 'lodging');
   assert.equal(AI.categoryOfKind('airport'), 'transport');
-  assert.equal(AI.categoryOfKind('attraction'), null);
+  assert.equal(AI.categoryOfKind('attraction'), 'attraction');            // 관광지 계약(agent_contract/categories/attraction.json)
   const list = [{ category_id: 'restaurant', id: 'allergy_notice', situation: 's' }, { category_id: 'lodging', id: 'check_in', situation: 's' }];
   assert.deepEqual(AI.weakIdsFor(list, ['restaurant', 'lodging', 'restaurant']), ['allergy_notice', 'check_in']);
 });
@@ -461,7 +461,7 @@ test('foldItinerary: 성공한 도시만 남기고, 블록이 없으면 코드 �
   assert.deepEqual(folded.places.map(p => p.city), ['뉴욕', '뉴욕', '뉴욕', '뉴욕', '뉴욕']);
   assert.deepEqual(folded.places.map(p => p.selected), [true, true, false, false, false]);
   assert.deepEqual(folded.places.map(p => p.kind), ['cafe', 'attraction', 'restaurant', 'restaurant', 'restaurant']);
-  assert.equal(AI.categoryOfKind('attraction'), null);
+  assert.equal(AI.categoryOfKind('attraction'), 'attraction');            // 관광지 계약(agent_contract/categories/attraction.json)
   assert.equal(AI.categoryOfKind('cafe'), 'restaurant');
   assert.equal(folded.meta['뉴욕'].base, 2);
   assert.equal(folded.meta['보스턴'].mode, 'empty');
@@ -705,4 +705,60 @@ test('직접 추가 장소 확인 응답: found 만 링크·이름을 싣고, ht
   assert.equal(AI.placeCheckResult({ status: 'found', name: '<b>', source: { url: 'https://a.b' } }).state, 'error');
   assert.equal(AI.placeCheckResult(null).state, 'error');
   assert.equal(AI.placeCheckResult({ status: 'found', name: 'G', source: { provider: 'google', url: 'https://maps.google.com/?cid=1' } }).label, 'Google 지도');
+});
+
+/* ---------- 장소 어휘 슬롯 문장 (PR-V2): 골든 + 속성 ---------- */
+test('어휘 슬롯 문장 골든: 백엔드 골든 코퍼스(실제 8개 도시 301곳)의 기대 어휘 → 기대 문장과 같다', () => {
+  const gold = require('./scripts/update-vocab-sentences.js');
+  const now = gold.compute();
+  const saved = JSON.parse(require('fs').readFileSync(gold.OUT, 'utf8'));
+  const diffs = [];
+  for (const c of Object.keys(now)) for (const k of Object.keys(now[c])) {
+    if (JSON.stringify(now[c][k]) !== JSON.stringify((saved[c] || {})[k])) diffs.push(`${c}/${k}`);
+  }
+  assert.deepEqual(diffs, [], '틀을 바꿨다면 node mockup/scripts/update-vocab-sentences.js 로 갱신하고 diff 확인');
+});
+
+test('어휘 슬롯 문장 속성: 골든 전체 — 15단어 이하·영어에 그 어휘·한국어 자리표시자 없음·장소 안 중복 없음·종류별 틀 규칙', () => {
+  const saved = require('./test-fixtures/vocab_sentences.json');
+  for (const c of Object.keys(saved)) for (const [k, list] of Object.entries(saved[c])) {
+    const ens = list.map(s => s[0].toLowerCase());
+    assert.equal(new Set(ens).size, ens.length, `${c}/${k} 중복`);
+    assert.ok(list.length <= 6);
+    for (const [en, ko] of list) {
+      assert.ok(en.split(/\s+/).length <= 15, en);
+      assert.ok(!/[{}]/.test(en + ko), en + ko);
+      assert.ok(ko.trim().length > 0 && /[가-힣]/.test(ko), ko);
+      assert.ok(!/close today/.test(en) || !/\b(square|street|bridge|island|beach|lake)\b/.test(en), en);   // 문을 닫지 않는 곳
+    }
+  }
+});
+
+test('어휘 슬롯 문장 속성: 무작위·악의적 어휘 600건 — 거른 어휘만 쓰고, 음식점엔 입구 틀 없음, n 개 이하', () => {
+  const words = ['sushi', 'Great Buddha', '<script>', 'http://x', '12 sides', 'temple', 'square', 'x'.repeat(50), 'Kong-namul-gukbap',
+    'a b c d e', 'festival', '{{v}}', 'café', 'museum', "O'Brien's ale"];
+  const kinds = ['dish', 'feature', 'type', 'evil'];
+  let seed = 7;
+  const rnd = n => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+  for (let i = 0; i < 600; i++) {
+    const vocab = Array.from({ length: rnd(6) }, () => ({ en: words[rnd(words.length)], kind: kinds[rnd(kinds.length)] }));
+    const kind = ['attraction', 'restaurant', 'cafe'][rnd(3)];
+    const n = rnd(8);
+    const out = AI.vocabSentences({ name: 'P', kind, vocab }, n);
+    const allowed = AI.placeVocab(vocab).map(v => v.en.toLowerCase());
+    assert.ok(out.length <= n);
+    for (const s of out) {
+      assert.ok(allowed.includes(s.vocab.toLowerCase()), s.vocab);
+      assert.ok(s.en.toLowerCase().includes(s.vocab.toLowerCase()));
+      assert.ok(!/[<>{}]|https?:|\d/.test(s.en), s.en);
+      if (kind !== 'attraction') assert.ok(!/entrance to the/.test(s.en), s.en);
+    }
+  }
+});
+
+test('어휘 슬롯 문장: 한국어 종류 낱말 조사(은/는)와 틀 돌리기', () => {
+  const t = AI.vocabSentences({ kind: 'attraction', vocab: [{ en: 'museum', kind: 'type' }, { en: 'temple', kind: 'type' }] }, 4).map(s => s.ko);
+  assert.ok(t.includes('박물관은 오늘 몇 시에 닫아요?') && t.includes('절 입구가 어디예요?'), JSON.stringify(t));
+  const cafe = AI.vocabSentences({ kind: 'cafe', vocab: [{ en: 'café', kind: 'type' }] }, 3).map(s => s.ko);
+  assert.deepEqual(cafe, ['카페는 오늘 몇 시에 닫아요?']);
 });

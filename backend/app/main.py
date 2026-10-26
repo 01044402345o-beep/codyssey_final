@@ -711,7 +711,8 @@ def post_place_check(req: PlaceCheckRequest, request: Request) -> dict[str, Any]
 
 def research_grounding(req: GenerateRequest) -> dict[str, Any]:
     """research_key 가 있으면 조사 캐시(외부 호출 없음)로 장소를 맞춰 본다. 조사가 꺼져 있거나 오류면 off(예전 동작)."""
-    off = {"status": "off", "places": [p.model_dump() for p in req.places], "filtered": [], "grounded": 0, "clause": ""}
+    off = {"status": "off", "places": [p.model_dump() for p in req.places], "filtered": [], "grounded": 0, "clause": "",
+           "vocab": {}}
     if not req.research_key or not research_config.research_enabled():
         return off
     try:
@@ -763,7 +764,7 @@ def _generate(req: GenerateRequest, request: Request) -> dict[str, Any]:
     th = threading.Thread(target=contextvars.copy_context().run, args=(_itinerary_side,), name="itinerary")   # IP 예산이 따라가게
     th.start()
     try:
-        body = _generate_sentences(req, cfg, schema, facts, grounding["clause"])
+        body = _generate_sentences(req, cfg, schema, facts, grounding["clause"], grounding.get("vocab") or {})
     finally:
         th.join()
     # 조사 연결 결과는 프롬프트의 VERIFIED_FACTS 에 섞지 않고(걸러진 이름이 모델에 가지 않게) 응답에만 싣는다
@@ -779,6 +780,7 @@ def _generate_sentences(
     schema: dict[str, Any] | None,
     facts: dict[str, Any],
     research_clause: str = "",
+    place_vocab: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
     if not os.getenv("GEMINI_API_KEY"):
         pack = mock_pack(cfg, req)
@@ -820,6 +822,9 @@ def _generate_sentences(
         t_val = time.perf_counter()
         try:
             issues = validate_pack(pack, cfg, req.weak_expressions, schema)
+            if place_vocab:                                  # 어휘 제약(조사 연결): 장소 문장이 이름·어휘를 쓰는지
+                from .research import grounding as _grounding
+                issues = issues + _grounding.vocab_issues(pack, place_vocab)
             rec["validate_ms"] = round((time.perf_counter() - t_val) * 1000)
         except Exception as exc:
             state["last_error"] = f"validator error: {type(exc).__name__}: {exc}"
