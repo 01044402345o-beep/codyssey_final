@@ -26,7 +26,7 @@
 
 ## 1. 문제 정의: 왜 모바일 웹 오디오가 어려운가
 
-여행영어(MADI) 사용자의 **100%(P1~P6)**는 카카오톡 대화방에 공유된 웹 링크를 통해 최초 유입되었으며, 국내 20~30대 인구의 **60% 이상**이 iPhone(iOS)을 사용한다([multi-agent-population-sampling.md](multi-agent-population-sampling.md)).
+여행영어(MADI) 사용자의 **100%(P1\~P6)**는 카카오톡 대화방에 공유된 웹 링크를 통해 최초 유입되었으며, 국내 20\~30대 인구의 **60% 이상**이 iPhone(iOS)을 사용한다([multi-agent-population-sampling.md](multi-agent-population-sampling.md)).
 
 실시간 양방향 음성 회화 에이전트(Gemini 3.8 Live 또는 OpenAI Realtime)를 모바일 웹에서 구현하려면 다음 3가지 오디오 파이프라인이 동시에, 지연 없이 동작해야 한다.
 
@@ -190,7 +190,7 @@ graph TD
         A["마이크 입력 (Float32, 48kHz)"] --> B["process() 128-frame 블록"]
         B --> C["48kHz → 16kHz 선형 보간 다운샘플링"]
         C --> D["Float32 → Int16 양자화 및 클램프<br/>Math.max(-32768, Math.min(32767, val * 32767))"]
-        D --> E["Ring Buffer 2048 샘플 누적 (~128ms)"]
+        D --> E["Ring Buffer 2048 샘플 누적 (\~128ms)"]
         E --> F["Transferable ArrayBuffer로 메인 스레드 전달"]
         F --> G["WebSocket 바이너리 전송 (base64 또는 raw PCM)"]
     end
@@ -304,7 +304,7 @@ class AudioStreamPlayer {
 
 ## 6. 크로스 브라우저 기능 감지 및 단계별 폴백 매트릭스
 
-단일 모드만 고집하면 50~60대 사용자나 카카오톡 인앱 사용자가 화면이 멈춘 것으로 오해하고 이탈한다([01-population.md](realtime-agent/01-population.md) P2 사례). 따라서 실행 시점의 브라우저 능력을 정확히 판별하여 가장 최적의 모드로 유도한다.
+단일 모드만 고집하면 50\~60대 사용자나 카카오톡 인앱 사용자가 화면이 멈춘 것으로 오해하고 이탈한다([01-population.md](realtime-agent/01-population.md) P2 사례). 따라서 실행 시점의 브라우저 능력을 정확히 판별하여 가장 최적의 모드로 유도한다.
 
 ```mermaid
 graph TD
@@ -315,7 +315,7 @@ graph TD
     
     CheckInApp -->|No| CheckWorklet{"AudioWorklet & WebSocket & getUserMedia 지원?"}
     
-    CheckWorklet -->|모두 지원| ModeA["✅ 모드 A: 실시간 스트리밍 대화<br/>(Gemini Live + WebSockets, 지연 ~1초)"]
+    CheckWorklet -->|모두 지원| ModeA["✅ 모드 A: 실시간 스트리밍 대화<br/>(Gemini Live + WebSockets, 지연 \~1초)"]
     CheckWorklet -->|일부 미지원 / 거부| CheckMediaRecorder{"MediaRecorder & 마이크 지원?"}
     
     CheckMediaRecorder -->|지원| ModeC["✅ 모드 C: 턴 단위 캐스케이드<br/>(녹음 → /speak-check → 텍스트 LLM → 음성)"]
