@@ -10,8 +10,8 @@
 | [multi-agent-population-sampling.md](multi-agent-population-sampling.md) | 다중 에이전트 기반 모집단 대표 표본집단 조사: 층화 표집 설계, 4대 코호트 페르소나 시뮬레이션, 편향 감사 및 2차 검증 로드맵 |
 | [mobile-audio-pipeline-constraints.md](mobile-audio-pipeline-constraints.md) | 모바일 브라우저 오디오 파이프라인 실측 조사: iOS WebKit 볼륨 반감(Bug 251532), 카카오톡 인앱 제약, AudioWorklet 다운샘플링 |
 | [realtime-interpretation/](realtime-interpretation/README.md) | 실시간 통역 — 제공자 조사와 우리 구현 (2026-10-21) |
-| [competition/](competition/) | 마디(MADI) 경쟁 분석 리서치 |
-| [verify/](verify/) | 배포·조사 파이프라인 실호출 검증 (2026-10-29 13:40 KST) |
+| [competition/](competition/) | 마디(MADI) 경쟁 분석 리서치 — **정본은 `경쟁분석_v2_케이크_스픽.md`**. v1은 Tripsy·CapWords 대조(가격·모집단은 v2가 정정), TRIPSY_딥다이브는 개발과정·커뮤니티·소스 경계 |
+| [verify/](verify/) | 배포·조사 파이프라인 실호출 검증 — 10-29 실호출 + **10-31 재검증**(배포 커밋 = main HEAD `9f86b79`) |
 | [tripsy-research.md](tripsy-research.md) | Tripsy 해부: 8년 된 2인 인디 앱이 MCP까지 간 이유 |
 | [tripsy_community_research_ko.md](tripsy_community_research_ko.md) | Tripsy 유저 커뮤니티 리서치 (r/TripsyApp) |
 
