@@ -1,6 +1,18 @@
 # Tripsy 딥다이브 — 개발 과정 · 커뮤니티 · 소스코드
 
-2026-10-29 조사. 근거는 전부 링크. 확인 못한 것은 "확인 못함"으로 남겼다.
+2026-10-29 조사 · 2026-11-02 보완. 근거는 전부 링크. 확인 못한 것은 "확인 못함"으로 남겼다.
+
+> **이 문서의 위치.** Tripsy는 마디의 **경쟁자가 아니다**([경쟁분석 v1 §0](경쟁분석_v1.md)) — 여행 일정 정리 앱이고 언어를 가르치지 않는다.
+> 이 문서는 "2인 팀이 여행 앱을 8년 운영한 방식"의 **참고 사례**다. 경쟁 구도·가격의 정본은 [경쟁분석 v2](경쟁분석_v2_케이크_스픽.md).
+> 발표에서 Tripsy를 "경쟁사"로 부르지 않는다.
+
+**2026-11-02 보완 내역**
+| 항목 | 변경 |
+|---|---|
+| §3 GitHub 공개 저장소 | API로 재조회 — 3개·스타·라이선스·최근 푸시 **10-29와 동일** |
+| §4 유저 인용 | 출처 스레드 링크를 붙였다([커뮤니티 원자료](../tripsy_community_research_ko.md)의 스레드 ID). 링크 없는 인용은 "출처 미기록"으로 표시 |
+| §5 가격 | App Store US 재조회 결과로 표를 다시 썼다. **"App Store 평생 $299"는 확인되지 않음**, v1의 "주 $4.99"·"평생 $199.99"는 근거 없음 |
+| §7 | "발표 3일 전" → 제출 마감 11-08 기준으로 수정 |
 
 ---
 
@@ -19,7 +31,7 @@ Tripsy는 **8년 된 2인 인디 앱**인데, 2026년에 **"여행 데이터를 
 | **2018-10-25** | **App Store 1.0.0** — 체인지로그 첫 줄 "First version in the App Store" | [업데이트](https://tripsy.app/updates) |
 | 2019-01 | 블로그 정식 런칭 공지 / 9to5Mac 소개 | [9to5Mac](https://9to5mac.com/2019/01/22/tripsy-all-in-one-ios-travel-app/) |
 | 2019-09 | **2.0** — 협업·문서 보관·iPad 멀티윈도·Sign in with Apple·다크모드. MacStories 심층 리뷰 | [MacStories](https://www.macstories.net/reviews/tripsy-review-the-ultimate-trip-planner-for-iphone-and-ipad/) |
-| 2020~2023 | 2.1 웹 일정 공유 → 2.7 캘린더 동기화 → 2.15 날씨·시간대 | [MacStories 2.1](https://www.macstories.net/reviews/tripsy-2-1-adds-web-based-itineraries-and-expanded-travel-email-forwarding/) |
+| 2020\~2023 | 2.1 웹 일정 공유 → 2.7 캘린더 동기화 → 2.15 날씨·시간대 | [MacStories 2.1](https://www.macstories.net/reviews/tripsy-2-1-adds-web-based-itineraries-and-expanded-travel-email-forwarding/) |
 | **2024-09-16** | **3.0** — "거의 5년 만의 가장 큰 업데이트". 경비·통계·경로 자동 계산·내보내기 | [업데이트](https://tripsy.app/updates) |
 | 2024-09-22 | The Verge Installer 소개 | [The Verge](https://www.theverge.com/2024/9/22/24249948/socialai-snap-spectacles-snapchat-penguin-installer) |
 | 2024-11 | **Apple 2024 App Store Awards 'iPhone App of the Year' 파이널리스트** | [Apple Newsroom](https://www.apple.com/newsroom/2024/11/apple-reveals-45-app-and-game-finalists-for-the-2024-app-store-awards/) |
@@ -29,9 +41,9 @@ Tripsy는 **8년 된 2인 인디 앱**인데, 2026년에 **"여행 데이터를 
 | 2026-08-26 | 3.9 — Smart Routes | 동일 |
 | 2026-09-14 | **3.10 — Smart Import** (스크린샷·문서·붙여넣기·구글맵 목록을 장소·예약으로) | 동일 |
 | 2026-09 | **Apple Siri AI 발표에 Tripsy가 예시로 호명** — "식당 추천을 Tripsy에 추가" | [Apple Newsroom](https://www.apple.com/newsroom/2026/09/siri-ai-a-profoundly-more-capable-and-personal-assistant-is-here/) |
-| 2026-09~10 | 3.10.1 → 3.10.5, **한 달에 5번 패치** | [업데이트](https://tripsy.app/updates) |
+| 2026-09\~10 | 3.10.1 → 3.10.5, **한 달에 5번 패치** | [업데이트](https://tripsy.app/updates) |
 
-**릴리스 리듬**: 3.10 계열만 2026-09-14~10-23 사이 5개. 사실상 1~2주 단위 포인트 릴리스 + 공개 체인지로그.
+**릴리스 리듬**: 3.10 계열만 2026-09-14\~10-23 사이 5개. 사실상 1\~2주 단위 포인트 릴리스 + 공개 체인지로그.
 이건 마케팅이 아니라 **"살아있는 앱" 신호**를 계속 발행하는 운영 방식이다.
 
 ---
@@ -40,7 +52,7 @@ Tripsy는 **8년 된 2인 인디 앱**인데, 2026년에 **"여행 데이터를 
 
 - 공개된 얼굴: **Rafael K. Streit**(개발, @rafaelks) + **Thiago Sanchez**(디자인·공동창업자). 둘이 2018년부터.
 - 여기에 **커뮤니티 매니저 James**(u/tripsyjames)가 붙어 r/TripsyApp을 직접 운영한다.
-  내가 직접 읽은 스레드에서 **Thiago와 James가 같은 스레드에서 연속으로 답글**을 달았다 — 이건 1차 확인이다.
+  내가 직접 읽은 스레드에서 **Thiago와 James가 같은 스레드에서 연속으로 답글**을 달았다 — 이건 1차 확인이다(스레드 ID 미기록. 운영 구도 자체는 [환영글](https://www.reddit.com/r/TripsyApp/comments/1uovxgo/)에서 확인).
 - **현재 인원: 확인 못함.** 공식 about 페이지 크롤링 실패, LinkedIn 로그인 벽.
 - **투자: 확인 못함.** 3자 DB(Tracxn)는 "unfunded, 브라질, 2018 설립"으로 분류하지만 1차 출처 아님.
 - **매출·구독 전환율: 비공개.**
@@ -51,7 +63,7 @@ Tripsy는 **8년 된 2인 인디 앱**인데, 2026년에 **"여행 데이터를 
 
 ## 3. 소스코드 — 정확히 무엇이 공개이고 무엇이 아닌가
 
-GitHub API로 직접 확인했다 (2026-10-29).
+GitHub API로 직접 확인했다 (2026-10-29, **2026-11-02 재조회 — 아래 표와 동일**).
 
 ### 공개 (조직 `tripsyapp`)
 | 저장소 | 언어 | 스타 | 라이선스 | 최근 푸시 |
@@ -81,25 +93,25 @@ GitHub API로 직접 확인했다 (2026-10-29).
 ## 4. 커뮤니티 — 실측
 
 r/TripsyApp을 직접 읽었다. **정정**: 서브레딧은 "유저 커뮤니티"라기보다 **개발사 릴리즈 노트 + 지원 창구**에 가깝다.
-2026-10 프론트페이지는 ChatGPT 연동(10-12), 3.10.3(10-13), MCP 2.0(10-08), iPhone Duo, Raycast 연동 — 대부분 개발사 글. 유저 글은 업보트 10 내외, 댓글 1~2개.
+2026-10 프론트페이지는 ChatGPT 연동(10-12), 3.10.3(10-13), MCP 2.0(10-08), iPhone Duo, Raycast 연동 — 대부분 개발사 글. 유저 글은 업보트 10 내외, 댓글 1\~2개.
 **구독자 수: 확인 못함** (Reddit 크롤러 차단).
 
 ### 유저가 실제로 말한 것 (원문)
 
-**① 웹 편집 버전 — 가장 뜨거운 요청, 가장 명확한 거절**
+**① 웹 편집 버전 — 가장 뜨거운 요청, 가장 명확한 거절** ([1xfzy0l, 2026-10-26](https://www.reddit.com/r/TripsyApp/comments/1xfzy0l/))
 > "We do have a read-only interface available at my.tripsy.app and we are carefully considering a fully featured web version… **no timeframe just yet**."
 
-**② 파워유저가 제품 결함을 직접 코딩으로 메꿨다** (2026-08, TripIt 15년 사용자)
+**② 파워유저가 제품 결함을 직접 코딩으로 메꿨다** (2026-08, TripIt 15년 사용자 · [1vk2twh](https://www.reddit.com/r/TripsyApp/comments/1vk2twh/))
 > "now just about ready to cancel my TripIt subscription altogether" — 웹 대시보드와 자동 이메일 임포터를 **"I've since solved both problems using Claude Code"**로 자체 제작.
 단일 사례이지만 신호는 강하다: **파워유저가 이미 워크플로를 앱 밖에서 완성하고 있다.**
 
-**③ 기능 요청은 추적되지 않는다**
+**③ 기능 요청은 추적되지 않는다** ([1s9oyps](https://www.reddit.com/r/TripsyApp/comments/1s9oyps/))
 > "Is there a place the team tracks feature requests?" → **"Yes, please send to support@tripsy.app"**
 공개 로드맵 없음. 이건 2인 팀의 합리적 선택이지만, 파워유저에게는 "내 요청이 어디 갔는지 모른다"로 읽힌다.
 
 **④ 결제 불만의 실체는 "비싸다"가 아니다**
-> 초대된 가족이 **"inundated with subscribe popups they'll never act on"**
-> 평생권 할인 요청 → **"Unfortunately only on Black Friday"**
+> 초대된 가족이 **"inundated with subscribe popups they'll never act on"** ([1uoyo67](https://www.reddit.com/r/TripsyApp/comments/1uoyo67/))
+> 평생권 할인 요청 → **"Unfortunately only on Black Friday"** (출처 스레드 ID 미기록 — 발표 인용 금지)
 즉 **비소유 협업자에게 반복되는 결제 압박 UX**가 실질 불만. James의 반론은 "Pro 기능 접근 시에만"이고, 게스트에게는 그 여행의 Pro 기능을 준다고 답했다.
 
 ### 요청 기능 표
@@ -115,25 +127,31 @@ r/TripsyApp을 직접 읽었다. **정정**: 서브레딧은 "유저 커뮤니�
 ### 반복 버그
 - 실행 즉시 크래시 → "reinstalling 해보라"로 종결, **원인 미공개**
 - 2026-09 3주간 크래시 핫픽스 3연속 (3.9.2 개방/복사/지도, 3.9.3 활동 추가, 3.9.4 주변 장소)
-- 게스트 동기화: MCP로 만든 항목이 다른 게스트에게 안 보이고 'Places' 탭이 사라짐
-- 임포트 날짜 오류: "imported… only to have the app import all the dates wrong" (2026-10-19 리뷰)
+- 게스트 동기화: MCP로 만든 항목이 다른 게스트에게 안 보이고 'Places' 탭이 사라짐 ([1vj2f9o](https://www.reddit.com/r/TripsyApp/comments/1vj2f9o/))
+- 임포트 날짜 오류: "imported… only to have the app import all the dates wrong" (2026-10-19 리뷰 — **App Store 원문이 아니라 3자 미러 [chartoo](https://www.chartoo.com/itunes/app/1429967544-tripsy-travel-planner) 기준**)
 
 ### TripIt 대비 우위 (유저 언어)
 > "super slow, outdated… dying slowly" · "doesn't feel bloated with crap or premium features to unlock" · "smarter for sending trip plans"
 전환 장벽은 기능이 아니라 **"15 years… muscle memory"**.
+(이 절 인용은 [커뮤니티 원자료 §TripIt 비교](../tripsy_community_research_ko.md) — 개별 스레드 ID 미기록, 발표에서는 "사용자 반응" 수준으로만 쓴다)
 
 ---
 
-## 5. 수익화 — 페이지마다 숫자가 다르다
+## 5. 수익화 — 페이지마다 숫자가 다르다 (2026-11-02 재조회)
 
-| 채널 | 값 |
-|---|---|
-| 공식 [/pro](https://tripsy.app/pro) | Free $0 / **Annual $59** / **Lifetime $299** (Family 공유) |
-| App Store IAP | 월 $7.99 · 연 $39.99 · 패밀리 연 $59.99 · 평생 $299 등 |
-| 9to5Mac(2026-09) | "$39/년 또는 평생 $199" ← 사이트와 어긋남 |
-| 이전 조사(v1) | 주 $4.99 / 월 $7.99 표기 |
+| 채널 | 확인된 값 | 조회 |
+|---|---|---|
+| 공식 [/pro](https://tripsy.app/pro) | Free $0 / **Annual $59** / **Lifetime $299** (둘 다 Family 공유). 월 요금 표기 없음 | 11-02 |
+| [App Store US](https://apps.apple.com/us/app/tripsy-travel-planner/id1429967544) IAP | Pro 월 **$7.99** · Pro 연 **$39.99** · Pro 연 $59.99 · 패밀리 연 **$59.99** · 구 "Premium" 월 $4.99/연 $39.99 · 단건 $3.99/$9.99 | 11-02 |
+| App Store US 평점 | **4.7 / 5.7천 평가** | 11-02 |
+| 9to5Mac(2026-09) | "$39/년 또는 평생 $199" | 10-29, 사이트와 어긋남 |
 
-**가격은 변동 중**이다. 단일 값으로 인용하면 틀린다. Free/Pro 경계도 사이트 마크업이 접혀 있어 항목별 판독 불가(1차 확인: **Smart Import·Smart Insights는 Pro 전용**).
+**정정 (10-29판 대비)**
+- "App Store IAP … 평생 $299 등" → **App Store 목록에 평생권이 보이지 않는다.** Apple은 IAP를 10개까지만 노출하므로 "없다"가 아니라 **"스토어에서 확인 안 됨"**. 평생 $299는 **공식 사이트에서만** 확인된다.
+- v1 §1의 "주 $4.99"는 근거가 없다 — 스토어의 $4.99는 **구 'Premium' 월 상품**이다. "평생 $199.99"도 9to5Mac 기사값($199)이 섞인 것으로 보이며 1차 출처에서 확인되지 않는다.
+
+**인용 규칙**: Tripsy 가격은 **"공식 사이트 연 $59 · 평생 $299 / 앱스토어 연 $39.99부터"** 로만 말한다. 단일 값 하나로 인용하면 틀린다.
+Free/Pro 경계는 사이트 마크업이 접혀 있어 항목별 판독 불가(1차 확인: **Smart Import·Smart Insights는 Pro 전용**).
 Setapp 번들도 병행 — Setapp 구독자는 Mac 앱 QR로 iOS Pro 활성화.
 
 ---
@@ -144,7 +162,7 @@ Setapp 번들도 병행 — Setapp 구독자는 Mac 앱 QR로 iOS Pro 활성화.
 1. **데이터 구조가 먼저, AI는 나중.** 3.0에서 일정·경비·문서를 객체로 재정의했기에 2026년 MCP로 그대로 열 수 있었다. 마디의 `place/sentence/weak` 구조도 지금 제대로 잡아두면 나중에 API가 된다.
 2. **엔진 하나, 표면 여럿.** 호스팅 MCP + 공개 REST + Go CLI를 같은 API 위에 얹었다. 클라이언트별 통합을 따로 만들지 않는다.
 3. **창업자가 커뮤니티에 직접 나온다.** 2인 체제에서도 창업자와 매니저가 같은 스레드에서 답한다. 아웃소싱 불가 자산.
-4. **릴리스 리듬을 제품 서사로.** 1~2주 포인트 릴리스 + 공개 체인지로그.
+4. **릴리스 리듬을 제품 서사로.** 1\~2주 포인트 릴리스 + 공개 체인지로그.
 5. **Apple 편집 노출을 유통으로.** App Store 스토리 → 어워드 파이널리스트 → Siri AI 발표 예시. 마케팅비 0으로 얻는 배치.
 
 ### 배우지 말 것
@@ -161,7 +179,8 @@ Tripsy가 2026년에 한 일은 **"내 앱 안에 AI를 넣는"** 게 아니라 
 그걸 **MCP 도구 3개**로 노출하면(`madi_trip_plan`, `madi_place_list`, `madi_sentences`) ChatGPT·Claude 사용자가 마디를 도구로 쓴다.
 앱을 안 깔아도 마디의 데이터가 쓰인다. 2인 팀이 앱 하나로 유통을 못 이기는 상황에서 이건 현실적인 우회로다.
 
-**단, 지금은 하지 말 것.** 발표 3일 전이고, 지금 필요한 건 배포 안정성이다. 발표 후 첫 과제로 두는 게 맞다.
+**단, 제출 전에는 하지 말 것.** 제출 마감(11-08 18:00)까지 필요한 건 배포 안정성이다. 제출 후 첫 과제로 두는 게 맞다.
+발표에서는 "구현했다"가 아니라 **"다음 단계로 설계해 둔 유통 경로"** 로만 말한다 — 지금 코드에 MCP 서버는 없다.
 
 ---
 
@@ -172,5 +191,7 @@ Tripsy가 2026년에 한 일은 **"내 앱 안에 AI를 넣는"** 게 아니라 
 - r/TripsyApp 구독자 수
 - TestFlight 베타 운영 여부
 - SwiftUI 채택 여부(개발자는 Xcode 주력이라고만 밝힘)
-- `cli` 외 공개 저장소의 라이선스
+- `cli` 외 공개 저장소의 라이선스(API상 `null` — 라이선스 파일 없음)
+- App Store에서의 평생권 판매 여부(공식 사이트에만 $299)
+- "Black Friday" 답글·TripIt 비교 인용의 개별 스레드 URL
 - Apple Design Award 수상 — **확인되는 건 2024 App Store Awards 파이널리스트뿐.** "ADA 수상"이라고 쓰면 틀린다.
