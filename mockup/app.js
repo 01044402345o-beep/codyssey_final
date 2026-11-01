@@ -286,10 +286,12 @@ function sessionCard(card) {
 function sessionWrite() {
   const box = personalStore();
   if (!box || !SESS_READY || skipStateWrite) return;
+  /* 상황별 연습은 S.card 를 빌려 쓴다. 연습 중에는 날짜별 학습 카드(savedCard)를 저장하고, 보던 화면은 문장 모음으로 남긴다 */
+  const drilling = !!(S.drill && S.drill.savedCard);
   try {
     box.setItem(SESSION_KEY, JSON.stringify({
-      v: SESSION_V, at: Date.now(), done: PROG.done, ...(Object.keys(PROG.pre).length ? { pre: PROG.pre } : {}), ...(Object.keys(PROG.act).length ? { act: PROG.act } : {}), screen: S.screen, studyDate: S.studyDate,
-      card: sessionCard(S.card),
+      v: SESSION_V, at: Date.now(), done: PROG.done, ...(Object.keys(PROG.pre).length ? { pre: PROG.pre } : {}), ...(Object.keys(PROG.act).length ? { act: PROG.act } : {}), screen: drilling ? 'u-coll' : S.screen, studyDate: S.studyDate,
+      card: sessionCard(drilling ? S.drill.savedCard : S.card),
     }));
   } catch (e) { /* 저장 불가(시크릿 모드·용량 초과): 이번 방문 동안만 유지 */ }
   scheduleStatePush();
@@ -929,7 +931,11 @@ async function refreshAiSentences() {
   if (!got.length) return;                                           // 폴백뿐이면 틀 문장을 그대로 둔다
   got.forEach(o => { S.aiPools[aiKey(o.city, o.categoryId)] = { kind: o.kind, pools: o.pools }; });
   // 뒤집은 카드·보던 카드를 잃지 않도록 학습 화면에서는 다시 그리지 않는다(다음 계획 재계산 때 반영).
-  if (['u-home', 'u-sched', 'u-coll', 'u-route'].includes(S.screen)) { buildPlan(); render(); }
+  if (['u-home', 'u-sched', 'u-coll', 'u-route'].includes(S.screen)) {
+    /* buildPlan 은 끝에서 카드를 비운다. 그대로 두면 새로고침 직후 도착한 AI 문장이 보던 카드 위치를 지우고, 빈 카드가 세션에 저장된다 */
+    const keep = S.card;
+    buildPlan(); S.card = keep; render();
+  }
 }
 function failStage(stage) {
   const t = S.trip; cancelGen();
