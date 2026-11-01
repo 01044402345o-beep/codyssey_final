@@ -1624,7 +1624,7 @@ async function loadLiveProviders() {
 }
 function liveTermsHtml() {   // 약관 전문 보기(모달) — 동의 창과 같은 내용을 다시 볼 수 있게
   return INTERP_TERMS.map(([k, v]) => `<p style="margin:0 0 8px"><b>${esc(k)}</b> · ${esc(v)}</p>`).join('')
-    + `<p class="small" style="margin:8px 0 0">v${INTERP_DISCLAIMER_VERSION} · 2026-10-21 시행. 문구가 바뀌면 다시 동의를 받아요.</p>`;
+    + `<p class="small" style="margin:8px 0 0">v${INTERP_DISCLAIMER_VERSION} · 2026-10-21 시행. 통역 업체가 늘거나 처리 범위가 넓어지는 등 동의 내용이 달라지면 다시 동의를 받아요.</p>`;
 }
 function askInterpConsent(after) {
   confirmBox('실시간 통역 전에 확인해 주세요',
