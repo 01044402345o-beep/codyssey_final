@@ -1,6 +1,6 @@
 # 실시간 통역 면책·고지 (v3, 2026-10-21)
 
-> **운영 상태 (2026-10-21 밤, 운영 `/interp/providers` 로 확인): 실시간 통역 엔진 네 개가 켜져 있다 — Soniox → Microsoft Azure Speech → OpenAI → Google Gemini Live 순서.** 운영자가 Azure·Gemini 를 켠 뒤에 이 문서와 처리방침을 고쳤다 — 즉 **켠 시점부터 이 문서·동의 창 반영(앱 동의 v3)까지는 Azure·Gemini 가 고지 없이 쓰일 수 있었다.** 그 사이 실제로 이 두 엔진으로 간 통역이 있었는지는 서버 로그로만 알 수 있고, 확인하지 않았다.
+> **운영 상태 (2026-10-21 밤, 운영 `/interp/providers` 로 확인): 실시간 통역 엔진 네 개가 켜져 있다 — Soniox → Microsoft Azure Speech → OpenAI → Google Gemini Live 순서.** (10-21 당시 기록이다. 11-02 실제 순서는 Azure → OpenAI → Gemini → Soniox — 아래 'v3 보완' 참조) 운영자가 Azure·Gemini 를 켠 뒤에 이 문서와 처리방침을 고쳤다 — 즉 **켠 시점부터 이 문서·동의 창 반영(앱 동의 v3)까지는 Azure·Gemini 가 고지 없이 쓰일 수 있었다.** 그 사이 실제로 이 두 엔진으로 간 통역이 있었는지는 서버 로그로만 알 수 있고, 확인하지 않았다.
 > v3 보완(2026-11-02): '앞에 적힌 순서로 먼저 쓴다'·'기본 업체는 Soniox' 를 뺐다 — 11-02 운영 `/interp/providers` 순서는 Azure → OpenAI → Gemini → Soniox 로 고지와 달랐다. 대신 **업체 순서·사용 여부가 운영 비용 사정으로 예고 없이 바뀌거나 줄 수 있다**고 적었다. 받는 곳(업체 목록)은 늘지 않았으므로 동의 버전(`INTERP_DISCLAIMER_VERSION = 3`)은 올리지 않았다 — **업체를 새로 추가할 때는 버전을 올려 다시 동의받는다.**
 >
 > v3: 운영에서 켠 업체 네 곳(Soniox·Microsoft Azure·OpenAI·Google Gemini)을 '받는 곳'·'국외 이전'에 모두 적고 버전을 올려 **기존 동의자도 다시 동의**하게 했다.
