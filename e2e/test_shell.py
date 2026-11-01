@@ -404,6 +404,26 @@ with sync_playwright() as p:
     check("음성 목록이 늦게 도착: 처음엔 단정 안 함 → 영어 음성이 없다고 드러나면 '듣기 불가'로 갱신", "안 돼요" not in first and "'듣기'(음성 재생)가 안 돼요" in later, first + " => " + later)
     ctx.close()
 
+    # --- getVoices() 를 부를 때마다 voiceschanged 를 다시 보내는 엔진(Android Chrome 보고 사례)에서도 다시 그리기가 돌지 않는다 ---
+    # 예전에는 알림마다 render() → 화면이 초당 30번 가까이 갈아 끼워져 깜빡이고, 누르던 단추가 바뀌어 탭이 먹히지 않았다.
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True)
+    ctx.add_init_script("""(() => { const ss = window.speechSynthesis; if (!ss) return; const g = ss.getVoices.bind(ss);
+      ss.getVoices = function () { setTimeout(() => ss.dispatchEvent(new Event('voiceschanged')), 30); return g(); }; })();""")
+    page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.evaluate("navFromMenu('u-coll')")
+    page.evaluate("(() => { window.__r = 0; const o = window.render; window.render = function () { window.__r++; return o.apply(this, arguments); }; })()")
+    page.wait_for_timeout(2000)
+    loops = page.evaluate("window.__r")
+    check("voiceschanged 가 반복돼도 2초 동안 다시 그리기 2회 이하(깜빡임 루프 없음)", loops <= 2, f"render {loops}회")
+    try:
+        page.locator('.pnav [data-id="u-sched"]').tap(timeout=3000); page.wait_for_timeout(400)
+        landed = page.evaluate("S.screen")
+    except Exception as e:
+        landed = "tap failed"
+    check("voiceschanged 가 반복되는 중에도 하단 탭이 눌린다", landed == "u-sched", landed)
+    ctx.close()
+
     # --- 상황별 연습 도중 새로고침해도 날짜별 학습 진도가 남는다 (연습이 S.card 를 빌려 쓰므로 저장이 덮어쓰던 결함) ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
