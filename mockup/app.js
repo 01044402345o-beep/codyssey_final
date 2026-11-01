@@ -1129,9 +1129,18 @@ function pickRow() {
 }
 
 /* ================= TTS ================= */
-const TTS = { voices: [], perChar: 84 };   // perChar = 글자당 ms 추정. 발화가 끝날 때마다 실측으로 보정한다
+const TTS = { voices: [], sig: '', perChar: 84 };   // perChar = 글자당 ms 추정. 발화가 끝날 때마다 실측으로 보정한다
 const ttsSupported = () => 'speechSynthesis' in window;
-function loadVoices() { if (ttsSupported()) TTS.voices = speechSynthesis.getVoices(); }
+/* 목록이 실제로 바뀌었으면 true. 일부 엔진(Android Chrome 보고 사례)은 getVoices() 를 부를 때마다 voiceschanged 를 다시 보낸다 —
+   바뀌지 않은 알림에 화면을 다시 그리면 '목록 읽기 → 알림 → 다시 그리기'가 끝없이 돌아 화면이 깜빡이고 탭이 먹히지 않는다. */
+function loadVoices() {
+  if (!ttsSupported()) return false;
+  const list = speechSynthesis.getVoices();
+  const sig = list.map(v => v.voiceURI + '|' + v.lang).join(',');
+  const changed = sig !== TTS.sig;
+  TTS.voices = list; TTS.sig = sig;
+  return changed;
+}
 function enVoice() {
   const v = TTS.voices;
   return v.find(x => /en[-_]US/i.test(x.lang) && /(Google|Samantha|Aria|Jenny|Guy|Zira|Natural)/i.test(x.name)) ||
@@ -1350,7 +1359,10 @@ function speak(text, btn, target, o = {}) {   // o = { rate, onend } — 대화�
 }
 if (ttsSupported()) {
   loadVoices();
-  speechSynthesis.onvoiceschanged = () => { loadVoices(); renderInAppBanner(); if (['u-study', 'u-sched', 'u-coll'].includes(S?.screen)) render(); };
+  speechSynthesis.onvoiceschanged = () => {
+    if (!loadVoices()) return;   // 같은 목록의 반복 알림은 무시한다(다시 그리기 루프 방지)
+    renderInAppBanner(); if (['u-study', 'u-sched', 'u-coll'].includes(S?.screen)) render();
+  };
 }
 
 /* ================= 화면 정의 ================= */
@@ -5301,7 +5313,8 @@ function renderInAppBanner() {
   const msg = lack ? `<b>${where} ${lack} 안 돼요.</b> ${how}${works ? ` ${works} 여기서도 돼요.` : ''}`
                    : `<b>${esc(info.name)} 안에서 열려 있어요.</b> 듣기·말하기가 안 되면 ${how}`;   // 기능은 있어 보이지만 앱 안 웹뷰는 실행 중 막힐 수 있다
   const open = info && info.scheme ? `<button type="button" data-inapp="open">브라우저에서 열기</button>` : '';
-  el.innerHTML = `<span>${msg}</span>${open}<button type="button" data-inapp="copy">링크 복사</button><button type="button" data-inapp="close">닫기</button>`;
+  const html = `<span>${msg}</span>${open}<button type="button" data-inapp="copy">링크 복사</button><button type="button" data-inapp="close">닫기</button>`;
+  if (el.innerHTML !== html) el.innerHTML = html;   // 같은 내용을 다시 쓰면 단추가 새로 만들어져 누르던 탭이 끊긴다
   el.hidden = false;
 }
 function initInAppBanner() {
