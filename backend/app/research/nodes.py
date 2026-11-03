@@ -9,10 +9,13 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
+
+log = logging.getLogger("app.research")
 
 from . import config
 from .cache import ResearchCache
@@ -339,7 +342,11 @@ def city_extract(deps: Deps, tc: dict, need: list, cached: dict, guide: Optional
     places = chain.merge(report.places_from(ref, wv) if wv.get("listings") else [], _storable(extra_places))
 
     def work() -> dict:
+        w0 = time.monotonic()
+        log.info("extract work start key=%s", ref["key"])
         r = extract.run(tc, places, report.practical_from(wv), climate, deps.llm)
+        w_dur = time.monotonic() - w0
+        log.info("extract work done key=%s status=%s dur=%.1f", ref["key"], r.get("status"), w_dur)
         if r["status"] == "ok":
             r["data"] = {"revid": wv.get("revid"), **r["data"]}
             ttl = config.cache_days() * DAY if ref["resolved"] else UNRESOLVED_TTL
@@ -348,10 +355,13 @@ def city_extract(deps: Deps, tc: dict, need: list, cached: dict, guide: Optional
         return r
 
     from concurrent.futures import TimeoutError as FutureTimeout
-    left = config.soft_deadline_s() - (time.monotonic() - deps.started)
+    t0 = time.monotonic()
+    left = config.soft_deadline_s() - (t0 - deps.started)
+    log.info("extract start key=%s elapsed=%.1f left=%.1f", ref["key"], t0 - deps.started, left)
     try:
         r = _extract_pool().submit(work).result(timeout=max(1.0, left))
     except FutureTimeout:
+        log.warning("extract deadline key=%s waited=%.1f", ref["key"], time.monotonic() - t0)
         deps.progress(ref["input"], "extract", "deadline")
         return {"extract": None, "extract_status": "deadline"}
     if r["status"] != "ok":
