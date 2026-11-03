@@ -395,6 +395,19 @@
     return n.getFullYear() + '-' + m + '-' + d;
   }
   const ITINERARY_KINDS = ['restaurant', 'cafe', 'attraction'];
+  /* /speak-check 의 phonemes(app/phonemes.py consensus) → 화면 한 줄. 두 받아쓰기가 같은 차이를 낸 단어(diff)만, 최대 3개.
+     받아쓴 글자에서 나온 음소라 basis 가 transcript 면 그렇게 밝힌다. 보여줄 게 없으면 ''. */
+  function phonemeNotes(ph, max = 3) {
+    if (!ph || !Array.isArray(ph.words)) return '';
+    const sym = x => `/${String(x || '')}/`;
+    const notes = ph.words.filter(w => w && w.status === 'diff' && Array.isArray(w.ops)).slice(0, max).map(w => {
+      const d = w.ops.filter(o => o && o.op !== 'eq').map(o =>
+        o.op === 'sub' ? `${sym(o.ref_ipa)}→${sym(o.hyp_ipa)}` : o.op === 'del' ? `${sym(o.ref_ipa)} 빠짐` : `${sym(o.hyp_ipa)} 더해짐`);
+      return d.length ? `${w.word} ${d.join(' ')}` : '';
+    }).filter(Boolean);
+    if (!notes.length) return '';
+    return `소리 차이${ph.basis === 'transcript' ? '(받아쓴 글자 기준)' : ''}: ${notes.join(' · ')}`;
+  }
   /* iso2·gid 는 검색 위치 편향용(선택). 서버가 이 둘로 도시 목록에서 좌표를 찾는다 — 좌표는 보내지 않는다. */
   function itineraryRequestBody(city, iso2) {
     const days = isoDiff(city && city.end, city && city.start) + 1;
@@ -810,7 +823,7 @@
     inAppBrowser, WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
     TRIP_KEY, cleanTrip, loadTrip, saveTrip, preferTrip,
     categoryOfKind,
-    calendarToday, itineraryRequestBody, kindFromPrimary, foldItinerary, placeBlocksOnDays, collectItinerary,
+    calendarToday, phonemeNotes, itineraryRequestBody, kindFromPrimary, foldItinerary, placeBlocksOnDays, collectItinerary,
     RESEARCH_TIMEOUT_MS, researchRequestBody, collectResearch, researchPlace, foldResearch, placeCheckResult, vocabSentences, placeVocab,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, scopedStorage, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,

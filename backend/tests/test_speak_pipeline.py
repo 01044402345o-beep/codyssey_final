@@ -10,6 +10,7 @@ import io
 import json
 import os
 import unittest
+from unittest import mock
 import wave
 from pathlib import Path
 from types import SimpleNamespace
@@ -499,6 +500,44 @@ class CrossValidationTest(Base):
         _, d = self.speak(GOOD)
         self.assertIs(d["cross_validated"], True)
         self.assertNotIn("limited", d)
+        self.assertIsInstance(d["score"], int)
+
+    def test_phonemes_attached_when_cross_validated(self) -> None:
+        fake, _ = self.install(self.ok())
+        _, d = self.speak(GOOD)
+        ph = d["phonemes"]
+        self.assertEqual(ph["basis"], "transcript")          # 받아쓴 글자 기준이라는 표시
+        self.assertEqual(ph["per"], 0)
+        self.assertEqual([w["word"] for w in ph["words"]], ["i", "have", "a", "peanut", "allergy"])
+
+    def test_phoneme_diff_only_when_both_transcripts_agree(self) -> None:
+        fake, _ = self.install({"groq": lambda n: Resp(200, stt_ok("I have a peanuts allergy"))})
+        fake.aai_text = "I have a peanuts allergy"
+        _, d = self.speak(GOOD)
+        w = next(x for x in d["phonemes"]["words"] if x["word"] == "peanut")
+        self.assertEqual(w["status"], "diff")
+        self.assertEqual([(o["op"], o["hyp"], o["hyp_ipa"]) for o in w["ops"] if o["op"] != "eq"], [("ins", "S", "s")])
+
+    def test_phoneme_diff_from_one_transcript_is_unsure(self) -> None:
+        fake, _ = self.install({"groq": lambda n: Resp(200, stt_ok("I have a peanuts allergy"))})
+        fake.aai_text = TARGET
+        _, d = self.speak(GOOD)
+        self.assertEqual(d["phonemes"]["unsure_words"], ["peanut"])
+        self.assertEqual(d["phonemes"]["per"], 0)               # 확실한 단어만 센다
+
+    def test_no_phonemes_in_limited_mode(self) -> None:
+        fake, gem = self.install(self.ok())
+        fake.aai_fail = True
+        _, d = self.speak(GOOD)
+        self.assertTrue(d.get("limited"))
+        self.assertNotIn("phonemes", d)
+
+    def test_phoneme_failure_does_not_break_scoring(self) -> None:
+        fake, _ = self.install(self.ok())
+        with mock.patch.object(main.phonemes, "consensus", side_effect=RuntimeError("boom")):
+            _, d = self.speak(GOOD)
+        self.assertIs(d["cross_validated"], True)
+        self.assertIsNone(d["phonemes"])
         self.assertIsInstance(d["score"], int)
 
     def test_local_detector_reported(self) -> None:
