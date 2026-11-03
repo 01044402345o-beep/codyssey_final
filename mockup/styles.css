@@ -1323,6 +1323,8 @@ html:not([data-mode=legacy]) :is(.app, .admin-main, .modal) :is(input, select, t
   /* 보이는 크기는 그대로 두고 눌리는 영역만 넓힌다 */
   html:not([data-mode=legacy]) .city-card .del::after { content: ''; position: absolute; inset: -9px; }
   html:not([data-mode=legacy]) .place .src a { display: inline-flex; align-items: center; min-height: 44px; }
+  /* 보고서 '알아두기' 카드의 문단 끝 '출처' 링크 — 글자만 하면 20x14 라 손가락으로 누르기 어렵다 */
+  html:not([data-mode=legacy]) .brief-src { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; vertical-align: middle; }
 }
 @media (pointer: coarse) and (max-width: 767px) {
   html:not([data-mode=legacy]) .admin-shell .cs-row { grid-template-columns: 22px minmax(0, 1fr) 44px; }
