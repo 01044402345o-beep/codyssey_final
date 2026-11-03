@@ -395,14 +395,18 @@
     return n.getFullYear() + '-' + m + '-' + d;
   }
   const ITINERARY_KINDS = ['restaurant', 'cafe', 'attraction'];
-  function itineraryRequestBody(city) {
+  /* iso2·gid 는 검색 위치 편향용(선택). 서버가 이 둘로 도시 목록에서 좌표를 찾는다 — 좌표는 보내지 않는다. */
+  function itineraryRequestBody(city, iso2) {
     const days = isoDiff(city && city.end, city && city.start) + 1;
-    return {
+    const body = {
       city: String(city && city.name || '').trim(),
       days: Number.isFinite(days) ? days : 0,
       start_date: (city && city.start) || '',
       itinerary_kinds: ITINERARY_KINDS.slice(),
     };
+    if (/^[A-Z]{2}$/.test(iso2 || '')) body.iso2 = iso2;
+    if (city && Number.isInteger(city.gid) && city.gid > 0) body.gid = city.gid;
+    return body;
   }
   /* primary_type 은 서버가 준 영어 값이다. 계약에 없는 종류는 관광지로 두어 문장 생성에 넣지 않는다. */
   function kindFromPrimary(primary) {
@@ -527,14 +531,14 @@
     });
     return out;
   }
-  async function collectItinerary({ fetchImpl, base, cities, signal, timeoutMs = GEN_TIMEOUT_MS }) {
+  async function collectItinerary({ fetchImpl, base, cities, signal, timeoutMs = GEN_TIMEOUT_MS, isoOf }) {
     const list = cities || [];
     const down = city => ({ city: city.name, error: 'network', body: null });
     if (base === null || base === undefined) return list.map(down);
     const jobs = list.map(async city => {
       const t = withTimeout(signal, timeoutMs);
       try {
-        const body = await postJson(fetchImpl, base + '/itinerary', itineraryRequestBody(city), t.signal);
+        const body = await postJson(fetchImpl, base + '/itinerary', itineraryRequestBody(city, isoOf ? isoOf(city) : ''), t.signal);
         return { city: city.name, error: null, body };
       } catch (e) { return down(city); }
       finally { t.done(); }

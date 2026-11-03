@@ -200,25 +200,35 @@ def _maps_uri_ok(url: Any) -> bool:
     return False
 
 
-def _place_from(item: Any, fetched_at: str) -> dict[str, Any] | None:
+def _exclude_reason(item: Any) -> str:
+    """검증에서 빠지는 이유. 빈 문자열이면 통과다.
+    '검색은 됐는데 검증에서 다 빠짐'과 '검색 결과 자체가 0건'을 구분하려고 사유를 남긴다(docs/research/place-zero-investigation.md)."""
     if not isinstance(item, dict):
-        return None
+        return "not_object"
     if item.get("businessStatus") == "CLOSED_PERMANENTLY":
-        return None
+        return "closed"
     provider_id = item.get("id")
-    name = (item.get("displayName") or {}).get("text") if isinstance(item.get("displayName"), dict) else None
     if not isinstance(provider_id, str) or not provider_id.strip():
-        return None
+        return "no_id"
+    name = (item.get("displayName") or {}).get("text") if isinstance(item.get("displayName"), dict) else None
     if not isinstance(name, str) or not name.strip():
-        return None
+        return "no_name"
     loc = item.get("location") if isinstance(item.get("location"), dict) else {}
-    lat = _num(loc.get("latitude"), -90, 90)
-    lon = _num(loc.get("longitude"), -180, 180)
-    if lat is None or lon is None:
+    if _num(loc.get("latitude"), -90, 90) is None or _num(loc.get("longitude"), -180, 180) is None:
+        return "no_coords"
+    if not _maps_uri_ok(item.get("googleMapsUri")):
+        return "bad_maps_uri"
+    return ""
+
+
+def _place_from(item: Any, fetched_at: str) -> dict[str, Any] | None:
+    if _exclude_reason(item):
         return None
+    provider_id = item["id"]
+    name = item["displayName"]["text"]
+    lat = _num(item["location"].get("latitude"), -90, 90)
+    lon = _num(item["location"].get("longitude"), -180, 180)
     source = item.get("googleMapsUri")
-    if not _maps_uri_ok(source):
-        return None
     address = item.get("formattedAddress") if isinstance(item.get("formattedAddress"), str) else ""
     primary = item.get("primaryType") if isinstance(item.get("primaryType"), str) else ""
     business = item.get("businessStatus") if isinstance(item.get("businessStatus"), str) else ""
@@ -260,7 +270,7 @@ def _search_one(query: dict[str, str], http: Http, key: str, fetched_at: str,
         "X-Goog-Api-Key": key,
         "X-Goog-FieldMask": FIELD_MASK,
     }
-    meta = {"query": query["text"], "included_type": query["included_type"], "places": []}
+    meta = {"query": query["text"], "included_type": query["included_type"], "places": [], "raw": 0, "excluded": {}}
     try:
         status, payload = http(SEARCH_URL, json.dumps(body).encode("utf-8"), headers, 8.0)
     except Exception as exc:  # noqa: BLE001 — 질의 하나의 실패가 나머지를 지우면 안 된다
@@ -277,7 +287,14 @@ def _search_one(query: dict[str, str], http: Http, key: str, fetched_at: str,
         meta["reason"] = "bad_json"
         return meta
     kept = [p for item in raw if (p := _place_from(item, fetched_at))]
+    excluded: dict[str, int] = {}
+    for item in raw:
+        why = _exclude_reason(item)
+        if why:
+            excluded[why] = excluded.get(why, 0) + 1
     meta["places"] = kept
+    meta["raw"] = len(raw)            # 공급자가 돌려준 원시 결과 수
+    meta["excluded"] = excluded       # 검증에서 빠진 사유별 개수 — raw 0 과 '전부 제외'를 구분한다
     meta["status"] = "verified" if kept else "unavailable"
     meta["reason"] = "" if kept else "none_verified"
     return meta
@@ -439,10 +456,43 @@ def _public_query(row: dict[str, Any]) -> dict[str, Any]:
         "included_type": row["included_type"],
         "status": row["status"],
         "reason": row.get("reason") or "",
+        "raw": row.get("raw", 0),
+        "excluded": row.get("excluded") or {},
     }
 
 
-def collect_itinerary(req: Any, *, http: Http | None = None, run: Any = None) -> dict[str, Any]:
+def _location(req: Any, store: Any = None) -> tuple[dict[str, float] | None, dict[str, str]]:
+    """검색 위치 편향(locationBias). 화면이 보낸 나라 코드(iso2)와 도시 목록 id(gid)로 GeoNames 좌표를 찾는다.
+    좌표는 화면이 아니라 서버의 도시 목록에서 가져온다 — 도시 조사(/research)와 같은 출처·같은 반경 공식.
+    gid → 이름 일치 순으로 찾고, 못 찾으면 편향 없이(기존과 같이) 검색한다. 임의의 기본 좌표로 대신하지 않는다
+    (모르는 도시를 엉뚱한 나라 중심으로 끌어당기면 0건보다 나쁜 결과가 나온다)."""
+    iso2 = str(_attr(req, "iso2", "") or "").strip().upper()
+    if not re.fullmatch(r"[A-Z]{2}", iso2):
+        return None, {"bias": "none", "reason": "no_country"}
+    gid = _attr(req, "gid")
+    name = str(_attr(req, "city", "") or "").strip()
+    from .. import geo
+    store = store or geo.STORE
+    found, how = None, ""
+    try:
+        # 나라를 먼저 읽는다: city_by_id·match_city 는 도시 목록 장애를 삼키고 None 을 돌려주므로,
+        # 그대로 두면 장애가 '도시 못 찾음'으로 기록된다(진단 로그가 원인을 잘못 가리킨다).
+        store.country(iso2)
+        if type(gid) is int and gid > 0:
+            found, how = store.city_by_id(iso2, gid), "gid"
+        if not found:
+            found, how = store.match_city(iso2, name), "name"
+    except geo.GeoError as exc:
+        return None, {"bias": "none", "reason": "unknown_country" if exc.status == 404 else "geo_unavailable"}
+    if not found or found.get("lat") is None or found.get("lon") is None:
+        return None, {"bias": "none", "reason": "city_not_found"}
+    from ..research.sources.google_places import radius_m
+    radius = radius_m(int(found.get("population") or 0))
+    return ({"lat": float(found["lat"]), "lon": float(found["lon"]), "radius_m": radius},
+            {"bias": how, "reason": "", "radius_m": str(radius)})
+
+
+def collect_itinerary(req: Any, *, http: Http | None = None, run: Any = None, store: Any = None) -> dict[str, Any]:
     """검증된 장소가 있을 때만 일정 문장을 한 번 요청한다. 실패는 unavailable 이다."""
     if not itinerary_enabled():
         return _off("itinerary_disabled")
@@ -464,13 +514,14 @@ def collect_itinerary(req: Any, *, http: Http | None = None, run: Any = None) ->
         return _off("daily_cap")
 
     caller = http or _default_http
+    bias, location = _location(req, store)
     key = (os.getenv("GOOGLE_MAPS_API_KEY") or "").strip()
     fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     t0 = datetime.now(timezone.utc)
     rows: list[dict[str, Any] | None] = [None] * take
 
     def one(i: int) -> None:
-        rows[i] = _search_one(queries[i], caller, key, fetched_at)
+        rows[i] = _search_one(queries[i], caller, key, fetched_at, bias)
 
     with ThreadPoolExecutor(max_workers=min(4, take)) as pool:
         list(pool.map(one, range(take)))
@@ -485,7 +536,15 @@ def collect_itinerary(req: Any, *, http: Http | None = None, run: Any = None) ->
         })
     places_ms = int((datetime.now(timezone.utc) - t0).total_seconds() * 1000)
     places = _merge_places(done)
-    http_fail = sum(1 for row in done if row["status"] != "verified")
+    http_fail = sum(1 for row in done if row["status"] != "verified")   # 기존 지표(호환): 검증 통과가 없는 질의 수
+    # 진단: 공급자 장애(연결·HTTP·형식) / 응답 0건 / 응답은 있었지만 전부 검증 제외 를 나눈다
+    provider_fail = sum(1 for row in done if row["status"] != "verified" and row.get("reason") not in ("none_verified", "daily_cap"))
+    raw_zero = sum(1 for row in done if row.get("reason") == "none_verified" and not row.get("raw"))
+    all_excluded = sum(1 for row in done if row.get("reason") == "none_verified" and row.get("raw"))
+    excluded_total: dict[str, int] = {}
+    for row in done:
+        for why, n in (row.get("excluded") or {}).items():
+            excluded_total[why] = excluded_total.get(why, 0) + n
     base = {
         "provider": "google_places",
         "weather": [],
@@ -493,10 +552,14 @@ def collect_itinerary(req: Any, *, http: Http | None = None, run: Any = None) ->
         "weather_reason": "not_in_slice_1",
         "queries": [_public_query(row) for row in done],
         "places": places,
+        "location": location,
     }
     if not places:
-        log.info("status=unavailable reason=no_verified_places queries=%s http_fail=%s cap_used=%s cap_limit=%s",
-                 len(done), http_fail, cap_used, cap_limit)
+        log.info("status=unavailable reason=no_verified_places queries=%s http_fail=%s provider_fail=%s raw_zero=%s "
+                 "all_excluded=%s excluded=%s bias=%s bias_reason=%s cap_used=%s cap_limit=%s",
+                 len(done), http_fail, provider_fail, raw_zero, all_excluded,
+                 json.dumps(excluded_total, sort_keys=True), location["bias"], location["reason"] or "-",
+                 cap_used, cap_limit)
         return {
             **base,
             "status": "unavailable",
@@ -545,8 +608,8 @@ def collect_itinerary(req: Any, *, http: Http | None = None, run: Any = None) ->
     status = "verified" if any_block else "unavailable"
     reason = "" if any_block else "all_days_empty"
     log.info(
-        "status=%s reason=%s queries=%s http_fail=%s places=%s dropped=%s places_ms=%s prose_attempts=%s model=%s cap_used=%s cap_limit=%s",
-        status, reason or "-", len(done), http_fail, len(places), dropped, places_ms,
+        "status=%s reason=%s queries=%s http_fail=%s places=%s dropped=%s places_ms=%s bias=%s prose_attempts=%s model=%s cap_used=%s cap_limit=%s",
+        status, reason or "-", len(done), http_fail, len(places), dropped, places_ms, location["bias"],
         getattr(result, "attempts", None), getattr(result, "model", None), cap_used, cap_limit,
     )
     return {

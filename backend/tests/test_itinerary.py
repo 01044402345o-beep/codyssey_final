@@ -212,6 +212,149 @@ class ItineraryTests(unittest.TestCase):
             run=lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("prose")))
         self.assertEqual(out["places"], [])
 
+    def test_excluded_places_are_counted_by_reason(self):
+        """응답은 왔지만 검증에서 전부 빠진 경우 — 사유별 개수가 질의와 로그에 남는다(장소 0건 조사 문서 1·2단계)."""
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g")
+        items = [_place(pid="a", status="CLOSED_PERMANENTLY"),
+                 _place(pid="b", uri="https://map.kakao.com/"),
+                 _place(pid="c", location={})]
+        with self.assertLogs("app.itinerary", level="INFO") as cap:
+            out = itinerary.collect_itinerary(self._req(), http=self._http({"places": items}))
+        self.assertEqual(out["reason"], "no_verified_places")
+        q = out["queries"][0]
+        self.assertEqual(q["raw"], 3)
+        self.assertEqual(q["excluded"], {"closed": 1, "bad_maps_uri": 1, "no_coords": 1})
+        line = [m for m in cap.output if "reason=no_verified_places" in m][-1]
+        self.assertIn("provider_fail=0", line)
+        self.assertIn("raw_zero=0", line)
+        self.assertIn("all_excluded=1", line)
+        self.assertIn('"closed": 1', line)
+
+    def test_empty_response_is_raw_zero_not_provider_failure(self):
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g")
+        with self.assertLogs("app.itinerary", level="INFO") as cap:
+            out = itinerary.collect_itinerary(self._req(), http=self._http({"places": []}))
+        self.assertEqual(out["queries"][0]["raw"], 0)
+        self.assertEqual(out["queries"][0]["excluded"], {})
+        line = [m for m in cap.output if "reason=no_verified_places" in m][-1]
+        self.assertIn("provider_fail=0", line)
+        self.assertIn("raw_zero=1", line)
+        self.assertIn("all_excluded=0", line)
+
+    def test_provider_error_is_counted_separately(self):
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g")
+
+        def down(url, body, headers, timeout):  # noqa: ANN001
+            return 503, {}
+
+        with self.assertLogs("app.itinerary", level="INFO") as cap:
+            out = itinerary.collect_itinerary(self._req(), http=down)
+        self.assertEqual(out["queries"][0]["reason"], "http_503")
+        line = [m for m in cap.output if "reason=no_verified_places" in m][-1]
+        self.assertIn("provider_fail=1", line)
+        self.assertIn("raw_zero=0", line)
+
+    def test_place_from_matches_exclude_reason(self):
+        """_place_from 과 _exclude_reason 이 같은 규칙을 쓴다(도시 조사의 Google 대체 소스도 _place_from 을 쓴다)."""
+        cases = [_place(), _place(status="CLOSED_PERMANENTLY"), _place(pid=""), _place(displayName={}),
+                 _place(lat=999), _place(uri="https://example.com/"), "x"]
+        for item in cases:
+            self.assertEqual(itinerary._place_from(item, "t") is None, bool(itinerary._exclude_reason(item)), item)
+
+    class _Store:
+        """geo.STORE 대역. 호출 기록을 남긴다."""
+        def __init__(self, by_id=None, by_name=None, error=False):
+            self.by_id, self.by_name, self.error, self.calls = by_id, by_name, error, []
+
+        def country(self, iso2):
+            if self.error:
+                from app.geo import GeoError
+                raise GeoError(404, "unknown_country") if self.error == 404 else GeoError(503, "geo_unavailable")
+            return {"iso2": iso2}
+
+        def city_by_id(self, iso2, gid):
+            self.calls.append(("id", iso2, gid))
+            return self.by_id
+
+        def match_city(self, iso2, name):
+            self.calls.append(("name", iso2, name))
+            return self.by_name
+
+    _NYC = {"gid": 5128581, "lat": 40.71427, "lon": -74.00597, "population": 8804190}
+
+    def _bias_of(self, call=0):
+        return json.loads(self.http_calls[call][1]).get("locationBias")
+
+    def test_gid_sets_location_bias_from_geonames(self):
+        """화면이 보낸 iso2·gid 로 서버 도시 목록의 좌표를 찾아 locationBias 를 건다(인구 100만 이상 → 10km)."""
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g")
+        store = self._Store(by_id=self._NYC)
+        out = itinerary.collect_itinerary(self._req(iso2="US", gid=5128581),
+                                          http=self._http({"places": []}), store=store)
+        self.assertEqual(store.calls, [("id", "US", 5128581)])
+        self.assertEqual(self._bias_of(), {"circle": {"center": {"latitude": 40.71427, "longitude": -74.00597},
+                                                      "radius": 10000.0}})
+        self.assertEqual(out["location"]["bias"], "gid")
+
+    def test_name_match_when_no_gid(self):
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g")
+        store = self._Store(by_name={**self._NYC, "population": 300000})
+        out = itinerary.collect_itinerary(self._req(iso2="US"), http=self._http({"places": []}), store=store)
+        self.assertEqual(store.calls, [("name", "US", "뉴욕")])
+        self.assertEqual(self._bias_of()["circle"]["radius"], 6000.0)
+        self.assertEqual(out["location"]["bias"], "name")
+
+    def test_no_country_keeps_old_name_only_search(self):
+        """구버전 화면(iso2 없음)은 이전과 똑같이 편향 없이 검색한다. 도시 목록도 부르지 않는다."""
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g")
+        store = self._Store(by_id=self._NYC)
+        out = itinerary.collect_itinerary(self._req(), http=self._http({"places": []}), store=store)
+        self.assertEqual(store.calls, [])
+        self.assertIsNone(self._bias_of())
+        self.assertEqual(out["location"], {"bias": "none", "reason": "no_country"})
+
+    def test_unknown_city_has_no_bias_not_a_default_point(self):
+        """못 찾은 도시를 임의의 기본 좌표로 끌어당기지 않는다 — 편향 없이 검색하고 사유만 남긴다."""
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g")
+        store = self._Store()
+        with self.assertLogs("app.itinerary", level="INFO") as cap:
+            out = itinerary.collect_itinerary(self._req(iso2="US", gid=1), http=self._http({"places": []}), store=store)
+        self.assertEqual([c[0] for c in store.calls], ["id", "name"])
+        self.assertIsNone(self._bias_of())
+        self.assertEqual(out["location"], {"bias": "none", "reason": "city_not_found"})
+        self.assertIn("bias=none bias_reason=city_not_found", cap.output[-1])
+
+    def test_geo_outage_falls_back_to_name_only_search(self):
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g")
+        out = itinerary.collect_itinerary(self._req(iso2="US", gid=5128581),
+                                          http=self._http({"places": [_place()]}), store=self._Store(error=True))
+        self.assertIsNone(self._bias_of())
+        self.assertEqual(out["location"], {"bias": "none", "reason": "geo_unavailable"})
+        self.assertEqual(len(out["places"]), 1)   # 도시 목록이 죽어도 검색은 계속된다
+
+    def test_unknown_country_is_not_reported_as_outage(self):
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g")
+        store = self._Store(by_id=self._NYC, error=404)
+        out = itinerary.collect_itinerary(self._req(iso2="ZZ", gid=5128581), http=self._http({"places": []}), store=store)
+        self.assertEqual(store.calls, [])
+        self.assertEqual(out["location"], {"bias": "none", "reason": "unknown_country"})
+
+    def test_real_geo_store_swallows_outage_so_country_is_checked_first(self):
+        """실제 GeoStore 는 도시 조회에서 장애를 삼킨다 — 그래도 사유가 geo_unavailable 로 남아야 한다."""
+        from app import geo
+        def down(_subpath):
+            raise geo.GeoError(503, "geo_unavailable")
+        _bias, location = itinerary._location(SimpleNamespace(city="뉴욕", iso2="US", gid=5128581), geo.GeoStore(fetch=down))
+        self.assertEqual(location, {"bias": "none", "reason": "geo_unavailable"})
+
+    def test_request_model_accepts_optional_iso2_gid(self):
+        ok = main.ItineraryRequest(city="뉴욕", iso2="US", gid=5128581)
+        self.assertEqual((ok.iso2, ok.gid), ("US", 5128581))
+        self.assertIsNone(main.ItineraryRequest(city="뉴욕").iso2)   # 구버전 화면
+        for bad in ({"iso2": "usa"}, {"iso2": "us"}, {"gid": 0}, {"gid": "x"}):
+            with self.assertRaises(Exception):
+                main.ItineraryRequest(city="뉴욕", **bad)
+
     def test_sentence_must_contain_the_verified_name(self):
         self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g", GEMINI_API_KEY="gem")
         payload = _sentence()
