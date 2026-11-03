@@ -212,6 +212,55 @@ class ItineraryTests(unittest.TestCase):
             run=lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("prose")))
         self.assertEqual(out["places"], [])
 
+    def test_excluded_places_are_counted_by_reason(self):
+        """응답은 왔지만 검증에서 전부 빠진 경우 — 사유별 개수가 질의와 로그에 남는다(장소 0건 조사 문서 1·2단계)."""
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g")
+        items = [_place(pid="a", status="CLOSED_PERMANENTLY"),
+                 _place(pid="b", uri="https://map.kakao.com/"),
+                 _place(pid="c", location={})]
+        with self.assertLogs("app.itinerary", level="INFO") as cap:
+            out = itinerary.collect_itinerary(self._req(), http=self._http({"places": items}))
+        self.assertEqual(out["reason"], "no_verified_places")
+        q = out["queries"][0]
+        self.assertEqual(q["raw"], 3)
+        self.assertEqual(q["excluded"], {"closed": 1, "bad_maps_uri": 1, "no_coords": 1})
+        line = [m for m in cap.output if "reason=no_verified_places" in m][-1]
+        self.assertIn("provider_fail=0", line)
+        self.assertIn("raw_zero=0", line)
+        self.assertIn("all_excluded=1", line)
+        self.assertIn('"closed": 1', line)
+
+    def test_empty_response_is_raw_zero_not_provider_failure(self):
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g")
+        with self.assertLogs("app.itinerary", level="INFO") as cap:
+            out = itinerary.collect_itinerary(self._req(), http=self._http({"places": []}))
+        self.assertEqual(out["queries"][0]["raw"], 0)
+        self.assertEqual(out["queries"][0]["excluded"], {})
+        line = [m for m in cap.output if "reason=no_verified_places" in m][-1]
+        self.assertIn("provider_fail=0", line)
+        self.assertIn("raw_zero=1", line)
+        self.assertIn("all_excluded=0", line)
+
+    def test_provider_error_is_counted_separately(self):
+        self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g")
+
+        def down(url, body, headers, timeout):  # noqa: ANN001
+            return 503, {}
+
+        with self.assertLogs("app.itinerary", level="INFO") as cap:
+            out = itinerary.collect_itinerary(self._req(), http=down)
+        self.assertEqual(out["queries"][0]["reason"], "http_503")
+        line = [m for m in cap.output if "reason=no_verified_places" in m][-1]
+        self.assertIn("provider_fail=1", line)
+        self.assertIn("raw_zero=0", line)
+
+    def test_place_from_matches_exclude_reason(self):
+        """_place_from 과 _exclude_reason 이 같은 규칙을 쓴다(도시 조사의 Google 대체 소스도 _place_from 을 쓴다)."""
+        cases = [_place(), _place(status="CLOSED_PERMANENTLY"), _place(pid=""), _place(displayName={}),
+                 _place(lat=999), _place(uri="https://example.com/"), "x"]
+        for item in cases:
+            self.assertEqual(itinerary._place_from(item, "t") is None, bool(itinerary._exclude_reason(item)), item)
+
     def test_sentence_must_contain_the_verified_name(self):
         self._env(ITINERARY_ENABLED="1", GOOGLE_MAPS_API_KEY="g", GEMINI_API_KEY="gem")
         payload = _sentence()
