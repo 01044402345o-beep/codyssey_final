@@ -428,6 +428,27 @@ test('itineraryRequestBody: 세 종류를 보내고 14일을 넘는 구간도 �
   assert.equal(AI.itineraryRequestBody({ name: '뉴욕', start: '2026-11-10', end: '2026-11-12' }).days, 3);
 });
 
+test('itineraryRequestBody: 위치 편향용 iso2·gid 는 있을 때만 보내고 좌표는 보내지 않는다', () => {
+  const c = { name: '뉴욕', start: '2026-11-10', end: '2026-11-12', gid: 5128581 };
+  const body = AI.itineraryRequestBody(c, 'US');
+  assert.equal(body.iso2, 'US');
+  assert.equal(body.gid, 5128581);
+  assert.equal('lat' in body || 'lon' in body || 'lng' in body, false);
+  const old = AI.itineraryRequestBody({ name: '뉴욕', start: '2026-11-10', end: '2026-11-12' });
+  assert.equal('iso2' in old || 'gid' in old, false);   // 나라·도시 목록에서 고르지 않은 입력은 예전 그대로
+  assert.equal('iso2' in AI.itineraryRequestBody(c, 'usa'), false);
+  assert.equal('gid' in AI.itineraryRequestBody({ ...c, gid: 0 }, ''), false);
+});
+
+test('collectItinerary: isoOf 로 도시마다 나라 코드를 붙인다', async () => {
+  const sent = [];
+  const fetchImpl = async (u, o) => { sent.push(JSON.parse(o.body)); return { ok: true, status: 200, json: async () => ({ status: 'unavailable' }) }; };
+  await AI.collectItinerary({ fetchImpl, base: 'http://x', cities: [{ name: '뉴욕', start: '2026-11-10', end: '2026-11-12', gid: 5128581, ci: 0 }],
+    isoOf: c => (c.ci === 0 ? 'US' : '') });
+  assert.equal(sent[0].iso2, 'US');
+  assert.equal(sent[0].gid, 5128581);
+});
+
 const rawPlace = (id, name, primary) => ({
   provider_id: id, name, attribution: 'Google Maps', fetched_at: '2026-10-16T01:02:03Z',
   source_url: 'https://maps.google.com/?cid=' + id,

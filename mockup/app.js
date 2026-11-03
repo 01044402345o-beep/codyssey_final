@@ -996,8 +996,11 @@ async function runReport(tok) {
   const baseDays = R.cityBase(R.buildDays(S.trip.cities));
   S.trip.cities.forEach(c => { const b = baseDays[c.name]; caps[c.name] = b ? b.attr + b.rest : 0; });
   try {
+    try { await geoCountries(); } catch (e) { /* 나라 목록이 없으면 이름만 보낸다(위치 편향 없이 검색) */ }
+    const tripCountries = (Array.isArray(S.trip.countries) && S.trip.countries.length ? S.trip.countries : [S.trip.country || '']);
     const results = await AI.collectItinerary({
       fetchImpl: (u, o) => fetch(u, o), base: API.base, cities: S.trip.cities, signal: ctl.signal, timeoutMs: AI.GEN_TIMEOUT_MS,
+      isoOf: c => (countryByName(tripCountries[Math.min(+c.ci || 0, tripCountries.length - 1)]) || {}).iso2 || '',
     });
     if (tok !== genToken || ctl.signal.aborted) return;
     const folded = AI.foldItinerary(S.trip.cities, results, caps);

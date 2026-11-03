@@ -270,6 +270,10 @@ class ItineraryRequest(BaseModel):
     days: int | None = None
     start_date: str | None = Field(default=None, max_length=10)
     itinerary_kinds: list[str] = Field(default_factory=list, max_length=4)
+    # 검색 위치 편향용(선택). 좌표는 받지 않는다 — 서버가 이 둘로 도시 목록(GeoNames)에서 찾는다.
+    # 없으면 이전과 같이 도시 이름만으로 검색한다(구버전 화면 호환).
+    iso2: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
+    gid: int | None = Field(default=None, ge=1, le=2 ** 31 - 1)
 
 
 class ResearchCountry(BaseModel):
