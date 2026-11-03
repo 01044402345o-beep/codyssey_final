@@ -58,6 +58,7 @@ from . import user_state
 from . import evidence
 from . import gemini as ai
 from . import speech_compare as compare
+from . import phonemes
 from . import speech_vad as vad
 from . import stt_providers as stt
 from . import stt_selftest as selftest
@@ -1090,6 +1091,12 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
     meta = base
     # 두 전사 모두에서 들린 목표 단어만 점수가 된다.
     diff = compare.compare_consensus(target, heard, heard_ck)
+    try:
+        # 음소 단위 차이(받아쓴 글자 기준). 두 전사가 같은 차이를 낸 단어만 남긴다. 실패해도 채점은 그대로다.
+        phones = phonemes.consensus(target, heard, heard_ck)
+    except Exception as exc:  # noqa: BLE001 — 부가 정보라 응답 전체를 막지 않는다
+        logging.getLogger("app.speak").warning("음소 비교 실패: %s", exc)
+        phones = None
     t.mark("compare")
     issues = [{"word": w, "note": "빠짐"} for w in diff["missing"]] + \
              [{"word": a, "note": f"'{b}'(으)로 들림"} for a, b in diff["replaced"]] + \
@@ -1128,6 +1135,7 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
         "heard_checker": heard_ck,
         "issues": issues,
         "diff": diff,
+        "phonemes": phones,
         "fix_one": fix_one,
         "tip": tip,
         "feedback": feedback,

@@ -135,6 +135,23 @@ class CompareTests(unittest.TestCase):
         self.assertEqual([w["word"] for w in P.compare(target, target)["words"]], words(target))
 
 
+class ConsensusTests(unittest.TestCase):
+    def test_agreeing_transcripts_keep_the_diff(self):
+        r = P.consensus("a window seat", "a window sit", "a window sit")
+        self.assertEqual([w["status"] for w in r["words"]], ["ok", "ok", "diff"])
+        self.assertEqual(r["counts"]["sub"], 1)
+
+    def test_disagreeing_transcripts_are_unsure(self):
+        r = P.consensus("a window seat", "a window sit", "a window seat")
+        self.assertEqual(r["unsure_words"], ["seat"])
+        self.assertNotIn("ops", r["words"][2])
+        self.assertEqual(r["per"], 0)
+
+    def test_ops_carry_ipa(self):
+        w = P.consensus("seat", "sit", "sit")["words"][0]
+        self.assertEqual([(o["ref_ipa"], o["hyp_ipa"]) for o in w["ops"] if o["op"] == "sub"], [("i", "ɪ")])
+
+
 class ComparePhonesTests(unittest.TestCase):
     """실제 소리에서 인식한 음소열을 붙일 자리. 인식기 출력은 ARPAbet 로 맞춰 넣는다."""
 
