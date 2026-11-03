@@ -131,6 +131,14 @@ with sync_playwright() as p:
     page.evaluate("preset('default'); go('u-input')"); page.wait_for_timeout(250)
     d = page.evaluate("(() => { const del = document.querySelector('.city-card .del'); const r = del.getBoundingClientRect(); const el = document.elementFromPoint(r.left - 7, r.top - 7); return el === del; })()")
     check("삭제 버튼: 보이는 크기는 작아도 눌리는 영역은 44px(바깥 7px 에서도 눌림)", d)
+    # 보고서 '알아두기' 출처 링크 — 조사 자료가 늦게 오면 위 화면 순회에 안 잡히므로 직접 넣어 잰다
+    page.evaluate("go('u-report')"); page.wait_for_timeout(250)
+    bs = page.evaluate("""(() => { const host = document.querySelector('.pframe .app') || document.querySelector('.pframe');
+      const row = document.createElement('div'); row.className = 'brief-row';
+      row.innerHTML = '<p class="brief-t">테스트 문단</p><a class="brief-src" href="https://example.com/">출처</a>';
+      host.appendChild(row); const r = row.querySelector('.brief-src').getBoundingClientRect(); row.remove();
+      return [Math.round(r.width), Math.round(r.height)]; })()""")
+    check("터치 기기: 보고서 출처 링크(.brief-src) 44px 이상", bs[0] >= 44 and bs[1] >= 44, f"{bs[0]}x{bs[1]}")
     ctx.close()
     # 마우스 기기에서는 터치용 크기를 강제하지 않는다
     ctx = b.new_context(viewport={"width": 1280, "height": 800})
@@ -138,6 +146,9 @@ with sync_playwright() as p:
     page.goto(BASE + "/#u-coll"); page.wait_for_timeout(600)
     h = page.evaluate("Math.round(document.querySelector('.chips button').getBoundingClientRect().height)")
     check("마우스 기기: 칩 높이 기존 크기 유지(<44)", h < 44, str(h))
+    bh = page.evaluate("""(() => { const a = document.createElement('a'); a.className = 'brief-src'; a.textContent = '출처';
+      (document.querySelector('.pframe .app') || document.body).appendChild(a); const h = a.getBoundingClientRect().height; a.remove(); return Math.round(h); })()""")
+    check("마우스 기기: 보고서 출처 링크는 글자 크기 그대로(<44)", bh < 44, str(bh))
     ctx.close()
 
     # --- P3: 라이트 / 다크 / 시스템 ---
