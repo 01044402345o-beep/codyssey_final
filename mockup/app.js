@@ -92,26 +92,46 @@ function userEmail() { return (S.user && S.user.email) || DEMO_USER.email; }
          (3) 온보딩에 마찰을 더하면 이탈이 커진다(업종 평균 1회 사용 후 이탈 25%).
    그래서 '기본 경로는 코스, 탈출구는 항상 열어 둔다'로 설계한다. */
 const IPA_COURSE = [
-  { ipa: 'iː', ko: '길게 "이"', tip: '"이"를 길게. 입꼬리를 옆으로 당기고 1초 이상 끌어 주세요.',
-    pair: [['seat', '좌석', 'iː'], ['sit', '앉다', 'ɪ']], say: 'Please have a seat.' },
-  { ipa: 'ɪ', ko: '짧게 "이"', tip: '"이"와 "에" 사이. 길게 끌지 말고 툭 끊어 주세요.',
-    pair: [['sit', '앉다', 'ɪ'], ['seat', '좌석', 'iː']], say: 'Can I sit here?' },
-  { ipa: 'æ', ko: '크게 "애"', tip: '입을 크게 벌리고 "애". "에"보다 턱이 아래로 내려가요.',
-    pair: [['bad', '나쁜', 'æ'], ['bed', '침대', 'e']], say: 'That is not bad.' },
-  { ipa: 'e', ko: '작게 "에"', tip: '"애"보다 입을 덜 벌리고 "에". 턱이 덜 내려가요.',
-    pair: [['bed', '침대', 'e'], ['bad', '나쁜', 'æ']], say: 'I need a bed.' },
-  { ipa: 'ə', ko: '아주 약한 "어"', tip: '힘을 완전히 빼고 아주 짧게. 강세 없는 음절은 거의 이 소리예요.',
-    pair: [['about', '대략', 'ə'], ['butter', '버터', 'ə']], say: 'I will be there about noon.' },
-  { ipa: 'θ', ko: '혀끝 "th" (무성)', tip: '혀끝을 윗니와 아랫니 사이로 살짝 내밀고 바람만 내보내요. "스"가 아니에요.',
-    pair: [['think', '생각하다', 'θ'], ['sink', '싱크대', 's']], say: 'I think it is Thursday.' },
-  { ipa: 'ð', ko: '혀끝 "th" (유성)', tip: 'θ와 같은 자리에서 목을 울려요. "드"가 아니에요.',
-    pair: [['this', '이것', 'ð'], ['dis', '(비교용)', 'd']], say: 'Is this the right gate?' },
-  { ipa: 'r', ko: '"r"', tip: '혀끝을 입천장에 대지 말고, 입술을 살짝 오므린 채 뒤로 당겨요.',
-    pair: [['right', '오른쪽', 'r'], ['light', '빛', 'l']], say: 'Turn right at the light.' },
-  { ipa: 'l', ko: '"l"', tip: '혀끝을 윗니 바로 뒤에 붙이고 떼요. "r"처럼 오므리지 않아요.',
-    pair: [['light', '빛', 'l'], ['right', '오른쪽', 'r']], say: 'The light is on the left.' },
-  { ipa: 'f', ko: '"f" (v와 같은 입모양)', tip: '윗니로 아랫입술을 살짝 물고 바람을 내보내요. 목이 울리면 v.',
-    pair: [['fan', '선풍기', 'f'], ['pan', '냄비', 'p']], say: 'Is the fan working?' },
+  { ipa: 'iː', ko: '길게 "이"', kind: '모음',
+    tip: '"이"를 길게. 입꼬리를 옆으로 당기고 1초 이상 끌어 주세요.',
+    pair: [{ w: 'seat', ko: '좌석', ip: 'iː', hi: 'ea' }, { w: 'sit', ko: '앉다', ip: 'ɪ', hi: 'i' }],
+    say: 'Please have a seat.' },
+  { ipa: 'ɪ', ko: '짧게 "이"', kind: '모음',
+    tip: '"이"와 "에" 사이. 길게 끌지 말고 툭 끊어 주세요.',
+    pair: [{ w: 'sit', ko: '앉다', ip: 'ɪ', hi: 'i' }, { w: 'seat', ko: '좌석', ip: 'iː', hi: 'ea' }],
+    say: 'Can I sit here?' },
+  { ipa: 'æ', ko: '크게 "애"', kind: '모음',
+    tip: '입을 크게 벌리고 "애". "에"보다 턱이 아래로 내려가요.',
+    pair: [{ w: 'bad', ko: '나쁜', ip: 'æ', hi: 'a' }, { w: 'bed', ko: '침대', ip: 'e', hi: 'e' }],
+    say: 'That is not bad.' },
+  { ipa: 'e', ko: '작게 "에"', kind: '모음',
+    tip: '"애"보다 입을 덜 벌리고 "에". 턱이 덜 내려가요.',
+    pair: [{ w: 'bed', ko: '침대', ip: 'e', hi: 'e' }, { w: 'bad', ko: '나쁜', ip: 'æ', hi: 'a' }],
+    say: 'I need a bed.' },
+  { ipa: 'ə', ko: '아주 약한 "어"', kind: '모음',
+    tip: '힘을 완전히 빼고 아주 짧게. 강세 없는 음절은 거의 이 소리예요.',
+    pair: [{ w: 'about', ko: '대략', ip: 'ə', hi: 'a' }, { w: 'butter', ko: '버터', ip: 'ə', hi: 'er' }],
+    say: 'I will be there about noon.' },
+  { ipa: 'θ', ko: '혀끝 "th" (무성)', kind: '자음',
+    tip: '혀끝을 윗니와 아랫니 사이로 살짝 내밀고 바람만 내보내요. "스"가 아니에요.',
+    pair: [{ w: 'think', ko: '생각하다', ip: 'θ', hi: 'th' }, { w: 'sink', ko: '싱크대', ip: 's', hi: 's' }],
+    say: 'I think it is Thursday.' },
+  { ipa: 'ð', ko: '혀끝 "th" (유성)', kind: '자음',
+    tip: 'θ와 같은 자리에서 목을 울려요. "드"가 아니에요.',
+    pair: [{ w: 'they', ko: '그들', ip: 'ð', hi: 'th' }, { w: 'day', ko: '날', ip: 'd', hi: 'd' }],
+    say: 'Is this the right gate?' },
+  { ipa: 'r', ko: '"r"', kind: '자음',
+    tip: '혀끝을 입천장에 대지 말고, 입술을 살짝 오므린 채 뒤로 당겨요.',
+    pair: [{ w: 'right', ko: '오른쪽', ip: 'r', hi: 'r' }, { w: 'light', ko: '빛', ip: 'l', hi: 'l' }],
+    say: 'Turn right at the light.' },
+  { ipa: 'l', ko: '"l"', kind: '자음',
+    tip: '혀끝을 윗니 바로 뒤에 붙이고 떼요. "r"처럼 오므리지 않아요.',
+    pair: [{ w: 'light', ko: '빛', ip: 'l', hi: 'l' }, { w: 'right', ko: '오른쪽', ip: 'r', hi: 'r' }],
+    say: 'The light is on the left.' },
+  { ipa: 'f', ko: '"f" (v와 같은 입모양)', kind: '자음',
+    tip: '윗니로 아랫입술을 살짝 물고 바람을 내보내요. 목이 울리면 v.',
+    pair: [{ w: 'fan', ko: '선풍기', ip: 'f', hi: 'f' }, { w: 'pan', ko: '냄비', ip: 'p', hi: 'p' }],
+    say: 'Is the fan working?' },
 ];
 const IPA_ITEM = Object.fromEntries(IPA_COURSE.map(x => [x.ipa, x]));
 
@@ -3595,28 +3615,50 @@ function scrIpa() {
   const i = Math.max(0, Math.min(st.i, n - 1));
   const c = C[i], prev = C[(i - 1 + n) % n], next = C[(i + 1) % n];
   const seen = new Set(st.seen), all = seen.size >= n;
-  const dots = C.map((x, k) => `<i class="${seen.has(x.ipa) ? 'seen' : ''} ${k === i ? 'cur' : ''}"></i>`).join('');
-  const pairRow = c.pair.map(([w, ko, ip], k) => `<button class="ipa-pair" data-act="ipa-say" data-w="${esc(w)}">
-      <b>${esc(w)}</b><span>${esc(ko)}</span><em>/${esc(ip)}/</em>${k === 0 ? '<small>먼저</small>' : '<small>비교</small>'}</button>`).join('');
+  const ticks = C.map((x, k) => `<i class="${seen.has(x.ipa) ? 'on' : ''}${k === i ? ' cur' : ''}"></i>`).join('');
+  /* 소리를 만드는 철자에만 밑줄을 긋는다. 이 화면에서 유일하게 '사실'인 대응이다 —
+     파형·길이 막대 같은 도형은 측정값처럼 보이지만 실제로 잰 값이 아니라 넣지 않았다. */
+  const mark = (w, hi) => {
+    const at = hi ? w.indexOf(hi) : -1;
+    if (at < 0) return esc(w);
+    return esc(w.slice(0, at)) + `<u>${esc(hi)}</u>` + esc(w.slice(at + hi.length));
+  };
+  const pairRow = c.pair.map(p => `<button class="ipa-pair${p.ip === c.ipa ? ' on' : ''}" data-act="ipa-say" data-w="${esc(p.w)}">
+      <span class="ipa-pair-w">${mark(p.w, p.hi)}</span>
+      <span class="ipa-pair-k">${esc(p.ko)}</span>
+      <em class="ipa-pair-ip">/${esc(p.ip)}/</em>
+      <span class="ipa-pair-play" aria-hidden="true">${I.speaker}</span>
+      <span class="sr-only">${esc(p.w)} 듣기</span>
+    </button>`).join('');
   const inner = `<div class="app-pad">
-    <div class="ipa-head"><div class="small">발음기호 알아보기</div>
-      <div class="ipa-count"><b>${i + 1}</b> / ${n}</div></div>
-    ${all ? `<div class="notice">${I.check}<div>기호 ${n}개를 모두 봤어요. 이제 회화 연습에서 나오는 기호를 읽을 수 있어요.</div></div>` : ''}
+    <div class="ipa-ticks" role="group" aria-label="기호 ${n}개 중 ${i + 1}번째">${ticks}</div>
     <div class="ipa-card">
-      <div class="ipa-sym">/${esc(c.ipa)}/</div>
-      <div class="ipa-ko">${esc(c.ko)}</div>
-      <p class="ipa-tip">${esc(c.tip)}</p>
-      <div class="ipa-pairs">${pairRow}</div>
-      <button class="btn soft block" data-act="ipa-say" data-w="${esc(c.say)}">${I.speaker}예문 듣기 · ${esc(c.say)}</button>
+      <div class="ipa-card-h"><span class="ipa-tag">sign</span>
+        <span class="ipa-count"><b>${i + 1}</b> / ${n}</span></div>
+      <div class="ipa-hero">
+        <div>
+          <div class="ipa-sym">/${esc(c.ipa)}/</div>
+          <div class="ipa-ko">${esc(c.ko)}<span class="ipa-kind">${esc(c.kind)}</span></div>
+        </div>
+        <button class="ipa-hero-play" data-act="ipa-say" data-w="${esc(c.pair[0].w)}" aria-label="${esc(c.ko)} 소리 듣기">${I.speaker}</button>
+      </div>
+      <div class="ipa-sec"><span class="ipa-tag">how</span><p class="ipa-tip">${esc(c.tip)}</p></div>
+      <div class="ipa-sec"><span class="ipa-tag">pair</span>
+        <div class="ipa-pair-wrap"><div class="ipa-pair-h"><span>최소대립쌍 · 한 글자만 다름</span>
+          <button class="ipa-ab" data-act="ipa-ab" data-pairs="${esc(c.pair[0].w)}|${esc(c.pair[1].w)}">A ↔ B 번갈아</button></div>${pairRow}</div></div>
+      <div class="ipa-sec"><span class="ipa-tag">eg</span>
+        <button class="ipa-eg" data-act="ipa-say" data-w="${esc(c.say)}">
+          <span class="ipa-eg-t">${esc(c.say)}</span><span class="ipa-pair-play" aria-hidden="true">${I.speaker}</span>
+          <span class="sr-only">예문 듣기</span></button></div>
+      ${all ? `<div class="ipa-done">${I.check}<span>기호 ${n}개를 모두 봤어요</span></div>` : ''}
     </div>
     <div class="ipa-neigh"><button class="ipa-neigh-b" data-act="ipa-go" data-i="${(i - 1 + n) % n}">${I.back}<span>/${esc(prev.ipa)}/</span></button>
       <button class="ipa-neigh-b" data-act="ipa-go" data-i="${(i + 1) % n}"><span>/${esc(next.ipa)}/</span>${I.next}</button></div>
-    <div class="dots" style="margin:14px 0 6px">${dots}</div>
-    <p class="small" style="text-align:center">회의 기호는 결과 카드에 그대로 나와요. 모르면 여기로 돌아오세요.</p>
+    <p class="small ipa-foot">밑줄은 그 소리를 만드는 철자예요. 모르면 여기로 돌아오세요.</p>
   </div>`;
   const bottom = all
     ? `<button class="btn accent block" data-act="ipa-finish">회화 연습 열기</button>`
-    : `<div style="display:flex;gap:8px"><button class="btn soft" style="flex:1" data-act="ipa-skip">건너뛰기</button><button class="btn primary" style="flex:1.4" data-act="ipa-next">다음 기호 (${i + 1}/${n})</button></div>`;
+    : `<div style="display:flex;gap:8px"><button class="btn soft" style="flex:1" data-act="ipa-skip">건너뛰기</button><button class="btn primary" style="flex:1.4" data-act="ipa-next">다음 기호</button></div>`;
   return frame(inner, { appbar: appbar('발음기호 알아보기', { back: 'u-sched' }), bottom, tabbar: false, tab: 'u-study' });
 }
 
@@ -5377,6 +5419,10 @@ const ACT = {
   'ipa-next': () => { const st = ipaState(); const c = IPA_COURSE[st.i]; if (c && !st.seen.includes(c.ipa)) st.seen.push(c.ipa);
     st.i = Math.min(IPA_COURSE.length - 1, st.i + 1); render(); window.scrollTo(0, 0); },
   'ipa-say': el => { speak(el.dataset.w, el); },
+  /* 두 단어를 번갈아 들려준다. 파형 도형 대신 '귀로 비교'하게 하는 장치. */
+  'ipa-ab': el => { const [x, y] = (el.dataset.pairs || '').split('|');
+    if (!x || !y) return;
+    speak(x, el, undefined, { onend: () => setTimeout(() => speak(y, el), 280) }); },
   'ipa-skip': () => { go('u-study'); S.sheet = true; pushOverlay('sheet'); render(); },
   'ipa-finish': () => { const st = ipaState(); IPA_COURSE.forEach(c => { if (!st.seen.includes(c.ipa)) st.seen.push(c.ipa); });
     go('u-study'); S.sheet = true; pushOverlay('sheet'); render(); toast('코스를 마쳤어요. 이제 회화 연습을 볼게요.'); },
