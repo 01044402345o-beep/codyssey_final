@@ -2180,50 +2180,91 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
    결과가 ' · ' 로 이어진 글 한 덩어리면 읽히지 않는다. 다만 점수는 '두 받아쓰기 모두에서 들린 단어 일치율'이라
    큰 숫자·링으로 강조하면 발음 인증서처럼 읽힌다 — 시각적 중심을 단어(안 들린 곳)와 음소(다르게 난 소리)에 둔다. */
 .speak-res.spk-card-wrap { padding: 0; background: none; align-self: stretch; }
-.spk-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; text-align: left; }
-.spk-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px; }
-.spk-ic { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 0.75rem; font-weight: 800; }
-.spk-ic.ok { background: var(--ok-soft); color: var(--ok-text); }
-.spk-ic.mid { background: var(--sun-soft); color: var(--on-sun-soft); }
-.spk-ic.low { background: var(--bad-soft); color: var(--bad-text); }
-.spk-verdict { font-weight: 800; font-size: 0.875rem; color: var(--text); }
-.spk-tag { margin-left: auto; font-size: 0.75rem; color: var(--text-3); border: 1px solid var(--border-strong); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
-.spk-bars { padding: 0 12px 10px; display: grid; gap: 6px; }
-.spk-bar { display: grid; grid-template-columns: 5.4em 1fr 3em; align-items: center; gap: 8px; }
-.spk-bar-l { font-size: 0.75rem; color: var(--text-soft); }
-.spk-track { height: 8px; border-radius: 999px; background: var(--surface-seg); overflow: hidden; }
+
+/* ── 말해보기 결과 = 여행 서류(탑승권) ─────────────────────────────────────
+   앱 아이덴티티(디자인 가이드 §1): 종이 바탕 + 잉크 글자 + 도장 주황 하나.
+   장식은 세 가지뿐 — 도장(점선 원·회전·mono), 점선(절취선), mono 글자 + 큰 숫자.
+   판단 근거가 있는 값만 큰 숫자로 세운다: 음소 일치(Fraunces)와 도장.
+   단어 일치는 발음 점수가 아니므로 mono 작은 값 + 각주로 둔다(위계 자체가 정직성 장치). */
+.spk-card {
+  background: var(--surface); text-align: left; min-width: 0; word-break: keep-all;
+  border: 1px solid var(--border); border-radius: 18px; overflow: hidden;
+}
+/* 머리: mono eyebrow + 판정 + 도장 */
+.spk-head { display: flex; align-items: flex-start; gap: 12px; padding: 14px 14px 12px; }
+.spk-head > div, .spk-head-txt { flex: 1; min-width: 0; }
+.spk-eyebrow { font-family: var(--mono); font-size: 0.75rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spk-verdict { display: block; font-size: 1.0625rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.35;
+  color: var(--text); margin-top: 3px; text-wrap: balance; }
+.spk-tag { flex: 0 0 auto; font-family: var(--mono); font-size: 0.75rem; color: var(--text-3);
+  border: 1px solid var(--border-strong); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+/* 도장 — 가이드: 기념하는 순간에만, 화면당 1개, −10~−14°, mono. 등급이 아니라 사실만 적는다 */
+.spk-seal { flex: 0 0 auto; width: 76px; height: 76px; border-radius: 50%; border: 2px dashed var(--ok);
+  color: var(--ok-text); display: grid; place-items: center; align-content: center; gap: 0;
+  transform: rotate(-12deg); font-family: var(--mono); font-size: 0.75rem; font-weight: 700; line-height: 1.25; text-align: center; }
+.spk-seal b { display: block; font-family: var(--display); font-size: 1.375rem; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+/* 절취선 — 점선 양 끝에 반원 홈. 장식은 점선 계열 하나로 유지 */
+.spk-perf { position: relative; border-top: 1px dashed var(--border-strong); margin: 0 14px; }
+.spk-perf::before, .spk-perf::after { content: ""; position: absolute; top: -7px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--surface); border: 1px solid var(--border); }
+.spk-perf::before { left: -21px; } .spk-perf::after { right: -21px; }
+/* 지표 — DOM 순서는 '단어 일치 → 음소 일치'(테스트 계약), 화면 순서는 order 로 음소를 위로 */
+.spk-bars { display: flex; flex-direction: column; gap: 12px; padding: 12px 14px 14px; }
+.spk-bar { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 10px; min-width: 0; }
+.spk-bar.hero { order: -1; }
+.spk-bar-l { font-size: 0.8125rem; font-weight: 600; color: var(--text-soft); }
+.spk-bar-v { font-family: var(--mono); font-size: 0.8125rem; font-weight: 700; color: var(--text-2);
+  text-align: right; font-variant-numeric: tabular-nums; }
+.spk-bar.hero .spk-bar-l { color: var(--text); }
+.spk-bar.hero .spk-bar-v { font-family: var(--display); font-size: 1.75rem; font-weight: 600; letter-spacing: -0.03em;
+  line-height: 1; color: var(--text); grid-row: 1 / span 2; grid-column: 1; }
+.spk-bar.hero .spk-bar-l { grid-column: 2; align-self: end; }
+.spk-track { grid-column: 2; height: 6px; border-radius: 999px; background: var(--surface-seg); overflow: hidden; }
+.spk-bar:not(.hero) .spk-track { grid-column: 1 / -1; }
 .spk-fill { display: block; height: 100%; border-radius: 999px; background: var(--ok); }
 .spk-fill.mid { background: var(--sun-line); }
 .spk-fill.low { background: var(--bad); }
-.spk-bar-v { font-family: var(--mono); font-size: 0.75rem; font-weight: 700; text-align: right; color: var(--text-2); }
-.spk-words { line-height: 1.7; }
-.spk-w.miss { color: var(--bad-text); background: var(--bad-soft); border-radius: 4px; padding: 0 3px; text-decoration: underline wavy var(--bad); text-underline-offset: 3px; }
-.spk-strip-wrap { border-top: 1px solid var(--border-faint); padding: 9px 0 10px; }
-.spk-strip-label { padding: 0 12px 6px; font-size: 0.75rem; color: var(--text-3); }
-.spk-strip { display: flex; flex-wrap: wrap; gap: 8px 10px; padding: 0 12px 2px; }   /* 줄바꿈 — 틀린 소리가 화면 밖으로 밀리지 않게 */
-.spk-wg { flex: 0 0 auto; display: grid; gap: 3px; justify-items: center; }
-.spk-wt { font-size: 0.75rem; color: var(--text-3); }
+/* 목표 문장 — 안 들린 단어에 점선. 색만으로 알리지 않는다 */
+.spk-word-wrap { padding: 12px 14px; }
+.spk-words { display: block; font-family: var(--display); font-size: 1rem; line-height: 1.65; color: var(--text); }
+.spk-w.miss { color: var(--bad-text); text-decoration: underline dashed var(--bad); text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px; }
+/* 소리별 결과 — 줄바꿈해서 틀린 소리가 화면 밖으로 밀리지 않게 */
+.spk-strip-wrap { padding: 12px 14px 10px; }
+.spk-strip-label { font-family: var(--mono); font-size: 0.75rem; color: var(--text-3); margin-bottom: 7px; }
+.spk-strip { display: flex; flex-wrap: wrap; gap: 10px 12px; }
+.spk-wg { flex: 0 0 auto; display: grid; gap: 3px; justify-items: center; min-width: 0; }
+.spk-wt { font-family: var(--mono); font-size: 0.75rem; color: var(--text-3); max-width: 7em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .spk-phs { display: flex; gap: 3px; }
 .spk-ph { display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 5px; border-radius: 6px;
-  font-size: 0.8125rem; font-family: var(--mono); background: var(--surface-2); color: var(--text); }
-.spk-ph.ok { background: var(--ok-soft); color: var(--ok-text); }
-.spk-ph.weak { background: var(--sun-soft); color: var(--on-sun-soft); }
-.spk-ph.missing { background: var(--bad-soft); color: var(--bad-text); box-shadow: inset 0 0 0 1.5px var(--bad); }
-.spk-focus { display: flex; gap: 9px; padding: 10px 12px; background: var(--bad-soft); border-top: 1px solid var(--border-faint); }
+  font-family: var(--mono); font-size: 0.75rem; font-weight: 500; background: var(--surface-3); color: var(--text-2); }
+.spk-ph.weak { background: var(--sun-soft); color: var(--on-sun-soft); text-decoration: underline dotted; text-underline-offset: 3px; }
+.spk-ph.missing { background: var(--bad-soft); color: var(--bad-text); box-shadow: inset 0 0 0 1.5px var(--bad); font-weight: 700; }
+.spk-ph.missing::before { content: "!"; margin-right: 1px; }
+/* 고칠 소리 — 주의/오류 안내 상자(가이드 §5). 아이콘은 원점 + 문장 */
+.spk-focus { display: flex; gap: 8px; margin: 0 14px 14px; padding: 10px 12px; border-radius: 10px;
+  background: var(--bad-soft); color: var(--on-bad-soft); }
+.spk-focus.ok { background: var(--sun-soft); color: var(--on-sun-soft); }
 .spk-focus > div { flex: 1; min-width: 0; }
-.spk-focus-ic { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; background: var(--bad); color: var(--on-bad);
-  display: grid; place-items: center; font-size: 0.75rem; font-weight: 800; }
-.spk-focus-h { font-size: 0.875rem; color: var(--on-bad-soft); }
-.spk-focus-h b { display: inline; font-family: var(--mono); font-size: 1rem; }
-.spk-heard { color: var(--bad-text); }
-.spk-focus-label { font-size: 0.75rem; color: var(--on-bad-soft); font-weight: 700; margin-top: 2px; }
-.spk-focus-tip { font-size: 0.8125rem; color: var(--text-2); margin-top: 3px; line-height: 1.5; }
-.spk-row { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border-faint); font-size: 0.8125rem; line-height: 1.5; }
-.spk-row-k { flex: 0 0 auto; width: 5.4em; font-weight: 700; color: var(--text-soft); font-size: 0.75rem; padding-top: 1px; }
+.spk-focus-ic { flex: 0 0 auto; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: currentColor; }
+.spk-focus-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; font-size: 0.8125rem; font-weight: 700;
+  line-height: 1.5; white-space: nowrap; }
+.spk-focus-h b { display: inline; font-family: var(--mono); font-size: 0.9375rem; }
+.spk-focus-h .spk-heard { font-weight: 600; opacity: .9; }
+.spk-focus-label { font-size: 0.75rem; font-weight: 700; margin-top: 2px; }
+.spk-focus-tip { font-size: 0.8125rem; color: var(--text-2); margin-top: 3px; line-height: 1.55; }
+.spk-row { display: flex; gap: 8px; padding: 9px 14px; border-top: 1px solid var(--border-faint); font-size: 0.8125rem; line-height: 1.55; }
+.spk-row-k { flex: 0 0 auto; width: 5.4em; font-family: var(--mono); font-weight: 700; color: var(--text-3); font-size: 0.75rem; padding-top: 1px; }
 .spk-row-v { flex: 1; min-width: 0; color: var(--text-2); overflow-wrap: anywhere; }
 .spk-more { border-top: 1px solid var(--border-faint); }
-.spk-more > summary { cursor: pointer; padding: 8px 12px; font-size: 0.75rem; color: var(--text-soft); list-style: none; min-height: 44px; display: flex; align-items: center; }
+.spk-more > summary { cursor: pointer; padding: 8px 14px; min-height: 44px; display: flex; align-items: center;
+  font-size: 0.75rem; color: var(--text-soft); list-style: none; }
 .spk-more > summary::-webkit-details-marker { display: none; }
-.spk-more > summary::before { content: "▸ "; white-space: pre; }
-.spk-more[open] > summary::before { content: "▾ "; }
-.spk-note { padding: 0 12px 10px; font-size: 0.75rem; color: var(--text-3); }
+.spk-more > summary::before { content: ""; width: 5px; height: 5px; border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); margin-right: 7px; flex: 0 0 auto; }
+.spk-more[open] > summary::before { transform: rotate(45deg); }
+.spk-note { padding: 9px 14px 12px; border-top: 1px solid var(--border-faint); font-size: 0.75rem; color: var(--text-3); line-height: 1.5; }
+.spk-note b { color: var(--text-2); font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .spk-seal { transform: none; } }

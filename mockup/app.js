@@ -4114,13 +4114,30 @@ function speakBtnHtml(s, k) {
    점수는 두 받아쓰기 모두에서 들린 단어의 일치율이라 큰 숫자·링으로 강조하지 않는다 — 발음 인증서로 읽힌다.
    음소 줄(실제 소리, phonemes_acoustic)은 음소 노드가 붙어 있을 때만 나온다. 없으면 단어 쪽만. */
 const PH_TITLE = { ok: '목표한 소리와 가깝게 났어요', weak: '조금 약했어요', missing: '목표한 소리와 다르게 났어요' };
-function spkBarHtml(label, value, tone) {
+/* 지표 한 줄. hero 는 음소 일치(실제 소리에서 잰 값) — 단어 일치는 발음 점수가 아니라 mono 작은 값으로 둔다. */
+function spkBarHtml(label, value, tone, hero) {
   const p = Math.max(0, Math.min(100, Math.round(value)));
-  return `<div class="spk-bar"><span class="spk-bar-l">${esc(label)}</span><span class="spk-track"><span class="spk-fill ${tone}" style="width:${Math.max(2, p)}%"></span></span><b class="spk-bar-v">${p}%</b></div>`;
+  return `<div class="spk-bar${hero ? ' hero' : ''}"><b class="spk-bar-v" aria-hidden="true">${p}%</b>` +
+    `<span class="spk-bar-l">${esc(label)}</span>` +
+    `<span class="spk-track"><span class="spk-fill ${tone}" style="width:${Math.max(2, p)}%"></span></span>` +
+    `<span class="sr-only">${esc(label)} ${p}%</span></div>`;
+}
+/* 도장 — 음소가 전부 통과했을 때만. 등급이 아니라 사실('음소 확인 20/20')만 적는다. */
+function spkSealHtml(rows) {
+  if (!rows.length) return '';
+  const off = rows.filter(r => r.status === 'missing' || r.status === 'weak').length;
+  if (off) return '';
+  return `<span class="spk-seal" aria-label="음소 ${rows.length}개 모두 목표한 소리와 가깝게 났어요">음소 확인<b>${rows.length}/${rows.length}</b></span>`;
+}
+function spkEyebrow(r, rows) {
+  const d = new Date();
+  const stamp = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+  return `SPEAK CHECK · ${stamp}${rows.length ? ` · ${rows.length} SOUNDS` : ''}`;
 }
 function speakCardHtml(r, target) {
   const pa = r.phonemes_acoustic && r.phonemes_acoustic.status === 'ok' ? r.phonemes_acoustic : null;
-  const rows = pa && Array.isArray(pa.phonemes) ? pa.phonemes : [];
+  const rows = pa && Array.isArray(pa.phonemes)
+    ? pa.phonemes.filter(x => x && x.ipa && ['ok', 'weak', 'missing'].includes(x.status)) : [];
   const v = AI.speakVerdict(r.score, rows);
   const acc = pa && typeof pa.phoneme_accuracy === 'number' ? pa.phoneme_accuracy : null;
   const miss = r.diff && Array.isArray(r.diff.missing) ? r.diff.missing : [];
@@ -4130,25 +4147,32 @@ function speakCardHtml(r, target) {
   const toneOf = x => (x >= 90 ? '' : x >= 70 ? 'mid' : 'low');
   const row = (key, val) => `<div class="spk-row"><span class="spk-row-k">${esc(key)}</span><span class="spk-row-v">${val}</span></div>`;
   const savedNote = r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '';
+  const perf = '<div class="spk-perf"></div>';
+  let body = '';
+  // 지표: DOM 순서는 단어 → 음소(테스트 계약), 화면은 order 로 음소를 위로
+  body += spkBarHtml('단어 일치', r.score, toneOf(r.score), acc === null);
+  if (acc !== null) body += spkBarHtml('음소 일치', acc, toneOf(acc), true);
   return `<div class="speak-res spk-card-wrap"${f ? ` data-ph-focus="${esc(f.ipa)}"` : ''}><div class="spk-card">` +
-    `<div class="spk-head"><span class="spk-ic ${v.tone}">${v.tone === 'ok' ? '✓' : '!'}</span><span class="spk-verdict">${esc(v.text)}</span>` +
-    `<span class="spk-tag">발음 점수 아님</span></div>` +
-    `<div class="spk-bars">${spkBarHtml('단어 일치', r.score, toneOf(r.score))}${acc !== null ? spkBarHtml('음소 일치', acc, toneOf(acc)) : ''}</div>` +
-    (marks.length ? row('목표 문장', `<span class="spk-words">${marks.map(m => `<span class="spk-w${m.miss ? ' miss' : ''}"${m.miss ? ' title="두 받아쓰기 모두에서 들리지 않았어요"' : ''}>${esc(m.w)}</span>`).join(' ')}</span>`) : '') +
-    (groups.length ? `<div class="spk-strip-wrap"><div class="spk-strip-label">실제 소리 · 음소 ${rows.length}개 · 빨간 테두리가 목표와 다르게 난 소리</div><div class="spk-strip">` +
+    `<div class="spk-head"><div class="spk-head-txt"><div class="spk-eyebrow">${esc(spkEyebrow(r, rows))}</div>` +
+      `<b class="spk-verdict">${esc(v.text)}</b></div>` +
+      `<span class="spk-tag">발음 점수 아님</span>${spkSealHtml(rows)}</div>` +
+    perf + `<div class="spk-bars">${body}</div>` +
+    (marks.length ? perf + `<div class="spk-word-wrap"><span class="spk-words">${marks.map(m =>
+        `<span class="spk-w${m.miss ? ' miss' : ''}"${m.miss ? ' title="두 받아쓰기 모두에서 들리지 않았어요"' : ''}>${esc(m.w)}</span>`).join(' ')}</span></div>` : '') +
+    (groups.length ? perf + `<div class="spk-strip-wrap"><div class="spk-strip-label">소리별 결과 · ${rows.length}개 · 표시된 것만 목표와 달라요</div><div class="spk-strip">` +
       groups.map(g => `<span class="spk-wg"><span class="spk-wt">${esc(g.word)}</span><span class="spk-phs">` +
-        g.items.map(p => `<span class="spk-ph ${esc(p.status)}" title="${esc(PH_TITLE[p.status] || '')}">${esc(p.ipa)}</span>`).join('') + '</span></span>').join('') +
+        g.items.map(p2 => `<span class="spk-ph ${esc(p2.status)}" title="${esc(PH_TITLE[p2.status] || '')}">${esc(p2.ipa)}</span>`).join('') + '</span></span>').join('') +
       '</div></div>' : '') +
-    (f ? `<div class="spk-focus"><span class="spk-focus-ic">!</span><div><div class="spk-focus-h">'${esc(f.word || '')}'의 <b>/${esc(f.ipa)}/</b>` +
+    (f ? `<div class="spk-focus${f.heard_as ? '' : ' ok'}"><span class="spk-focus-ic" aria-hidden="true"></span><div>` +
+      `<div class="spk-focus-h">'${esc(f.word || '')}'의 <b>/${esc(f.ipa)}/</b>` +
       (f.heard_as ? ` <span class="spk-heard">→ /${esc(f.heard_as)}/처럼 들렸어요</span>` : ' 소리가 약했어요') + '</div>' +
       (f.label ? `<div class="spk-focus-label">${esc(f.label)}</div>` : '') + (f.tip ? `<div class="spk-focus-tip">${esc(f.tip)}</div>` : '') + '</div></div>' : '') +
     (r.heard ? row('들린 문장', esc(r.heard)) : '') +
     (r.fix_one ? row('고칠 한 가지', esc(r.fix_one)) : '') +
     ((r.tip || (r.offer && r.coverage !== null)) ? `<details class="spk-more"><summary>설명 더 보기</summary>` +
       (r.tip ? row('팁', esc(r.tip)) : '') +
-      (r.offer && r.coverage !== null ? `<div class="spk-note">참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)</div>` : '') + '</details>' : '') +
-    (savedNote ? `<div class="spk-note">${esc(savedNote)}</div>` : '') +
-    (!pa ? '' : `<div class="spk-note">소리 분석은 AI 음소 인식 결과예요 — 틀릴 수 있어요</div>`) +
+      (r.offer && r.coverage !== null ? `<div class="spk-note" style="border-top:0">참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)</div>` : '') + '</details>' : '') +
+    `<div class="spk-note"><b>단어 일치율</b>이에요 · 발음 점수 아님${savedNote ? ' · ' + esc(savedNote) : ''}${pa ? ' · 소리 분석은 AI 음소 인식 결과라 틀릴 수 있어요' : ''}</div>` +
     '</div></div>';
 }
 function speakResHtml(s, k) {
