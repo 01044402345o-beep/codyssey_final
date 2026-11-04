@@ -4148,7 +4148,7 @@ function speakCardHtml(r, target) {
       (r.tip ? row('팁', esc(r.tip)) : '') +
       (r.offer && r.coverage !== null ? `<div class="spk-note">참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)</div>` : '') + '</details>' : '') +
     (savedNote ? `<div class="spk-note">${esc(savedNote)}</div>` : '') +
-    (!pa ? '' : `<div class="spk-note">소리 분석은 AI 음소 인식 결과예요 — 틀릴 수 있어요</div>`) +
+    (!pa ? '' : `<div class="spk-note">소리 분석은 AI 음소 인식 결과예요${pa.via === 'azure' ? '(Microsoft Azure 발음 평가)' : pa.via === 'speechace' ? '(Speechace 발음 평가)' : ''} — 틀릴 수 있어요</div>`) +
     '</div></div>';
 }
 function speakResHtml(s, k) {
@@ -4193,7 +4193,7 @@ function askVoiceConsent(after) {
   const host = esc(API.host || location.host);
   confirmBox('말하기 연습 전에 확인해 주세요',
     `<b>보내는 것</b> · 녹음한 목소리(최대 15초)와 연습 중인 영어 문장<br>
-     <b>받는 곳</b> · ① 이 서비스 서버(${host}) — 말소리가 있는지 신경망(VAD)으로 확인 서버 안의 두 신경망(Silero·pyannote)이 <b>모두</b> 말소리를 찾으면 ② 그 구간의 녹음이 서로 다른 전사 AI 둘에 동시에: Groq Whisper(실패 시 OpenAI Whisper), 교차검증용 AssemblyAI ③ 받아쓴 문장·목표 문장·상황 이름(글만)이 피드백용 Google Gemini API로 ④ 음소 분석이 켜져 있을 때만, 같은 녹음 구간과 목표 문장이 팀이 운영하는 음소 분석 PC로(암호화된 HTTPS, 분석 뒤 저장하지 않아요)<br>
+     <b>받는 곳</b> · ① 이 서비스 서버(${host}) — 말소리가 있는지 신경망(VAD)으로 확인 서버 안의 두 신경망(Silero·pyannote)이 <b>모두</b> 말소리를 찾으면 ② 그 구간의 녹음이 서로 다른 전사 AI 둘에 동시에: Groq Whisper(실패 시 OpenAI Whisper), 교차검증용 AssemblyAI ③ 받아쓴 문장·목표 문장·상황 이름(글만)이 피드백용 Google Gemini API로 ④ 음소 분석이 켜져 있을 때만, 같은 녹음 구간과 목표 문장이 팀이 운영하는 음소 분석 PC로(암호화된 HTTPS, 분석 뒤 저장하지 않아요) ⑤ 음소 분석 PC가 모두 꺼져 있을 때만, 같은 녹음 구간과 목표 문장이 클라우드 발음 평가(Microsoft Azure, 필요하면 Speechace)로<br>
      <b>처리</b> · 전사 AI들은 목표 문장을 모른 채 <b>받아쓰기만</b> 하고, 두 전사에서 <b>모두</b> 들린 단어만 코드가 점수로 계산해요. 교차검증이 안 되면 채점하지 않아요.<br>
      <b>목적</b> · 말하기 연습 피드백 (피드백 문장은 AI가 만든 결과예요)<br>
      <b>보관</b> · 이 서비스 서버와 음소 분석 PC는 녹음을 저장하지 않아요. 전사 AI 회사의 처리·보관은 각 회사 약관을 따라요.<br>

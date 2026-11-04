@@ -57,6 +57,8 @@ Render → codyssey-api → Environment:
 
 ## 4. 끄기·되돌리기
 
+노드가 모두 실패할 때 클라우드로 넘기는 대체 경로는 [FALLBACK.md](FALLBACK.md).
+
 | 하고 싶은 것 | 방법 |
 |---|---|
 | 공개 주소만 닫기 | `funnel_off.cmd` |

@@ -543,7 +543,7 @@ class CrossValidationTest(Base):
     def test_no_phoneme_node_no_call(self) -> None:
         """노드 주소·토큰이 없으면 노드를 부르지 않는다(음성이 새 수신처로 가지 않는다)."""
         fake, _ = self.install(self.ok())
-        with mock.patch.object(main.acoustic_remote, "analyze") as an:
+        with mock.patch.object(main.acoustic_chain.remote, "analyze") as an:
             _, d = self.speak(GOOD)
         an.assert_not_called()
         self.assertIsNone(d["phonemes_acoustic"])
@@ -559,7 +559,7 @@ class CrossValidationTest(Base):
             return got
 
         with mock.patch.dict(os.environ, {"PHONEME_REMOTE_URL": "https://pc.tail1.ts.net", "PHONEME_TOKEN": "t" * 32}), \
-                mock.patch.object(main.acoustic_remote, "analyze", side_effect=analyze):
+                mock.patch.object(main.acoustic_chain.remote, "analyze", side_effect=analyze):
             _, d = self.speak(GOOD)
         self.assertEqual(d["phonemes_acoustic"], got)
         self.assertEqual(seen["target"], TARGET)
@@ -569,7 +569,7 @@ class CrossValidationTest(Base):
     def test_phoneme_node_crash_keeps_scoring(self) -> None:
         fake, _ = self.install(self.ok())
         with mock.patch.dict(os.environ, {"PHONEME_REMOTE_URL": "https://pc.tail1.ts.net", "PHONEME_TOKEN": "t" * 32}), \
-                mock.patch.object(main.acoustic_remote, "analyze", side_effect=RuntimeError("boom")):
+                mock.patch.object(main.acoustic_chain.remote, "analyze", side_effect=RuntimeError("boom")):
             _, d = self.speak(GOOD)
         self.assertEqual(d["phonemes_acoustic"]["status"], "unavailable")
         self.assertIsInstance(d["score"], int)
@@ -578,7 +578,7 @@ class CrossValidationTest(Base):
         fake, _ = self.install(self.ok())
         fake.aai_fail = True
         with mock.patch.dict(os.environ, {"PHONEME_REMOTE_URL": "https://pc.tail1.ts.net", "PHONEME_TOKEN": "t" * 32}), \
-                mock.patch.object(main.acoustic_remote, "analyze") as an:
+                mock.patch.object(main.acoustic_chain.remote, "analyze") as an:
             _, d = self.speak(GOOD)
         self.assertTrue(d.get("limited"))
         an.assert_not_called()
