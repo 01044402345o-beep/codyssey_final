@@ -23,14 +23,6 @@ if not defined PHONEME_PORT set "PHONEME_PORT=8443"
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
 for %%A in ("%LOG%") do if %%~zA GTR 5000000 move /y "%LOG%" "%LOG%.old" >nul
 
-rem ---- 0) already running? ----
-netstat -ano | findstr /r /c:"127.0.0.1:%PHONEME_PORT% .*LISTENING" >nul
-if not errorlevel 1 (
-  echo [skip] something is already listening on 127.0.0.1:%PHONEME_PORT%
-  echo [%DATE% %TIME%] skip: port %PHONEME_PORT% busy >> "%LOG%"
-  goto :end
-)
-
 rem ---- 1) venv + deps (once; marker file means deps finished) ----
 if not exist "%PY%" (
   echo [1/4] creating venv: %VENV%
@@ -71,6 +63,19 @@ if errorlevel 1 (
   goto :fail
 )
 
+if /i "%MODE%"=="prepare" (
+  echo [ok] prepared: venv, packages, token, model
+  goto :end
+)
+
+rem ---- already running? (do not start a second copy) ----
+netstat -ano | findstr /r /c:"127.0.0.1:%PHONEME_PORT% .*LISTENING" >nul
+if not errorlevel 1 (
+  echo [skip] something is already listening on 127.0.0.1:%PHONEME_PORT%
+  echo [%DATE% %TIME%] skip: port %PHONEME_PORT% busy >> "%LOG%"
+  goto :end
+)
+
 rem ---- 4) run, restart on crash (exit 2 = config error: stop) ----
 echo [4/4] node on http://127.0.0.1:%PHONEME_PORT%  ^(log: %LOG%^)
 set "PYTHONPATH=%BACKEND%"
@@ -87,7 +92,7 @@ ping -n 31 127.0.0.1 >nul
 goto loop
 
 :fail
-if /i not "%MODE%"=="hidden" pause
+if /i not "%MODE%"=="hidden" if not defined MADI_NOPAUSE pause
 endlocal & exit /b 1
 :end
 endlocal & exit /b 0

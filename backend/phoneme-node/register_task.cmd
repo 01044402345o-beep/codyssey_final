@@ -23,8 +23,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "Get-ScheduledTask -TaskName '%TASK%' | Select-Object TaskName, State | Format-List"
 if errorlevel 1 (
   echo [FAIL] registration failed. For "startup" mode, run this file as administrator.
-  pause & exit /b 1
+  if not defined MADI_NOPAUSE pause
+  exit /b 1
 )
 echo.
 echo Registered "%TASK%". Check in about a minute:  check_node.cmd
-pause
+if not defined MADI_NOPAUSE pause
+exit /b 0
