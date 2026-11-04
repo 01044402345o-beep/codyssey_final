@@ -50,7 +50,7 @@
 | Groq, Inc. (미국) | **말하기 녹음 음성** | 1차 전사(들린 문장 만들기) | 서버 안 두 단계 말소리 검사(Silero·pyannote, 서버에서 실행)를 **둘 다 통과한 녹음만** | **[확인 필요]** Groq 데이터 정책 |
 | OpenAI, L.L.C. (미국) | 말하기 녹음 음성 | 1차 전사 예비(Groq 실패 시) | 위와 같음 | **[확인 필요]** API 데이터 정책(기본 학습 미사용, 남용 감시 보관) |
 | AssemblyAI, Inc. (미국) | 말하기 녹음 음성 | 교차검증 전사 | 위와 같음 | **[확인 필요]** |
-| 팀 운영 음소 분석 PC (팀원 개인 PC, **위치 [확인 필요]**) | 말하기 녹음 음성(위 두 검사를 통과하고 교차검증된 것만)·목표 문장 | 실제 소리의 음소 분석 — 운영자가 `PHONEME_REMOTE_URL`·`PHONEME_TOKEN` 을 넣었을 때만(앱 동의 v8 ④) | 우리 서버 → Tailscale Funnel HTTPS(TLS 는 그 PC 에서 끝남, 중계 서버는 내용을 못 봄) + 공유 토큰 | 저장하지 않음 — 메모리에서 분석하고 버린다, 로그에도 음성·문장 없음(`backend/app/acoustic/server.py`) |
+| 팀 운영 음소 분석 PC (팀원 개인 PC, **위치 [확인 필요]**) | 말하기 녹음 음성(위 두 검사를 통과하고 교차검증된 것만)·목표 문장 | 실제 소리의 음소 분석 — 운영자가 `PHONEME_REMOTE_URLS`·`PHONEME_TOKEN` 을 넣었을 때만(앱 동의 v8 ④) | 우리 서버 → Tailscale Funnel HTTPS(TLS 는 그 PC 에서 끝남, 중계 서버는 내용을 못 봄) + 공유 토큰 | 저장하지 않음 — 메모리에서 분석하고 버린다, 로그에도 음성·문장 없음(`backend/app/acoustic/server.py`) |
 | Microsoft Corporation — Azure AI Speech 발음 평가 (**리전은 운영 설정 `PHONEME_AZURE_REGION`, 권장 koreacentral = 국내**) | 말하기 녹음 음성(교차검증된 것만)·목표 문장 | 음소 분석 PC 가 **모두** 꺼졌거나 실패했을 때만, 하루 상한(`PHONEME_CLOUD_DAILY_CAP`) 안에서 — 키(`PHONEME_AZURE_KEY`)를 넣었을 때만(앱 동의 v9 ⑤) | 우리 서버 → HTTPS | **[확인 필요]** Azure Speech 데이터 보관 정책(실시간 인식은 기본 저장 안 함으로 알려져 있으나 계약 확인) |
 | Speechace (미국) | 위와 같음 | Azure 다음 순서, `PHONEME_SPEECHACE_KEY` 를 넣었을 때만(동의 v9 ⑤) | 우리 서버 → HTTPS | **[확인 필요]** Speechace 데이터 보관 정책 |
 | Soniox, Inc. (미국) | **실시간 통역 음성**(통역을 켠 동안 계속, 한 번 최대 3분) | 받아쓰기와 한국어↔영어 번역(기본 통역 제공자) | 우리 서버를 거쳐 WebSocket(TLS). 로그인 토큰 확인 뒤에만, 계정·IP 마다 10분에 6번까지 | **[확인 필요]** Soniox 데이터 보관·학습 사용 정책 |
