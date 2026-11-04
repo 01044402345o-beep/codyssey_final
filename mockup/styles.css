@@ -2274,6 +2274,7 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .spk-note { padding: 9px clamp(11px, 3.4vw, 14px) 11px; border-top: 1px solid var(--border);
   font-size: 0.75rem; color: var(--text-soft); line-height: 1.5; }
 .spk-note b { color: var(--text-2); font-weight: 700; }
+.spk-note p { display: inline; margin: 0; }
 
 /* 아주 좁은 화면(≤340px): 라벨과 값을 세로로 쌓고, 태그를 제 줄로 내린다 */
 @media (max-width: 340px) {
