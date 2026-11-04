@@ -136,6 +136,8 @@ def build_report(rows: list[dict[str, Any]], via: str, model: str) -> dict[str, 
     """[{ipa, word, score(0~100), heard_as, start_ms, end_ms}] → phonemes_acoustic 형식(노드와 같음)."""
     out, worst = [], None
     for r in rows[:80]:
+        if r.get("score") is None:
+            continue                 # 점수를 모르는 음소는 '틀림'으로 보이지 않고 뺀다(빠진 단어는 Omission → 0점으로 따로 온다)
         r = {**r, "ipa": norm_ipa(r.get("ipa")) or "?", "heard_as": norm_ipa(r.get("heard_as")) or None}
         st = _status_of(r.get("score"))
         heard = r.get("heard_as") or None
@@ -173,8 +175,19 @@ def _read_json(req: urllib.request.Request, t: float) -> Any:
 
 
 # ---------------------------------------------------------------- Azure
+def _assess(obj: dict) -> dict:
+    """평가 값이 PronunciationAssessment 아래(SDK·일부 응답)에 있든, 바로 아래(REST format=detailed)에 있든 읽는다."""
+    inner = obj.get("PronunciationAssessment")
+    return {**obj, **inner} if isinstance(inner, dict) else obj
+
+
 def azure_rows(data: Any) -> list[dict[str, Any]]:
-    """Azure 발음 평가 응답(format=detailed) → 공통 행. 오류 구조면 ValueError."""
+    """Azure 발음 평가 응답(format=detailed) → 공통 행. 오류 구조면 ValueError.
+
+    2026-11-04 라이브 실측: REST 응답은 음소 점수를 Phonemes[].AccuracyScore 에 바로 둔다(중첩 아님).
+    중첩 형식만 읽던 첫 버전은 점수를 못 읽어 20개 음소를 전부 '틀림(0%)'으로 그렸다.
+    점수를 하나도 못 읽으면 결과를 만들지 않고 실패로 넘긴다 — 모르는 것을 '전부 틀림'으로 보이지 않게.
+    """
     if not isinstance(data, dict) or data.get("RecognitionStatus") != "Success":
         raise ValueError(f"azure_{(data or {}).get('RecognitionStatus', 'bad')}"[:40] if isinstance(data, dict) else "azure_bad")
     nbest = data.get("NBest") or []
@@ -182,19 +195,24 @@ def azure_rows(data: Any) -> list[dict[str, Any]]:
         raise ValueError("azure_no_nbest")
     rows: list[dict[str, Any]] = []
     for w in nbest[0].get("Words") or []:
+        if not isinstance(w, dict):
+            continue
+        wa = _assess(w)
         word = str(w.get("Word") or "").lower()
-        etype = (w.get("PronunciationAssessment") or {}).get("ErrorType", "None")
+        etype = wa.get("ErrorType", "None")
         if etype == "Insertion":
             continue                       # 목표에 없는 말 — 목표 음소 행이 아니다
         for ph in w.get("Phonemes") or []:
-            pa = ph.get("PronunciationAssessment") or {}
+            if not isinstance(ph, dict):
+                continue
+            pa = _assess(ph)
             score = pa.get("AccuracyScore")
-            score = float(score) if isinstance(score, (int, float)) else None
+            score = float(score) if isinstance(score, (int, float)) and not isinstance(score, bool) else None
             if etype == "Omission":
                 score = 0.0
             heard = None
             for cand in pa.get("NBestPhonemes") or []:
-                p = str(cand.get("Phoneme") or "")
+                p = str((cand or {}).get("Phoneme") or "")
                 if p and p != ph.get("Phoneme"):
                     heard = p
                     break
@@ -205,6 +223,8 @@ def azure_rows(data: Any) -> list[dict[str, Any]]:
                          "start_ms": start, "end_ms": end})
     if not rows:
         raise ValueError("azure_no_phonemes")
+    if all(r["score"] is None for r in rows):
+        raise ValueError("azure_no_scores")
     return rows
 
 
