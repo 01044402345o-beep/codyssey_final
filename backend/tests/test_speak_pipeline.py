@@ -540,6 +540,49 @@ class CrossValidationTest(Base):
         self.assertIsNone(d["phonemes"])
         self.assertIsInstance(d["score"], int)
 
+    def test_no_phoneme_node_no_call(self) -> None:
+        """노드 주소·토큰이 없으면 노드를 부르지 않는다(음성이 새 수신처로 가지 않는다)."""
+        fake, _ = self.install(self.ok())
+        with mock.patch.object(main.acoustic_remote, "analyze") as an:
+            _, d = self.speak(GOOD)
+        an.assert_not_called()
+        self.assertIsNone(d["phonemes_acoustic"])
+
+    def test_phoneme_node_result_attached(self) -> None:
+        fake, _ = self.install(self.ok())
+        got = {"status": "ok", "basis": "acoustic", "via": "remote", "phoneme_accuracy": 95.0,
+               "focus": {"word": "peanut", "ipa": "iː", "heard_as": "ɪ"}}
+        seen = {}
+
+        def analyze(samples, target):
+            seen.update(n=len(samples), target=target)
+            return got
+
+        with mock.patch.dict(os.environ, {"PHONEME_REMOTE_URL": "https://pc.tail1.ts.net", "PHONEME_TOKEN": "t" * 32}), \
+                mock.patch.object(main.acoustic_remote, "analyze", side_effect=analyze):
+            _, d = self.speak(GOOD)
+        self.assertEqual(d["phonemes_acoustic"], got)
+        self.assertEqual(seen["target"], TARGET)
+        self.assertGreater(seen["n"], 16000 * 0.5)          # 디코드한 16k 샘플을 그대로 보낸다
+        self.assertIsInstance(d["score"], int)
+
+    def test_phoneme_node_crash_keeps_scoring(self) -> None:
+        fake, _ = self.install(self.ok())
+        with mock.patch.dict(os.environ, {"PHONEME_REMOTE_URL": "https://pc.tail1.ts.net", "PHONEME_TOKEN": "t" * 32}), \
+                mock.patch.object(main.acoustic_remote, "analyze", side_effect=RuntimeError("boom")):
+            _, d = self.speak(GOOD)
+        self.assertEqual(d["phonemes_acoustic"]["status"], "unavailable")
+        self.assertIsInstance(d["score"], int)
+
+    def test_phoneme_node_not_called_in_limited_mode(self) -> None:
+        fake, _ = self.install(self.ok())
+        fake.aai_fail = True
+        with mock.patch.dict(os.environ, {"PHONEME_REMOTE_URL": "https://pc.tail1.ts.net", "PHONEME_TOKEN": "t" * 32}), \
+                mock.patch.object(main.acoustic_remote, "analyze") as an:
+            _, d = self.speak(GOOD)
+        self.assertTrue(d.get("limited"))
+        an.assert_not_called()
+
     def test_local_detector_reported(self) -> None:
         fake, _ = self.install(self.ok())
         _, d = self.speak(GOOD)

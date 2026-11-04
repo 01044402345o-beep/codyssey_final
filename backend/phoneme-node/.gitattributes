@@ -1,0 +1,4 @@
+# Windows 배치·스크립트는 CRLF 여야 goto·라벨이 깨지지 않는다
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.vbs text eol=crlf

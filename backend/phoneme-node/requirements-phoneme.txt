@@ -1,0 +1,7 @@
+# 음소 노드(상시 가동 PC) 전용 — 본체 requirements.txt 와 같은 버전으로 고정한다.
+fastapi==0.142.2
+uvicorn==0.54.0
+python-multipart==0.0.32
+onnxruntime==1.23.2
+numpy==2.2.6
+psutil==7.2.2
