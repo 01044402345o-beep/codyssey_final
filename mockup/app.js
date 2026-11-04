@@ -4110,6 +4110,47 @@ function speakBtnHtml(s, k) {
   const act = k === 'me' ? 'data-act="speak-rec"' : `data-act="speak-line" data-k="${k}"`;
   return `<button class="speak-btn ${st === 'recording' ? 'rec' : ''}" ${act} ${st === 'requesting' || st === 'uploading' || other ? 'disabled' : ''} aria-label="${st === 'recording' ? '녹음 끝내기' : '이 문장 말해보기'}">${st === 'recording' ? TALK_SVG.stop : TALK_SVG.mic}${label}</button>`;
 }
+/* 말해보기 결과 카드. 시각적 중심은 점수가 아니라 '어디가 안 들렸나'(단어)와 '어느 소리가 달랐나'(음소)다.
+   점수는 두 받아쓰기 모두에서 들린 단어의 일치율이라 큰 숫자·링으로 강조하지 않는다 — 발음 인증서로 읽힌다.
+   음소 줄(실제 소리, phonemes_acoustic)은 음소 노드가 붙어 있을 때만 나온다. 없으면 단어 쪽만. */
+const PH_TITLE = { ok: '목표한 소리와 가깝게 났어요', weak: '조금 약했어요', missing: '목표한 소리와 다르게 났어요' };
+function spkBarHtml(label, value, tone) {
+  const p = Math.max(0, Math.min(100, Math.round(value)));
+  return `<div class="spk-bar"><span class="spk-bar-l">${esc(label)}</span><span class="spk-track"><span class="spk-fill ${tone}" style="width:${Math.max(2, p)}%"></span></span><b class="spk-bar-v">${p}%</b></div>`;
+}
+function speakCardHtml(r, target) {
+  const pa = r.phonemes_acoustic && r.phonemes_acoustic.status === 'ok' ? r.phonemes_acoustic : null;
+  const rows = pa && Array.isArray(pa.phonemes) ? pa.phonemes : [];
+  const v = AI.speakVerdict(r.score, rows);
+  const acc = pa && typeof pa.phoneme_accuracy === 'number' ? pa.phoneme_accuracy : null;
+  const miss = r.diff && Array.isArray(r.diff.missing) ? r.diff.missing : [];
+  const marks = AI.wordMarks(target, miss);
+  const groups = AI.phonemeGroups(rows);
+  const f = pa && pa.focus && pa.focus.ipa ? pa.focus : null;
+  const toneOf = x => (x >= 90 ? '' : x >= 70 ? 'mid' : 'low');
+  const row = (key, val) => `<div class="spk-row"><span class="spk-row-k">${esc(key)}</span><span class="spk-row-v">${val}</span></div>`;
+  const savedNote = r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '';
+  return `<div class="speak-res spk-card-wrap"${f ? ` data-ph-focus="${esc(f.ipa)}"` : ''}><div class="spk-card">` +
+    `<div class="spk-head"><span class="spk-ic ${v.tone}">${v.tone === 'ok' ? '✓' : '!'}</span><span class="spk-verdict">${esc(v.text)}</span>` +
+    `<span class="spk-tag">발음 점수 아님</span></div>` +
+    `<div class="spk-bars">${spkBarHtml('단어 일치', r.score, toneOf(r.score))}${acc !== null ? spkBarHtml('음소 일치', acc, toneOf(acc)) : ''}</div>` +
+    (marks.length ? row('목표 문장', `<span class="spk-words">${marks.map(m => `<span class="spk-w${m.miss ? ' miss' : ''}"${m.miss ? ' title="두 받아쓰기 모두에서 들리지 않았어요"' : ''}>${esc(m.w)}</span>`).join(' ')}</span>`) : '') +
+    (groups.length ? `<div class="spk-strip-wrap"><div class="spk-strip-label">실제 소리 · 음소 ${rows.length}개 · 빨간 테두리가 목표와 다르게 난 소리</div><div class="spk-strip">` +
+      groups.map(g => `<span class="spk-wg"><span class="spk-wt">${esc(g.word)}</span><span class="spk-phs">` +
+        g.items.map(p => `<span class="spk-ph ${esc(p.status)}" title="${esc(PH_TITLE[p.status] || '')}">${esc(p.ipa)}</span>`).join('') + '</span></span>').join('') +
+      '</div></div>' : '') +
+    (f ? `<div class="spk-focus"><span class="spk-focus-ic">!</span><div><div class="spk-focus-h">'${esc(f.word || '')}'의 <b>/${esc(f.ipa)}/</b>` +
+      (f.heard_as ? ` <span class="spk-heard">→ /${esc(f.heard_as)}/처럼 들렸어요</span>` : ' 소리가 약했어요') + '</div>' +
+      (f.label ? `<div class="spk-focus-label">${esc(f.label)}</div>` : '') + (f.tip ? `<div class="spk-focus-tip">${esc(f.tip)}</div>` : '') + '</div></div>' : '') +
+    (r.heard ? row('들린 문장', esc(r.heard)) : '') +
+    (r.fix_one ? row('고칠 한 가지', esc(r.fix_one)) : '') +
+    ((r.tip || (r.offer && r.coverage !== null)) ? `<details class="spk-more"><summary>설명 더 보기</summary>` +
+      (r.tip ? row('팁', esc(r.tip)) : '') +
+      (r.offer && r.coverage !== null ? `<div class="spk-note">참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)</div>` : '') + '</details>' : '') +
+    (savedNote ? `<div class="spk-note">${esc(savedNote)}</div>` : '') +
+    (!pa ? '' : `<div class="spk-note">소리 분석은 AI 음소 인식 결과예요 — 틀릴 수 있어요</div>`) +
+    '</div></div>';
+}
 function speakResHtml(s, k) {
   const mine = SPK.sid === s.id && SPK.line === k;
   const st = mine ? SPK.state : 'idle';
@@ -4120,9 +4161,12 @@ function speakResHtml(s, k) {
       : r.usable !== true ? [r.mock ? '샘플 응답이에요(채점 안 됨).' : (r.reason || '평가하지 못했어요. 다시 시도해 주세요.'), k === 'me' ? '복습 목록에 저장하지 않았어요.' : '']
       : r.limited ? [r.heard ? `들린 문장: ${r.heard}` : '', r.reason || '음성 확인이 제한되어 점수와 자동 복습 저장을 제공하지 않습니다.',
          r.saved ? '복습 목록에 저장했어요(직접 선택)' : '']   // 제한 모드: 검증 못 한 전사라 점수·일치율을 보이지 않는다
-      : [typeof r.score === 'number' ? (r.score_kind === 'word_match' ? `단어 일치 ${r.score}% (발음 점수 아님)` : `점수 ${r.score}`) : '', r.heard ? `들린 문장: ${r.heard}` : '', AI.acousticNote(r.phonemes_acoustic) || AI.phonemeNotes(r.phonemes), r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '',
+      : [typeof r.score === 'number' ? (String(r.score_kind || '').startsWith('word_match') ? `단어 일치 ${r.score}% (발음 점수 아님)` : `점수 ${r.score}`) : '', r.heard ? `들린 문장: ${r.heard}` : '', AI.acousticNote(r.phonemes_acoustic) || AI.phonemeNotes(r.phonemes), r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '',
          r.offer && r.coverage !== null ? `참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)` : ''];
-    res = `<div class="speak-res">${parts.filter(Boolean).map(esc).join(' · ')}</div>`;
+    // 교차검증된 채점 결과는 카드(인포그래픽)로, 오류·말소리 없음·제한 모드는 지금처럼 한 줄 글로
+    res = (!r.error && r.usable === true && !r.limited && typeof r.score === 'number')
+      ? speakCardHtml(r, r.target || s.en)
+      : `<div class="speak-res">${parts.filter(Boolean).map(esc).join(' · ')}</div>`;
     if (r.offer) res += `<button class="speak-btn" data-act="weak-save">이 상황을 복습 목록에 저장</button>`;
   }
   // 결과가 나온 뒤(오류·말소리 없음 포함) 방금 녹음을 다시 들을 수 있다 — 원어민 '듣기'와 비교하라고
@@ -4284,13 +4328,13 @@ async function uploadSpeech(tok, blob, s, opt) {
   SPK.state = 'idle'; SPK.ctl = null;
   if (opt && opt.onResult) { opt.onResult(res); updateSpeakUi(); return; }   // 대화 중에는 점수·자동 저장 없음(끝난 뒤 요약)
   if (opt && opt.line && opt.line !== 'me') {   // 상대 답변·이어서 할 말 연습: 결과만 보이고 복습 목록(내 문장 기준 규칙)은 건드리지 않는다
-    SPK.result = { ...res, saved: false, savedBy: null, offer: false, coverage: typeof res.heard === 'string' ? AI.heardCoverage(opt.target, res.heard) : null };
+    SPK.result = { ...res, target: opt.target, saved: false, savedBy: null, offer: false, coverage: typeof res.heard === 'string' ? AI.heardCoverage(opt.target, res.heard) : null };
     updateSpeakUi(); return;
   }
   const decision = AI.weakDecision(s, res);
   const save = decision === 'auto';
   if (save) saveWeakList(AI.upsertWeak(weakList(), weakItem(s)));
-  SPK.result = { ...res, saved: save, savedBy: save ? 'auto' : null, offer: decision === 'ask', coverage: typeof res.heard === 'string' ? AI.heardCoverage(s.en, res.heard) : null };
+  SPK.result = { ...res, target: s.en, saved: save, savedBy: save ? 'auto' : null, offer: decision === 'ask', coverage: typeof res.heard === 'string' ? AI.heardCoverage(s.en, res.heard) : null };
   updateSpeakUi(); renderDemo();
 }
 
