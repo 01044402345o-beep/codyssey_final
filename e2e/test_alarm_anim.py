@@ -54,14 +54,16 @@ with sync_playwright() as pw:
         check("막대 순번(--i)이 붙어 있다",
               pg.evaluate("() => { const b = [...document.querySelectorAll('.alarm-week i')]; return b.length === 7 && b.every((e, k) => e.style.getPropertyValue('--i') === String(k)); }"))
 
+        big_before = pg.inner_text(".alarm-big").strip()
+        label_before = pg.inner_text(".alarm-label").strip()
+
         # 카드를 뒤집어 다시 그려도 '들어오는' 동작은 재생되지 않는다
         pg.evaluate("() => ACT['alarm-next']()"); pg.wait_for_timeout(600)
         later = pg.evaluate("() => { const e = document.querySelector('.alarm'); return e ? e.classList.contains('alarm-fx') : null; }")
         check("다시 그려도 들어오는 동작은 재생되지 않는다", later in (False, None), later)
 
-        big = pg.inner_text(".alarm-big").strip()
-        check("움직여도 숫자는 그대로 읽힌다", big.endswith("/10장") and big[0].isdigit(), big)
-        check("움직여도 라벨이 읽힌다", len(pg.inner_text(".alarm-label").strip()) > 4)
+        check("움직여도 숫자는 그대로 읽힌다", big_before.endswith("/10장") and big_before[0].isdigit(), big_before)
+        check("움직여도 라벨이 읽힌다", len(label_before) > 4, label_before)
     pg.close()
 
     # reduced motion
