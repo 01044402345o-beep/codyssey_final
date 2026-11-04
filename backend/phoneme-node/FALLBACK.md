@@ -23,15 +23,15 @@ PC 노드가 꺼지거나 절전·네트워크 단절로 **모두** 응답하지
 2. 입력
    | 칸 | 값 |
    |---|---|
-   | Region | **Korea Central** (음성이 국내 리전에서 처리된다) |
+   | Region | 운영은 **East US**(`eastus`, 2026-11-04). Korea Central 을 고르면 음성이 국내에서 처리된다 — 어느 쪽이든 **처리방침 초안 표의 Azure 발음 평가 행 지역을 같이 고친다** |
    | Name | 아무 이름(예: `madi-phoneme`) |
    | Pricing tier | **Free F0**(월 5시간 무료) — 넘으면 Standard S0 로 바꾼다 |
-3. 만들어지면 리소스 → **Keys and Endpoint** → **KEY 1** 과 **Location/Region**(`koreacentral`)을 복사한다
+3. 만들어지면 리소스 → **Keys and Endpoint** → **KEY 1** 과 **Location/Region**(예: `eastus`)을 복사한다
 4. Render → codyssey-api → Environment
    | 키 | 값 |
    |---|---|
    | `PHONEME_AZURE_KEY` | KEY 1 |
-   | `PHONEME_AZURE_REGION` | `koreacentral` (Location 그대로, 소문자) |
+   | `PHONEME_AZURE_REGION` | `eastus` 등 (Location 그대로, 소문자) |
 
 통역용 `AZURE_SPEECH_KEY` 와는 **따로 둔다**(사용량·리전·상한을 분리). 같은 리소스의 키를 써도 동작은 한다.
 
