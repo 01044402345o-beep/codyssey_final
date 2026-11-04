@@ -2520,6 +2520,43 @@ function syncNavSpace() {
   if (n && getComputedStyle(n).position === 'fixed') document.documentElement.style.setProperty('--nav-space', n.offsetHeight + 'px');
 }
 window.addEventListener('resize', () => syncNavSpace());
+/* 가로 스크롤 목록(문장 모음 필터 칩·도시 탭·발음기호 눈금 등)은 render() 가 화면을 통째로 갈아 끼울 때
+   scrollLeft 가 0 으로 돌아가 '옆으로 밀어서 누르면 목록이 처음으로 튀는' 결함이 있었다.
+   그리기 전에 옆으로 밀린 요소의 위치를 적어 두고, 같은 화면을 다시 그렸으면 되돌린다.
+   요소는 '태그+클래스' 와 그 묶음 안의 순번으로 찾는다(목록 구조가 같으면 같은 요소). */
+function hscrollKey(el) { return el.tagName + '.' + [...el.classList].filter(c => !/^(on|cur|sel|active|seen)$/.test(c)).sort().join('.'); }
+function hscrollSave(root) {
+  const out = [], seen = {};
+  if (!root) return out;
+  root.querySelectorAll('*').forEach(el => {
+    if (el.scrollWidth <= el.clientWidth + 1) return;
+    const ox = getComputedStyle(el).overflowX;
+    if (ox !== 'auto' && ox !== 'scroll') return;
+    const k = hscrollKey(el), n = seen[k] = (seen[k] || 0) + 1;
+    out.push({ k, n, x: el.scrollLeft });
+  });
+  return out;
+}
+function hscrollRestore(root, saved) {
+  if (!root) return;
+  const seen = {}, want = {};
+  saved.forEach(r => { want[r.k + '#' + r.n] = r.x; });
+  root.querySelectorAll('*').forEach(el => {
+    if (el.scrollWidth <= el.clientWidth + 1) return;
+    const ox = getComputedStyle(el).overflowX;
+    if (ox !== 'auto' && ox !== 'scroll') return;
+    const k = hscrollKey(el), n = seen[k] = (seen[k] || 0) + 1, x = want[k + '#' + n];
+    if (x) el.scrollLeft = x;
+    // 선택된 항목이 목록 밖에 있으면(다음·이전 버튼으로 옮겼을 때) 그 목록만 옆으로 맞춘다 — 페이지는 움직이지 않는다
+    const cur = el.querySelector(':scope > .cur, :scope > .on, :scope > [aria-current="true"], :scope > [aria-pressed="true"]');
+    if (cur) {
+      const er = el.getBoundingClientRect(), cr = cur.getBoundingClientRect();
+      if (cr.left < er.left) el.scrollLeft -= er.left - cr.left + 8;
+      else if (cr.right > er.right) el.scrollLeft += cr.right - er.right + 8;
+    }
+  });
+}
+
 function render() {
   settlePre();
   if (TALK.on && (!S.sheet || !studyShown())) cancelTalk();   // 시트를 닫는 모든 경로(닫기·카드 넘김·화면 이동)
@@ -2527,6 +2564,7 @@ function render() {
   const app = $('.app'), same = S.lastScreen === S.screen;
   const prevTop = LEGACY ? (app ? app.scrollTop : 0) : window.scrollY;   // 제품·데모 모드는 문서 스크롤
   const prevList = $('.split-list'), prevListTop = prevList ? prevList.scrollTop : 0;   // 마스터-디테일 목록의 스크롤
+  const prevH = same ? hscrollSave($('#stage')) : [];   // 가로 스크롤 목록의 위치(같은 화면을 다시 그릴 때만)
   updateSideActive(); renderDemo();
   const sc = SCR[S.screen];
   const t = S.trip;
@@ -2547,6 +2585,7 @@ function render() {
   if (LEGACY) { const na = $('.app'); if (na && same) na.scrollTop = prevTop; }
   else window.scrollTo(0, same ? prevTop : 0);
   { const nl = $('.split-list'); if (nl && prevListTop) nl.scrollTop = prevListTop; }
+  hscrollRestore($('#stage'), prevH);
   S.lastScreen = S.screen;
   sessionWrite();   /* 진도·보던 화면 저장 — 모든 상태 변화가 여기를 지난다 */
 }
