@@ -2410,3 +2410,30 @@ body.is-narrow .spk-card { border-radius: 12px; }
     animation-delay: calc(.1s + var(--i, 0) * 55ms), 1.1s; }
   .alarm-fx .alarm-rail i { animation: al-fill .95s .28s cubic-bezier(.2,.85,.25,1) both; }
 }
+
+/* 갈래 선택 · 44칸 눈금 · 한국인 취약 표시 */
+.ipa-secs { display: flex; gap: 3px; margin: 2px 0 12px; padding: 3px; background: var(--surface-seg); border-radius: 999px; }
+.ipa-secs button { flex: 1; min-height: 44px; border: 0; border-radius: 999px; background: transparent;
+  font-size: 0.8125rem; font-weight: 600; color: var(--text-soft); cursor: pointer; }
+.ipa-secs button b { margin-left: 4px; font-family: var(--mono); font-size: 0.75rem; font-weight: 500; color: var(--text-soft); }
+.ipa-secs button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 10%, transparent); }
+.ipa-secs button.on b { color: var(--accent-text); }
+
+.ipa-strip { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0 4px; margin-top: 10px;
+  scrollbar-width: thin; overscroll-behavior-x: contain; }
+.ipa-cell { flex: none; min-width: 54px; min-height: 44px; padding: 4px 8px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-soft);
+  font-family: var(--mono); font-size: 0.75rem; cursor: pointer; position: relative; }
+.ipa-cell.seen { background: var(--surface-3); color: var(--text); }
+.ipa-cell.kr::after { content: ''; position: absolute; top: 5px; right: 5px; width: 4px; height: 4px;
+  border-radius: 999px; background: var(--accent); }
+.ipa-cell.cur { border: 2px solid var(--accent); padding: 3px 7px; color: var(--text); font-weight: 700; }
+
+.ipa-kr { display: flex; align-items: flex-start; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border);
+  font-size: var(--fs-small); line-height: 1.55; color: var(--text-soft); }
+.ipa-kr-tag { flex: none; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft);
+  color: var(--accent-text); font-family: var(--mono); font-size: 0.75rem; }
+.ipa-ex { display: flex; flex-wrap: wrap; gap: 6px; }
+.ipa-ex-b { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 6px 11px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  font-size: 0.875rem; color: var(--text); cursor: pointer; }
