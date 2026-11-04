@@ -3644,7 +3644,7 @@ function scrIpa() {
       </div>
       <div class="ipa-sec"><span class="ipa-tag">how</span><p class="ipa-tip">${esc(c.tip)}</p></div>
       <div class="ipa-sec"><span class="ipa-tag">pair</span>
-        <div class="ipa-pair-wrap"><div class="ipa-pair-h"><span>최소대립쌍 · 한 글자만 다름</span>
+        <div class="ipa-pair-wrap"><div class="ipa-pair-h"><span>${c.pair[0].ip === c.pair[1].ip ? '같은 소리 · 두 단어' : '최소대립쌍 · 소리 하나만 달라요'}</span>
           <button class="ipa-ab" data-act="ipa-ab" data-pairs="${esc(c.pair[0].w)}|${esc(c.pair[1].w)}">A ↔ B 번갈아</button></div>${pairRow}</div></div>
       <div class="ipa-sec"><span class="ipa-tag">eg</span>
         <button class="ipa-eg" data-act="ipa-say" data-w="${esc(c.say)}">
