@@ -3239,26 +3239,10 @@ function schedListHtml(selDate = null) {
   return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div class="seg"><button class="${S.schedFilter === 'all' ? 'on' : ''}" data-act="sched-filter" data-v="all">전체</button><button class="${S.schedFilter === 'miss' ? 'on' : ''}" data-act="sched-filter" data-v="miss">미완료 ${pr.miss}</button></div>
       <span class="small">완료율 <b style="color:var(--text)">${Math.round(pr.rate * 100)}%</b> (${pr.done}/${pr.den})</span></div>
-    ${ipaCardHtml()}
     ${pre.length ? `<div class="phase-label">여행 전 · ${S.plan.N}일</div>${pre.map(one).join('')}` : ''}
     ${trip.length ? `<div class="phase-label">여행 중</div>${trip.map(one).join('')}` : ''}
     ${!rows.length ? `<div class="empty"><div class="ico">${I.check}</div>미완료 날짜가 없어요</div>` : ''}`;
 }
-/* 일정표 맨 위의 발음기호 코스 안내. S.sched 에 행을 넣지 않는다 —
-   넣으면 완료율 분모(progress)와 달력이 오염되고, KIND 에 없는 kind 면 렌더가 깨진다.
-   '기억이 잘 안나요'를 고른 사람에게만 보이고, 코스를 마치면 사라진다. */
-function ipaCardHtml() {
-  if (ipaLocalGet() !== 'course' && ipaSeenMem !== true) return '';
-  const st = ipaState(), n = IPA_COURSE.length, seen = st.seen.length;
-  if (seen >= n) return '';
-  return `<div class="ipa-entry">
-      <div class="ipa-entry-t"><b>발음기호 연습 코스</b><span>${seen}/${n} · 한 장에 기호 하나</span></div>
-      <p class="small">회화 연습 결과에 나오는 기호를 먼저 익혀 두면 피드백이 훨씬 빨리 읽혀요.</p>
-      <button class="btn primary block" data-act="ipa-open">${seen ? '이어서 하기' : '첫 기호부터 보기'}</button>
-    </div>
-    <div class="phase-label">학습 일정</div>`;
-}
-
 /* ================= 일정표 전체: 달력 =================
    한 달을 통째로 본다. 칸 색은 rowStatus() 결과를 그대로 쓴다 — 목록과 달력이 다른 말을 하지 않게.
    일정에 없는 날(학습 기간 밖)은 누를 수 없다. 날짜를 누르면 목록과 같은 동작(study-date)이다. */
