@@ -68,6 +68,36 @@ class ParseTest(Env):
         self.assertEqual(rep["phonemes"][0]["start_ms"], 100)                          # 100ns → ms
         self.assertEqual((rep["basis"], rep["via"]), ("acoustic", "azure"))
 
+    def test_azure_flat_rest_format(self):
+        """라이브 실측(2026-11-04): REST format=detailed 는 점수를 음소·단어 바로 아래에 둔다(중첩 아님)."""
+        flat = {"RecognitionStatus": "Success", "NBest": [{"AccuracyScore": 80, "Words": [
+            {"Word": "a", "AccuracyScore": 95, "ErrorType": "None",
+             "Phonemes": [{"Phoneme": "ə", "AccuracyScore": 95, "Offset": 100000, "Duration": 50000}]},
+            {"Word": "seat", "AccuracyScore": 60, "ErrorType": "Mispronunciation", "Phonemes": [
+                {"Phoneme": "s", "AccuracyScore": 97, "Offset": 200000, "Duration": 50000},
+                {"Phoneme": "i", "AccuracyScore": 20, "Offset": 250000, "Duration": 60000,
+                 "NBestPhonemes": [{"Phoneme": "ɪ", "Score": 85}, {"Phoneme": "i", "Score": 20}]},
+                {"Phoneme": "t", "AccuracyScore": 92, "Offset": 310000, "Duration": 40000}]},
+            {"Word": "uh", "AccuracyScore": 0, "ErrorType": "Insertion", "Phonemes": [{"Phoneme": "ʌ", "AccuracyScore": 0}]}]}]}
+        rep = cloud.build_report(cloud.azure_rows(flat), "azure", "m")
+        self.assertEqual([r["status"] for r in rep["phonemes"]], ["ok", "ok", "missing", "ok"])
+        self.assertEqual(rep["phoneme_accuracy"], 75.0)
+        self.assertEqual((rep["focus"]["word"], rep["focus"]["ipa"], rep["focus"]["heard_as"]), ("seat", "iː", "ɪ"))
+
+    def test_azure_without_any_score_is_a_failure_not_zero_percent(self):
+        """점수를 못 읽으면 '전부 틀림 0%'를 만들지 않고 실패로 넘긴다(첫 배포의 버그)."""
+        noscore = {"RecognitionStatus": "Success", "NBest": [{"Words": [
+            {"Word": "seat", "Phonemes": [{"Phoneme": "s"}, {"Phoneme": "i"}]}]}]}
+        with self.assertRaises(ValueError) as cm:
+            cloud.azure_rows(noscore)
+        self.assertEqual(str(cm.exception), "azure_no_scores")
+
+    def test_unknown_score_rows_are_dropped(self):
+        rep = cloud.build_report([{"ipa": "s", "word": "seat", "score": 95}, {"ipa": "i", "word": "seat", "score": None}],
+                                 "azure", "m")
+        self.assertEqual([r["ipa"] for r in rep["phonemes"]], ["s"])
+        self.assertEqual(rep["phoneme_accuracy"], 100.0)
+
     def test_azure_omission_is_missing(self):
         data = {"RecognitionStatus": "Success", "NBest": [{"Words": [
             {"Word": "seat", "PronunciationAssessment": {"ErrorType": "Omission"}, "Phonemes": [azure_ph("s", 90)]}]}]}
