@@ -36,7 +36,7 @@ with sync_playwright() as p:
     page = ctx.new_page()
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/"); page.wait_for_timeout(900)
+    page.goto(BASE + "/?gate=off"); page.wait_for_timeout(900)
     scr = lambda: page.evaluate("S.screen")
 
     # --- 첫 화면: 고르기만 ---
@@ -89,7 +89,7 @@ with sync_playwright() as p:
 
     # --- Firebase 꺼짐: 기존처럼 Google 버튼만(이메일 로그인은 쓸 수 없다) ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
-    page = ctx.new_page(); page.goto(BASE + "/"); page.wait_for_timeout(900)
+    page = ctx.new_page(); page.goto(BASE + "/?gate=off"); page.wait_for_timeout(900)
     check("Firebase 꺼짐: Google 버튼만, 로그인·손님 버튼 없음",
           page.locator('.ticket [data-act="login"]').count() == 1 and page.locator('[data-act="auth-open"]').count() == 0 and page.locator('[data-act="guest"]').count() == 0)
     ctx.close()

@@ -25,7 +25,7 @@ with sync_playwright() as p:
     page = b.new_page(viewport={"width": 390, "height": 844})
     page.on("pageerror", lambda e: errors.append(str(e)))
     # 해시 없이 연다(실제 제품 경로) → 세션 복원이 켜져 새로고침 저장이 동작한다.
-    page.goto(BASE + "/", wait_until="domcontentloaded")
+    page.goto(BASE + "/?gate=off", wait_until="domcontentloaded")
     page.wait_for_timeout(500)
     # 로그인 뒤 홈까지 온 상태를 만든다.
     page.evaluate("S.user = DEMO_USER; ensure('plan'); go('u-home')")
@@ -92,7 +92,7 @@ with sync_playwright() as p:
           f'before={before} after={after}')
 
     # --- 새로고침: 저장한 여행으로 홈이 복원된다 (실제 제품 경로: 해시 없이 다시 연다) ---
-    page.goto(BASE + "/", wait_until="domcontentloaded")
+    page.goto(BASE + "/?gate=off", wait_until="domcontentloaded")
     page.wait_for_timeout(900)
     reloaded = page.evaluate("""() => ({
       scr: S.screen, trip: !!S.trip, plan: !!S.plan,
@@ -164,7 +164,7 @@ with sync_playwright() as p:
     page.wait_for_timeout(600)
     out = page.evaluate("({ scr: S.screen, uid: accountUid() })")
     check("로그아웃하면 로그인 화면으로", out["scr"] == "u-login" and out["uid"] == "", str(out))
-    page.goto(BASE + "/", wait_until="domcontentloaded")
+    page.goto(BASE + "/?gate=off", wait_until="domcontentloaded")
     page.wait_for_timeout(700)
     check("로그아웃 뒤 새로고침해도 로그인 화면", page.evaluate("S.screen") == "u-login", page.evaluate("S.screen"))
     kept = page.evaluate("""(() => { try { return JSON.parse(localStorage.getItem('cd_trip') || 'null'); } catch (e) { return null; } })()""")

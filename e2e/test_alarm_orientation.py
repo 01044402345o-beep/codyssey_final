@@ -44,7 +44,8 @@ def view(pg, w, h, tab=True):
 
 with sync_playwright() as p:
     b = p.chromium.launch()
-    ctx = b.new_context(viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True)
+    # 배치만 잰다 — 들어오는 움직임(막대가 자라는 0.7초+)은 test_alarm_anim.py 가 본다
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True, reduced_motion="reduce")
     pg = ctx.new_page()
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
