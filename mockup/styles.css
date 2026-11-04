@@ -2189,13 +2189,14 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .spk-verdict { font-weight: 800; font-size: 0.875rem; color: var(--text); }
 .spk-tag { margin-left: auto; font-size: 0.75rem; color: var(--text-3); border: 1px solid var(--border-strong); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
 .spk-bars { padding: 0 12px 10px; display: grid; gap: 6px; }
-.spk-bar { display: grid; grid-template-columns: 5.4em 1fr 3em; align-items: center; gap: 8px; }
-.spk-bar-l { font-size: 0.75rem; color: var(--text-soft); }
+/* 값 칸은 내용 폭(max-content) — 고정폭(3em)이면 글꼴이 넓은 기기(iPhone 등)에서 '100%'가 두 줄로 넘어간다 */
+.spk-bar { display: grid; grid-template-columns: minmax(4.5em, max-content) minmax(0, 1fr) max-content; align-items: center; gap: 8px; }
+.spk-bar-l { font-size: 0.75rem; color: var(--text-soft); white-space: nowrap; }
 .spk-track { height: 8px; border-radius: 999px; background: var(--surface-seg); overflow: hidden; }
 .spk-fill { display: block; height: 100%; border-radius: 999px; background: var(--ok); }
 .spk-fill.mid { background: var(--sun-line); }
 .spk-fill.low { background: var(--bad); }
-.spk-bar-v { font-family: var(--mono); font-size: 0.75rem; font-weight: 700; text-align: right; color: var(--text-2); }
+.spk-bar-v { font-family: var(--mono); font-size: 0.75rem; font-weight: 700; text-align: right; color: var(--text-2); white-space: nowrap; min-width: 4ch; }
 .spk-words { line-height: 1.7; }
 .spk-w.miss { color: var(--bad-text); background: var(--bad-soft); border-radius: 4px; padding: 0 3px; text-decoration: underline wavy var(--bad); text-underline-offset: 3px; }
 .spk-strip-wrap { border-top: 1px solid var(--border-faint); padding: 9px 0 10px; }
