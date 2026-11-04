@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import time
 import unittest
 from unittest import mock
 import wave
@@ -288,6 +289,42 @@ class SttTest(Base):
         self.assertEqual(d["feedback"]["source"], "template")
         self.assertIn("peanut", d["fix_one"])
         self.assertEqual(gem.texts, [])
+
+    def test_slow_feedback_falls_back_to_template_at_deadline(self) -> None:
+        # 피드백이 상한(SPEAK_FEEDBACK_DEADLINE)을 넘기면 틀 문장으로 바로 답하고, 남은 시도는 부르지 않는다
+        os.environ["SPEAK_FEEDBACK_DEADLINE"] = "2"
+
+        def slow_bad(_n: int) -> str:
+            time.sleep(0.4)
+            return "not json"
+        _, gem = self.install({"groq": lambda n: Resp(200, stt_ok("I have a allergy"))}, feedback=slow_bad)
+        t0 = time.monotonic()
+        _, d = self.speak(GOOD)
+        self.assertLess(time.monotonic() - t0, 6)
+        self.assertTrue(d["usable"])
+        self.assertEqual((d["feedback"]["source"], d["feedback"]["error_code"]), ("template", "deadline"))
+        self.assertEqual(d["feedback"]["deadline_s"], 2.0)
+        self.assertIn("peanut", d["fix_one"])
+        time.sleep(0.6)                                     # 진행 중이던 한 번은 끝나게 둔다
+        n = len(gem.texts)
+        time.sleep(1.0)
+        self.assertEqual(len(gem.texts), n)                 # 취소 뒤 더 부르지 않는다
+        self.assertLess(n, 10)
+
+    def test_feedback_reports_failed_attempts(self) -> None:
+        # 몇 번째 시도에 왜 실패했는지 응답에 남긴다(지연 원인 진단용)
+        _, gem = self.install({"groq": lambda n: Resp(200, stt_ok("I have a allergy"))},
+                              feedback=lambda n: "not json" if n == 1 else fb_ok(n))
+        _, d = self.speak(GOOD)
+        self.assertEqual((d["feedback"]["source"], d["feedback"]["attempts"]), ("ai", 2))
+        self.assertEqual(len(d["feedback"]["failures"]), 1)
+        self.assertEqual(len(gem.texts), 2)
+
+    def test_deadline_env_is_clamped(self) -> None:
+        for raw, want in (("", 8.0), ("abc", 8.0), ("0.5", 2.0), ("999", 60.0), ("8", 8.0)):
+            with self.subTest(raw):
+                os.environ["SPEAK_FEEDBACK_DEADLINE"] = raw
+                self.assertEqual(main.speak_feedback_deadline(), want)
 
 
 class HallucinationFilterTest(Base):

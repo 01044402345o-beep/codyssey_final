@@ -954,6 +954,15 @@ def _run_parallel(tasks: dict[str, Any]) -> dict[str, Any]:
         return out
 
 
+def speak_feedback_deadline() -> float:
+    """말하기 피드백 문장을 기다리는 상한(초). SPEAK_FEEDBACK_DEADLINE, 기본 8, 2~60."""
+    try:
+        v = float(os.getenv("SPEAK_FEEDBACK_DEADLINE", "").strip() or 8)
+    except ValueError:
+        v = 8.0
+    return max(2.0, min(60.0, v))
+
+
 LIMITED_REASON = "음성 확인이 제한되어 점수와 자동 복습 저장을 제공하지 않습니다. 다시 녹음해 보세요."
 
 
@@ -1114,7 +1123,11 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
     # 3) 피드백 문장 — 오디오 없이 비교 결과만 준다. 응답의 다른 키(score 등)는 버린다.
     prompt = feedback_input(situation, target, heard, diff, heard_ck)
 
+    give_up = threading.Event()     # 상한을 넘겨 틀 문장으로 응답한 뒤에는 다음 시도를 부르지 않는다
+
     def write_feedback(client: Any, model: str, attempt: int) -> tuple[str, str]:
+        if give_up.is_set():
+            raise ai.Cancelled("speak_feedback_deadline")
         data = parse_json_object(ai.generate_text(client, model, prompt, temperature=0.4))
         fix_one, tip = data.get("fix_one"), data.get("tip")
         if not (isinstance(fix_one, str) and fix_one.strip() and isinstance(tip, str)):
@@ -1125,14 +1138,28 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
         fix_one, tip = compare.template_feedback(diff)
         feedback = {"source": "template", "attempts": 0, "error_code": "no_key"}
     else:
+        # 피드백 문장만 기다리는 상한(기본 8초). 넘기면 사실 기반 문장 틀로 바로 응답한다 — 점수·음소는 이미 코드가 정했다.
+        # 2026-11-04 라이브에서 재시도 3~4회로 46~94초 걸렸다. 30회 최소 시도 규칙은 그대로 두고 '기다림'만 자른다:
+        # 상한을 넘기면 give_up 을 세워 다음 시도를 부르지 않는다(이미 나간 호출 한 건은 끝까지 간다).
+        fb_job = asyncio.ensure_future(run_in_threadpool(ai.run, "speak-feedback", write_feedback))
+        fb_job.add_done_callback(lambda j: j.cancelled() or j.exception())     # 늦게 끝난 결과·예외를 조용히 거둔다
         try:
-            fb = await run_in_threadpool(ai.run, "speak-feedback", write_feedback)
+            fb = await asyncio.wait_for(asyncio.shield(fb_job), timeout=speak_feedback_deadline())
             (fix_one, tip), feedback = fb.value, {"source": "ai", "attempts": fb.attempts, "model": fb.model}
+            if fb.failures:
+                feedback["failures"] = ai.public_failures(fb.failures)      # 왜 재시도했는지(진단)
+        except asyncio.TimeoutError:
+            give_up.set()
+            fix_one, tip = compare.template_feedback(diff)
+            logging.getLogger("app.speak").warning("피드백 %.0f초 상한 — 틀 문장으로 응답", speak_feedback_deadline())
+            feedback = {"source": "template", "attempts": None, "error_code": "deadline",
+                        "deadline_s": speak_feedback_deadline()}
         except ai.AttemptsExhausted as exc:
             # 점수는 코드가 이미 정했으므로 결과는 쓸 수 있다. 문구만 사실 기반 문장 틀로 대신한다.
             fix_one, tip = compare.template_feedback(diff)
             logging.getLogger("app.speak").warning("피드백 생성 실패: %s", exc.last_error)
-            feedback = {"source": "template", "attempts": exc.attempts, "error_code": "ai_exhausted"}
+            feedback = {"source": "template", "attempts": exc.attempts, "error_code": "ai_exhausted",
+                        "failures": ai.public_failures(exc.failures)}
     t.mark("feedback")
     phones_acoustic = None
     if acoustic_job is not None:
