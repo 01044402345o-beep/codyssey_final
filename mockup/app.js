@@ -82,58 +82,1002 @@ const fbOn = () => !!(window.FirebaseAuth && FirebaseAuth.enabled);
 function userName() { return (S.user && S.user.name) || DEMO_USER.name; }
 function userEmail() { return (S.user && S.user.email) || DEMO_USER.email; }
 
-/* ================= 발음기호 안내 코스 =================
-   왜 넣나: 피드백이 /iː/ · /θ/ 같은 기호를 보여주는데, 2022 개정 영어과 교육과정에
-   '발음기호'가 한 번도 나오지 않는다(=학교에서 배웠다고 가정할 수 없다).
-   그래서 기호를 처음 보는 사람을 위한 최소 코스를 둔다.
-   다만 '코스를 마쳐야 회화 연습을 쓸 수 있다'는 강제는 두지 않는다 — 근거가 없다(아래 주석).
-   근거: (1) IPA 지도가 원어민 모방보다 낫다는 증거가 없다(한국 중학생 n=30, 4주, 모든 측정치 유의차 없음).
-         (2) 듀오링고·ELSA·스픽·케이크 중 IPA를 선행 조건으로 거는 제품이 없다.
-         (3) 온보딩에 마찰을 더하면 이탈이 커진다(업종 평균 1회 사용 후 이탈 25%).
-   그래서 '기본 경로는 코스, 탈출구는 항상 열어 둔다'로 설계한다. */
-const IPA_COURSE = [
-  { ipa: 'iː', ko: '길게 "이"', kind: '모음',
-    tip: '"이"를 길게. 입꼬리를 옆으로 당기고 1초 이상 끌어 주세요.',
-    pair: [{ w: 'seat', ko: '좌석', ip: 'iː', hi: 'ea' }, { w: 'sit', ko: '앉다', ip: 'ɪ', hi: 'i' }],
-    say: 'Please have a seat.' },
-  { ipa: 'ɪ', ko: '짧게 "이"', kind: '모음',
-    tip: '"이"와 "에" 사이. 길게 끌지 말고 툭 끊어 주세요.',
-    pair: [{ w: 'sit', ko: '앉다', ip: 'ɪ', hi: 'i' }, { w: 'seat', ko: '좌석', ip: 'iː', hi: 'ea' }],
-    say: 'Can I sit here?' },
-  { ipa: 'æ', ko: '크게 "애"', kind: '모음',
-    tip: '입을 크게 벌리고 "애". "에"보다 턱이 아래로 내려가요.',
-    pair: [{ w: 'bad', ko: '나쁜', ip: 'æ', hi: 'a' }, { w: 'bed', ko: '침대', ip: 'e', hi: 'e' }],
-    say: 'That is not bad.' },
-  { ipa: 'e', ko: '작게 "에"', kind: '모음',
-    tip: '"애"보다 입을 덜 벌리고 "에". 턱이 덜 내려가요.',
-    pair: [{ w: 'bed', ko: '침대', ip: 'e', hi: 'e' }, { w: 'bad', ko: '나쁜', ip: 'æ', hi: 'a' }],
-    say: 'I need a bed.' },
-  { ipa: 'ə', ko: '아주 약한 "어"', kind: '모음',
-    tip: '힘을 완전히 빼고 아주 짧게. 강세 없는 음절은 거의 이 소리예요.',
-    pair: [{ w: 'about', ko: '대략', ip: 'ə', hi: 'a' }, { w: 'butter', ko: '버터', ip: 'ə', hi: 'er' }],
-    say: 'I will be there about noon.' },
-  { ipa: 'θ', ko: '혀끝 "th" (무성)', kind: '자음',
-    tip: '혀끝을 윗니와 아랫니 사이로 살짝 내밀고 바람만 내보내요. "스"가 아니에요.',
-    pair: [{ w: 'think', ko: '생각하다', ip: 'θ', hi: 'th' }, { w: 'sink', ko: '싱크대', ip: 's', hi: 's' }],
-    say: 'I think it is Thursday.' },
-  { ipa: 'ð', ko: '혀끝 "th" (유성)', kind: '자음',
-    tip: 'θ와 같은 자리에서 목을 울려요. "드"가 아니에요.',
-    pair: [{ w: 'they', ko: '그들', ip: 'ð', hi: 'th' }, { w: 'day', ko: '날', ip: 'd', hi: 'd' }],
-    say: 'Is this the right gate?' },
-  { ipa: 'r', ko: '"r"', kind: '자음',
-    tip: '혀끝을 입천장에 대지 말고, 입술을 살짝 오므린 채 뒤로 당겨요.',
-    pair: [{ w: 'right', ko: '오른쪽', ip: 'r', hi: 'r' }, { w: 'light', ko: '빛', ip: 'l', hi: 'l' }],
-    say: 'Turn right at the light.' },
-  { ipa: 'l', ko: '"l"', kind: '자음',
-    tip: '혀끝을 윗니 바로 뒤에 붙이고 떼요. "r"처럼 오므리지 않아요.',
-    pair: [{ w: 'light', ko: '빛', ip: 'l', hi: 'l' }, { w: 'right', ko: '오른쪽', ip: 'r', hi: 'r' }],
-    say: 'The light is on the left.' },
-  { ipa: 'f', ko: '"f" (v와 같은 입모양)', kind: '자음',
-    tip: '윗니로 아랫입술을 살짝 물고 바람을 내보내요. 목이 울리면 v.',
-    pair: [{ w: 'fan', ko: '선풍기', ip: 'f', hi: 'f' }, { w: 'pan', ko: '냄비', ip: 'p', hi: 'p' }],
-    say: 'Is the fan working?' },
+/* ================= 발음기호 목록 (영국식 RP 44) =================
+   자음 24 · 단모음 12 · 이중모음 8. 조사 결과 총 44는 출처가 일치하고,
+   12+8 로 나누는지 13+7 로 나누는지만 분석에 따라 갈린다(총수는 같다).
+   미국식은 자음 24 + 모음 16 = 40 으로 세는 것이 학술 표준이다. 흔히 말하는
+   '미국식 46'은 모음+/r/ 조합 8개를 독립 음소처럼 중복 계수한 교재식 숫자다.
+   kr:true 는 한국어 화자에게 특히 어려운 음소(대조분석·오류분석 문헌 기준).
+   tip 의 조음 설명은 문헌 대조로 썼고, 한국어 1:1 대체는 하지 않았다. */
+const IPA_ALL = [
+{
+"ipa": "iː",
+"ko": "길게 끄는 '이'에 가까움",
+"kind": "모음",
+"sec": "단모음",
+"tip": "입꼬리를 옆으로 당기고 혀 앞부분을 높이 올린 채 1초 이상 길게 끌어요.",
+"ex": [
+"see",
+"seat",
+"tree"
+],
+"say": "Please have a seat.",
+"pair": [
+{
+"w": "seat",
+"ko": "좌석",
+"ip": "iː",
+"hi": "ea"
+},
+{
+"w": "sit",
+"ko": "앉다",
+"ip": "ɪ",
+"hi": "i"
+}
+]
+},
+{
+"ipa": "ɪ",
+"ko": "한국어에 없음(짧고 느슨한 전설 모음)",
+"kind": "모음",
+"sec": "단모음",
+"tip": "혀 앞부분을 조금 낮추고 입을 살짝 벌린 채 짧게 끊어요. 근육은 풀어요.",
+"ex": [
+"sit",
+"busy",
+"village"
+],
+"note": "한국어 'ㅣ'로 대체하면 /iː/와 구별되지 않아요. 길이와 긴장도가 달라요.",
+"say": "Can I sit here?",
+"pair": [
+{
+"w": "sit",
+"ko": "앉다",
+"ip": "ɪ",
+"hi": "i"
+},
+{
+"w": "seat",
+"ko": "좌석",
+"ip": "iː",
+"hi": "ea"
+}
+],
+"kr": true,
+"err": "seat/sit, sheep/ship, feel/fill을 구별하지 못하고 모두 '시트'처럼 긴 [i]로 낸다",
+"cue": "입술을 살짝 옆으로 당긴 채 짧게 끊어요. 'sit'은 '씨-'가 아니라 턱이 살짝 내려간 짧은 소리예요"
+},
+{
+"ipa": "e",
+"ko": "'에'에 가까움(입을 조금 더 벌림)",
+"kind": "모음",
+"sec": "단모음",
+"tip": "혀 앞부분을 중간 높이에 두고 턱을 손가락 하나만큼 내려 짧게 내요. 입술은 옆으로 편평해요.",
+"ex": [
+"dress",
+"bed",
+"head"
+],
+"note": "사전에 따라 /ɛ/로 적어요. 미국식도 같은 소리지만 기호는 대개 /ɛ/예요.",
+"say": "I need a bed.",
+"pair": [
+{
+"w": "bed",
+"ko": "침대",
+"ip": "e",
+"hi": "e"
+},
+{
+"w": "bad",
+"ko": "나쁜",
+"ip": "æ",
+"hi": "a"
+}
+]
+},
+{
+"ipa": "æ",
+"ko": "한국어에 없음(입을 크게 벌린 전설 저모음)",
+"kind": "모음",
+"sec": "단모음",
+"tip": "턱을 크게 내려 입을 넓게 벌리고 혀 앞부분을 낮게 둔 채 짧게 내요. 혀는 긴장을 풀어요.",
+"ex": [
+"trap",
+"cat",
+"hand"
+],
+"note": "한국어 'ㅐ'는 입이 덜 벌어져 대체가 안 돼요. 미국식도 /æ/로 적어요.",
+"say": "That is not bad.",
+"pair": [
+{
+"w": "bad",
+"ko": "나쁜",
+"ip": "æ",
+"hi": "a"
+},
+{
+"w": "bed",
+"ko": "침대",
+"ip": "e",
+"hi": "e"
+}
+],
+"kr": true,
+"err": "bad/bed, man/men, had/head를 같은 소리로 내고 '배드'처럼 [e]로 실현한다",
+"cue": "턱을 손가락 두 개만큼 벌려요. 'bed'는 턱이 거의 안 내려가고 'bad'는 확실히 내려가요"
+},
+{
+"ipa": "ɑː",
+"ko": "길게 끄는 '아'에 가까움(혀가 뒤쪽)",
+"kind": "모음",
+"sec": "단모음",
+"tip": "혀를 낮고 뒤쪽에 두고 입을 크게 벌린 채 길게 끌어요. 입술은 둥글리지 않아요.",
+"ex": [
+"father",
+"start",
+"car"
+],
+"note": "미국식은 bath·dance·laugh 같은 단어에 /æ/를 써요. 영국식은 /ɑː/예요.",
+"vary": "미국식 /æ/ (bath·can't)",
+"say": "Where is the cart?",
+"pair": [
+{
+"w": "cart",
+"ko": "카트",
+"ip": "ɑː",
+"hi": "ar"
+},
+{
+"w": "cat",
+"ko": "고양이",
+"ip": "æ",
+"hi": "a"
+}
+]
+},
+{
+"ipa": "ɒ",
+"ko": "'아'와 '오' 사이에 가까움, 짧고 둥근 입술",
+"kind": "모음",
+"sec": "단모음",
+"tip": "입술을 둥글게 오므리고 혀를 낮은 뒤쪽에 둔 채 짧게 터뜨리듯 내요. 턱은 크게 벌려요.",
+"ex": [
+"lot",
+"hot",
+"wash"
+],
+"note": "영국식에만 있는 짧은 원순 모음이에요. 미국식은 lot·hot을 /ɑː/로 내요.",
+"vary": "미국식 /ɑ/ (lot)",
+"say": "It is a long stop.",
+"pair": [
+{
+"w": "cot",
+"ko": "간이침대",
+"ip": "ɒ",
+"hi": "o"
+},
+{
+"w": "caught",
+"ko": "잡았다",
+"ip": "ɔː",
+"hi": "augh"
+}
+],
+"kr": true,
+"err": "hot, lot, dog을 '핫/럿/독'에 가까운 /o/로 내어 cot/caught 구별이 무너진다",
+"cue": "입을 크게 벌린 채 입술만 살짝 둥글게 '아'와 '오' 사이로 내요"
+},
+{
+"ipa": "ɔː",
+"ko": "길게 끄는 '오'에 가까움(입을 더 벌림)",
+"kind": "모음",
+"sec": "단모음",
+"tip": "입술을 둥글게 내밀고 혀 뒤쪽을 중간 높이로 올린 채 길게 끌어요. 턱은 내려 둔 상태예요.",
+"ex": [
+"thought",
+"north",
+"law"
+],
+"note": "미국식은 cot-caught 병합으로 lot과 thought를 같은 /ɑː/로 내는 화자가 많아요.",
+"vary": "미국식 /ɔ/ (thought)",
+"say": "I thought so.",
+"pair": [
+{
+"w": "caught",
+"ko": "잡았다",
+"ip": "ɔː",
+"hi": "augh"
+},
+{
+"w": "cot",
+"ko": "간이침대",
+"ip": "ɒ",
+"hi": "o"
+}
+]
+},
+{
+"ipa": "ʊ",
+"ko": "'우'에 가까움, 짧고 힘을 뺌",
+"kind": "모음",
+"sec": "단모음",
+"tip": "입술을 살짝 오므리고 혀 뒤쪽을 높이되 힘을 빼고 짧게 끊어 내요. 입은 거의 안 벌려요.",
+"ex": [
+"foot",
+"book",
+"good"
+],
+"note": "한국어 'ㅜ'보다 입술 오므림과 혀 높이가 약해요.",
+"say": "Pull the door.",
+"pair": [
+{
+"w": "pull",
+"ko": "당기다",
+"ip": "ʊ",
+"hi": "u"
+},
+{
+"w": "pool",
+"ko": "수영장",
+"ip": "uː",
+"hi": "oo"
+}
+],
+"kr": true,
+"err": "full/fool, pull/pool을 같은 [u]로 낸다",
+"cue": "입술을 힘껏 내밀지 말고 살짝만 둥글게, 짧게 '우' 해요"
+},
+{
+"ipa": "uː",
+"ko": "길게 끄는 '우'에 가까움(입술을 좁게)",
+"kind": "모음",
+"sec": "단모음",
+"tip": "입술을 좁게 오므려 앞으로 내밀고 혀 뒤쪽을 높인 채 길게 끌어요. 입술에 힘을 주세요.",
+"ex": [
+"goose",
+"blue",
+"food"
+],
+"say": "The pool is closed.",
+"pair": [
+{
+"w": "pool",
+"ko": "수영장",
+"ip": "uː",
+"hi": "oo"
+},
+{
+"w": "pull",
+"ko": "당기다",
+"ip": "ʊ",
+"hi": "u"
+}
+]
+},
+{
+"ipa": "ʌ",
+"ko": "한국어에 없음(짧은 중설 중모음)",
+"kind": "모음",
+"sec": "단모음",
+"tip": "입을 자연스럽게 벌리고 혀 중앙을 낮게 둔 채 짧고 힘을 뺀 소리를 내요.",
+"ex": [
+"strut",
+"cup",
+"love"
+],
+"note": "한국어 'ㅓ'는 혀 위치가 뒤쪽이라 대체가 안 돼요. 미국식도 /ʌ/로 적어요.",
+"say": "One cup, please.",
+"pair": [
+{
+"w": "cup",
+"ko": "컵",
+"ip": "ʌ",
+"hi": "u"
+},
+{
+"w": "cop",
+"ko": "경찰",
+"ip": "ɒ",
+"hi": "o"
+}
+],
+"kr": true,
+"err": "cup을 '컵'의 [ʌ]로, hot을 '핫'으로 내어 cut/cot, luck/lock의 대립이 사라진다",
+"cue": "'아'도 '어'도 아닌, 입을 살짝만 벌린 짧은 '어'예요"
+},
+{
+"ipa": "ɜː",
+"ko": "한국어에 없음(길게 끄는 중설 중모음)",
+"kind": "모음",
+"sec": "단모음",
+"tip": "혀 중앙을 중간 높이에 두고 입술을 둥글리지 않은 채 길게 끌어요. 혀끝은 아랫니 뒤에 둬요.",
+"ex": [
+"nurse",
+"bird",
+"work"
+],
+"note": "미국식은 /ɝː/로 혀를 말아 내요. 영국식은 권설음이 없어요.",
+"vary": "미국식 /ɜr/ (bird·nurse)",
+"say": "The nurse is here.",
+"kr": true,
+"err": "bird를 '버드'로, work를 '워크'로 내어 /ɜː/의 길이·음색이 사라진다",
+"cue": "'어'를 길게 늘여요. 입술은 힘 빼고, 혀는 가운데에 둬요"
+},
+{
+"ipa": "ə",
+"ko": "한국어에 없음(가장 약한 중설 중모음)",
+"kind": "모음",
+"sec": "단모음",
+"tip": "입을 가장 편하게 반쯤 열고 혀 중앙을 가운데 둔 채 아주 짧게 내요. 힘을 완전히 빼세요.",
+"ex": [
+"about",
+"sofa",
+"banana"
+],
+"note": "RP에서는 강세 없는 음절에만 나요. 미국식은 r 뒤에서 /ɚ/로 권설음이 돼요.",
+"vary": "미국식도 동일(약화)",
+"say": "I will be there about noon.",
+"kr": true,
+"err": "banana를 '바나나'처럼 세 음절을 또박또박 다 내고, 단어·문장 강세와 약형이 사라져 리듬이 평평해진다",
+"cue": "힘을 받는 음절만 크게, 나머지는 '으'에 가깝게 흘려요. ba-NUH-na에서 가운데만 살아나요"
+},
+{
+"ipa": "eɪ",
+"ko": "'에이'로 미끄러짐",
+"kind": "모음",
+"sec": "이중모음",
+"tip": "입을 반쯤 벌린 '에'에서 시작해 턱을 올리며 '이' 쪽으로 부드럽게 미끄러져요.",
+"ex": [
+"day",
+"name",
+"eight"
+],
+"say": "What time does it open?"
+},
+{
+"ipa": "aɪ",
+"ko": "'아이'로 미끄러짐",
+"kind": "모음",
+"sec": "이중모음",
+"tip": "입을 크게 벌린 '아'에서 시작해 혀 앞을 높이며 '이' 쪽으로 좁혀져요.",
+"ex": [
+"my",
+"time",
+"buy"
+],
+"say": "I would like a ticket."
+},
+{
+"ipa": "ɔɪ",
+"ko": "'오이'로 미끄러짐",
+"kind": "모음",
+"sec": "이중모음",
+"tip": "입술을 둥글게 한 '오'에서 시작해 입꼬리를 당기며 '이'로 미끄러져요.",
+"ex": [
+"boy",
+"choice",
+"enjoy"
+],
+"say": "Boil the water."
+},
+{
+"ipa": "aʊ",
+"ko": "'아우'로 미끄러짐",
+"kind": "모음",
+"sec": "이중모음",
+"tip": "입을 크게 벌린 '아'에서 시작해 입술을 오므리며 '우' 쪽으로 좁혀져요.",
+"ex": [
+"now",
+"loud",
+"brown"
+],
+"say": "How much is it?"
+},
+{
+"ipa": "əʊ",
+"ko": "'어우'로 미끄러짐",
+"kind": "모음",
+"sec": "이중모음",
+"tip": "입을 편하게 연 '어'에서 시작해 혀 뒤쪽을 올리며 '우'로 미끄러져요.",
+"ex": [
+"go",
+"home",
+"know"
+],
+"note": "미국식은 /oʊ/로 적고 시작점의 입이 더 오므라들어요.",
+"vary": "미국식 /oʊ/ (go)",
+"say": "Let us go now."
+},
+{
+"ipa": "ɪə",
+"ko": "'이어'로 미끄러짐",
+"kind": "모음",
+"sec": "이중모음",
+"tip": "짧은 '이'에서 시작해 혀를 낮추고 중앙으로 풀면서 '어'로 흘러가요. 한 음절 안에서 움직여요.",
+"ex": [
+"beer",
+"near",
+"here"
+],
+"note": "현대 RP에서는 [ɪː] 단모음으로 바뀌는 추세예요. 미국식은 r을 살려 /ɪr/로 내요.",
+"vary": "미국식 /ɪr/ (near)",
+"say": "I am near the gate."
+},
+{
+"ipa": "eə",
+"ko": "'에어'로 미끄러짐",
+"kind": "모음",
+"sec": "이중모음",
+"tip": "입을 반쯤 벌린 '에'에서 시작해 턱을 내리며 중앙의 '어'로 풀려요. 끝은 약하게 흐려져요.",
+"ex": [
+"fair",
+"care",
+"there"
+],
+"note": "현대 RP에서는 장모음 /ɛː/로 단모음화했어요. 미국식은 /er/로 r을 발음해요.",
+"vary": "미국식 /er/ (square)",
+"say": "The square is close."
+},
+{
+"ipa": "ʊə",
+"ko": "'우어'로 미끄러짐",
+"kind": "모음",
+"sec": "이중모음",
+"tip": "입술을 오므린 '우'에서 시작해 입을 열고 혀를 낮추며 '어'로 풀어져요.",
+"ex": [
+"tour",
+"poor",
+"sure"
+],
+"note": "현대 RP에서는 대부분 /ɔː/로 합쳐져 tour·poor·sure가 /tɔː/·/pɔː/·/ʃɔː/로 나요. 예시 단어는 전통 표기 기준이며, 보수적 화자만 /ʊə/를 써요.",
+"vary": "미국식 /ʊr/ (cure)",
+"say": "Is the tour over?"
+},
+{
+"ipa": "p",
+"ko": "'ㅍ'에 가까움, 숨을 터뜨림",
+"kind": "자음",
+"sec": "자음",
+"tip": "두 입술을 꽉 붙여 막았다가 터뜨리며 숨을 내보내요. 어말에서는 숨이 약해져요.",
+"ex": [
+"pen",
+"happy",
+"stop"
+],
+"note": "강세 음절 첫소리에서는 종이를 밀 만큼 숨이 세고, /s/ 뒤(spin)와 어말(stop)에서는 거의 나지 않아요.",
+"say": "A cup of tea, please.",
+"pair": [
+{
+"w": "pan",
+"ko": "냄비",
+"ip": "p",
+"hi": "p"
+},
+{
+"w": "fan",
+"ko": "선풍기",
+"ip": "f",
+"hi": "f"
+}
+]
+},
+{
+"ipa": "b",
+"ko": "'ㅂ'에 가까움, 성대 울림",
+"kind": "자음",
+"sec": "자음",
+"tip": "두 입술을 붙였다 떼면서 성대를 울려요. 숨은 터뜨리지 않고 약하게 내요.",
+"ex": [
+"book",
+"rabbit",
+"rob"
+],
+"note": "어말에서는 'ㅂ' 받침처럼 거의 안 들릴 만큼 약해질 수 있어요.",
+"say": "I will be back.",
+"pair": [
+{
+"w": "bent",
+"ko": "구부러진",
+"ip": "b",
+"hi": "b"
+},
+{
+"w": "vent",
+"ko": "환풍구",
+"ip": "v",
+"hi": "v"
+}
+]
+},
+{
+"ipa": "t",
+"ko": "'ㅌ'에 가까움, 혀끝이 더 앞",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀끝을 윗잇몸에 붙여 막았다 떼며 숨을 터뜨려요. 혀끝이 한국어 ㅌ보다 앞에 있어요.",
+"ex": [
+"town",
+"better",
+"cat"
+],
+"note": "영국식 일상 발화에서는 모음 사이·어말 /t/가 성문 파열음으로 바뀌기도 해요.",
+"say": "Take the ticket."
+},
+{
+"ipa": "d",
+"ko": "'ㄷ'에 가까움, 성대 울림",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀끝을 윗잇몸에 붙였다 떼며 성대를 울려요. 숨은 거의 내보내지 않아요.",
+"ex": [
+"day",
+"ladder",
+"bed"
+],
+"say": "Do not do that."
+},
+{
+"ipa": "k",
+"ko": "'ㅋ'에 가까움, 숨을 터뜨림",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀뿌리를 연구개에 붙여 막았다 떼며 숨을 터뜨려요. 어말에서는 숨이 약해져요.",
+"ex": [
+"cat",
+"school",
+"back"
+],
+"say": "Could you call a cab?"
+},
+{
+"ipa": "ɡ",
+"ko": "'ㄱ'에 가까움, 성대 울림",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀뿌리로 연구개를 막았다 떼며 성대를 울려요. 숨은 거의 내보내지 않아요.",
+"ex": [
+"give",
+"ago",
+"bag"
+],
+"say": "Go straight."
+},
+{
+"ipa": "tʃ",
+"ko": "'ㅊ'에 가까움, 혀가 더 뒤",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀끝을 윗잇몸 뒤에 대 막았다가 좁은 틈으로 터뜨려 '쉬'처럼 내요. 입술은 살짝 내밀어요.",
+"ex": [
+"cheese",
+"teacher",
+"watch"
+],
+"note": "한국어 ㅊ보다 혀 접촉점이 뒤쪽이고 입술을 더 내밀어요.",
+"say": "Is this cheese fresh?",
+"pair": [
+{
+"w": "cheap",
+"ko": "싼",
+"ip": "tʃ",
+"hi": "ch"
+},
+{
+"w": "jeep",
+"ko": "지프",
+"ip": "dʒ",
+"hi": "j"
+}
+],
+"kr": true,
+"err": "chair를 '체어'로 내어 /tʃ/가 한국어 ㅊ에 가깝게 실현된다",
+"cue": "'치'보다 입술을 조금 더 내밀고 짧게 터뜨려요"
+},
+{
+"ipa": "dʒ",
+"ko": "'ㅈ'에 가까움, 혀가 더 뒤",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀끝을 윗잇몸 뒤에 대 막았다가 좁혀 터뜨리며 성대를 함께 울려요. 숨은 약해요.",
+"ex": [
+"jump",
+"soldier",
+"bridge"
+],
+"say": "Just a moment, please.",
+"pair": [
+{
+"w": "jeep",
+"ko": "지프",
+"ip": "dʒ",
+"hi": "j"
+},
+{
+"w": "cheap",
+"ko": "싼",
+"ip": "tʃ",
+"hi": "ch"
+}
+],
+"kr": true,
+"err": "job을 '잡'의 경음에 가까운 [tɕ]로 내어 영어 원어민에게는 /tʃ/처럼 들린다",
+"cue": "'쥐'보다 혀를 조금 뒤로 물리고, 성대를 울리면서 터뜨려요"
+},
+{
+"ipa": "f",
+"ko": "한국어에 없음(순치 마찰음)",
+"kind": "자음",
+"sec": "자음",
+"tip": "윗니를 아랫입술에 가볍게 대고 그 좁은 틈으로 바람을 길게 흘려보내요. 성대는 쉬어요.",
+"ex": [
+"fish",
+"coffee",
+"safe"
+],
+"note": "한국어 ㅍ처럼 두 입술을 쓰지 않고, 이와 입술 사이로 공기를 계속 흘려요.",
+"say": "Is the fan working?",
+"pair": [
+{
+"w": "fan",
+"ko": "선풍기",
+"ip": "f",
+"hi": "f"
+},
+{
+"w": "pan",
+"ko": "냄비",
+"ip": "p",
+"hi": "p"
+}
+],
+"kr": true,
+"err": "fight→'파이트', coffee→'코피', phone→'포네'처럼 /p/로 낸다",
+"cue": "윗니로 아랫입술을 물고 '프-' 바람을 새요. 입술만 맞대면 /p/가 돼요"
+},
+{
+"ipa": "v",
+"ko": "한국어에 없음(순치 유성 마찰음)",
+"kind": "자음",
+"sec": "자음",
+"tip": "윗니를 아랫입술에 대고 좁은 틈으로 바람을 흘리며 성대를 울려요. 이 틈을 유지해요.",
+"ex": [
+"very",
+"seven",
+"love"
+],
+"note": "한국어 ㅂ으로 대체하면 마찰이 사라져요. 어말에서도 성대 울림을 유지해요.",
+"say": "Please vent the room.",
+"pair": [
+{
+"w": "vent",
+"ko": "환풍구",
+"ip": "v",
+"hi": "v"
+},
+{
+"w": "bent",
+"ko": "구부러진",
+"ip": "b",
+"hi": "b"
+}
+],
+"kr": true,
+"err": "vent→'벤트', love→'러브'를 [lʌp̚]처럼 내고 very와 berry를 구별하지 못한다",
+"cue": "'f'와 같은 입 모양에서 목에 손을 대면 떨림이 느껴져요. 그게 /v/예요"
+},
+{
+"ipa": "θ",
+"ko": "한국어에 없음(치 마찰음)",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀끝을 윗니 뒤쪽에 살짝 대고 그 틈으로 바람을 계속 흘려요. 성대는 쉬어요.",
+"ex": [
+"think",
+"author",
+"bath"
+],
+"note": "혀끝을 이빨로 막지 말고, 좁은 틈을 유지한 채 공기만 새게 해요.",
+"say": "I think it is Thursday.",
+"pair": [
+{
+"w": "think",
+"ko": "생각하다",
+"ip": "θ",
+"hi": "th"
+},
+{
+"w": "sink",
+"ko": "싱크대",
+"ip": "s",
+"hi": "s"
+}
+],
+"kr": true,
+"err": "think→'sink', three→'스리', mouth→'마우스'처럼 /s/로 대체해 다른 단어와 합류한다",
+"cue": "혀끝을 윗니에 살짝 물리고 바람만 통과시켜요. 거울로 혀가 보이면 성공이에요"
+},
+{
+"ipa": "ð",
+"ko": "한국어에 없음(치 유성 마찰음)",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀끝을 윗니 뒤쪽에 살짝 대고 좁은 틈으로 바람을 흘리며 성대를 울려요.",
+"ex": [
+"this",
+"brother",
+"breathe"
+],
+"note": "관사·대명사·전치사처럼 기능어 첫소리로 자주 나와요.",
+"say": "Is this the right gate?",
+"pair": [
+{
+"w": "they",
+"ko": "그들",
+"ip": "ð",
+"hi": "th"
+},
+{
+"w": "day",
+"ko": "날",
+"ip": "d",
+"hi": "d"
+}
+],
+"kr": true,
+"err": "these→'디즈', brother→'브라더', breathe→'브리드'처럼 /d/로 대체한다",
+"cue": "'드'와 똑같이 시작하되 혀끝을 이 사이에 두고 바람을 계속 흘려요"
+},
+{
+"ipa": "s",
+"ko": "'ㅅ'에 가까움, 혀끝이 윗잇몸 쪽",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀끝을 윗잇몸 가까이 두고 혀 가운데 홈으로 바람을 긁어 내보내요. 성대는 울리지 않아요.",
+"ex": [
+"say",
+"sister",
+"bus"
+],
+"note": "한국어 ㅅ보다 혀끝이 위로 올라가 좁은 홈을 만들어요.",
+"say": "Is this seat taken?",
+"pair": [
+{
+"w": "sink",
+"ko": "싱크대",
+"ip": "s",
+"hi": "s"
+},
+{
+"w": "think",
+"ko": "생각하다",
+"ip": "θ",
+"hi": "th"
+}
+]
+},
+{
+"ipa": "z",
+"ko": "한국어에 없음(유성 ㅅ)",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀끝을 윗잇몸 가까이 두고 홈으로 바람을 긁으며 성대를 함께 울려요. 숨은 계속 흘러요.",
+"ex": [
+"zoo",
+"easy",
+"nose"
+],
+"note": "한국어에는 단어 첫소리 유성 마찰음이 없어 ㅈ으로 대체되기 쉬워요.",
+"say": "The zoo opens at nine.",
+"pair": [
+{
+"w": "zoo",
+"ko": "동물원",
+"ip": "z",
+"hi": "z"
+},
+{
+"w": "Sue",
+"ko": "수(이름)",
+"ip": "s",
+"hi": "S"
+}
+],
+"kr": true,
+"err": "zoo→'주', zero→'지로', rose→'로즈'를 [로지]처럼 낸다",
+"cue": "'즈'에서 시작해 '스'처럼 바람을 계속 흘려요. '주'는 혀가 입천장을 막았다 떼지만 /z/는 막지 않아요"
+},
+{
+"ipa": "ʃ",
+"ko": "'쉬'에 가까움",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀끝을 윗잇몸 뒤쪽으로 당겨 넓게 좁히고 입술을 살짝 내밀며 바람을 흘려요.",
+"ex": [
+"she",
+"nation",
+"wash"
+],
+"note": "한국어 '쉬'보다 입술 내밈이 약하고 혀 앞부분이 평평해요.",
+"say": "She sells sea shells."
+},
+{
+"ipa": "ʒ",
+"ko": "한국어에 없음(유성 '쉬')",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀끝을 윗잇몸 뒤쪽으로 당겨 좁히고 입술을 내밀며 바람과 함께 성대를 울려요.",
+"ex": [
+"vision",
+"measure",
+"beige"
+],
+"note": "영국식에서는 강세 없는 음절과 프랑스어 차용어에 주로 나타나요.",
+"pair": [
+{
+"w": "measure",
+"ko": "측정하다",
+"ip": "ʒ",
+"hi": "s"
+},
+{
+"w": "mesher",
+"ko": "(비교용)",
+"ip": "ʃ",
+"hi": "sh"
+}
+],
+"kr": true,
+"err": "measure를 '메저', vision을 '비전'처럼 /dʒ/로 내고, beige를 /beɪtʃ/처럼 무성음화한다",
+"cue": "'쥐'에서 혀를 떼지 말고 그 자리에서 바람만 계속 흘려요"
+},
+{
+"ipa": "h",
+"ko": "'ㅎ'에 가까움",
+"kind": "자음",
+"sec": "자음",
+"tip": "성대를 좁힌 채 숨만 가볍게 흘려보내요. 혀와 입술은 다음 모음 모양을 잡아요.",
+"ex": [
+"hand",
+"behind"
+],
+"note": "RP에서는 어두 h를 발음하지만, 일부 지역 방언은 h를 떨어뜨려요.",
+"say": "How much?"
+},
+{
+"ipa": "m",
+"ko": "'ㅁ'에 가까움",
+"kind": "자음",
+"sec": "자음",
+"tip": "두 입술을 붙인 채 코로 소리를 울려요. 입으로는 공기가 거의 나가지 않아요.",
+"ex": [
+"moon",
+"summer",
+"lamp"
+],
+"say": "May I come in?"
+},
+{
+"ipa": "n",
+"ko": "'ㄴ'에 가까움",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀끝을 윗잇몸에 붙이고 혀 양옆도 막은 채 코로 소리를 울려요. 입으로는 공기가 새지 않아요.",
+"ex": [
+"name",
+"dinner",
+"sun"
+],
+"say": "No, thank you."
+},
+{
+"ipa": "ŋ",
+"ko": "받침 'ㅇ'에 가까움",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀뿌리를 연구개에 붙인 채 코로 울려요. 어말에서도 소리를 줄이지 않아요.",
+"ex": [
+"sing",
+"ringing",
+"long"
+],
+"note": "singer처럼 형태소 경계 뒤에서는 /ŋ/만 나고 /ɡ/가 덧나지 않아요.",
+"say": "The meeting is long."
+},
+{
+"ipa": "l",
+"ko": "'ㄹ'에 가까움(혀끝을 붙임)",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀끝을 윗잇몸에 붙이고 혀 옆으로 공기를 흘려요. 어말에서는 혀뿌리가 올라가요.",
+"ex": [
+"look",
+"yellow",
+"bell"
+],
+"note": "모음 앞은 맑은 l, 음절 끝은 혀뿌리가 올라간 어두운 l로 실현돼요.",
+"say": "The light is on the left.",
+"pair": [
+{
+"w": "light",
+"ko": "빛",
+"ip": "l",
+"hi": "l"
+},
+{
+"w": "right",
+"ko": "오른쪽",
+"ip": "r",
+"hi": "r"
+}
+],
+"kr": true,
+"err": "light를 '라이트'의 탄설음으로 내고, milk·wolf 같은 어말·자음군 /l/에서 모음을 삽입한다",
+"cue": "혀끝을 윗잇몸에 붙인 채 떼지 말고 '을-'로 끝내요. '라'가 아니라 혀가 닿아 있어야 해요"
+},
+{
+"ipa": "r",
+"ko": "'ㄹ'과 다름(혀를 말지 않음)",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀끝을 윗잇몸 뒤쪽에 닿지 않게 두고 혀 몸통을 살짝 말아 올려요. 혀끝은 떨지 않아요.",
+"ex": [
+"run",
+"carry",
+"around"
+],
+"note": "영국식은 모음 앞에서만 발음해요. car·bird의 r은 소리 나지 않아요.",
+"vary": "미국식은 어말·자음 앞 /r/도 발음",
+"say": "Turn right at the light.",
+"pair": [
+{
+"w": "right",
+"ko": "오른쪽",
+"ip": "r",
+"hi": "r"
+},
+{
+"w": "light",
+"ko": "빛",
+"ip": "l",
+"hi": "l"
+}
+],
+"kr": true,
+"err": "rice/lice, right/light, road/load를 구별하지 못하고, /r/을 탄설음 [ɾ]이나 /l/로 낸다",
+"cue": "혀끝을 입천장에 닿지 말고 띄운 채로 '우-'를 섞어요. 'rice'는 혀가 어디에도 닿지 않아요"
+},
+{
+"ipa": "j",
+"ko": "'이' 반모음에 가까움",
+"kind": "자음",
+"sec": "자음",
+"tip": "혀 앞부분을 경구개 가까이 올린 채 '이'처럼 빠르게 다음 모음으로 미끄러져요.",
+"ex": [
+"yes",
+"music",
+"few"
+],
+"note": "미국식은 new·tune에서 j를 빼고 /nuː/, /tuːn/으로 내는 경우가 많아요.",
+"say": "Yes, of course."
+},
+{
+"ipa": "w",
+"ko": "'우' 반모음에 가까움",
+"kind": "자음",
+"sec": "자음",
+"tip": "입술을 둥글게 내밀고 혀뿌리를 올린 채 '우'처럼 다음 모음으로 미끄러져요.",
+"ex": [
+"we",
+"away",
+"quick"
+],
+"note": "which·when의 /hw/는 RP에서 대부분 /w/로 합쳐졌어요.",
+"say": "We will wait."
+}
 ];
-const IPA_ITEM = Object.fromEntries(IPA_COURSE.map(x => [x.ipa, x]));
+const IPA_SECS = ['단모음', '이중모음', '자음'];
+const IPA_ITEM = Object.fromEntries(IPA_ALL.map(x => [x.ipa, x]));
 
 /* 게이트 상태 — 계정별(personalStore). 손님은 이 브라우저 공용 칸에 남는다.
    'known' = 안다고 답함, 'course' = 코스를 골랐음. 둘 다 다시 묻지 않는다. */
@@ -1481,7 +2425,7 @@ const SCREENS = [
   { id: 'u-study', no: 'SCR-08', name: '학습 카드', fr: ['FR-STUDY-01', 'FR-STUDY-02', 'FR-STUDY-04'],
     tips: ['카드를 눌러 뒤집고 "듣기"로 영어 발음을 들어 보세요.', '모든 카드를 한 번 이상 뒤집어야 완료 버튼이 켜져요.', '[your name]·[your destination]는 채울 자리예요. 듣기도 그대로 읽어요.', '사이드바의 "TTS 미지원"을 켜면 듣기 버튼 대신 안내가 나와요.'] },
   { id: 'u-ipa', no: 'SCR-08b', name: '발음기호 알아보기', fr: ['FR-STUDY-01', 'FR-STUDY-02'],
-    tips: ['기호 10개를 한 장씩 봐요. 소리를 듣고 따라 해 보세요.', '한 바퀴 돌면 코스가 끝나고, 회화 연습을 그대로 쓸 수 있어요.', '여기서 배운 기호가 회화 연습 결과 카드에 그대로 나와요.'] },
+    tips: ['기호 44개(단모음 12·이중모음 8·자음 24)를 한 장씩 봐요.', '한 바퀴 돌면 코스가 끝나고, 회화 연습을 그대로 쓸 수 있어요.', '여기서 배운 기호가 회화 연습 결과 카드에 그대로 나와요.'] },
   { id: 'u-coll', no: 'SCR-09', name: '문장 모음', fr: ['FR-STUDY-05', 'FR-SENT-01'],
     tips: ['공통 상황과 장소별 문장을 골라 볼 수 있어요.', '"문장 모음 전용"은 일정에 넣지 않은 문장이에요.', '모든 문장에 듣기 버튼이 있어요.'] },
   { id: 'u-interp', no: 'SCR-12', name: '통역 (여행 중)', fr: ['FR-TRIP-INTERP'],
@@ -3586,7 +4530,7 @@ async function ipaAskOnce() {
   if (await ipaSeen()) return;
   confirmBox('발음기호, 기억 나세요?',
     `회화 연습 결과에는 <b>/iː/ · /θ/ · /ə/</b> 같은 기호가 나와요. 기호를 읽을 수 있으면 피드백이 바로 이해돼요.<br><br>
-     기억이 안 나도 괜찮아요. <b>기호 10개, 3분</b>이면 충분해요.`,
+     기억이 안 나도 괜찮아요. <b>기호 44개</b>를 한 장씩 볼 수 있어요. 자주 틀리는 것부터 표시해 뒀어요.`,
     '네, 알아요', () => { ipaMarkSeen('known'); S.modal = null; render(); },
     { cancel: '기억이 잘 안나요', onCancel: () => {
         ipaMarkSeen('course'); S.modal = null;
@@ -3611,52 +4555,64 @@ function scrStudy() {
    최소대립쌍은 '듣기'로 두 단어를 번갈아 들을 수 있게 한다(기호보다 귀가 먼저다). */
 function scrIpa() {
   const st = ipaState();
-  const C = IPA_COURSE, n = C.length;
+  const all44 = IPA_ALL, n = all44.length;
   const i = Math.max(0, Math.min(st.i, n - 1));
-  const c = C[i], prev = C[(i - 1 + n) % n], next = C[(i + 1) % n];
-  const seen = new Set(st.seen), all = seen.size >= n;
-  const ticks = C.map((x, k) => `<i class="${seen.has(x.ipa) ? 'on' : ''}${k === i ? ' cur' : ''}"></i>`).join('');
-  /* 소리를 만드는 철자에만 밑줄을 긋는다. 이 화면에서 유일하게 '사실'인 대응이다 —
-     파형·길이 막대 같은 도형은 측정값처럼 보이지만 실제로 잰 값이 아니라 넣지 않았다. */
-  const mark = (w, hi) => {
-    const at = hi ? w.indexOf(hi) : -1;
-    if (at < 0) return esc(w);
-    return esc(w.slice(0, at)) + `<u>${esc(hi)}</u>` + esc(w.slice(at + hi.length));
-  };
-  const pairRow = c.pair.map(p => `<button class="ipa-pair${p.ip === c.ipa ? ' on' : ''}" data-act="ipa-say" data-w="${esc(p.w)}">
-      <span class="ipa-pair-w">${mark(p.w, p.hi)}</span>
-      <span class="ipa-pair-k">${esc(p.ko)}</span>
-      <em class="ipa-pair-ip">/${esc(p.ip)}/</em>
-      <span class="ipa-pair-play" aria-hidden="true">${I.speaker}</span>
-      <span class="sr-only">${esc(p.w)} 듣기</span>
-    </button>`).join('');
+  const c = all44[i], prev = all44[(i - 1 + n) % n], next = all44[(i + 1) % n];
+  const seen = new Set(st.seen), done = seen.size >= n;
+  const secOf = s2 => all44.findIndex(x => x.sec === s2);
+  const secs = IPA_SECS.map(s2 => `<button class="${c.sec === s2 ? 'on' : ''}" data-act="ipa-sec" data-sec="${s2}">${s2}
+      <b>${all44.filter(x => x.sec === s2).length}</b></button>`).join('');
+  /* 44칸 눈금 — 좁은 화면에서는 이 줄만 옆으로 밀린다(페이지 전체는 밀리지 않는다) */
+  const strip = all44.map((x, k) => `<button class="ipa-cell${x.ipa === c.ipa ? ' cur' : ''}${seen.has(x.ipa) ? ' seen' : ''}${x.kr ? ' kr' : ''}"
+      data-act="ipa-go" data-i="${k}" aria-label="/${esc(x.ipa)}/ ${esc(x.ko)}${seen.has(x.ipa) ? ' (봤음)' : ''}"
+      ${x.ipa === c.ipa ? 'aria-current="true"' : ''}>/${esc(x.ipa)}/</button>`).join('');
+  const mark = (w, hi) => { const at = hi ? w.indexOf(hi) : -1;
+    return at < 0 ? esc(w) : esc(w.slice(0, at)) + `<u>${esc(hi)}</u>` + esc(w.slice(at + hi.length)); };
+  const row = (p2, cls) => `<button class="ipa-pair${cls}" data-act="ipa-say" data-w="${esc(p2.w)}">
+      <span class="ipa-pair-w">${mark(p2.w, p2.hi)}</span><span class="ipa-pair-k">${esc(p2.ko)}</span>
+      <em class="ipa-pair-ip">/${esc(p2.ip)}/</em><span class="ipa-pair-play" aria-hidden="true">${I.speaker}</span>
+      <span class="sr-only">${esc(p2.w)} 듣기</span></button>`;
+  const pairBlock = c.pair
+    ? `<div class="ipa-sec" style="grid-template-columns:minmax(0,1fr)"><div class="ipa-pair-h">
+         <span>최소대립쌍 · 한 글자만 다름</span>
+         <button class="ipa-ab" data-act="ipa-ab" data-pairs="${esc(c.pair[0].w)}|${esc(c.pair[1].w)}">A ↔ B 번갈아</button></div>
+       ${row(c.pair[0], c.pair[0].ip === c.ipa ? ' on' : '')}${row(c.pair[1], c.pair[1].ip === c.ipa ? ' on' : '')}</div>`
+    : '';
+  const exBlock = c.ex && c.ex.length
+    ? `<div class="ipa-sec"><span class="ipa-tag">as in</span><div class="ipa-ex">${c.ex.map(w =>
+        `<button class="ipa-ex-b" data-act="ipa-say" data-w="${esc(w)}">${mark(w, c.ipa === 'ə' ? '' : '')}<span class="ipa-pair-play">${I.speaker}</span>
+          <span class="sr-only">${esc(w)} 듣기</span></button>`).join('')}</div></div>` : '';
   const inner = `<div class="app-pad">
-    <div class="ipa-ticks" role="group" aria-label="기호 ${n}개 중 ${i + 1}번째">${ticks}</div>
+    <div class="ipa-secs" role="group" aria-label="소리 갈래">${secs}</div>
     <div class="ipa-card">
-      <div class="ipa-card-h"><span class="ipa-tag">sign</span>
+      <div class="ipa-card-h"><span class="ipa-tag">${esc(c.sec)}</span>
         <span class="ipa-count"><b>${i + 1}</b> / ${n}</span></div>
       <div class="ipa-hero">
         <div>
           <div class="ipa-sym">/${esc(c.ipa)}/</div>
           <div class="ipa-ko">${esc(c.ko)}<span class="ipa-kind">${esc(c.kind)}</span></div>
         </div>
-        <button class="ipa-hero-play" data-act="ipa-say" data-w="${esc(c.pair[0].w)}" aria-label="${esc(c.ko)} 소리 듣기">${I.speaker}</button>
+        <button class="ipa-hero-play" data-act="ipa-say" data-w="${esc((c.pair && c.pair[0].w) || (c.ex && c.ex[0]) || c.ipa)}"
+          aria-label="${esc(c.ko)} 소리 듣기">${I.speaker}</button>
       </div>
+      ${c.kr ? `<div class="ipa-kr"><span class="ipa-kr-tag">한국인 취약</span>
+        <span>${esc(c.err || '')}${c.err && c.cue ? ' · ' : ''}${esc(c.cue || '')}</span></div>` : ''}
       <div class="ipa-sec"><span class="ipa-tag">how</span><p class="ipa-tip">${esc(c.tip)}</p></div>
-      <div class="ipa-sec"><span class="ipa-tag">pair</span>
-        <div class="ipa-pair-wrap"><div class="ipa-pair-h"><span>${c.pair[0].ip === c.pair[1].ip ? '같은 소리 · 두 단어' : '최소대립쌍 · 소리 하나만 달라요'}</span>
-          <button class="ipa-ab" data-act="ipa-ab" data-pairs="${esc(c.pair[0].w)}|${esc(c.pair[1].w)}">A ↔ B 번갈아</button></div>${pairRow}</div></div>
-      <div class="ipa-sec"><span class="ipa-tag">eg</span>
-        <button class="ipa-eg" data-act="ipa-say" data-w="${esc(c.say)}">
-          <span class="ipa-eg-t">${esc(c.say)}</span><span class="ipa-pair-play" aria-hidden="true">${I.speaker}</span>
-          <span class="sr-only">예문 듣기</span></button></div>
-      ${all ? `<div class="ipa-done">${I.check}<span>기호 ${n}개를 모두 봤어요</span></div>` : ''}
+      ${c.vary ? `<div class="ipa-sec"><span class="ipa-tag">us</span><p class="ipa-tip">${esc(c.vary)}</p></div>` : ''}
+      ${pairBlock}${exBlock}
+      ${c.say ? `<div class="ipa-sec"><span class="ipa-tag">eg</span>
+        <button class="ipa-eg" data-act="ipa-say" data-w="${esc(c.say)}"><span class="ipa-eg-t">${esc(c.say)}</span>
+          <span class="ipa-pair-play" aria-hidden="true">${I.speaker}</span><span class="sr-only">예문 듣기</span></button></div>` : ''}
+      ${c.note ? `<div class="ipa-sec"><span class="ipa-tag">note</span><p class="ipa-tip">${esc(c.note)}</p></div>` : ''}
+      ${done ? `<div class="ipa-done">${I.check}<span>기호 ${n}개를 모두 봤어요</span></div>` : ''}
     </div>
+    <div class="ipa-strip" role="group" aria-label="기호 ${n}개">${strip}</div>
     <div class="ipa-neigh"><button class="ipa-neigh-b" data-act="ipa-go" data-i="${(i - 1 + n) % n}">${I.back}<span>/${esc(prev.ipa)}/</span></button>
       <button class="ipa-neigh-b" data-act="ipa-go" data-i="${(i + 1) % n}"><span>/${esc(next.ipa)}/</span>${I.next}</button></div>
-    <p class="small ipa-foot">밑줄은 그 소리를 만드는 철자예요. 모르면 여기로 돌아오세요.</p>
+    <p class="small ipa-foot">밑줄은 그 소리를 만드는 철자예요. <b>한국인 취약</b>은 한국어에 같은 소리가 없어 자주 틀리는 기호예요.</p>
+    <p class="small ipa-foot">영국식 표준(RP) ${n}개입니다. 미국식은 보통 40개로 세요 — 흔히 말하는 46개는 모음+/r/ 조합 8개를 따로 센 숫자예요.</p>
   </div>`;
-  const bottom = all
+  const bottom = done
     ? `<button class="btn accent block" data-act="ipa-finish">회화 연습 열기</button>`
     : `<div style="display:flex;gap:8px"><button class="btn soft" style="flex:1" data-act="ipa-skip">건너뛰기</button><button class="btn primary" style="flex:1.4" data-act="ipa-next">다음 기호</button></div>`;
   return frame(inner, { appbar: appbar('발음기호 알아보기', { back: 'u-sched' }), bottom, tabbar: false, tab: 'u-study' });
@@ -5416,15 +6372,17 @@ const ACT = {
   'sheet-open': () => { S.sheet = true; pushOverlay('sheet'); render(); },
   'ipa-open': () => { go('u-ipa'); },
   'ipa-go': el => { const st = ipaState(); st.i = +el.dataset.i; render(); window.scrollTo(0, 0); },
-  'ipa-next': () => { const st = ipaState(); const c = IPA_COURSE[st.i]; if (c && !st.seen.includes(c.ipa)) st.seen.push(c.ipa);
-    st.i = Math.min(IPA_COURSE.length - 1, st.i + 1); render(); window.scrollTo(0, 0); },
+  'ipa-next': () => { const st = ipaState(); const c = IPA_ALL[st.i]; if (c && !st.seen.includes(c.ipa)) st.seen.push(c.ipa);
+    st.i = Math.min(IPA_ALL.length - 1, st.i + 1); render(); window.scrollTo(0, 0); },
+  /* 갈래(단모음/이중모음/자음)로 바로 건너뛴다 */
+  'ipa-sec': el => { const k = IPA_ALL.findIndex(x => x.sec === el.dataset.sec); if (k >= 0) { ipaState().i = k; render(); window.scrollTo(0, 0); } },
   'ipa-say': el => { speak(el.dataset.w, el); },
   /* 두 단어를 번갈아 들려준다. 파형 도형 대신 '귀로 비교'하게 하는 장치. */
   'ipa-ab': el => { const [x, y] = (el.dataset.pairs || '').split('|');
     if (!x || !y) return;
     speak(x, el, undefined, { onend: () => setTimeout(() => speak(y, el), 280) }); },
   'ipa-skip': () => { go('u-study'); S.sheet = true; pushOverlay('sheet'); render(); },
-  'ipa-finish': () => { const st = ipaState(); IPA_COURSE.forEach(c => { if (!st.seen.includes(c.ipa)) st.seen.push(c.ipa); });
+  'ipa-finish': () => { const st = ipaState(); IPA_ALL.forEach(c => { if (!st.seen.includes(c.ipa)) st.seen.push(c.ipa); });
     go('u-study'); S.sheet = true; pushOverlay('sheet'); render(); toast('코스를 마쳤어요. 이제 회화 연습을 볼게요.'); },
   'sheet-close': () => closeSheet(),
   'talk-start': () => startTalk(),
