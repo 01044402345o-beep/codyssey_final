@@ -87,6 +87,32 @@ check("C1 학습 앱바에 입구", bool(study_bar) and "ipaEntryBtn()" in study
 check("C2 상황별 연습 앱바에 입구", bool(drill_bar) and "ipaEntryBtn()" in drill_bar.group(1), drill_bar.group(1) if drill_bar else "없음")
 check("C3 시트 진입에는 질문이 없다", "confirmBox('발음기호" not in SRC.split("'sheet-open':")[1].split("'ipa-open'")[0])
 
+
+# ── D: 어떤 답을 하든 입구는 남는다 (좁은 화면·와이드 화면·질문 중) ──────
+with sync_playwright() as pw:
+    br = pw.chromium.launch()
+    for w, label in ((390, "좁은"), (1280, "와이드")):
+        for act, ans in (("modal-ok", "네"), ("modal-cancel", "기억이 잘 안나요")):
+            pg = br.new_page(viewport={"width": w, "height": 900})
+            pg.goto(BASE + "/?demo=1"); pg.wait_for_timeout(2200)
+            to_study(pg); pg.wait_for_timeout(900)
+            during = pg.locator('.appbar .ipa-btn').count()
+            check(f"D {label}·{ans}: 질문이 떠 있는 동안에도 입구가 있다", during == 1, during)
+            pg.evaluate(f"() => ACT['{act}']()"); pg.wait_for_timeout(900)
+            if act == "modal-cancel":
+                pg.evaluate("() => go('u-study')"); pg.wait_for_timeout(900)
+            after = pg.locator('.appbar .ipa-btn').count()
+            check(f"D {label}·{ans}: 답한 뒤에도 입구가 있다", after == 1, after)
+            # 눌러서 실제로 코스가 열리는지
+            if after == 1:
+                pg.locator('.appbar .ipa-btn').first.click(); pg.wait_for_timeout(700)
+                check(f"D {label}·{ans}: 눌러서 코스가 열린다", pg.locator(".ipa-card").count() == 1)
+            pg.close()
+    br.close()
+
+check("C4 일정이 없을 때도 입구가 있다", "appbar('학습', { back: 'u-sched', act: ipaEntryBtn() }), tabbar: true, tab: 'u-study' });" in SRC)
+check("C5 와이드 학습 앱바에도 입구", "tab === 'u-study' ? ipaEntryBtn() : pastEntryBtn()" in SRC)
+
 print("---")
 print("ALL PASS" if not fails else "FAILED: " + ", ".join(fails))
 sys.exit(1 if fails else 0)

@@ -3248,7 +3248,7 @@ function schedListHtml(selDate = null) {
    넣으면 완료율 분모(progress)와 달력이 오염되고, KIND 에 없는 kind 면 렌더가 깨진다.
    '기억이 잘 안나요'를 고른 사람에게만 보이고, 코스를 마치면 사라진다. */
 function ipaCardHtml() {
-  if (ipaGateGet() !== 'course') return '';
+  if (ipaLocalGet() !== 'course' && ipaSeenMem !== true) return '';
   const st = ipaState(), n = IPA_COURSE.length, seen = st.seen.length;
   if (seen >= n) return '';
   return `<div class="ipa-entry">
@@ -3415,7 +3415,7 @@ function scrSplit(tab) {
   let detail = `<div class="empty">일정이 없어요</div>`;
   if (r) { const v = studyView(r, { inline: true }); detail = `${v.inner}${v.bottom ? `<div class="bottombar">${v.bottom}</div>` : ''}`; }
   return frame(`<div class="split"><div class="split-list">${calHtml(true)}${schedListHtml(r ? r.date : null)}</div><div class="split-detail">${detail}</div></div>`,
-    { appbar: appbar(tab === 'u-study' ? '학습' : '일정표', { act: tab === 'u-study' ? '' : pastEntryBtn() }), tabbar: true, tab, wide: true });
+    { appbar: appbar(tab === 'u-study' ? '학습' : '일정표', { act: tab === 'u-study' ? ipaEntryBtn() : pastEntryBtn() }), tabbar: true, tab, wide: true });
 }
 
 /* SCR-08 */
@@ -3590,7 +3590,7 @@ function scrStudy() {
   }
   if (isWide()) return scrSplit('u-study');
   const r = pickRow();
-  if (!r) return frame(`<div class="empty">일정이 없어요</div>`, { tabbar: true });
+  if (!r) return frame(`<div class="empty">일정이 없어요</div>`, { appbar: appbar('학습', { back: 'u-sched', act: ipaEntryBtn() }), tabbar: true, tab: 'u-study' });
   const v = studyView(r);
   return frame(v.inner, { appbar: appbar('학습', { back: 'u-sched', act: ipaEntryBtn() }), bottom: v.bottom || undefined, tabbar: v.tabbar, tab: 'u-study' });
 }
