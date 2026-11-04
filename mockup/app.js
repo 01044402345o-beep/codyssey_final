@@ -4298,7 +4298,7 @@ function speakCardHtml(r, target) {
     ((r.tip || (r.offer && r.coverage !== null)) ? `<details class="spk-more"><summary>설명 더 보기</summary>` +
       (r.tip ? row('팁', esc(r.tip)) : '') +
       (r.offer && r.coverage !== null ? `<div class="spk-note" style="border-top:0">참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)</div>` : '') + '</details>' : '') +
-    `<div class="spk-note"><p><b>단어 일치율이에요 (발음 점수 아님)</b></p><br>${savedNote ? ' · ' + esc(savedNote) : ''}${pa ? `소리 분석은 AI 음소 인식 결과${pa.via === 'azure' ? '(Microsoft Azure 발음 평가)' : pa.via === 'speechace' ? '(Speechace 발음 평가)' : ''}라 틀릴 수 있어요` : ''}</div>` +
+    `<div class="spk-note"><p><b>단어 일치율이에요 (발음 점수 아님)</b></p>${savedNote ? ' · ' + esc(savedNote) : ''}${pa ? `소리 분석은 AI 음소 인식 결과${pa.via === 'azure' ? '(Microsoft Azure 발음 평가)' : pa.via === 'speechace' ? '(Speechace 발음 평가)' : ''}라 틀릴 수 있어요` : ''}</div>` +
     '</div></div>';
 }
 function speakResHtml(s, k) {
