@@ -3169,9 +3169,18 @@ function bumpAct() {
      · 화면 아래 넓은 캡슐 버튼(주 동작) + 보조 버튼
    값은 알람의 '시간' 자리에 오늘 목표(n/10)를, 라벨 자리에 안내 문구를, 버튼 자리에
    '학습 시작'을 둔다. 목록·토글이 아니라 알람 카드 자체다. 배경은 알람처럼 어두운 면을 쓴다. */
+/* 알람 카드는 render() 마다 DOM 이 새로 만들어진다 — CSS 애니메이션도 매번 처음부터 다시 돈다.
+   그래서 '들어올 때 한 번' 도는 동작(숫자·막대·레일)은 화면 진입에서만 켠다. 매번 재생되면
+   카드를 뒤집을 때마다 카드가 다시 자라나는 것처럼 보인다. 계속 도는 동작(종 흔들림·글로우·
+   오늘 막대 숨쉬기)은 첫 프레임이 중립값이라 다시 시작해도 눈에 띄지 않는다. */
+let alarmFxPending = true;   // 첫 화면도 '들어오는 순간'이다
+const markAlarmFx = () => { alarmFxPending = true; };
+const takeAlarmFx = () => { const v = alarmFxPending; alarmFxPending = false; return v; };
+
 const ALARM_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="13.5" r="7.2"/><path d="M12 10v3.8l2.4 1.6M4.6 4.2 7 2.4M19.4 4.2 17 2.4"/></svg>';
 function alarmCard(pr, o = {}) {
   const n = actToday(), done = n >= DAY_GOAL, st = streakDays();
+  const fx = takeAlarmFx();   // 들어오는 순간에만 켜지는 동작
   const r = S.sched.find(x => x.date === S.today);
   const date = r ? r.date : S.today;
   const sub = done ? '오늘 목표를 채웠어요'
@@ -3182,16 +3191,16 @@ function alarmCard(pr, o = {}) {
      막대 아래에 요일 이름을 붙인다 — 남는 공간이 있을 때만 CSS 가 보여 준다. */
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const wdOf = d => WD[new Date(d + 'T00:00:00').getDay()];
-  const week = days.map(d => {
+  const week = days.map((d, k) => {
     const c = PROG.act[d] || 0, on = c > 0;
-    return `<i class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}" style="--n:${Math.min(c, 7)}" title="${Dt.md(d)}${on ? ` · ${c}장` : ''}"></i>`;
+    return `<i class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}" style="--n:${Math.min(c, 7)};--i:${k}" title="${Dt.md(d)}${on ? ` · ${c}장` : ''}"></i>`;
   }).join('');
   const wdLabels = days.map(d => {
     const on = (PROG.act[d] || 0) > 0;
     return `<b class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}">${wdOf(d)}</b>`;
   }).join('');
   const pr2 = pr, pct = Math.round(pr2.rate * 100);
-  return `<div class="alarm-wrap"><div class="alarm" data-live="alarm">
+  return `<div class="alarm-wrap"><div class="alarm${fx ? ' alarm-fx' : ''}" data-live="alarm">
     <div class="alarm-h"><span class="alarm-ic">${ALARM_IC}</span>오늘의 알람</div>
     <b class="alarm-big">${n}<i>/${DAY_GOAL}장</i></b>
     <p class="alarm-label">${sub}</p>
@@ -4079,7 +4088,9 @@ function go(id) {
   cancelSpeak(); S.card.back = null; if (id !== 'u-study') endDrill();
   LIVE.partner = false;
   if (id !== 'u-interp' && LIVE.on) stopLive();   // 다른 화면으로 가면 마이크도 끈다
-  S.screen = id; S.modal = null; S.sheet = false; if (S.interp) S.interp.show = null; pushScreen(id); render();
+  S.screen = id; S.modal = null; S.sheet = false; if (S.interp) S.interp.show = null;
+  if (id === 'u-study') markAlarmFx();          // 알람 카드의 '들어오는' 동작
+  pushScreen(id); render();
 }
 
 /* ================= 화면 히스토리 (안드로이드 하단 뒤로가기) =================
