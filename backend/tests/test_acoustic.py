@@ -103,7 +103,8 @@ class ScoreTest(unittest.TestCase):
 
 class RemoteTest(unittest.TestCase):
     def env(self, **kw):
-        return mock.patch.dict(os.environ, {"PHONEME_REMOTE_URL": "", "PHONEME_TOKEN": "", **kw})
+        remote.reset_state()
+        return mock.patch.dict(os.environ, {"PHONEME_REMOTE_URL": "", "PHONEME_REMOTE_URLS": "", "PHONEME_TOKEN": "", **kw})
 
     def test_configured_rules(self):
         with self.env(PHONEME_REMOTE_URL="https://pc.tail1.ts.net", PHONEME_TOKEN=TOKEN):
