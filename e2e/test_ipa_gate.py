@@ -7,12 +7,14 @@
   4) 학습·상황별 연습 화면 우측 상단에 항상 [발음기호] 입구가 있다.
 """
 import io
+import json
+import os
 import re
 import sys
 from playwright.sync_api import sync_playwright
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8899"
-SRC = io.open("mockup/app.js", encoding="utf-8").read()
+SRC = io.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "mockup", "app.js"), encoding="utf-8").read()   # CI 는 backend/ 에서 실행한다
 fails = []
 
 
@@ -20,6 +22,21 @@ def check(name, cond, extra=""):
     print(("PASS " if cond else "FAIL ") + name + ((" — " + str(extra)) if (extra and not cond) else ""))
     if not cond:
         fails.append(name)
+
+
+def fresh_user(page):
+    """이 창을 처음 온 사용자로 만든다. 서버는 게스트를 IP 로 기억하는데 테스트 창은 모두 127.0.0.1 이라,
+    /ipa/gate 를 창마다 따로 기억하는 가짜로 바꾼다. 실제 서버 경로는 맨 끝 E 와 backend/tests/test_ipa_gate.py 가 본다."""
+    store = {}
+
+    def handle(route):
+        req = route.request
+        if req.method == "POST":
+            store["v"] = (json.loads(req.post_data or "{}") or {}).get("value", "known")
+            route.fulfill(json={"ok": True, "value": store["v"]})
+        else:
+            route.fulfill(json={"seen": "v" in store, "value": store.get("v")})
+    page.route("**/ipa/gate*", handle)
 
 
 def to_study(page):
@@ -41,7 +58,7 @@ with sync_playwright() as pw:
     br = pw.chromium.launch()
 
     # ── A: 모른다 → 코스 → 이후 안 물음 ────────────────────────────
-    pg = br.new_page(viewport={"width": 390, "height": 844})
+    pg = br.new_page(viewport={"width": 390, "height": 844}); fresh_user(pg)
     pg.goto(BASE + "/?demo=1"); pg.wait_for_timeout(2200)
     to_study(pg)
     pg.wait_for_timeout(900)
@@ -68,7 +85,7 @@ with sync_playwright() as pw:
     pg.close()
 
     # ── B: 안다 → 즉시 닫히고 이후 안 물음 ──────────────────────────
-    pg = br.new_page(viewport={"width": 390, "height": 844})
+    pg = br.new_page(viewport={"width": 390, "height": 844}); fresh_user(pg)
     pg.goto(BASE + "/?demo=1"); pg.wait_for_timeout(2200)
     to_study(pg); pg.wait_for_timeout(900)
     check("B1 첫 진입에 질문", modal_visible(pg))
@@ -93,7 +110,7 @@ with sync_playwright() as pw:
     br = pw.chromium.launch()
     for w, label in ((390, "좁은"), (1280, "와이드")):
         for act, ans in (("modal-ok", "네"), ("modal-cancel", "기억이 잘 안나요")):
-            pg = br.new_page(viewport={"width": w, "height": 900})
+            pg = br.new_page(viewport={"width": w, "height": 900}); fresh_user(pg)
             pg.goto(BASE + "/?demo=1"); pg.wait_for_timeout(2200)
             to_study(pg); pg.wait_for_timeout(900)
             during = pg.locator('.appbar .ipa-btn').count()
@@ -112,6 +129,24 @@ with sync_playwright() as pw:
 
 check("C4 일정이 없을 때도 입구가 있다", "appbar('학습', { back: 'u-sched', act: ipaEntryBtn() }), tabbar: true, tab: 'u-study' });" in SRC)
 check("C5 와이드 학습 앱바에도 입구", "tab === 'u-study' ? ipaEntryBtn() : pastEntryBtn()" in SRC)
+
+# ── E: 실제 서버 — 한 브라우저에서 답하면 새 브라우저(같은 사용자)에서는 다시 묻지 않는다 ──────
+# (게스트는 IP 기준. 이전 실행이 이미 답했으면 첫 창도 안 물을 수 있어, 두 번째 창만 검사한다)
+with sync_playwright() as pw:
+    br = pw.chromium.launch()
+    pg = br.new_page(viewport={"width": 390, "height": 844})
+    pg.goto(BASE + "/?demo=1"); pg.wait_for_timeout(2200)
+    to_study(pg); pg.wait_for_timeout(900)
+    if modal_visible(pg):
+        pg.evaluate("() => ACT['modal-ok']()"); pg.wait_for_timeout(1200)
+    r = pg.evaluate("async () => (await fetch('/ipa/gate', {cache: 'no-store'})).json()")
+    check("E1 서버가 답을 기억한다(GET /ipa/gate)", r.get("seen") is True, r)
+    pg.close()
+    pg = br.new_context(viewport={"width": 390, "height": 844}).new_page()   # 저장소가 빈 새 브라우저
+    pg.goto(BASE + "/?demo=1"); pg.wait_for_timeout(2200)
+    to_study(pg); pg.wait_for_timeout(1200)
+    check("E2 새 브라우저에서도 다시 묻지 않는다", not modal_visible(pg))
+    br.close()
 
 print("---")
 print("ALL PASS" if not fails else "FAILED: " + ", ".join(fails))

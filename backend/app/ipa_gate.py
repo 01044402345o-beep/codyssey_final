@@ -9,6 +9,9 @@
     한 번 더 물을 수 있다. 이 한계를 없애려면 Firestore 를 써야 하지만, 그러려면 게스트에게도
     토큰이 필요해 인증 구조를 바꿔야 한다 — 마감 전에 바꿀 변경이 아니다.
   · 180일이 지난 항목은 읽을 때 버린다.
+  · 프록시 뒤인데 실제 사용자 IP 를 모를 때(Render + TRUSTED_PROXY_HOPS=0)는 모든 게스트가 프록시 IP
+    하나로 보인다. 그때 IP 로 기억하면 한 사람이 답한 뒤 아무에게도 묻지 않으므로, 게스트는 서버에
+    기억하지 않고 브라우저 칸(localStorage)만 쓴다. 계정은 그대로 기억한다.
 """
 from __future__ import annotations
 
@@ -63,6 +66,8 @@ def _save(data: dict[str, Any]) -> None:
 
 
 def seen(uid: str, ip: str) -> str | None:
+    if not uid and not ip:   # 믿을 수 있는 IP 가 없는 게스트 — 서버는 모른다(브라우저 칸이 답한다)
+        return None
     now = time.time()
     with _lock:
         data = _load()
@@ -77,6 +82,8 @@ def seen(uid: str, ip: str) -> str | None:
 def mark(uid: str, ip: str, value: str) -> None:
     if value not in _VALUES:
         value = "known"
+    if not uid and not ip:   # 프록시 IP 하나로 모든 게스트가 묶이는 경우 — 기록하지 않는다
+        return
     with _lock:
         data = _load()
         now = time.time()
@@ -88,12 +95,13 @@ def mark(uid: str, ip: str, value: str) -> None:
 
 
 def _ip(request: Request) -> str:
-    # main.client_ip 를 그대로 쓴다(프록시 신뢰 설정 공유). 순환 import 를 피해 지역 import.
+    # main.ai_client_key 를 쓴다 — 프록시 신뢰 설정을 공유하고, 관리형 플랫폼에서 실제 IP 를 모르면 '' 를 준다.
+    # 순환 import 를 피해 지역 import.
     try:
-        from .main import client_ip
-        return client_ip(request)
+        from .main import ai_client_key
+        return ai_client_key(request)
     except Exception:  # noqa: BLE001
-        return request.client.host if request.client else "unknown"
+        return ""
 
 
 def _uid(raw: str) -> str:
