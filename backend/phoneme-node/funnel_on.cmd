@@ -7,5 +7,8 @@ tailscale funnel --bg --https=443 http://127.0.0.1:8443
 echo.
 tailscale funnel status
 echo.
-echo Put the https://....ts.net address above into Render env PHONEME_REMOTE_URL (no trailing slash).
+echo Add the https://....ts.net address above to Render env PHONEME_REMOTE_URLS (no trailing slash).
+echo Several PCs: one variable, comma separated, first = tried first. Example:
+echo   PHONEME_REMOTE_URLS=https://pc1.example.ts.net,https://pc2.example.ts.net
+echo Check all of them first: python tools\check_phoneme_nodes.py ^<url1^> ^<url2^>
 pause

@@ -285,6 +285,22 @@ class CooldownTest(Base):
         self.assertEqual(len(fake.gen_calls), 30)
         self.assertEqual(set(fake.gen_calls), {f"gemini-{m}" for m in self.MODELS})
 
+    def test_cancelled_stops_retry_without_cooldown(self) -> None:
+        # 호출자가 취소하면(말하기 피드백 상한 초과) 남은 시도를 부르지 않고, 모델 탓으로 쉬게 하지 않는다
+        fake = self.install_names(lambda *_: json.dumps({"ok": 1}))
+        calls = []
+
+        def fn(c: Any, m: str, a: int) -> str:
+            calls.append(a)
+            if a == 3:
+                raise ai.Cancelled("deadline")
+            raise ValueError("빈 응답")
+        with self.assertRaises(ai.Cancelled):
+            ai.run("t", fn)
+        self.assertEqual(calls, [1, 2, 3])
+        self.assertEqual(ai.model_health()["cooling"], {})
+        self.assertEqual(fake.gen_calls, [])
+
     def test_cooldown_expires(self) -> None:
         os.environ["AI_COOLDOWN_BUSY"] = "0"
         ai.note_failure("m1", ApiError(503))
