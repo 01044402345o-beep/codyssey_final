@@ -23,18 +23,62 @@
 
 ---
 
-## 0. 처음 한 번만 (이미 했으면 건너뛴다)
+## 0. 처음 한 번만 — Tailscale 관리 콘솔 설정 (이미 했으면 건너뛴다)
 
-2026-11-04 에 첫 노드(`book-8tsjl7a64d`)를 붙이면서 끝냈다. 새 tailnet 을 만들 때만 다시 한다.
+2026-11-04 에 첫 노드를 붙이면서 끝냈다. **새 tailnet 을 만들 때만** 다시 한다. 관리 콘솔 소유자(owner)·관리자만 바꿀 수 있다.
+안 하면 노드 PC 에서 `funnel_on.cmd`·`join_node.cmd` 가 아래 메시지로 멈춘다.
 
-- Tailscale 관리 콘솔 → **DNS** → MagicDNS 켜기, **HTTPS Certificates → Enable**
-- **Access controls** → 정책 파일에 아래가 있는지 확인(없으면 맨 바깥 `{ }` 안에 추가 후 Save)
-  ```json
-  "nodeAttrs": [
-    { "target": ["autogroup:member"], "attr": ["funnel"] }
-  ],
-  ```
-- 관리자 PC 의 `backend\phoneme-node\token.txt` 가 **모든 노드가 같이 쓰는 토큰**이다. Render 의 `PHONEME_TOKEN` 과 같은 값.
+| 메시지 | 빠진 설정 |
+|---|---|
+| `Funnel not available; HTTPS must be enabled.` | 0-1 HTTPS 인증서 |
+| `Funnel not available; "funnel" node attribute not set.` | 0-2 정책 파일 `nodeAttrs` |
+
+> 아래 화면의 `<tailnet>.ts.net` 은 실제 tailnet 이름을 가린 자리다. 문서·이슈·채팅에 실제 이름·기기 주소를 붙이지 않는다.
+
+### 0-1. MagicDNS 와 HTTPS 인증서 켜기 — DNS 화면
+
+[https://login.tailscale.com/admin/dns](https://login.tailscale.com/admin/dns)
+
+1. 맨 위 **Tailnet DNS name** 에 `<무언가>.ts.net` 이 있다. 노드 주소는 `https://<PC 이름>.<이 이름>` 이 된다(따로 적을 필요 없다 — `join_node.cmd` 가 알려 준다).
+2. 아래로 내려 **MagicDNS** — 버튼이 `Enable MagicDNS` 면 누른다. `Disable MagicDNS…` 로 보이면 **이미 켜진 것**이다.
+3. 맨 아래 **HTTPS Certificates** — 버튼이 `Enable HTTPS` 면 누르고 확인한다. `Disable HTTPS…` 로 보이면 **이미 켜진 것**이다.
+
+![DNS 화면 — Tailnet DNS name 과 MagicDNS(이름은 가림)](img/tailscale-2-dns-name.png)
+
+![DNS 화면 아래 — MagicDNS·HTTPS Certificates 가 켜진 상태(버튼이 Disable… 로 보임)](img/tailscale-3-dns-https.png)
+
+### 0-2. Funnel 허용 — Access controls → JSON editor
+
+[https://login.tailscale.com/admin/acls/file](https://login.tailscale.com/admin/acls/file)
+
+1. **Access controls** 화면에서 **JSON editor**(파일 편집)를 연다. 위에 `Edit file` · `Preview changes` · `Preview rules` 탭이 보이는 화면이다.
+   - 버튼으로 규칙을 만드는 **시각 편집기(Grants·App 칸)** 가 아니다. App 칸의 목록(`tailscale.com/cap/drive` 등)에는 Funnel 이 없다.
+2. 파일 **맨 끝의 닫는 `}` 바로 위**에 아래를 붙여 넣는다.
+   ```json
+   	"nodeAttrs": [
+   		{"target": ["autogroup:member"], "attr": ["funnel"]},
+   	],
+   ```
+   - 이미 `"nodeAttrs": [ … ]` 가 있으면 새로 만들지 말고, 그 대괄호 안에 `{"target": ["autogroup:member"], "attr": ["funnel"]},` 한 줄만 넣는다(같은 키가 두 번이면 저장이 거부된다).
+   - 이 파일은 끝 쉼표를 허용한다(HuJSON).
+3. 아래 **Save** 를 누른다. 빨간 오류가 뜨면 괄호·따옴표를 다시 본다.
+4. 1~2분 뒤 노드 PC 에서 `funnel_on.cmd`(또는 `join_node.cmd`)를 다시 실행한다.
+
+![Access controls JSON editor — 파일 끝의 nodeAttrs(funnel) 와 Save](img/tailscale-1-acl-nodeattrs.png)
+
+`autogroup:member` = 이 tailnet 의 모든 사용자 기기. 노드 PC 만 허용하려면 기기에 태그를 붙이고 `"target": ["tag:phoneme-node"]` 로 좁힐 수 있다
+(태그는 `tagOwners` 정의가 필요하다 — 처음에는 위 그대로 둔다).
+
+### 0-3. 토큰
+
+관리자 PC 의 `backend\phoneme-node\token.txt` 가 **모든 노드가 같이 쓰는 토큰**이다. Render 의 `PHONEME_TOKEN` 과 같은 값.
+없으면 `make_token.cmd` 로 만든다.
+
+### 0-4. 노드 PC 를 고를 때
+
+- **늘 켜 둘 PC** 여야 한다. 노트북이면 절전·덮개 닫힘·꺼짐 때 음소 분석이 같이 멈춘다(채점은 계속된다).
+- `serve_phoneme.bat` 를 손으로 띄운 **창을 닫으면 노드도 꺼진다.** `register_task.cmd`(또는 `join_node.cmd`)로 숨김 자동 실행을 등록한 뒤 창을 닫는다.
+  같은 포트가 이미 쓰이는 중이면 중복으로 띄우지 않으므로 순서는 상관없다.
 
 ---
 
@@ -82,18 +126,18 @@
 관리자 PC 의 저장소 폴더에서, **우선순위 순서대로** 주소를 나열한다(앞이 먼저 쓰인다):
 
 ```
-python tools\check_phoneme_nodes.py https://book-8tsjl7a64d.tail34209e.ts.net https://<새 PC>.tail34209e.ts.net
+python tools\check_phoneme_nodes.py https://<PC1>.<tailnet>.ts.net https://<PC2>.<tailnet>.ts.net
 ```
 
 출력 예:
 
 ```
-[OK  ] https://book-8tsjl7a64d.tail34209e.ts.net  healthz 94ms · 분석 515ms
-[OK  ] https://<새 PC>.tail34209e.ts.net  healthz 120ms · 분석 640ms
+[OK  ] https://<PC1>.<tailnet>.ts.net  healthz 94ms · 분석 515ms
+[OK  ] https://<PC2>.<tailnet>.ts.net  healthz 120ms · 분석 640ms
 
 Render → Environment 에 넣을 값 (통과한 노드만, 입력 순서 = 우선순위):
 
-PHONEME_REMOTE_URLS=https://book-8tsjl7a64d.tail34209e.ts.net,https://<새 PC>.tail34209e.ts.net
+PHONEME_REMOTE_URLS=https://<PC1>.<tailnet>.ts.net,https://<PC2>.<tailnet>.ts.net
 ```
 
 - 무음 1초만 보내 점검한다(사용자 음성 없음). `[FAIL]` 이면 아래 **문제 해결**을 본다.
