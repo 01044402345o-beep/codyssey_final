@@ -5332,7 +5332,7 @@ function speakCardHtml(r, target) {
       (f.heard_as ? ` <span class="spk-heard">→ /${esc(f.heard_as)}/처럼 들렸어요</span>` : ' 소리가 약했어요') + '</div>' +
       (f.label ? `<div class="spk-focus-label">${esc(f.label)}</div>` : '') + (f.tip ? `<div class="spk-focus-tip">${esc(f.tip)}</div>` : '') + '</div></div>' : '') +
     (r.heard ? row('귀하의 문장', esc(r.heard)) : '') +
-    (r.fix_one ? row('고칠 한 가지', esc(r.fix_one)) : '') +
+    (r.fix_one ? row('한 가지만 확인 부탁드려요', esc(r.fix_one)) : '') +
     ((r.tip || (r.offer && r.coverage !== null)) ? `<details class="spk-more"><summary>설명 더 보기</summary>` +
       (r.tip ? row('팁', esc(r.tip)) : '') +
       (r.offer && r.coverage !== null ? `<div class="spk-note" style="border-top:0">참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)</div>` : '') + '</details>' : '') +
@@ -5349,7 +5349,7 @@ function speakResHtml(s, k) {
       : r.usable !== true ? [r.mock ? '샘플 응답이에요(채점 안 됨).' : (r.reason || '평가하지 못했어요. 다시 시도해 주세요.'), k === 'me' ? '복습 목록에 저장하지 않았어요.' : '']
       : r.limited ? [r.heard ? `귀하의 문장: ${r.heard}` : '', r.reason || '음성 확인이 제한되어 점수와 자동 복습 저장을 제공하지 않습니다.',
          r.saved ? '복습 목록에 저장했어요(직접 선택)' : '']   // 제한 모드: 검증 못 한 전사라 점수·일치율을 보이지 않는다
-      : [typeof r.score === 'number' ? (String(r.score_kind || '').startsWith('word_match') ? `단어 일치 ${r.score}% (발음 점수 아님)` : `점수 ${r.score}`) : '', r.heard ? `귀하의 문장: ${r.heard}` : '', AI.acousticNote(r.phonemes_acoustic) || AI.phonemeNotes(r.phonemes), r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '',
+      : [typeof r.score === 'number' ? (String(r.score_kind || '').startsWith('word_match') ? `단어 일치 ${r.score}% (발음 점수 아님)` : `점수 ${r.score}`) : '', r.heard ? `귀하의 문장: ${r.heard}` : '', AI.acousticNote(r.phonemes_acoustic) || AI.phonemeNotes(r.phonemes), r.fix_one ? `한 가지만 확인 부탁드려요: ${r.fix_one}` : '', r.tip || '', r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '',
          r.offer && r.coverage !== null ? `참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)` : ''];
     // 교차검증된 채점 결과는 카드(인포그래픽)로, 오류·말소리 없음·제한 모드는 지금처럼 한 줄 글로
     res = (!r.error && r.usable === true && !r.limited && typeof r.score === 'number')
