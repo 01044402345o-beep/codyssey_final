@@ -5,7 +5,7 @@
 어떤 실패도 예외로 새지 않는다 — 다 실패하면 화면은 받아쓴 글자 기준(#211)·단어 쪽만으로 내려간다.
 
   Azure AI Speech 발음 평가(REST short audio, en-US, 음소 IPA·NBest 음소)
-    PHONEME_AZURE_KEY, PHONEME_AZURE_REGION(예: koreacentral — 음성이 국내 리전에서 처리된다)
+    PHONEME_AZURE_KEY, PHONEME_AZURE_REGION(운영 eastus = 미국. koreacentral 이면 국내 — 바꾸면 처리방침 초안 표도 고친다)
   Speechace(scoring/text v9, 음소 품질 점수·sound_most_like)
     PHONEME_SPEECHACE_KEY, PHONEME_SPEECHACE_URL(선택, 지역 API 주소. 기본 https://api.speechace.co)
 
