@@ -435,6 +435,15 @@ test('phonemeNotes: 두 받아쓰기가 같은 차이를 낸 단어만, 받아�
   assert.equal(AI.phonemeNotes({}), '');
 });
 
+test('acousticNote: 음소 노드 결과(실제 소리) — 가장 약한 음소 하나와 안내, 없으면 빈 문자열', () => {
+  const pa = { status: 'ok', basis: 'acoustic', phoneme_accuracy: 95,
+    focus: { word: 'seat', ipa: 'iː', heard_as: 'ɪ', tip: '입꼬리를 옆으로 당기고 길게.' } };
+  assert.equal(AI.acousticNote(pa), "소리 분석(실제 음성): 'seat'의 /iː/가 /ɪ/처럼 들렸어요 — 입꼬리를 옆으로 당기고 길게.");
+  assert.equal(AI.acousticNote({ ...pa, focus: { word: 'seat', ipa: 'iː' } }), "소리 분석(실제 음성): 'seat'의 /iː/ 소리가 약했어요");
+  assert.equal(AI.acousticNote({ status: 'ok', phoneme_accuracy: 100, focus: null }), '소리 분석(실제 음성): 목표 음소 100%가 들렸어요');
+  for (const bad of [null, undefined, {}, { status: 'unavailable', reason: 'URLError' }, { status: 'disabled' }]) assert.equal(AI.acousticNote(bad), '');
+});
+
 test('itineraryRequestBody: 세 종류를 보내고 14일을 넘는 구간도 자르지 않는다', () => {
   const body = AI.itineraryRequestBody({ name: '뉴욕', start: '2026-10-16', end: '2026-11-04' });
   assert.equal(body.city, '뉴욕');
