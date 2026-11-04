@@ -4114,25 +4114,17 @@ function speakBtnHtml(s, k) {
    점수는 두 받아쓰기 모두에서 들린 단어의 일치율이라 큰 숫자·링으로 강조하지 않는다 — 발음 인증서로 읽힌다.
    음소 줄(실제 소리, phonemes_acoustic)은 음소 노드가 붙어 있을 때만 나온다. 없으면 단어 쪽만. */
 const PH_TITLE = { ok: '목표한 소리와 가깝게 났어요', weak: '조금 약했어요', missing: '목표한 소리와 다르게 났어요' };
-/* 지표 한 줄. hero 는 음소 일치(실제 소리에서 잰 값) — 단어 일치는 발음 점수가 아니라 mono 작은 값으로 둔다. */
-function spkBarHtml(label, value, tone, hero) {
+/* 지표 한 줄. hero 는 음소 일치(실제 소리에서 잰 값) — 단어 일치는 발음 점수가 아니라 작은 mono 로 둔다. */
+function spkMetricHtml(label, value, tone, lead) {
   const p = Math.max(0, Math.min(100, Math.round(value)));
-  return `<div class="spk-bar${hero ? ' hero' : ''}"><b class="spk-bar-v" aria-hidden="true">${p}%</b>` +
-    `<span class="spk-bar-l">${esc(label)}</span>` +
-    `<span class="spk-track"><span class="spk-fill ${tone}" style="width:${Math.max(2, p)}%"></span></span>` +
-    `<span class="sr-only">${esc(label)} ${p}%</span></div>`;
+  return `<div class="spk-metric${lead ? ' lead' : ''}"><span class="spk-bar-l">${esc(label)}</span>` +
+    `<b class="spk-bar-v">${p}%</b>` +
+    `<span class="spk-track"><span class="spk-fill ${tone}" style="width:${Math.max(2, p)}%"></span></span></div>`;
 }
-/* 도장 — 음소가 전부 통과했을 때만. 등급이 아니라 사실('음소 확인 20/20')만 적는다. */
-function spkSealHtml(rows) {
-  if (!rows.length) return '';
-  const off = rows.filter(r => r.status === 'missing' || r.status === 'weak').length;
-  if (off) return '';
-  return `<span class="spk-seal" aria-label="음소 ${rows.length}개 모두 목표한 소리와 가깝게 났어요">음소 확인<b>${rows.length}/${rows.length}</b></span>`;
-}
-function spkEyebrow(r, rows) {
+function spkEyebrow(rows) {
   const d = new Date();
   const stamp = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
-  return `SPEAK CHECK · ${stamp}${rows.length ? ` · ${rows.length} SOUNDS` : ''}`;
+  return `SPEAK CHECK · ${stamp}`;
 }
 function speakCardHtml(r, target) {
   const pa = r.phonemes_acoustic && r.phonemes_acoustic.status === 'ok' ? r.phonemes_acoustic : null;
@@ -4147,19 +4139,16 @@ function speakCardHtml(r, target) {
   const toneOf = x => (x >= 90 ? '' : x >= 70 ? 'mid' : 'low');
   const row = (key, val) => `<div class="spk-row"><span class="spk-row-k">${esc(key)}</span><span class="spk-row-v">${val}</span></div>`;
   const savedNote = r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '';
-  const perf = '<div class="spk-perf"></div>';
-  let body = '';
-  // 지표: DOM 순서는 단어 → 음소(테스트 계약), 화면은 order 로 음소를 위로
-  body += spkBarHtml('단어 일치', r.score, toneOf(r.score), acc === null);
-  if (acc !== null) body += spkBarHtml('음소 일치', acc, toneOf(acc), true);
+  let metrics = '';
+  metrics += spkMetricHtml('단어 일치', r.score, toneOf(r.score), acc === null);   // DOM 순서 계약: 단어 → 음소
+  if (acc !== null) metrics += spkMetricHtml('음소 일치', acc, toneOf(acc), true);
   return `<div class="speak-res spk-card-wrap"${f ? ` data-ph-focus="${esc(f.ipa)}"` : ''}><div class="spk-card">` +
-    `<div class="spk-head"><div class="spk-head-txt"><div class="spk-eyebrow">${esc(spkEyebrow(r, rows))}</div>` +
-      `<b class="spk-verdict">${esc(v.text)}</b></div>` +
-      `<span class="spk-tag">발음 점수 아님</span>${spkSealHtml(rows)}</div>` +
-    perf + `<div class="spk-bars">${body}</div>` +
-    (marks.length ? perf + `<div class="spk-word-wrap"><span class="spk-words">${marks.map(m =>
-        `<span class="spk-w${m.miss ? ' miss' : ''}"${m.miss ? ' title="두 받아쓰기 모두에서 들리지 않았어요"' : ''}>${esc(m.w)}</span>`).join(' ')}</span></div>` : '') +
-    (groups.length ? perf + `<div class="spk-strip-wrap"><div class="spk-strip-label">소리별 결과 · ${rows.length}개 · 표시된 것만 목표와 달라요</div><div class="spk-strip">` +
+    `<div class="spk-head"><div class="spk-head-txt"><div class="spk-eyebrow">${esc(spkEyebrow(rows))}</div>` +
+      `<b class="spk-verdict">${esc(v.text)}</b></div><span class="spk-tag">발음 점수 아님</span></div>` +
+    `<div class="spk-metrics">${metrics}</div>` +
+    (marks.length ? `<div class="spk-words-box"><div class="spk-words-k">목표 문장${miss.length ? ' · 점선 = 안 들린 단어' : ''}</div>` +
+      `<span class="spk-words">${marks.map(m => `<span class="spk-w${m.miss ? ' miss' : ''}"${m.miss ? ' title="두 받아쓰기 모두에서 들리지 않았어요"' : ''}>${esc(m.w)}</span>`).join(' ')}</span></div>` : '') +
+    (groups.length ? `<div class="spk-sounds"><div class="spk-sounds-k">소리별 결과 · ${rows.length}개 · 표시된 것만 목표와 달라요</div><div class="spk-strip">` +
       groups.map(g => `<span class="spk-wg"><span class="spk-wt">${esc(g.word)}</span><span class="spk-phs">` +
         g.items.map(p2 => `<span class="spk-ph ${esc(p2.status)}" title="${esc(PH_TITLE[p2.status] || '')}">${esc(p2.ipa)}</span>`).join('') + '</span></span>').join('') +
       '</div></div>' : '') +
