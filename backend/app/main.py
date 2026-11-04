@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import ipaddress
 import json
 import logging
@@ -46,7 +47,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile, WebSocket
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
@@ -1511,5 +1512,40 @@ async def diagnostics_withdraw(request: Request, payload: WithdrawReport) -> dic
 
 # 화면(목업)을 같은 서비스에서 서빙한다. 반드시 모든 API 라우트 등록 뒤에 마운트한다.
 WEB_DIR = REPO_ROOT / "mockup"
+
+# index.html 이 부르는 스크립트·스타일 주소에 '파일 내용 해시'를 붙여 내보낸다(styles.css?v=1a2b3c4d5e).
+# 주소에 버전이 없으면 배포 직후 브라우저가 새 app.js 와 옛 styles.css 를 섞어 쓸 수 있다 —
+# 2026-11-04 휴대폰에서 새 결과 카드(app.js)가 옛 CSS 로 그려져 글자만 늘어선 일이 있었다.
+# 해시는 파일이 바뀔 때만 바뀌므로, 바뀌지 않은 파일은 그대로 캐시(ETag 재검증)를 쓴다.
+_ASSET_REF = re.compile(r'(?P<pre>(?:src|href)=")(?P<name>[A-Za-z0-9_.-]+\.(?:js|css))(?=")')
+_index_cache: dict[str, Any] = {"key": None, "html": None}
+
+
+def versioned_index_html() -> str | None:
+    index = WEB_DIR / "index.html"
+    if not index.is_file():
+        return None
+    text = index.read_text(encoding="utf-8")
+    names = sorted({m.group("name") for m in _ASSET_REF.finditer(text)})
+    key = tuple((n, (WEB_DIR / n).stat().st_mtime_ns if (WEB_DIR / n).is_file() else 0) for n in names) + \
+        (("index.html", index.stat().st_mtime_ns),)
+    if _index_cache["key"] != key:
+        digests = {n: hashlib.sha256((WEB_DIR / n).read_bytes()).hexdigest()[:10]
+                   for n in names if (WEB_DIR / n).is_file()}
+        html = _ASSET_REF.sub(lambda m: f'{m.group("pre")}{m.group("name")}?v={digests[m.group("name")]}'
+                              if m.group("name") in digests else m.group(0), text)
+        _index_cache.update(key=key, html=html)
+    return _index_cache["html"]
+
+
+@app.get("/", include_in_schema=False)
+@app.get("/index.html", include_in_schema=False)
+def index_page() -> HTMLResponse:
+    html = versioned_index_html()
+    if html is None:
+        raise HTTPException(status_code=404)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+
 if WEB_DIR.is_dir():
     app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
