@@ -200,7 +200,9 @@ def _word_entry(word: str, phones: tuple[str, ...], status: str, ops: list[dict[
     if heard is not None:
         e["heard"] = heard
     if ops is not None:
-        e["ops"] = [{k: o[k] for k in ("op", "ref", "hyp")} for o in ops]
+        e["ops"] = [{"op": o["op"], "ref": o["ref"], "hyp": o["hyp"],
+                     "ref_ipa": ARPABET_IPA.get(o["ref"], "") if o["ref"] else "",
+                     "hyp_ipa": ARPABET_IPA.get(o["hyp"], "") if o["hyp"] else ""} for o in ops]
     return e
 
 
@@ -304,3 +306,41 @@ def compare_phones(target: str, heard_phones: list[str]) -> dict[str, Any]:
             "per": round((c["sub"] + c["del"] + c["ins"]) / len(ref), 4),
             "counts": {"ref_phones": len(ref), "sub": c["sub"], "del": c["del"], "ins": c["ins"]},
             "unknown_words": []}
+
+
+def _sig(w: dict[str, Any]) -> tuple:
+    return (w["status"], tuple((o["op"], o["ref"], o["hyp"]) for o in w.get("ops") or ()))
+
+
+def consensus(target: str, heard_a: str, heard_b: str) -> dict[str, Any]:
+    """두 받아쓰기(서로 다른 모델 계열)가 **같은 음소 차이**를 낸 단어만 차이로 남긴다.
+
+    speech_compare.compare_consensus 와 같은 원칙이다 — 한쪽 받아쓰기만 다르게 적은 단어는
+    그 받아쓰기의 실수일 수 있으므로 status="unsure"(음소 차이 없음)로 둔다.
+    per·counts 는 두 쪽이 같은 판정을 낸 단어만 센다.
+    """
+    a, b = compare(target, heard_a), compare(target, heard_b)
+    out: list[dict[str, Any]] = []
+    total = {"ref_phones": 0, "sub": 0, "del": 0, "ins": 0}
+    for wa, wb in zip(a["words"], b["words"]):
+        if "unknown" in (wa["status"], wb["status"]):
+            out.append({**{k: wa[k] for k in ("word", "phones", "ipa")}, "status": "unknown"})
+            continue
+        if _sig(wa) != _sig(wb):
+            out.append({**{k: wa[k] for k in ("word", "phones", "ipa")}, "status": "unsure"})
+            continue
+        out.append(wa)
+        total["ref_phones"] += len(wa["phones"])
+        for o in wa.get("ops") or ():
+            if o["op"] in ("sub", "del", "ins"):
+                total[o["op"]] += 1
+    errors = total["sub"] + total["del"] + total["ins"]
+    return {
+        "basis": "transcript",
+        "inventory": "arpabet",
+        "words": out,
+        "per": round(errors / total["ref_phones"], 4) if total["ref_phones"] else None,
+        "counts": total,
+        "unknown_words": [w["word"] for w in out if w["status"] == "unknown"],
+        "unsure_words": [w["word"] for w in out if w["status"] == "unsure"],
+    }

@@ -4120,7 +4120,7 @@ function speakResHtml(s, k) {
       : r.usable !== true ? [r.mock ? '샘플 응답이에요(채점 안 됨).' : (r.reason || '평가하지 못했어요. 다시 시도해 주세요.'), k === 'me' ? '복습 목록에 저장하지 않았어요.' : '']
       : r.limited ? [r.heard ? `들린 문장: ${r.heard}` : '', r.reason || '음성 확인이 제한되어 점수와 자동 복습 저장을 제공하지 않습니다.',
          r.saved ? '복습 목록에 저장했어요(직접 선택)' : '']   // 제한 모드: 검증 못 한 전사라 점수·일치율을 보이지 않는다
-      : [typeof r.score === 'number' ? (r.score_kind === 'word_match' ? `단어 일치 ${r.score}% (발음 점수 아님)` : `점수 ${r.score}`) : '', r.heard ? `들린 문장: ${r.heard}` : '', r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '',
+      : [typeof r.score === 'number' ? (r.score_kind === 'word_match' ? `단어 일치 ${r.score}% (발음 점수 아님)` : `점수 ${r.score}`) : '', r.heard ? `들린 문장: ${r.heard}` : '', AI.acousticNote(r.phonemes_acoustic) || AI.phonemeNotes(r.phonemes), r.fix_one ? `고칠 한 가지: ${r.fix_one}` : '', r.tip || '', r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '',
          r.offer && r.coverage !== null ? `참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)` : ''];
     res = `<div class="speak-res">${parts.filter(Boolean).map(esc).join(' · ')}</div>`;
     if (r.offer) res += `<button class="speak-btn" data-act="weak-save">이 상황을 복습 목록에 저장</button>`;
@@ -4149,10 +4149,10 @@ function askVoiceConsent(after) {
   const host = esc(API.host || location.host);
   confirmBox('말하기 연습 전에 확인해 주세요',
     `<b>보내는 것</b> · 녹음한 목소리(최대 15초)와 연습 중인 영어 문장<br>
-     <b>받는 곳</b> · ① 이 서비스 서버(${host}) — 말소리가 있는지 신경망(VAD)으로 확인 서버 안의 두 신경망(Silero·pyannote)이 <b>모두</b> 말소리를 찾으면 ② 그 구간의 녹음이 서로 다른 전사 AI 둘에 동시에: Groq Whisper(실패 시 OpenAI Whisper), 교차검증용 AssemblyAI ③ 받아쓴 문장·목표 문장·상황 이름(글만)이 피드백용 Google Gemini API로<br>
+     <b>받는 곳</b> · ① 이 서비스 서버(${host}) — 말소리가 있는지 신경망(VAD)으로 확인 서버 안의 두 신경망(Silero·pyannote)이 <b>모두</b> 말소리를 찾으면 ② 그 구간의 녹음이 서로 다른 전사 AI 둘에 동시에: Groq Whisper(실패 시 OpenAI Whisper), 교차검증용 AssemblyAI ③ 받아쓴 문장·목표 문장·상황 이름(글만)이 피드백용 Google Gemini API로 ④ 음소 분석이 켜져 있을 때만, 같은 녹음 구간과 목표 문장이 팀이 운영하는 음소 분석 PC로(암호화된 HTTPS, 분석 뒤 저장하지 않아요)<br>
      <b>처리</b> · 전사 AI들은 목표 문장을 모른 채 <b>받아쓰기만</b> 하고, 두 전사에서 <b>모두</b> 들린 단어만 코드가 점수로 계산해요. 교차검증이 안 되면 채점하지 않아요.<br>
      <b>목적</b> · 말하기 연습 피드백 (피드백 문장은 AI가 만든 결과예요)<br>
-     <b>보관</b> · 이 서비스 서버는 녹음을 저장하지 않아요. 전사 AI 회사의 처리·보관은 각 회사 약관을 따라요.<br>
+     <b>보관</b> · 이 서비스 서버와 음소 분석 PC는 녹음을 저장하지 않아요. 전사 AI 회사의 처리·보관은 각 회사 약관을 따라요.<br>
      <b>Google 처리</b> · 무료 등급 API에서는 Google이 전송된 내용을 제품 개선에 사용하고 사람 검토자가 읽을 수 있어요(계정·키와는 분리돼요). <b>민감한 개인정보는 말하지 마세요.</b><br>
      <b>이 브라우저에 저장</b> · 채점 결과로 고른 '어려워한 상황'(복습 목록). 다음 문장을 만들 때 상황 이름만 서버로 보내요. 로그인한 계정은 학습 진도·복습 목록·여행 설정·이용약관 동의 여부 등을 서버에 올려요. 녹음 파일은 올리지 않아요.<br><br>
      동의하지 않아도 카드 학습과 듣기는 그대로 쓸 수 있어요. 동의는 홈 화면에서 언제든 철회할 수 있고, 철회하면 복습 목록도 지워져요.`,

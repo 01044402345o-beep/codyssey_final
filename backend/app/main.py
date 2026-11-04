@@ -58,6 +58,8 @@ from . import user_state
 from . import evidence
 from . import gemini as ai
 from . import speech_compare as compare
+from . import phonemes
+from .acoustic import remote as acoustic_remote
 from . import speech_vad as vad
 from . import stt_providers as stt
 from . import stt_selftest as selftest
@@ -566,6 +568,8 @@ def health_detail() -> dict[str, Any]:
         # 자체 통역 엔진(local): 켜졌는지·패키지·모델 준비 상태(idle/loading/ready/error). docs/ops/INTERP_ENGINES.md
         "interp_local": {"enabled": "local" in interp.enabled_providers(), "deps": interp_local.deps_ok(),
                          **interp_local.status()},
+        # 음소 노드(상시 가동 PC, app/acoustic): 붙어 있는지만. 주소·토큰은 내보내지 않는다.
+        "phoneme_node": {"configured": acoustic_remote.configured()},
         "firebase_auth": firebase_auth.configured(),
         # 탈퇴 관리자 경로(서비스 계정)를 쓸 수 있는지만 알린다. 키 값은 노출하지 않는다.
         "admin_erase": firebase_admin.configured(),
@@ -1090,10 +1094,21 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
     meta = base
     # 두 전사 모두에서 들린 목표 단어만 점수가 된다.
     diff = compare.compare_consensus(target, heard, heard_ck)
+    try:
+        # 음소 단위 차이(받아쓴 글자 기준). 두 전사가 같은 차이를 낸 단어만 남긴다. 실패해도 채점은 그대로다.
+        phones = phonemes.consensus(target, heard, heard_ck)
+    except Exception as exc:  # noqa: BLE001 — 부가 정보라 응답 전체를 막지 않는다
+        logging.getLogger("app.speak").warning("음소 비교 실패: %s", exc)
+        phones = None
     t.mark("compare")
     issues = [{"word": w, "note": "빠짐"} for w in diff["missing"]] + \
              [{"word": a, "note": f"'{b}'(으)로 들림"} for a, b in diff["replaced"]] + \
              [{"word": w, "note": "목표 문장에 없음"} for w in diff["extra"]]
+
+    # 음소 노드(실제 소리 → 음소, app/acoustic) — 설정돼 있을 때만, 피드백 생성과 동시에 돈다.
+    # 노드가 꺼져 있거나 느려도 채점·피드백은 그대로다(remote.analyze 는 예외를 내지 않는다).
+    acoustic_job = (asyncio.ensure_future(run_in_threadpool(acoustic_remote.analyze, samples, target))
+                    if acoustic_remote.configured() else None)
 
     # 3) 피드백 문장 — 오디오 없이 비교 결과만 준다. 응답의 다른 키(score 등)는 버린다.
     prompt = feedback_input(situation, target, heard, diff, heard_ck)
@@ -1118,6 +1133,14 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
             logging.getLogger("app.speak").warning("피드백 생성 실패: %s", exc.last_error)
             feedback = {"source": "template", "attempts": exc.attempts, "error_code": "ai_exhausted"}
     t.mark("feedback")
+    phones_acoustic = None
+    if acoustic_job is not None:
+        try:
+            phones_acoustic = await asyncio.wait_for(acoustic_job, timeout=acoustic_remote.timeout() + 2)
+        except Exception as exc:  # noqa: BLE001 — 부가 정보라 응답 전체를 막지 않는다
+            logging.getLogger("app.speak").warning("음소 노드 실패: %s", type(exc).__name__)
+            phones_acoustic = {"status": "unavailable", "reason": type(exc).__name__, "via": "remote"}
+        t.mark("acoustic")
 
     return {
         "usable": True,
@@ -1128,6 +1151,8 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
         "heard_checker": heard_ck,
         "issues": issues,
         "diff": diff,
+        "phonemes": phones,
+        "phonemes_acoustic": phones_acoustic,   # 실제 소리 기준(음소 노드). 노드가 없으면 None
         "fix_one": fix_one,
         "tip": tip,
         "feedback": feedback,

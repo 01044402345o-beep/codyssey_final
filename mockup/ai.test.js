@@ -418,6 +418,32 @@ test('calendarToday: 로컬 연월일이고 UTC 문자열로 바꾸지 않는다
   assert.doesNotMatch(String(AI.calendarToday), /toISOString/);
 });
 
+test('phonemeNotes: 두 받아쓰기가 같은 차이를 낸 단어만, 받아쓴 글자 기준임을 밝힌다', () => {
+  const op = (o, r, h, ri, hi) => ({ op: o, ref: r, hyp: h, ref_ipa: ri, hyp_ipa: hi });
+  const ph = { basis: 'transcript', words: [
+    { word: 'a', status: 'ok' },
+    { word: 'seat', status: 'diff', ops: [op('eq', 'S', 'S', 's', 's'), op('sub', 'IY', 'IH', 'i', 'ɪ'), op('eq', 'T', 'T', 't', 't')] },
+    { word: 'peanut', status: 'diff', ops: [op('eq', 'T', 'T', 't', 't'), op('ins', null, 'S', '', 's')] },
+    { word: 'sightseeing', status: 'diff', ops: [op('del', 'S', null, 's', ''), op('del', 'IY', null, 'i', '')] },
+    { word: 'please', status: 'unsure' },
+  ] };
+  assert.equal(AI.phonemeNotes(ph), '소리 차이(받아쓴 글자 기준): seat /i/→/ɪ/ · peanut /s/ 더해짐 · sightseeing /s/ 빠짐 /i/ 빠짐');
+  assert.equal(AI.phonemeNotes(ph, 1), '소리 차이(받아쓴 글자 기준): seat /i/→/ɪ/');
+  assert.equal(AI.phonemeNotes({ ...ph, basis: 'acoustic' }, 1), '소리 차이: seat /i/→/ɪ/');
+  assert.equal(AI.phonemeNotes({ basis: 'transcript', words: [{ word: 'a', status: 'ok' }, { word: 'b', status: 'unsure' }] }), '');
+  assert.equal(AI.phonemeNotes(null), '');
+  assert.equal(AI.phonemeNotes({}), '');
+});
+
+test('acousticNote: 음소 노드 결과(실제 소리) — 가장 약한 음소 하나와 안내, 없으면 빈 문자열', () => {
+  const pa = { status: 'ok', basis: 'acoustic', phoneme_accuracy: 95,
+    focus: { word: 'seat', ipa: 'iː', heard_as: 'ɪ', tip: '입꼬리를 옆으로 당기고 길게.' } };
+  assert.equal(AI.acousticNote(pa), "소리 분석(실제 음성): 'seat'의 /iː/가 /ɪ/처럼 들렸어요 — 입꼬리를 옆으로 당기고 길게.");
+  assert.equal(AI.acousticNote({ ...pa, focus: { word: 'seat', ipa: 'iː' } }), "소리 분석(실제 음성): 'seat'의 /iː/ 소리가 약했어요");
+  assert.equal(AI.acousticNote({ status: 'ok', phoneme_accuracy: 100, focus: null }), '소리 분석(실제 음성): 목표 음소 100%가 들렸어요');
+  for (const bad of [null, undefined, {}, { status: 'unavailable', reason: 'URLError' }, { status: 'disabled' }]) assert.equal(AI.acousticNote(bad), '');
+});
+
 test('itineraryRequestBody: 세 종류를 보내고 14일을 넘는 구간도 자르지 않는다', () => {
   const body = AI.itineraryRequestBody({ name: '뉴욕', start: '2026-10-16', end: '2026-11-04' });
   assert.equal(body.city, '뉴욕');

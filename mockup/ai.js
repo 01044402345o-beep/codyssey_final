@@ -6,7 +6,7 @@
   const WEAK_KEY = 'cd_weak';
   /* 말하기 연습 동의. 문구를 바꾸면 CONSENT_VERSION 을 올려 다시 동의를 받는다. */
   const CONSENT_KEY = 'cd_consent';
-  const CONSENT_VERSION = 7;   // v2 Gemini 무료 등급·민감정보 / v3 2단계 처리 / v4 서버 VAD + 전용 STT / v5 교차검증 전송 / v6 말소리 재확인은 서버 안(pyannoteAI 미전송) / v7 계정에 올리는 것에 여행 설정 포함
+  const CONSENT_VERSION = 8;   // v2 Gemini 무료 등급·민감정보 / v3 2단계 처리 / v4 서버 VAD + 전용 STT / v5 교차검증 전송 / v6 말소리 재확인은 서버 안(pyannoteAI 미전송) / v7 계정에 올리는 것에 여행 설정 포함 / v8 음소 분석 PC(켜져 있을 때만)
   /* 임시 제품 규칙: 이 점수 미만이면 "취약 상황" 후보로 저장한다. 검증된 학습 기준이 아니다. */
   const WEAK_THRESHOLD = 70;
   /* 참고 신호: 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 "다르게 들렸어요"로 표시한다 (저장 판정에 쓰지 않음). */
@@ -395,6 +395,30 @@
     return n.getFullYear() + '-' + m + '-' + d;
   }
   const ITINERARY_KINDS = ['restaurant', 'cafe', 'attraction'];
+  /* /speak-check 의 phonemes(app/phonemes.py consensus) → 화면 한 줄. 두 받아쓰기가 같은 차이를 낸 단어(diff)만, 최대 3개.
+     받아쓴 글자에서 나온 음소라 basis 가 transcript 면 그렇게 밝힌다. 보여줄 게 없으면 ''. */
+  function phonemeNotes(ph, max = 3) {
+    if (!ph || !Array.isArray(ph.words)) return '';
+    const sym = x => `/${String(x || '')}/`;
+    const notes = ph.words.filter(w => w && w.status === 'diff' && Array.isArray(w.ops)).slice(0, max).map(w => {
+      const d = w.ops.filter(o => o && o.op !== 'eq').map(o =>
+        o.op === 'sub' ? `${sym(o.ref_ipa)}→${sym(o.hyp_ipa)}` : o.op === 'del' ? `${sym(o.ref_ipa)} 빠짐` : `${sym(o.hyp_ipa)} 더해짐`);
+      return d.length ? `${w.word} ${d.join(' ')}` : '';
+    }).filter(Boolean);
+    if (!notes.length) return '';
+    return `소리 차이${ph.basis === 'transcript' ? '(받아쓴 글자 기준)' : ''}: ${notes.join(' · ')}`;
+  }
+  /* /speak-check 의 phonemes_acoustic(음소 노드, 실제 소리 기준) → 화면 한 줄. 노드가 없거나 실패면 ''.
+     가장 약한 음소 하나(focus)와 한국어 조음 안내. 틀린 곳이 없으면 일치율만. 발음 점수라고 부르지 않는다. */
+  function acousticNote(pa) {
+    if (!pa || pa.status !== 'ok') return '';
+    const f = pa.focus;
+    if (f && f.word && f.ipa) {
+      const heard = f.heard_as ? `가 /${f.heard_as}/처럼 들렸어요` : ' 소리가 약했어요';
+      return `소리 분석(실제 음성): '${f.word}'의 /${f.ipa}/${heard}${f.tip ? ` — ${f.tip}` : ''}`;
+    }
+    return typeof pa.phoneme_accuracy === 'number' ? `소리 분석(실제 음성): 목표 음소 ${Math.round(pa.phoneme_accuracy)}%가 들렸어요` : '';
+  }
   /* iso2·gid 는 검색 위치 편향용(선택). 서버가 이 둘로 도시 목록에서 좌표를 찾는다 — 좌표는 보내지 않는다. */
   function itineraryRequestBody(city, iso2) {
     const days = isoDiff(city && city.end, city && city.start) + 1;
@@ -810,7 +834,7 @@
     inAppBrowser, WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
     TRIP_KEY, cleanTrip, loadTrip, saveTrip, preferTrip,
     categoryOfKind,
-    calendarToday, itineraryRequestBody, kindFromPrimary, foldItinerary, placeBlocksOnDays, collectItinerary,
+    calendarToday, phonemeNotes, acousticNote, itineraryRequestBody, kindFromPrimary, foldItinerary, placeBlocksOnDays, collectItinerary,
     RESEARCH_TIMEOUT_MS, researchRequestBody, collectResearch, researchPlace, foldResearch, placeCheckResult, vocabSentences, placeVocab,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, scopedStorage, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
