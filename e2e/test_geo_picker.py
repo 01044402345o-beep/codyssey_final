@@ -55,7 +55,7 @@ def geo_route(route):
 
 
 def open_input(page):
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(700)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(700)
     page.evaluate("S.user = DEMO_USER; go('u-input')"); page.wait_for_timeout(300)
 
 

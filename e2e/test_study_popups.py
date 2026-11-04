@@ -41,7 +41,7 @@ with sync_playwright() as p:
     page = b.new_page(viewport={"width": 390, "height": 844})
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1", wait_until="domcontentloaded")
+    page.goto(BASE + "/?demo=1&gate=off", wait_until="domcontentloaded")
     page.wait_for_timeout(700)
     page.evaluate("ensure('plan'); go('u-sched')")
     page.wait_for_timeout(300)

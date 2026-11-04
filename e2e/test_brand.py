@@ -28,7 +28,7 @@ with sync_playwright() as p:
     page = b.new_page(viewport={"width": 390, "height": 844})
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/", wait_until="domcontentloaded")
+    page.goto(BASE + "/?gate=off", wait_until="domcontentloaded")
     page.wait_for_timeout(800)
 
     check("문서 제목이 '마디 MADI'", page.title() == "마디 MADI", page.title())

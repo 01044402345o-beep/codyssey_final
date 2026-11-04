@@ -40,7 +40,7 @@ with sync_playwright() as p:
         covers = page.evaluate(COVERS)
         check(f"{w}px 로그인 화면: 화면을 덮는 불투명 고정 요소 없음", covers == [], str(covers))
         check(f"{w}px 로그인 화면: 제목이 보인다", page.locator(".login h1, .login .title-lg").first.is_visible())
-        page.goto(BASE + "/?demo=1"); page.wait_for_timeout(900)
+        page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(900)
         page.evaluate("S.user = DEMO_USER; ensure('plan'); S.today = S.trip.tripStart; go('u-interp')"); page.wait_for_timeout(500)
         covers = page.evaluate(COVERS)
         check(f"{w}px 통역 탭(통역 안 함): 덮는 요소 없음", covers == [], str(covers))

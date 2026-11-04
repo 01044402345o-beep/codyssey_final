@@ -57,7 +57,7 @@ with sync_playwright() as p:
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.route("**/geo/**", route)
-    pg.goto(BASE + "/?demo=1"); pg.wait_for_timeout(700)
+    pg.goto(BASE + "/?demo=1&gate=off"); pg.wait_for_timeout(700)
     pg.evaluate("S.user = DEMO_USER; go('u-input')"); pg.wait_for_timeout(320)
     pg.evaluate("S.draft.country = '미국'; S.draft.cities[0].name = ''; updateInputLive && updateInputLive()")
     pg.wait_for_timeout(120)

@@ -72,7 +72,7 @@ def fresh(b, w=390):
     ctx.route("**/auth.js*", fb_on)
     page = ctx.new_page()
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/")
+    page.goto(BASE + "/?gate=off")
     page.wait_for_function("() => typeof S !== 'undefined' && S.screen === 'u-login' && FirebaseAuth.enabled", timeout=30000)
     page.wait_for_timeout(300)
     return ctx, page

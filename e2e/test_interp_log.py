@@ -39,7 +39,7 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844}, permissions=["clipboard-read", "clipboard-write"])
     page = ctx.new_page(); errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(800)
     page.evaluate("S.user = DEMO_USER; ensure('plan'); S.today = S.trip.tripStart; go('u-coll')"); page.wait_for_timeout(400)
 
     seg = page.locator(".seg.coll-seg button")
@@ -179,7 +179,7 @@ with sync_playwright() as p:
     srv = page.evaluate("__srv.ilog")
     ctx2 = b.new_context(viewport={"width": 390, "height": 844}); page2 = ctx2.new_page()
     page2.on("pageerror", lambda e: errors.append(str(e)))
-    page2.goto(BASE + "/?demo=1"); page2.wait_for_timeout(800)
+    page2.goto(BASE + "/?demo=1&gate=off"); page2.wait_for_timeout(800)
     page2.evaluate("(s) => { window.__srv = { ilog: s, calls: [] }; }", srv)
     page2.evaluate(FAKE, "uidA"); page2.wait_for_timeout(200)
     page2.locator('[data-act="coll-tab"][data-v="log"]').click(); page2.wait_for_timeout(900)

@@ -50,7 +50,7 @@ with sync_playwright() as p:
     errors, sent = [], []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.on("request", lambda r: sent.append(r.url) if r.method == "POST" else None)
-    page.goto(BASE + "/?demo=1&frame=1#u-study")
+    page.goto(BASE + "/?demo=1&frame=1&gate=off#u-study")
     page.wait_for_timeout(800)
     page.evaluate("S.modal && S.modal.title === '아직 학습일이 아니에요' && ACT['modal-ok']()")   # 미래 날짜 확인 창 → 미리 학습하기
     page.locator('[data-act="flip"]').first.click(position={"x": 30, "y": 30})

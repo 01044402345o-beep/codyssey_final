@@ -25,7 +25,7 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844}, permissions=["microphone"])
     page = ctx.new_page(); errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(800)
     page.evaluate("S.user = DEMO_USER; ensure('plan'); S.today = S.trip.tripStart; go('u-interp')"); page.wait_for_timeout(500)
 
     check("통역 화면에 '대화 통역' 카드", page.locator('.live-card [data-act="live-start"]').count() == 1)

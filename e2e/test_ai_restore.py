@@ -44,7 +44,7 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page()
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1", wait_until="domcontentloaded")
+    page.goto(BASE + "/?demo=1&gate=off", wait_until="domcontentloaded")
     page.wait_for_timeout(700)
     page.evaluate("ensure('plan'); go('u-home')")           # 여행 입력 저장 + 세션(화면) 기록
     check("여행 입력·세션이 저장됐다",

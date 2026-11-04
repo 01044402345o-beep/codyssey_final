@@ -32,7 +32,7 @@ with sync_playwright() as p:
     # --- 모드 ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/#u-home"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?gate=off#u-home"); page.wait_for_timeout(600)
     check("기본 URL = 제품 모드", page.evaluate("document.documentElement.dataset.mode") == "product")
     check("제품 모드: 폰 프레임·데모 사이드 패널·데모 버튼 없음",
           page.locator(".device").count() == 0 and not page.locator(".side").is_visible() and not page.locator("#demo-fab").is_visible())
@@ -62,7 +62,7 @@ with sync_playwright() as p:
     for w, h, kind, minw, maxw in ((768, 1024, "레일", 60, 90), (1280, 800, "사이드", 220, 260)):
         ctx = b.new_context(viewport={"width": w, "height": h})
         page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(BASE + "/#u-home"); page.wait_for_timeout(600)
+        page.goto(BASE + "/?gate=off#u-home"); page.wait_for_timeout(600)
         nav = box(page, ".pnav")
         check(f"{w}px: 내비가 왼쪽 세로 {kind}({minw}~{maxw}px)", nav and nav["x"] == 0 and minw <= nav["width"] <= maxw and nav["height"] >= h - 1, str(nav))
         col = box(page, ".pcol")
@@ -75,7 +75,7 @@ with sync_playwright() as p:
     for w, h, kind in ((390, 844, "bottom"), (1280, 800, "center")):
         ctx = b.new_context(viewport={"width": w, "height": h})
         page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(BASE + "/#u-home"); page.wait_for_timeout(600)
+        page.goto(BASE + "/?gate=off#u-home"); page.wait_for_timeout(600)
         page.evaluate("S.modal = {title:'테스트', body:'본문', ok:'확인'}; render()"); page.wait_for_timeout(300)
         m = box(page, ".modal")
         if kind == "bottom":
@@ -87,7 +87,7 @@ with sync_playwright() as p:
     # --- 데모 서랍 ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1#u-home"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?demo=1&gate=off#u-home"); page.wait_for_timeout(600)
     check("?demo=1: 데모 버튼 보임, 서랍은 닫힘", page.locator("#demo-fab").is_visible() and box(page, ".side")["x"] < 0)
     page.locator("#demo-fab").click(); page.wait_for_timeout(350)
     sd = box(page, ".side")
@@ -101,14 +101,14 @@ with sync_playwright() as p:
     # --- ?demo=1&frame=1 = 예전 레이아웃 ---
     ctx = b.new_context(viewport={"width": 1400, "height": 1000})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1&frame=1#u-home"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?demo=1&frame=1&gate=off#u-home"); page.wait_for_timeout(600)
     check("frame=1: 폰 프레임·사이드 패널 유지", page.locator(".device").count() == 1 and page.locator(".side").is_visible())
     ctx.close()
 
     # --- 예전 레이아웃 좁은 화면: 폰 프레임을 벗기고, 서랍은 "데모" 버튼으로 ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1&frame=1#u-home"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?demo=1&frame=1&gate=off#u-home"); page.wait_for_timeout(600)
     check("frame=1 390px: 폰 프레임 모양 해제(테두리 둥근 기기 아님)", page.evaluate("getComputedStyle(document.querySelector('.device')).borderRadius") == "0px")
     check("frame=1 390px: 데모 버튼으로 서랍 열림", page.locator("#demo-fab").is_visible() and (page.locator("#demo-fab").click() or True) and (page.wait_for_timeout(350) or True) and box(page, ".side")["x"] >= -1)
     check("frame=1 390px: 가로 스크롤 없음", hscroll(page) <= 0)
@@ -117,7 +117,7 @@ with sync_playwright() as p:
     # --- P2: 글자·입력·터치 ---
     ctx = b.new_context(viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True)
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/#u-input"); page.wait_for_timeout(700)
+    page.goto(BASE + "/?gate=off#u-input"); page.wait_for_timeout(700)
     check("입력 글자 16px 이상(iOS 확대 방지)", page.evaluate("[...document.querySelectorAll('.app input, .app select')].every(e => parseFloat(getComputedStyle(e).fontSize) >= 16)"))
     check("한글 줄바꿈 keep-all", page.evaluate("getComputedStyle(document.body).wordBreak") == "keep-all")
     for scr in ("u-input", "u-report", "u-home", "u-sched", "u-study", "u-coll"):
@@ -143,7 +143,7 @@ with sync_playwright() as p:
     # 마우스 기기에서는 터치용 크기를 강제하지 않는다
     ctx = b.new_context(viewport={"width": 1280, "height": 800})
     page = ctx.new_page()
-    page.goto(BASE + "/#u-coll"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?gate=off#u-coll"); page.wait_for_timeout(600)
     h = page.evaluate("Math.round(document.querySelector('.chips button').getBoundingClientRect().height)")
     check("마우스 기기: 칩 높이 기존 크기 유지(<44)", h < 44, str(h))
     bh = page.evaluate("""(() => { const a = document.createElement('a'); a.className = 'brief-src'; a.textContent = '출처';
@@ -156,7 +156,7 @@ with sync_playwright() as p:
     LIGHT_BG, DARK_BG = "rgb(251, 248, 241)", "rgb(18, 21, 28)"
     ctx = b.new_context(viewport={"width": 390, "height": 844}, color_scheme="dark")
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/#u-home"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?gate=off#u-home"); page.wait_for_timeout(600)
     check("시스템 다크 → 다크 배경(저장값 없음)", page.evaluate(bg) == DARK_BG and page.evaluate("document.documentElement.dataset.theme") is None, page.evaluate(bg))
     check("theme-color 메타가 다크 값", page.evaluate("document.getElementById('theme-color').content") == "#12151c")
     check("카드가 다크 표면(흰색 아님)", page.evaluate("getComputedStyle(document.querySelector('.today-card, .card')).backgroundColor") != "rgb(255, 255, 255)")
@@ -175,14 +175,14 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844}, color_scheme="light")
     ctx.add_init_script("try { localStorage.setItem('cd_theme', 'dark'); } catch (e) {}")
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/#u-home", wait_until="domcontentloaded")
+    page.goto(BASE + "/?gate=off#u-home", wait_until="domcontentloaded")
     check("저장된 다크 + 시스템 라이트 → 첫 화면부터 다크", page.evaluate("document.documentElement.dataset.theme") == "dark" and page.evaluate(bg) == DARK_BG)
     ctx.close()
     # localStorage 를 쓸 수 없는 환경(시크릿 모드 등): 화면은 정상, 선택은 이번 접속에서만
     ctx = b.new_context(viewport={"width": 390, "height": 844}, color_scheme="light")
     ctx.add_init_script("Object.defineProperty(window, 'localStorage', { get() { throw new Error('blocked'); } });")
     page = ctx.new_page(); errs2 = []; page.on("pageerror", lambda e: errs2.append(str(e)))
-    page.goto(BASE + "/#u-home"); page.wait_for_timeout(700)
+    page.goto(BASE + "/?gate=off#u-home"); page.wait_for_timeout(700)
     ok_render = page.locator(".pnav").count() == 1
     page.locator('[data-act="theme"][data-v="dark"]').scroll_into_view_if_needed(); page.locator('[data-act="theme"][data-v="dark"]').click(); page.wait_for_timeout(200)
     check("저장소 차단: 화면 정상 + 다크 선택은 그 접속에서 적용", ok_render and page.evaluate(bg) == DARK_BG, "; ".join(errs2)[:120])
@@ -190,7 +190,7 @@ with sync_playwright() as p:
     # 다크 모드에서 데스크톱 레이아웃·관리자도 같은 토큰
     ctx = b.new_context(viewport={"width": 1280, "height": 800}, color_scheme="dark")
     page = ctx.new_page()
-    page.goto(BASE + "/#a-metrics"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?gate=off#a-metrics"); page.wait_for_timeout(600)
     check("다크 관리자 화면: 표면이 어두움", page.evaluate("getComputedStyle(document.querySelector('.admin-main')).backgroundColor") != "rgb(250, 248, 243)")
     ctx.close()
 
@@ -198,7 +198,7 @@ with sync_playwright() as p:
     for w in (320, 360, 390, 430, 768):
         ctx = b.new_context(viewport={"width": w, "height": 900}, has_touch=True, is_mobile=True)
         page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(BASE + "/#u-input"); page.wait_for_timeout(600)
+        page.goto(BASE + "/?gate=off#u-input"); page.wait_for_timeout(600)
         r = page.evaluate("""[...document.querySelectorAll('input[type=date].input')].map(i => {
           const q = i.getBoundingClientRect(), host = i.closest('.city-card, .field').getBoundingClientRect();
           return { out: q.right > host.right + 0.5 || q.left < host.left - 0.5, app: getComputedStyle(i).appearance, w: Math.round(q.width), host: Math.round(host.width) }; })""")
@@ -212,7 +212,7 @@ with sync_playwright() as p:
     # --- P4: 마스터-디테일 (≥900px) ---
     ctx = b.new_context(viewport={"width": 1280, "height": 800})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/#u-sched"); page.wait_for_timeout(700)
+    page.goto(BASE + "/?gate=off#u-sched"); page.wait_for_timeout(700)
     # 미래 날짜는 일정표를 여는 것만으로 창을 띄우지 않고, 오른쪽 상세 안에 '미리 학습하기'를 둔다
     check("1280px 미래 날짜: 창 없이 상세 안에 '미리 학습하기'", page.evaluate("S.modal") is None and page.locator(".split-detail [data-act=preview-ok]").count() == 1)
     page.locator(".split-detail [data-act=preview-ok]").click(); page.wait_for_timeout(300)
@@ -247,14 +247,14 @@ with sync_playwright() as p:
     check("다시 1280 으로 넓히면 2열 복귀(재렌더)", page.locator(".split").count() == 1)
     ctx.close()
     ctx = b.new_context(viewport={"width": 1280, "height": 800})
-    page = ctx.new_page(); page.goto(BASE + "/?demo=1&frame=1#u-sched"); page.wait_for_timeout(700)
+    page = ctx.new_page(); page.goto(BASE + "/?demo=1&frame=1&gate=off#u-sched"); page.wait_for_timeout(700)
     check("legacy 레이아웃은 2열을 쓰지 않음", page.locator(".split").count() == 0)
     ctx.close()
 
     # --- 접근성: 글자 200% 확대(WCAG 1.4.4/1.4.10) · 모션 줄이기 ---
     ctx = b.new_context(viewport={"width": 320, "height": 640})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/#u-home"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?gate=off#u-home"); page.wait_for_timeout(600)
     page.add_style_tag(content="html{font-size:200%}")
     bad = []
     for scr in ("u-input", "u-report", "u-route", "u-home", "u-sched", "u-study", "u-coll", "a-metrics", "a-jobs", "a-common", "a-users"):
@@ -265,7 +265,7 @@ with sync_playwright() as p:
     ctx.close()
     ctx = b.new_context(viewport={"width": 390, "height": 844}, reduced_motion="reduce")
     page = ctx.new_page()
-    page.goto(BASE + "/#u-home"); page.wait_for_timeout(500)
+    page.goto(BASE + "/?gate=off#u-home"); page.wait_for_timeout(500)
     page.evaluate("ACT['demo-gen']()"); page.wait_for_timeout(500)
     d = page.evaluate("(() => { const e = document.querySelector('.orbit .plane'); return e ? parseFloat(getComputedStyle(e).animationDuration) : -1; })()")
     check("모션 줄이기: 생성 화면 회전 애니메이션이 사실상 꺼짐", 0 <= d < 0.001, str(d))
@@ -275,27 +275,27 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page(); health = []
     page.on("request", lambda r: health.append(r.url) if r.url.endswith("/health") else None)
-    page.goto(BASE + "/"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?gate=off"); page.wait_for_timeout(800)
     check("첫 방문: 사용자가 아무것도 안 해도 /health 로 서버를 깨움(1회)", len(health) == 1, str(health))
     ctx.close()
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page(); health = []
     page.on("request", lambda r: health.append(r.url) if r.url.endswith("/health") else None)
-    page.goto(BASE + "/?api=https://example.com"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?api=https://example.com&gate=off"); page.wait_for_timeout(800)
     check("?api= 외부 서버에는 미리 부르지 않음", not any("example.com" in u for u in health), str(health))
     ctx.close()
 
     # --- 외부 서버 배너 ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page()
-    page.goto(BASE + "/?api=https://example.com#u-login"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?api=https://example.com&gate=off#u-login"); page.wait_for_timeout(600)
     check("?api= 외부 서버: 상단 배너에 호스트 표시", page.locator("#api-banner").is_visible() and "example.com" in page.locator("#api-banner").inner_text())
     ctx.close()
 
     # --- 상황별 연습 (사용자 피드백: 날짜별 말고 상황별로 묶어서 연습) ---
     ctx = b.new_context(viewport={"width": 360, "height": 780}, has_touch=True, is_mobile=True)
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/#u-study"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?gate=off#u-study"); page.wait_for_timeout(600)
     page.evaluate("S.modal && S.modal.title === '아직 학습일이 아니에요' && ACT['modal-ok']()"); page.wait_for_timeout(200)   # 미래 날짜 확인 창
     page.locator(".flip").click(); page.wait_for_timeout(200)
     day = page.evaluate("({ date: S.card.date, i: S.card.i, n: S.card.flipped.size })")
@@ -352,7 +352,7 @@ with sync_playwright() as p:
     ctx.close()
     ctx = b.new_context(viewport={"width": 1280, "height": 800})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/#u-coll"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?gate=off#u-coll"); page.wait_for_timeout(600)
     page.locator('[data-act="drill"][data-v="hotel"]').click(); page.wait_for_timeout(300)
     check("1280px 상황별 연습: 일정 목록(2열) 없이 카드만", page.locator(".split").count() == 0 and page.locator(".flip").count() == 1)
     ctx.close()
@@ -367,7 +367,7 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 360, "height": 780}, user_agent=KAKAO_AND, has_touch=True, is_mobile=True)
     ctx.add_init_script(EN_VOICE)
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?gate=off"); page.wait_for_timeout(600)
     ban = page.locator("#inapp-banner")
     check("카톡(안드로이드): 상단에 브라우저 안내", ban.is_visible() and "카카오톡" in ban.inner_text())
     bt = ban.inner_text()
@@ -382,23 +382,23 @@ with sync_playwright() as p:
     ctx.close()
     ctx = b.new_context(viewport={"width": 390, "height": 844}, user_agent=INSTA_IOS, has_touch=True, is_mobile=True)
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?gate=off"); page.wait_for_timeout(600)
     check("인스타그램(iOS): 안내는 뜨지만 직접 여는 버튼은 없고 링크 복사만", page.locator("#inapp-banner").is_visible() and page.locator('[data-inapp="open"]').count() == 0 and page.locator('[data-inapp="copy"]').count() == 1)
     ctx.close()
     ctx = b.new_context(viewport={"width": 390, "height": 844})
-    page = ctx.new_page(); page.add_init_script(EN_VOICE); page.goto(BASE + "/"); page.wait_for_timeout(500)
+    page = ctx.new_page(); page.add_init_script(EN_VOICE); page.goto(BASE + "/?gate=off"); page.wait_for_timeout(500)
     check("일반 브라우저(기능 정상)에는 안내 없음", not page.locator("#inapp-banner").is_visible())
     ctx.close()
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page(); page.add_init_script("delete window.MediaRecorder;")
-    page.goto(BASE + "/"); page.wait_for_timeout(500)
+    page.goto(BASE + "/?gate=off"); page.wait_for_timeout(500)
     check("일반 브라우저라도 녹음 API 가 없으면 기능 감지로 안내", page.locator("#inapp-banner").is_visible() and "녹음이 안 돼요" in page.locator("#inapp-banner").inner_text())
     ctx.close()
 
     # 실제 감지: 카톡에서 speechSynthesis 가 없으면 '듣기만' 안 된다고 안내하고, 되는 것(말하기·카드)도 알린다
     ctx = b.new_context(viewport={"width": 360, "height": 780}, user_agent=KAKAO_AND, has_touch=True, is_mobile=True)
     page = ctx.new_page(); page.add_init_script("delete window.speechSynthesis;")
-    page.goto(BASE + "/"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?gate=off"); page.wait_for_timeout(600)
     bt = page.locator("#inapp-banner").inner_text() if page.locator("#inapp-banner").is_visible() else ""
     check("카톡에서 듣기만 안 됨(speechSynthesis 없음): '듣기'가 안 돼요 + 카톡 메뉴 + 말하기·카드는 된다고 알림",
           "'듣기'(음성 재생)가 안 돼요" in bt and "다른 브라우저로 열기" in bt and "말하기와 카드 학습은 여기서도 돼요" in bt and "녹음" not in bt, bt)
@@ -407,7 +407,7 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 360, "height": 780}, user_agent=KAKAO_AND, has_touch=True, is_mobile=True)
     page = ctx.new_page()
     page.add_init_script("window.__v = []; const ss = window.speechSynthesis; if (ss) { ss.getVoices = () => window.__v; }")
-    page.goto(BASE + "/"); page.wait_for_timeout(500)
+    page.goto(BASE + "/?gate=off"); page.wait_for_timeout(500)
     first = page.locator("#inapp-banner").inner_text()
     page.evaluate("window.__v = [{lang:'ko-KR', name:'Korean', default:true}]; speechSynthesis.onvoiceschanged && speechSynthesis.onvoiceschanged(new Event('voiceschanged'));")
     page.wait_for_timeout(300)
@@ -421,7 +421,7 @@ with sync_playwright() as p:
     ctx.add_init_script("""(() => { const ss = window.speechSynthesis; if (!ss) return; const g = ss.getVoices.bind(ss);
       ss.getVoices = function () { setTimeout(() => ss.dispatchEvent(new Event('voiceschanged')), 30); return g(); }; })();""")
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(800)
     page.evaluate("navFromMenu('u-coll')")
     page.evaluate("(() => { window.__r = 0; const o = window.render; window.render = function () { window.__r++; return o.apply(this, arguments); }; })()")
     page.wait_for_timeout(2000)
@@ -438,7 +438,7 @@ with sync_playwright() as p:
     # --- 상황별 연습 도중 새로고침해도 날짜별 학습 진도가 남는다 (연습이 S.card 를 빌려 쓰므로 저장이 덮어쓰던 결함) ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(800)
     page.evaluate("navFromMenu('u-study')"); page.wait_for_timeout(300)
     page.evaluate("S.modal && ACT['modal-ok']()"); page.wait_for_timeout(200)
     page.locator(".flip").first.click(); page.wait_for_timeout(120)
@@ -460,7 +460,7 @@ with sync_playwright() as p:
     # --- 카드를 보다가 홈에서 새로고침해도 학습 위치가 남는다 (새로고침 직후 도착한 AI 문장이 buildPlan 으로 카드를 지우던 결함) ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(800)
     page.evaluate("navFromMenu('u-study')"); page.wait_for_timeout(300)
     page.evaluate("S.modal && ACT['modal-ok']()"); page.wait_for_timeout(200)
     page.locator(".flip").first.click(); page.wait_for_timeout(120)
@@ -488,7 +488,7 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True)
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
     cdp = ctx.new_cdp_session(page)
-    page.goto(BASE + "/#u-coll"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?gate=off#u-coll"); page.wait_for_timeout(600)
     page.locator('[data-act="drill"][data-v="airport"]').click(); page.wait_for_timeout(300)
     cur = lambda: page.evaluate("S.card.i")
     check("터치 스와이프: 시작은 1번째 카드", cur() == 0, str(cur()))
@@ -508,7 +508,7 @@ with sync_playwright() as p:
     # 카톡(Android)에서 듣기 불가: 배너를 닫은 뒤에도 카드의 듣기 안내·토스트에 카톡 메뉴 안내가 있다
     ctx = b.new_context(viewport={"width": 360, "height": 780}, user_agent=KAKAO_AND, has_touch=True, is_mobile=True)
     page = ctx.new_page(); page.add_init_script("delete window.speechSynthesis;")
-    page.goto(BASE + "/#u-coll"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?gate=off#u-coll"); page.wait_for_timeout(600)
     page.locator('[data-inapp="close"]').click(); page.wait_for_timeout(200)
     st_txt = page.locator("#stage").inner_text()
     check("카톡: 배너를 닫아도 문장 모음의 듣기 안내에 카톡 메뉴 안내가 남음", "다른 브라우저로 열기" in st_txt and "말하기와 카드 학습은" in st_txt, st_txt[:120])
@@ -517,7 +517,7 @@ with sync_playwright() as p:
     ctx.close()
     ctx = b.new_context(viewport={"width": 360, "height": 780})
     page = ctx.new_page(); page.add_init_script("delete window.speechSynthesis;")
-    page.goto(BASE + "/#u-coll"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?gate=off#u-coll"); page.wait_for_timeout(600)
     check("카톡이 아닌 브라우저: 듣기 안내에 카톡 메뉴 문구 없음", "듣기를 지원하지 않아요" in page.locator("#stage").inner_text() and "다른 브라우저로 열기" not in page.locator("#stage").inner_text())
     ctx.close()
 

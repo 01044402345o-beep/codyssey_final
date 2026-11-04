@@ -22,7 +22,7 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page(); errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(800)
     page.evaluate("S.user = DEMO_USER; ensure('plan'); S.today = S.trip.tripStart; go('u-sched')"); page.wait_for_timeout(500)
 
     tabs = page.evaluate("[...document.querySelectorAll('.pnav button, .tabbar button')].map(b => b.textContent.trim())")

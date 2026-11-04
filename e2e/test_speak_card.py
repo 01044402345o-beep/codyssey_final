@@ -56,7 +56,7 @@ with sync_playwright() as p:
         pg = b.new_page(viewport={"width": 390, "height": 844}, color_scheme=scheme)
         errors = []
         pg.on("pageerror", lambda e: errors.append(str(e)))
-        pg.goto(BASE + "/?demo=1"); pg.wait_for_timeout(2500)
+        pg.goto(BASE + "/?demo=1&gate=off"); pg.wait_for_timeout(2500)
         if pg.locator('[data-act="guest"]').count():
             pg.locator('[data-act="guest"]').first.click(); pg.wait_for_timeout(1200)
         pg.evaluate("try{saveConsentHere(true)}catch(e){}; ensure('plan'); navFromMenu('u-study')"); pg.wait_for_timeout(1200)
@@ -84,7 +84,7 @@ with sync_playwright() as p:
         pg.set_viewport_size({"width": 320, "height": 700})
         pg.add_style_tag(content="html{font-size:150%}")
         pg.wait_for_timeout(200)
-        bars = pg.evaluate("""() => [...document.querySelectorAll('[data-live="speak-res"][data-k="me"] .spk-bar')].map(b => {
+        bars = pg.evaluate("""() => [...document.querySelectorAll('[data-live="speak-res"][data-k="me"] .spk-metric')].map(b => {
           const v = b.querySelector('.spk-bar-v'), l = b.querySelector('.spk-bar-l'), t = b.querySelector('.spk-track');
           const lh = parseFloat(getComputedStyle(v).lineHeight) || parseFloat(getComputedStyle(v).fontSize) * 1.3;
           const vr = v.getBoundingClientRect(), br = b.getBoundingClientRect();

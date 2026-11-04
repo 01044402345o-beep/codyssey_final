@@ -38,7 +38,7 @@ with sync_playwright() as p:
     pushes = []
     ctx.on("request", lambda r: pushes.append(r.url) if "/user/state" in r.url else None)
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/"); page.wait_for_timeout(900)
+    page.goto(BASE + "/?gate=off"); page.wait_for_timeout(900)
     check("Firebase 켜짐: 첫 화면은 로그인 화면", page.evaluate("S.screen") == "u-login" and page.evaluate("FirebaseAuth.enabled"))
     g = page.locator('[data-act="guest"]')
     check("'로그인 없이 시작' 버튼이 보인다", g.count() == 1 and g.is_visible())
@@ -81,7 +81,7 @@ with sync_playwright() as p:
     # --- Firebase 꺼짐(설정 없는 환경): 기존 데모 로그인 그대로 ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/"); page.wait_for_timeout(900)
+    page.goto(BASE + "/?gate=off"); page.wait_for_timeout(900)
     check("Firebase 꺼짐: 손님 버튼 없음, 기존 문구·Google 버튼 그대로",
           page.locator('[data-act="guest"]').count() == 0 and page.locator('[data-act="login"]').count() == 1
           and "다른 화면에 들어가기 어려워요" in page.locator(".ticket").inner_text())

@@ -38,7 +38,7 @@ with sync_playwright() as p:
     page = b.new_page(viewport={"width": 390, "height": 844})
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(800)
     page.evaluate("S.user = DEMO_USER; ensure('plan'); S.today = S.trip.studyStart; ACT.tab({ dataset: { id: 'u-study' } })"); page.wait_for_timeout(300)   # 알람 카드는 학습 탭 덱의 첫 장(학습일이어야 덱이 열린다)
     page.evaluate("window.__t = []; const o = toast; toast = m => { window.__t.push(m); o(m); }")
     today = page.evaluate("S.today")

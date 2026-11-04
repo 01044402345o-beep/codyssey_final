@@ -1574,5 +1574,11 @@ def index_page() -> HTMLResponse:
     return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
-if WEB_DIR.is_dir():
+# 발음기호 안내 1회 질문 — 사용자(계정)/IP 기준 기억. app/ipa_gate.py 참고.
+# 화면 마운트("/")보다 먼저 등록한다 — 뒤에 두면 마운트가 /ipa/gate 를 먼저 받아 404 를 준다.
+from . import ipa_gate  # noqa: E402
+app.include_router(ipa_gate.router)
+
+
+if WEB_DIR.is_dir():   # 맨 마지막 — 이 아래에 경로를 더하면 화면 마운트에 가려진다
     app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")

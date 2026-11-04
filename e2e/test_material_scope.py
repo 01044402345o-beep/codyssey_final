@@ -103,7 +103,7 @@ with sync_playwright() as p:
     pin_transparency(pg)
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
-    pg.goto(f"{BASE}/?demo=1")
+    pg.goto(f"{BASE}/?demo=1&gate=off")
     ready(pg)
 
     borders, tinted_seen = set(), 0
@@ -152,7 +152,7 @@ with sync_playwright() as p:
     pg2 = ctx2.new_page()
     pin_transparency(pg2, prefers_color_scheme="dark")
     pg2.on("pageerror", lambda e: errs.append(str(e)))
-    pg2.goto(f"{BASE}/?demo=1"); ready(pg2)
+    pg2.goto(f"{BASE}/?demo=1&gate=off"); ready(pg2)
     for scr, label in [("u-home", "다크 홈"), ("u-sched", "다크 일정표")]:
         pg2.evaluate(f"go('{scr}')"); pg2.wait_for_timeout(300)
         probe = pg2.evaluate(JS_PROBE, CARDS)

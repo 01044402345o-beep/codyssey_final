@@ -82,6 +82,72 @@ const fbOn = () => !!(window.FirebaseAuth && FirebaseAuth.enabled);
 function userName() { return (S.user && S.user.name) || DEMO_USER.name; }
 function userEmail() { return (S.user && S.user.email) || DEMO_USER.email; }
 
+/* ================= 발음기호 안내 코스 =================
+   왜 넣나: 피드백이 /iː/ · /θ/ 같은 기호를 보여주는데, 2022 개정 영어과 교육과정에
+   '발음기호'가 한 번도 나오지 않는다(=학교에서 배웠다고 가정할 수 없다).
+   그래서 기호를 처음 보는 사람을 위한 최소 코스를 둔다.
+   다만 '코스를 마쳐야 회화 연습을 쓸 수 있다'는 강제는 두지 않는다 — 근거가 없다(아래 주석).
+   근거: (1) IPA 지도가 원어민 모방보다 낫다는 증거가 없다(한국 중학생 n=30, 4주, 모든 측정치 유의차 없음).
+         (2) 듀오링고·ELSA·스픽·케이크 중 IPA를 선행 조건으로 거는 제품이 없다.
+         (3) 온보딩에 마찰을 더하면 이탈이 커진다(업종 평균 1회 사용 후 이탈 25%).
+   그래서 '기본 경로는 코스, 탈출구는 항상 열어 둔다'로 설계한다. */
+const IPA_COURSE = [
+  { ipa: 'iː', ko: '길게 "이"', tip: '"이"를 길게. 입꼬리를 옆으로 당기고 1초 이상 끌어 주세요.',
+    pair: [['seat', '좌석', 'iː'], ['sit', '앉다', 'ɪ']], say: 'Please have a seat.' },
+  { ipa: 'ɪ', ko: '짧게 "이"', tip: '"이"와 "에" 사이. 길게 끌지 말고 툭 끊어 주세요.',
+    pair: [['sit', '앉다', 'ɪ'], ['seat', '좌석', 'iː']], say: 'Can I sit here?' },
+  { ipa: 'æ', ko: '크게 "애"', tip: '입을 크게 벌리고 "애". "에"보다 턱이 아래로 내려가요.',
+    pair: [['bad', '나쁜', 'æ'], ['bed', '침대', 'e']], say: 'That is not bad.' },
+  { ipa: 'e', ko: '작게 "에"', tip: '"애"보다 입을 덜 벌리고 "에". 턱이 덜 내려가요.',
+    pair: [['bed', '침대', 'e'], ['bad', '나쁜', 'æ']], say: 'I need a bed.' },
+  { ipa: 'ə', ko: '아주 약한 "어"', tip: '힘을 완전히 빼고 아주 짧게. 강세 없는 음절은 거의 이 소리예요.',
+    pair: [['about', '대략', 'ə'], ['butter', '버터', 'ə']], say: 'I will be there about noon.' },
+  { ipa: 'θ', ko: '혀끝 "th" (무성)', tip: '혀끝을 윗니와 아랫니 사이로 살짝 내밀고 바람만 내보내요. "스"가 아니에요.',
+    pair: [['think', '생각하다', 'θ'], ['sink', '싱크대', 's']], say: 'I think it is Thursday.' },
+  { ipa: 'ð', ko: '혀끝 "th" (유성)', tip: 'θ와 같은 자리에서 목을 울려요. "드"가 아니에요.',
+    pair: [['this', '이것', 'ð'], ['dis', '(비교용)', 'd']], say: 'Is this the right gate?' },
+  { ipa: 'r', ko: '"r"', tip: '혀끝을 입천장에 대지 말고, 입술을 살짝 오므린 채 뒤로 당겨요.',
+    pair: [['right', '오른쪽', 'r'], ['light', '빛', 'l']], say: 'Turn right at the light.' },
+  { ipa: 'l', ko: '"l"', tip: '혀끝을 윗니 바로 뒤에 붙이고 떼요. "r"처럼 오므리지 않아요.',
+    pair: [['light', '빛', 'l'], ['right', '오른쪽', 'r']], say: 'The light is on the left.' },
+  { ipa: 'f', ko: '"f" (v와 같은 입모양)', tip: '윗니로 아랫입술을 살짝 물고 바람을 내보내요. 목이 울리면 v.',
+    pair: [['fan', '선풍기', 'f'], ['pan', '냄비', 'p']], say: 'Is the fan working?' },
+];
+const IPA_ITEM = Object.fromEntries(IPA_COURSE.map(x => [x.ipa, x]));
+
+/* 게이트 상태 — 계정별(personalStore). 손님은 이 브라우저 공용 칸에 남는다.
+   'known' = 안다고 답함, 'course' = 코스를 골랐음. 둘 다 다시 묻지 않는다. */
+const IPA_GATE_KEY = 'cd_ipa_v1';
+/* 자동화·e2e 전용 탈출구. 사람이 쓰는 경로에서는 절대 켜지 않는다(?gate=off 를 직접 붙여야 한다). */
+const gateOff = () => /[?&]gate=off(&|$)/.test(location.search);
+
+/* '한 번만 묻는다'의 기준은 브라우저가 아니라 사람이다 — 서버가 계정 또는 IP 로 기억한다.
+   서버에 못 닿으면(오프라인·정적 목업·데모) 이 브라우저 칸으로 떨어진다. 응답이 올 때까지만 대기한다. */
+let ipaSeenMem = null;                 // 이번 접속의 판정 결과
+function ipaLocalGet() { try { const v = personalStore().getItem(IPA_GATE_KEY); return v === 'known' || v === 'course' ? v : null; } catch (e) { return null; } }
+function ipaLocalSet(v) { try { personalStore().setItem(IPA_GATE_KEY, v); } catch (e) { /* 시크릿 모드: 이번 접속만 */ } }
+
+async function ipaSeen() {
+  if (ipaSeenMem) return ipaSeenMem;
+  if (ipaLocalGet()) return (ipaSeenMem = true);
+  if (API.base === null) return false;
+  try {
+    const r = await fetch(`${API.base}/ipa/gate?uid=${encodeURIComponent(accountUid() || '')}`, { cache: 'no-store' });
+    if (r.ok) { const j = await r.json(); if (j && j.seen) { ipaSeenMem = true; return true; } }
+  } catch (e) { /* 서버 없음 → 이 브라우저 기준 */ }
+  return false;
+}
+function ipaMarkSeen(v) {
+  ipaSeenMem = true; ipaLocalSet(v);
+  if (API.base === null) return;
+  try {
+    fetch(`${API.base}/ipa/gate`, { method: 'POST', keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid: accountUid() || '', value: v }) }).catch(() => {});
+  } catch (e) { /* 기록 실패는 화면을 막지 않는다 */ }
+}
+const ipaState = () => (S.ipa || (S.ipa = { i: 0, seen: [] }));
+
 /* ================= 계산 규칙 (shared/rules) ================= */
 const R = {
   /* FR-TRIP-02 날짜 종류 */
@@ -1394,6 +1460,8 @@ const SCREENS = [
     tips: ['지난 여행별 완료율·학습일·학습한 문장 수를 모아 봐요.', '여행 카드를 누르면 그 여행의 학습 목록(날짜별 완료)이 펼쳐져요.', '새 여행을 만들면 기존 여행이 이 목록에 남아요(삭제되지 않아요).'] },
   { id: 'u-study', no: 'SCR-08', name: '학습 카드', fr: ['FR-STUDY-01', 'FR-STUDY-02', 'FR-STUDY-04'],
     tips: ['카드를 눌러 뒤집고 "듣기"로 영어 발음을 들어 보세요.', '모든 카드를 한 번 이상 뒤집어야 완료 버튼이 켜져요.', '[your name]·[your destination]는 채울 자리예요. 듣기도 그대로 읽어요.', '사이드바의 "TTS 미지원"을 켜면 듣기 버튼 대신 안내가 나와요.'] },
+  { id: 'u-ipa', no: 'SCR-08b', name: '발음기호 알아보기', fr: ['FR-STUDY-01', 'FR-STUDY-02'],
+    tips: ['기호 10개를 한 장씩 봐요. 소리를 듣고 따라 해 보세요.', '한 바퀴 돌면 코스가 끝나고, 회화 연습을 그대로 쓸 수 있어요.', '여기서 배운 기호가 회화 연습 결과 카드에 그대로 나와요.'] },
   { id: 'u-coll', no: 'SCR-09', name: '문장 모음', fr: ['FR-STUDY-05', 'FR-SENT-01'],
     tips: ['공통 상황과 장소별 문장을 골라 볼 수 있어요.', '"문장 모음 전용"은 일정에 넣지 않은 문장이에요.', '모든 문장에 듣기 버튼이 있어요.'] },
   { id: 'u-interp', no: 'SCR-12', name: '통역 (여행 중)', fr: ['FR-TRIP-INTERP'],
@@ -2204,6 +2272,8 @@ function pframe(inner, o = {}) {
 }
 /* o.act: 오른쪽 위 버튼(HTML). 지금은 일정표의 '이전 여행' 하나뿐이다. */
 const appbar = (title, o = {}) => `<div class="appbar">${o.back ? `<button class="back" data-act="tab" data-id="${o.back}">${I.back}</button>` : ''}<h2>${title}</h2>${o.step ? `<span class="step">${o.step}</span>` : ''}${o.act || ''}</div>`;
+/* 발음기호 코스 입구 — 학습·상황별 연습 화면 우측 상단. 물어본 뒤에도 계속 남는다. */
+const ipaEntryBtn = () => `<button class="act ipa-btn" data-act="ipa-open" aria-label="발음기호 안내"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V7a2 2 0 0 1 2-2h5l8 14h-5L9 12"/><circle cx="17.5" cy="6.5" r="1.4" fill="currentColor" stroke="none"/></svg><span>발음기호</span></button>`;
 const pastEntryBtn = () => `<button class="act" data-act="past-go" aria-label="이전 여행 보기">${I.past}<span>이전 여행</span></button>`;
 const notice = (html, kind = '') => `<div class="notice ${kind}">${kind === 'warn' || kind === 'bad' ? I.alert : I.info}<div>${html}</div></div>`;
 function modalHtml(center = false) {
@@ -2229,7 +2299,8 @@ function userScreen() {
     case 'u-route': return scrRoute();
     case 'u-home': return scrHome();
     case 'u-sched': return scrSched();
-    case 'u-study': return scrStudy();
+    case 'u-study': setTimeout(ipaAskOnce, 400); return scrStudy();
+    case 'u-ipa': return scrIpa();
     case 'u-coll': return scrColl();
     case 'u-interp': return scrInterp();
     case 'u-past': return scrPast();
@@ -3098,9 +3169,18 @@ function bumpAct() {
      · 화면 아래 넓은 캡슐 버튼(주 동작) + 보조 버튼
    값은 알람의 '시간' 자리에 오늘 목표(n/10)를, 라벨 자리에 안내 문구를, 버튼 자리에
    '학습 시작'을 둔다. 목록·토글이 아니라 알람 카드 자체다. 배경은 알람처럼 어두운 면을 쓴다. */
+/* 알람 카드는 render() 마다 DOM 이 새로 만들어진다 — CSS 애니메이션도 매번 처음부터 다시 돈다.
+   그래서 '들어올 때 한 번' 도는 동작(숫자·막대·레일)은 화면 진입에서만 켠다. 매번 재생되면
+   카드를 뒤집을 때마다 카드가 다시 자라나는 것처럼 보인다. 계속 도는 동작(종 흔들림·글로우·
+   오늘 막대 숨쉬기)은 첫 프레임이 중립값이라 다시 시작해도 눈에 띄지 않는다. */
+let alarmFxPending = true;   // 첫 화면도 '들어오는 순간'이다
+const markAlarmFx = () => { alarmFxPending = true; };
+const takeAlarmFx = () => { const v = alarmFxPending; alarmFxPending = false; return v; };
+
 const ALARM_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="13.5" r="7.2"/><path d="M12 10v3.8l2.4 1.6M4.6 4.2 7 2.4M19.4 4.2 17 2.4"/></svg>';
 function alarmCard(pr, o = {}) {
   const n = actToday(), done = n >= DAY_GOAL, st = streakDays();
+  const fx = takeAlarmFx();   // 들어오는 순간에만 켜지는 동작
   const r = S.sched.find(x => x.date === S.today);
   const date = r ? r.date : S.today;
   const sub = done ? '오늘 목표를 채웠어요'
@@ -3111,16 +3191,16 @@ function alarmCard(pr, o = {}) {
      막대 아래에 요일 이름을 붙인다 — 남는 공간이 있을 때만 CSS 가 보여 준다. */
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const wdOf = d => WD[new Date(d + 'T00:00:00').getDay()];
-  const week = days.map(d => {
+  const week = days.map((d, k) => {
     const c = PROG.act[d] || 0, on = c > 0;
-    return `<i class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}" style="--n:${Math.min(c, 7)}" title="${Dt.md(d)}${on ? ` · ${c}장` : ''}"></i>`;
+    return `<i class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}" style="--n:${Math.min(c, 7)};--i:${k}" title="${Dt.md(d)}${on ? ` · ${c}장` : ''}"></i>`;
   }).join('');
   const wdLabels = days.map(d => {
     const on = (PROG.act[d] || 0) > 0;
     return `<b class="${on ? 'on' : ''}${d === S.today ? ' today' : ''}">${wdOf(d)}</b>`;
   }).join('');
   const pr2 = pr, pct = Math.round(pr2.rate * 100);
-  return `<div class="alarm-wrap"><div class="alarm" data-live="alarm">
+  return `<div class="alarm-wrap"><div class="alarm${fx ? ' alarm-fx' : ''}" data-live="alarm">
     <div class="alarm-h"><span class="alarm-ic">${ALARM_IC}</span>오늘의 알람</div>
     <b class="alarm-big">${n}<i>/${DAY_GOAL}장</i></b>
     <p class="alarm-label">${sub}</p>
@@ -3328,7 +3408,7 @@ function scrSplit(tab) {
   let detail = `<div class="empty">일정이 없어요</div>`;
   if (r) { const v = studyView(r, { inline: true }); detail = `${v.inner}${v.bottom ? `<div class="bottombar">${v.bottom}</div>` : ''}`; }
   return frame(`<div class="split"><div class="split-list">${calHtml(true)}${schedListHtml(r ? r.date : null)}</div><div class="split-detail">${detail}</div></div>`,
-    { appbar: appbar(tab === 'u-study' ? '학습' : '일정표', { act: tab === 'u-study' ? '' : pastEntryBtn() }), tabbar: true, tab, wide: true });
+    { appbar: appbar(tab === 'u-study' ? '학습' : '일정표', { act: tab === 'u-study' ? ipaEntryBtn() : pastEntryBtn() }), tabbar: true, tab, wide: true });
 }
 
 /* SCR-08 */
@@ -3474,17 +3554,72 @@ function deckStep(r, d) {   // 덱에서 한 장 앞(+1)/뒤(-1)
   if (deckIdx(r) === 0 && alarmFirst(r)) S.card.alarm = true; else S.card.i = Math.max(0, deckIdx(r) - 1);
 }
 
+/* 학습 화면에 처음 들어올 때 한 번만 묻는다. 사용자당(계정 또는 IP) 한 번이라
+   새 기기·새 브라우저에서도 다시 묻지 않는다. 응답 전에 그리는 것은 그대로 둔다 —
+   질문이 늦게 떠도 화면이 멈추지 않게. */
+let ipaAskStarted = false, ipaAskTries = 0;
+async function ipaAskOnce() {
+  if (ipaAskStarted || gateOff()) return;
+  // 다른 창(안내·동의)이 떠 있으면 겹쳐 띄우지 않고 잠시 뒤 다시 본다. 여기서 포기하면 영영 안 묻는다.
+  if (S.modal || S.sheet) { if (ipaAskTries++ < 10) setTimeout(ipaAskOnce, 1200); return; }
+  ipaAskStarted = true; ipaAskTries = 0;
+  if (await ipaSeen()) return;
+  confirmBox('발음기호, 기억 나세요?',
+    `회화 연습 결과에는 <b>/iː/ · /θ/ · /ə/</b> 같은 기호가 나와요. 기호를 읽을 수 있으면 피드백이 바로 이해돼요.<br><br>
+     기억이 안 나도 괜찮아요. <b>기호 10개, 3분</b>이면 충분해요.`,
+    '네, 알아요', () => { ipaMarkSeen('known'); S.modal = null; render(); },
+    { cancel: '기억이 잘 안나요', onCancel: () => {
+        ipaMarkSeen('course'); S.modal = null;
+        if (!S.ipa) S.ipa = { i: 0, seen: [] };
+        toast('학습 화면 오른쪽 위 [발음기호]에서 언제든 볼 수 있어요.');
+        go('u-ipa');
+      } });
+}
+
 function scrStudy() {
   if (S.drill) {   // 상황별 연습: 넓은 화면에서도 일정 목록 없이 카드만 (뒤로 → 문장 모음)
     const v = studyView(S.drill);
-    return frame(v.inner, { appbar: appbar('상황별 연습', { back: 'u-coll' }), bottom: v.bottom, tabbar: false, tab: 'u-study' });
+    return frame(v.inner, { appbar: appbar('상황별 연습', { back: 'u-coll', act: ipaEntryBtn() }), bottom: v.bottom, tabbar: false, tab: 'u-study' });
   }
   if (isWide()) return scrSplit('u-study');
   const r = pickRow();
-  if (!r) return frame(`<div class="empty">일정이 없어요</div>`, { tabbar: true });
+  if (!r) return frame(`<div class="empty">일정이 없어요</div>`, { appbar: appbar('학습', { back: 'u-sched', act: ipaEntryBtn() }), tabbar: true, tab: 'u-study' });
   const v = studyView(r);
-  return frame(v.inner, { appbar: appbar('학습', { back: 'u-sched' }), bottom: v.bottom || undefined, tabbar: v.tabbar, tab: 'u-study' });
+  return frame(v.inner, { appbar: appbar('학습', { back: 'u-sched', act: ipaEntryBtn() }), bottom: v.bottom || undefined, tabbar: v.tabbar, tab: 'u-study' });
 }
+/* 발음기호 코스 화면. 카드 한 장에 기호 하나 — 기호·한국어 이름·조음 방법·최소대립쌍.
+   최소대립쌍은 '듣기'로 두 단어를 번갈아 들을 수 있게 한다(기호보다 귀가 먼저다). */
+function scrIpa() {
+  const st = ipaState();
+  const C = IPA_COURSE, n = C.length;
+  const i = Math.max(0, Math.min(st.i, n - 1));
+  const c = C[i], prev = C[(i - 1 + n) % n], next = C[(i + 1) % n];
+  const seen = new Set(st.seen), all = seen.size >= n;
+  const dots = C.map((x, k) => `<i class="${seen.has(x.ipa) ? 'seen' : ''} ${k === i ? 'cur' : ''}"></i>`).join('');
+  const pairRow = c.pair.map(([w, ko, ip], k) => `<button class="ipa-pair" data-act="ipa-say" data-w="${esc(w)}">
+      <b>${esc(w)}</b><span>${esc(ko)}</span><em>/${esc(ip)}/</em>${k === 0 ? '<small>먼저</small>' : '<small>비교</small>'}</button>`).join('');
+  const inner = `<div class="app-pad">
+    <div class="ipa-head"><div class="small">발음기호 알아보기</div>
+      <div class="ipa-count"><b>${i + 1}</b> / ${n}</div></div>
+    ${all ? `<div class="notice">${I.check}<div>기호 ${n}개를 모두 봤어요. 이제 회화 연습에서 나오는 기호를 읽을 수 있어요.</div></div>` : ''}
+    <div class="ipa-card">
+      <div class="ipa-sym">/${esc(c.ipa)}/</div>
+      <div class="ipa-ko">${esc(c.ko)}</div>
+      <p class="ipa-tip">${esc(c.tip)}</p>
+      <div class="ipa-pairs">${pairRow}</div>
+      <button class="btn soft block" data-act="ipa-say" data-w="${esc(c.say)}">${I.speaker}예문 듣기 · ${esc(c.say)}</button>
+    </div>
+    <div class="ipa-neigh"><button class="ipa-neigh-b" data-act="ipa-go" data-i="${(i - 1 + n) % n}">${I.back}<span>/${esc(prev.ipa)}/</span></button>
+      <button class="ipa-neigh-b" data-act="ipa-go" data-i="${(i + 1) % n}"><span>/${esc(next.ipa)}/</span>${I.next}</button></div>
+    <div class="dots" style="margin:14px 0 6px">${dots}</div>
+    <p class="small" style="text-align:center">회의 기호는 결과 카드에 그대로 나와요. 모르면 여기로 돌아오세요.</p>
+  </div>`;
+  const bottom = all
+    ? `<button class="btn accent block" data-act="ipa-finish">회화 연습 열기</button>`
+    : `<div style="display:flex;gap:8px"><button class="btn soft" style="flex:1" data-act="ipa-skip">건너뛰기</button><button class="btn primary" style="flex:1.4" data-act="ipa-next">다음 기호 (${i + 1}/${n})</button></div>`;
+  return frame(inner, { appbar: appbar('발음기호 알아보기', { back: 'u-sched' }), bottom, tabbar: false, tab: 'u-study' });
+}
+
 /* 모든 카드를 뒤집으면 버튼을 누르지 않아도 끝난다(팀 요청 10/19). 날짜에 따라 완료·미리 학습·연습 축하 창을 띄운다. */
 function allFlipped(r) {
   const n = r.ids.length, md = Dt.md(r.date);
@@ -3953,7 +4088,9 @@ function go(id) {
   cancelSpeak(); S.card.back = null; if (id !== 'u-study') endDrill();
   LIVE.partner = false;
   if (id !== 'u-interp' && LIVE.on) stopLive();   // 다른 화면으로 가면 마이크도 끈다
-  S.screen = id; S.modal = null; S.sheet = false; if (S.interp) S.interp.show = null; pushScreen(id); render();
+  S.screen = id; S.modal = null; S.sheet = false; if (S.interp) S.interp.show = null;
+  if (id === 'u-study') markAlarmFx();          // 알람 카드의 '들어오는' 동작
+  pushScreen(id); render();
 }
 
 /* ================= 화면 히스토리 (안드로이드 하단 뒤로가기) =================
@@ -4114,13 +4251,22 @@ function speakBtnHtml(s, k) {
    점수는 두 받아쓰기 모두에서 들린 단어의 일치율이라 큰 숫자·링으로 강조하지 않는다 — 발음 인증서로 읽힌다.
    음소 줄(실제 소리, phonemes_acoustic)은 음소 노드가 붙어 있을 때만 나온다. 없으면 단어 쪽만. */
 const PH_TITLE = { ok: '목표한 소리와 가깝게 났어요', weak: '조금 약했어요', missing: '목표한 소리와 다르게 났어요' };
-function spkBarHtml(label, value, tone) {
+/* 지표 한 줄. hero 는 음소 일치(실제 소리에서 잰 값) — 단어 일치는 발음 점수가 아니라 작은 mono 로 둔다. */
+function spkMetricHtml(label, value, tone, lead) {
   const p = Math.max(0, Math.min(100, Math.round(value)));
-  return `<div class="spk-bar"><span class="spk-bar-l">${esc(label)}</span><span class="spk-track"><span class="spk-fill ${tone}" style="width:${Math.max(2, p)}%"></span></span><b class="spk-bar-v">${p}%</b></div>`;
+  return `<div class="spk-metric${lead ? ' lead' : ''}"><span class="spk-bar-l">${esc(label)}</span>` +
+    `<b class="spk-bar-v">${p}%</b>` +
+    `<span class="spk-track"><span class="spk-fill ${tone}" style="width:${Math.max(2, p)}%"></span></span></div>`;
+}
+function spkEyebrow(rows) {
+  const d = new Date();
+  const stamp = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+  return `SPEAK CHECK · ${stamp}`;
 }
 function speakCardHtml(r, target) {
   const pa = r.phonemes_acoustic && r.phonemes_acoustic.status === 'ok' ? r.phonemes_acoustic : null;
-  const rows = pa && Array.isArray(pa.phonemes) ? pa.phonemes : [];
+  const rows = pa && Array.isArray(pa.phonemes)
+    ? pa.phonemes.filter(x => x && x.ipa && ['ok', 'weak', 'missing'].includes(x.status)) : [];
   const v = AI.speakVerdict(r.score, rows);
   const acc = pa && typeof pa.phoneme_accuracy === 'number' ? pa.phoneme_accuracy : null;
   const miss = r.diff && Array.isArray(r.diff.missing) ? r.diff.missing : [];
@@ -4130,25 +4276,29 @@ function speakCardHtml(r, target) {
   const toneOf = x => (x >= 90 ? '' : x >= 70 ? 'mid' : 'low');
   const row = (key, val) => `<div class="spk-row"><span class="spk-row-k">${esc(key)}</span><span class="spk-row-v">${val}</span></div>`;
   const savedNote = r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '';
+  let metrics = '';
+  metrics += spkMetricHtml('단어 일치', r.score, toneOf(r.score), acc === null);   // DOM 순서 계약: 단어 → 음소
+  if (acc !== null) metrics += spkMetricHtml('음소 일치', acc, toneOf(acc), true);
   return `<div class="speak-res spk-card-wrap"${f ? ` data-ph-focus="${esc(f.ipa)}"` : ''}><div class="spk-card">` +
-    `<div class="spk-head"><span class="spk-ic ${v.tone}">${v.tone === 'ok' ? '✓' : '!'}</span><span class="spk-verdict">${esc(v.text)}</span>` +
-    `<span class="spk-tag">발음 점수 아님</span></div>` +
-    `<div class="spk-bars">${spkBarHtml('단어 일치', r.score, toneOf(r.score))}${acc !== null ? spkBarHtml('음소 일치', acc, toneOf(acc)) : ''}</div>` +
-    (marks.length ? row('목표 문장', `<span class="spk-words">${marks.map(m => `<span class="spk-w${m.miss ? ' miss' : ''}"${m.miss ? ' title="두 받아쓰기 모두에서 들리지 않았어요"' : ''}>${esc(m.w)}</span>`).join(' ')}</span>`) : '') +
-    (groups.length ? `<div class="spk-strip-wrap"><div class="spk-strip-label">실제 소리 · 음소 ${rows.length}개 · 빨간 테두리가 목표와 다르게 난 소리</div><div class="spk-strip">` +
+    `<div class="spk-head"><div class="spk-head-txt"><div class="spk-eyebrow">${esc(spkEyebrow(rows))}</div>` +
+      `<b class="spk-verdict">${esc(v.text)}</b></div><span class="spk-tag">발음 점수 아님</span></div>` +
+    `<div class="spk-metrics">${metrics}</div>` +
+    (marks.length ? `<div class="spk-words-box"><div class="spk-words-k">목표 문장${miss.length ? ' · 점선 = 안 들린 단어' : ''}</div>` +
+      `<span class="spk-words">${marks.map(m => `<span class="spk-w${m.miss ? ' miss' : ''}"${m.miss ? ' title="두 받아쓰기 모두에서 들리지 않았어요"' : ''}>${esc(m.w)}</span>`).join(' ')}</span></div>` : '') +
+    (groups.length ? `<div class="spk-sounds"><div class="spk-sounds-k">소리별 결과 · ${rows.length}개 · 표시된 것만 목표와 달라요</div><div class="spk-strip">` +
       groups.map(g => `<span class="spk-wg"><span class="spk-wt">${esc(g.word)}</span><span class="spk-phs">` +
-        g.items.map(p => `<span class="spk-ph ${esc(p.status)}" title="${esc(PH_TITLE[p.status] || '')}">${esc(p.ipa)}</span>`).join('') + '</span></span>').join('') +
+        g.items.map(p2 => `<span class="spk-ph ${esc(p2.status)}" title="${esc(PH_TITLE[p2.status] || '')}">${esc(p2.ipa)}</span>`).join('') + '</span></span>').join('') +
       '</div></div>' : '') +
-    (f ? `<div class="spk-focus"><span class="spk-focus-ic">!</span><div><div class="spk-focus-h">'${esc(f.word || '')}'의 <b>/${esc(f.ipa)}/</b>` +
+    (f ? `<div class="spk-focus${f.heard_as ? '' : ' ok'}"><span class="spk-focus-ic" aria-hidden="true"></span><div>` +
+      `<div class="spk-focus-h">'${esc(f.word || '')}'의 <b>/${esc(f.ipa)}/</b>` +
       (f.heard_as ? ` <span class="spk-heard">→ /${esc(f.heard_as)}/처럼 들렸어요</span>` : ' 소리가 약했어요') + '</div>' +
       (f.label ? `<div class="spk-focus-label">${esc(f.label)}</div>` : '') + (f.tip ? `<div class="spk-focus-tip">${esc(f.tip)}</div>` : '') + '</div></div>' : '') +
     (r.heard ? row('들린 문장', esc(r.heard)) : '') +
     (r.fix_one ? row('고칠 한 가지', esc(r.fix_one)) : '') +
     ((r.tip || (r.offer && r.coverage !== null)) ? `<details class="spk-more"><summary>설명 더 보기</summary>` +
       (r.tip ? row('팁', esc(r.tip)) : '') +
-      (r.offer && r.coverage !== null ? `<div class="spk-note">참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)</div>` : '') + '</details>' : '') +
-    (savedNote ? `<div class="spk-note">${esc(savedNote)}</div>` : '') +
-    (!pa ? '' : `<div class="spk-note">소리 분석은 AI 음소 인식 결과예요${pa.via === 'azure' ? '(Microsoft Azure 발음 평가)' : pa.via === 'speechace' ? '(Speechace 발음 평가)' : ''} — 틀릴 수 있어요</div>`) +
+      (r.offer && r.coverage !== null ? `<div class="spk-note" style="border-top:0">참고: 목표 문장 단어 ${Math.round(r.coverage * 100)}% 일치 (실력 판정이 아니에요)</div>` : '') + '</details>' : '') +
+    `<div class="spk-note"><b>단어 일치율</b>이에요 · 발음 점수 아님${savedNote ? ' · ' + esc(savedNote) : ''}${pa ? ` · 소리 분석은 AI 음소 인식 결과${pa.via === 'azure' ? '(Microsoft Azure 발음 평가)' : pa.via === 'speechace' ? '(Speechace 발음 평가)' : ''}라 틀릴 수 있어요` : ''}</div>` +
     '</div></div>';
 }
 function speakResHtml(s, k) {
@@ -5220,7 +5370,16 @@ const ACT = {
   'interp-show': el => { S.interp.show = el.dataset.id; pushOverlay('interp-show'); render(); },
   'interp-close': () => { S.interp.show = null; render(); },
   'interp-say-reply': el => { const x = S.smap[S.interp.show]; const r = x && x.talk && x.talk.replies[+el.dataset.i]; if (r) speak(r.en, el, readTarget(el)); },
+  /* 회화 연습 입구. 발음기호 질문은 여기서 하지 않는다 — 학습 화면에 들어올 때 한 번뿐이다. */
   'sheet-open': () => { S.sheet = true; pushOverlay('sheet'); render(); },
+  'ipa-open': () => { go('u-ipa'); },
+  'ipa-go': el => { const st = ipaState(); st.i = +el.dataset.i; render(); window.scrollTo(0, 0); },
+  'ipa-next': () => { const st = ipaState(); const c = IPA_COURSE[st.i]; if (c && !st.seen.includes(c.ipa)) st.seen.push(c.ipa);
+    st.i = Math.min(IPA_COURSE.length - 1, st.i + 1); render(); window.scrollTo(0, 0); },
+  'ipa-say': el => { speak(el.dataset.w, el); },
+  'ipa-skip': () => { go('u-study'); S.sheet = true; pushOverlay('sheet'); render(); },
+  'ipa-finish': () => { const st = ipaState(); IPA_COURSE.forEach(c => { if (!st.seen.includes(c.ipa)) st.seen.push(c.ipa); });
+    go('u-study'); S.sheet = true; pushOverlay('sheet'); render(); toast('코스를 마쳤어요. 이제 회화 연습을 볼게요.'); },
   'sheet-close': () => closeSheet(),
   'talk-start': () => startTalk(),
   'talk-exit': () => { cancelTalk(); render(); },

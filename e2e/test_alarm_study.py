@@ -30,7 +30,7 @@ with sync_playwright() as p:
     pg = ctx.new_page()
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
-    pg.goto(BASE + "/?demo=1"); pg.wait_for_timeout(780)
+    pg.goto(BASE + "/?demo=1&gate=off"); pg.wait_for_timeout(780)
     pg.evaluate("""() => { S.user = DEMO_USER; ensure('plan'); S.today = S.trip.studyStart;
         PROG.act = {}; PROG.act[S.today] = 4; render(); go('u-home'); }""")
     pg.wait_for_timeout(380)
