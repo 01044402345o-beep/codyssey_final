@@ -2327,7 +2327,7 @@ body.is-narrow .spk-card { border-radius: 12px; }
 
 .ipa-pair-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
 .ipa-pair-h > span { font-size: 0.75rem; color: var(--text-soft); }
-.ipa-ab { flex: none; padding: 5px 9px; min-height: 30px; border: 1px solid var(--border-strong); border-radius: 999px;
+.ipa-ab { flex: none; padding: 6px 12px; min-height: 44px; border: 1px solid var(--border-strong); border-radius: 999px;
   background: transparent; color: var(--accent-text); font-family: var(--mono); font-size: 0.75rem; cursor: pointer; }
 .ipa-pair-wrap { min-width: 0; }
 .ipa-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto 24px; align-items: center; gap: 8px;
@@ -2337,7 +2337,8 @@ body.is-narrow .spk-card { border-radius: 12px; }
 .ipa-pair.on { border: 2px solid var(--accent); padding: 7px 9px; }
 .ipa-pair-w { font-size: 1.0625rem; font-weight: 500; color: var(--text); letter-spacing: -.01em; }
 .ipa-pair.on .ipa-pair-w { font-weight: 750; }
-.ipa-pair-w u { text-decoration: none; border-bottom: 2px solid var(--accent); font-weight: 750; }
+.ipa-pair-w u { text-decoration: none; border-bottom: 2px solid var(--accent); font-weight: 750;
+  padding-bottom: 1px; }
 .ipa-pair-k { grid-column: 1; font-size: 0.75rem; color: var(--text-soft); margin-top: -2px; }
 .ipa-pair-ip { grid-row: 1 / span 2; grid-column: 2; font-family: var(--mono); font-style: normal;
   font-size: 0.8125rem; color: var(--accent-text); }
