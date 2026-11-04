@@ -5323,7 +5323,7 @@ function speakCardHtml(r, target) {
     `<div class="spk-metrics">${metrics}</div>` +
     (marks.length ? `<div class="spk-words-box"><div class="spk-words-k">목표 문장${miss.length ? ' · 점선 = 안 들린 단어' : ''}</div>` +
       `<span class="spk-words">${marks.map(m => `<span class="spk-w${m.miss ? ' miss' : ''}"${m.miss ? ' title="두 받아쓰기 모두에서 들리지 않았어요"' : ''}>${esc(m.w)}</span>`).join(' ')}</span></div>` : '') +
-    (groups.length ? `<div class="spk-sounds"><div class="spk-sounds-k">소리별 결과 · ${rows.length}개 · 표시된 것만 목표와 달라요</div><div class="spk-strip">` +
+    (groups.length ? `<div class="spk-sounds"><div class="spk-sounds-k">소리별 결과 · ${rows.length}개 · 표시된 것만 제 의도와 조금 다르네요.</div><div class="spk-strip">` +
       groups.map(g => `<span class="spk-wg"><span class="spk-wt">${esc(g.word)}</span><span class="spk-phs">` +
         g.items.map(p2 => `<span class="spk-ph ${esc(p2.status)}" title="${esc(PH_TITLE[p2.status] || '')}">${esc(p2.ipa)}</span>`).join('') + '</span></span>').join('') +
       '</div></div>' : '') +
