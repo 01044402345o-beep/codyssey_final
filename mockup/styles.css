@@ -1900,7 +1900,7 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .alarm-week { display: flex; align-items: flex-end; justify-content: center; gap: 6px;
   margin-top: auto; padding-top: clamp(10px, 1.8dvh, 20px);
   box-sizing: content-box; height: var(--alarm-week-h); }
-.alarm-week i { --n: 0;   /* 그날 학습량 — app.js 가 인라인 style 로 덮는다 */
+.alarm-week i { --n: 0; --i: 0;   /* 그날 학습량·순번 — app.js 가 인라인 style 로 덮는다 */
   width: 10px; height: calc(5px + (var(--n) * var(--alarm-week-h) / 8));
   max-height: var(--alarm-week-h); border-radius: 3px;
   background: color-mix(in srgb, var(--text) 15%, var(--al-bg)); }
