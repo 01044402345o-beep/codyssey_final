@@ -45,7 +45,7 @@ with sync_playwright() as p:
     ctx.route("**/speak-check", fake)
     page = ctx.new_page(); errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1", wait_until="domcontentloaded"); page.wait_for_timeout(700)
+    page.goto(BASE + "/?demo=1&gate=off", wait_until="domcontentloaded"); page.wait_for_timeout(700)
     page.evaluate("ensure('plan')"); page.evaluate("saveConsentHere(true) || (consentMem = true)")
     page.evaluate("navFromMenu('u-coll')"); page.wait_for_timeout(300)
     page.locator('[data-act="drill"][data-v="immigration"]').click(); page.wait_for_timeout(300)

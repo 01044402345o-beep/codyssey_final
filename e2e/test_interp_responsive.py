@@ -48,7 +48,7 @@ with sync_playwright() as p:
         ctx = b.new_context(viewport={"width": w, "height": h}, permissions=["microphone"])
         page = ctx.new_page(); errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(BASE + "/?demo=1"); page.wait_for_timeout(600)
+        page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(600)
         page.evaluate(START); page.wait_for_timeout(300)
         page.locator('[data-act="live-start"]').click()
         for _ in range(30):
@@ -109,7 +109,7 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844}, permissions=["microphone"])
     page = ctx.new_page(); errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(600)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(600)
     page.evaluate(START); page.locator('[data-act="live-start"]').click()
     for _ in range(30):
         page.wait_for_timeout(250)

@@ -80,5 +80,6 @@ __pycache__/
 # 음소 음향 모델(317MB)은 저장소에 넣지 않는다 — tools/fetch_phoneme_model.py 로 받는다
 backend/app/acoustic/data/*.onnx
 backend/phoneme-node/token.txt
+backend/phoneme-node/node-url.txt
 backend/phoneme-node/logs/
 backend/venv-phoneme/

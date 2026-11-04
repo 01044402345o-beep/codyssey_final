@@ -69,7 +69,7 @@ def contrast(pg, sel):
 
 
 def ready(pg):
-    pg.goto(BASE + "/?demo=1")
+    pg.goto(BASE + "/?demo=1&gate=off")
     pg.wait_for_timeout(750)
     pg.evaluate("""try{localStorage.removeItem('cd_home')}catch(e){}
       S.user = DEMO_USER; ensure('plan'); S.today = S.trip.studyStart;

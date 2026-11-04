@@ -26,7 +26,7 @@ with sync_playwright() as p:
     errors = []
     page = b.new_page(viewport={"width": 390, "height": 844})
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1")
+    page.goto(BASE + "/?demo=1&gate=off")
     page.wait_for_timeout(700)
 
     url0 = page.url.split("#")[0]
@@ -69,7 +69,7 @@ with sync_playwright() as p:
           f"url={page.url} screen={scr()}")
 
     # 깊이: 같은 화면이 반복돼도 끊지 않고, 문서 주소가 바뀔 때까지 센다.
-    page.goto(BASE + "/?demo=1")
+    page.goto(BASE + "/?demo=1&gate=off")
     page.wait_for_timeout(700)
     url1 = page.url.split("#")[0]
     for _ in range(10):
@@ -95,7 +95,7 @@ with sync_playwright() as p:
     check("뒤로가기 깊이가 상한(6)을 넘지 않는다", depth <= 6, f"{depth}회")
     # 상한: 뒤로가기 '횟수'는 오버레이 칸에 따라 4도 6도 나와 상한을 증명하지 못한다.
     # 브라우저 기록 길이가 상한 뒤에 더 자라지 않는지를 직접 본다(수정 전에는 쌍마다 +2 였다).
-    page.goto(BASE + "/?demo=1")
+    page.goto(BASE + "/?demo=1&gate=off")
     page.wait_for_timeout(700)
     for _ in range(10):
         page.evaluate("go('u-study')")

@@ -45,7 +45,7 @@ with sync_playwright() as p:
     page = ctx.new_page()
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1", wait_until="domcontentloaded")
+    page.goto(BASE + "/?demo=1&gate=off", wait_until="domcontentloaded")
     page.wait_for_timeout(700)
     page.evaluate("ensure('plan')")
 

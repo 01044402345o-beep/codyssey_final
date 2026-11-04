@@ -521,7 +521,7 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   border: 3px dashed var(--accent-a55); display: grid; place-items: center; transform: rotate(-14deg);
   font-family: var(--mono); color: var(--accent-a70); font-size: 0.75rem; text-align: center; line-height: 1.6;
 }
-.login .stamp::before { content: ''; position: absolute; inset: 14px; border-radius: 50%; border: 1.5px solid var(--accent-a40); }
+.login .stamp::before { content: ''; position: absolute; inset: 14px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--accent) 40%, transparent); }
 .login h1 { font-family: var(--display); font-size: 2.75rem; line-height: 1.02; letter-spacing: -0.04em; margin: 150px 0 14px; font-weight: 600; }
 .login h1 em { font-style: italic; color: var(--accent-text); }
 /* 브랜드(마디 MADI): 앱 아이콘 + 이름 + 태그라인. 아이콘 원본은 Flutter 앱 assets/brand/madi_icon.png */
@@ -727,7 +727,7 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .face .en .ph { color: var(--sun); font-style: italic; }
 /* 따라 읽기: 지금 읽는 단어. 글자색은 그대로 두고 밑줄 + 옅은 바탕으로만 표시한다(대비 유지) */
 .w { border-radius: 4px; transition: background-color .12s; }
-.w.now { background: var(--accent-a40); box-shadow: 0 2px 0 var(--accent); }
+.w.now { background: color-mix(in srgb, var(--accent) 40%, transparent); box-shadow: 0 2px 0 var(--accent); }
 .face .ko-s { font-size: 0.875rem; color: var(--inv-text-2); margin-bottom: auto; }
 .face .hint { font-size: 0.75rem; color: var(--text-3); text-align: center; display: flex; gap: 6px; justify-content: center; align-items: center; }
 .tts-row { display: flex; gap: 8px; align-items: center; }
@@ -1191,7 +1191,7 @@ html[data-mode=demo] .side .note-card { box-shadow: none; }
 .talk-side:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
 .talk-side:disabled { opacity: .4; }
 .talk-micwrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.talk-mic { position: relative; width: 76px; height: 76px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); box-shadow: 0 6px 18px var(--accent-a40); transition: transform .1s, background .15s; }
+.talk-mic { position: relative; width: 76px; height: 76px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 40%, transparent); transition: transform .1s, background .15s; }
 .talk-mic svg { width: 32px; height: 32px; }
 .talk-mic:active { transform: scale(.96); }
 .talk-mic.rec { background: var(--bad); color: var(--on-bad); box-shadow: none; }
@@ -1566,7 +1566,7 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
 .live-turn { margin-top: 8px; }   /* 브라우저 엔진: 내 차례 ↔ 상대 차례 */
 .conv-tap { display: block; margin-top: 4px; font-size: 0.6875rem; font-weight: 700; color: var(--accent-text); }
 .conv-me { border-radius: 14px; padding: 10px 12px; background: var(--surface-3); }
-.conv-me.speaking { box-shadow: 0 0 0 2px var(--accent-a40); }
+.conv-me.speaking { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
 .conv-small { margin: 4px 0 0; font-size: 0.9375rem; line-height: 1.45; }
 .conv-who { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; font-weight: 700; color: var(--text-3); }
 .conv-hist { list-style: none; padding: 0; margin: 0 0 8px; display: flex; flex-direction: column; gap: 4px; }
@@ -1771,7 +1771,7 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .cal-d.done .mk { background: var(--ok); }
 .cal-d.miss { background: var(--bad-soft); color: var(--on-bad-soft); }
 .cal-d.miss .mk { background: var(--bad); }
-.cal-d.sel { box-shadow: 0 0 0 2px var(--accent-a40); }
+.cal-d.sel { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
 .cal-d:active { transform: scale(.96); }
 .cal-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .cal-legend { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--text-3); }
@@ -1904,7 +1904,7 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .alarm-week { display: flex; align-items: flex-end; justify-content: center; gap: 6px;
   margin-top: auto; padding-top: clamp(10px, 1.8dvh, 20px);
   box-sizing: content-box; height: var(--alarm-week-h); }
-.alarm-week i { --n: 0;   /* 그날 학습량 — app.js 가 인라인 style 로 덮는다 */
+.alarm-week i { --n: 0; --i: 0;   /* 그날 학습량·순번 — app.js 가 인라인 style 로 덮는다 */
   width: 10px; height: calc(5px + (var(--n) * var(--alarm-week-h) / 8));
   max-height: var(--alarm-week-h); border-radius: 3px;
   background: color-mix(in srgb, var(--text) 15%, var(--al-bg)); }
@@ -2179,3 +2179,185 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .brief-sk.w2 { width: 60%; }
 @keyframes briefsk { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .brief-sk { animation: none; } }
+
+/* ── 말해보기 결과 카드(인포그래픽) ───────────────────────────────────────
+   결과가 ' · ' 로 이어진 글 한 덩어리면 읽히지 않는다. 다만 점수는 '두 받아쓰기 모두에서 들린 단어 일치율'이라
+   큰 숫자·링으로 강조하면 발음 인증서처럼 읽힌다 — 시각적 중심을 단어(안 들린 곳)와 음소(다르게 난 소리)에 둔다. */
+.speak-res.spk-card-wrap { padding: 0; background: none; align-self: stretch; min-width: 0; }
+/* 화면 밖으로만 읽히는 글자(접근성용) */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ── 말해보기 결과 카드 ──────────────────────────────────────────────
+   앱과 같은 언어: 종이 위 흰 카드 + 1px 테두리 + 안내 상자 + mono 숫자.
+   폭은 전부 유동(clamp)이고, 아주 좁은 화면(≤340px)에서는 줄을 세로로 쌓는다.
+   상태 구분은 색 + 굵기 + 테두리 두께로 한다(문자 표시를 넣지 않는다). */
+.spk-card {
+  background: var(--surface); text-align: left; min-width: 0; word-break: keep-all;
+  border: 1px solid var(--border-strong); border-radius: clamp(12px, 4vw, 16px);
+  padding: 0; overflow: hidden;
+}
+.spk-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 8px;
+  padding: clamp(11px, 3.4vw, 14px) clamp(11px, 3.4vw, 14px) clamp(10px, 3vw, 12px);
+  border-bottom: 1px solid var(--border); }
+.spk-head-txt { flex: 1 1 100%; min-width: 0; }
+/* 긴 글자는 자르지(…) 않고 화면 폭에 따라 크기를 줄인다. nowrap + overflow:visible 이라
+   좁아져도 말줄임이 생기지 않고, 글자 크기가 먼저 작아진다(최소 10px). */
+.spk-eyebrow { font-family: var(--mono); font-size: clamp(0.75rem, 3.1vw, 0.8125rem); font-weight: 700;
+  letter-spacing: .03em; text-transform: uppercase; color: var(--accent-text);
+  white-space: nowrap; overflow: visible; text-overflow: clip; }
+.spk-verdict { display: block; font-size: clamp(0.9375rem, 4vw, 1rem); font-weight: 800; letter-spacing: -0.02em;
+  line-height: 1.35; color: var(--text); margin-top: 3px; text-wrap: balance; }
+.spk-tag { flex: 0 0 auto; margin-left: auto; font-size: clamp(0.75rem, 3.1vw, 0.8125rem); font-weight: 600;
+  color: var(--text-soft); background: var(--surface-3); border-radius: 999px; padding: 3px 9px;
+  white-space: nowrap; align-self: flex-start; }
+
+/* 지표 — 큰 숫자 하나 + 얇은 막대. 폭이 좁으면 숫자를 줄여 같은 줄에 유지한다 */
+.spk-metrics { display: grid; gap: clamp(10px, 3vw, 12px);
+  padding: clamp(11px, 3.4vw, 14px) clamp(11px, 3.4vw, 14px) clamp(11px, 3.4vw, 13px); }
+.spk-metric { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 0 8px; }
+.spk-bar-l { min-width: 0; font-size: clamp(0.75rem, 3.2vw, 0.8125rem); font-weight: 600; color: var(--text-soft); }
+.spk-bar-v { font-family: var(--mono); font-size: 0.8125rem; font-weight: 700; color: var(--text-2);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.spk-metric.lead { order: -1; }
+.spk-metric.lead .spk-bar-l { color: var(--text); font-weight: 700; }
+.spk-metric.lead .spk-bar-v { font-family: var(--display); font-weight: 600; letter-spacing: -0.03em;
+  font-size: clamp(1.5rem, 7.5vw, 1.875rem); line-height: 1; color: var(--text); }
+.spk-track { grid-column: 1 / -1; height: 6px; margin-top: 6px; border-radius: 999px;
+  background: var(--surface-seg); overflow: hidden; }
+.spk-fill { display: block; height: 100%; border-radius: 999px; background: var(--ok); }
+.spk-fill.mid { background: var(--sun-line); }
+.spk-fill.low { background: var(--bad); }
+
+/* 목표 문장 — 안 들린 단어에 점선 밑줄(색만으로 알리지 않는다) */
+.spk-words-box { padding: clamp(10px, 3vw, 12px) clamp(11px, 3.4vw, 14px); border-top: 1px solid var(--border); }
+.spk-words-k { font-size: 0.75rem; font-weight: 600; color: var(--text-soft); margin-bottom: 5px; }
+.spk-words { display: block; font-family: var(--display); font-size: clamp(0.9375rem, 4.4vw, 1.0625rem);
+  line-height: 1.55; color: var(--text); overflow-wrap: break-word; }
+.spk-w.miss { color: var(--bad-text); text-decoration: underline dashed var(--bad); text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px; }
+
+/* 소리별 결과 — 줄바꿈. 통과는 중립, 약함은 점선, 다름은 굵기+2px 테두리(문자 표시 없음) */
+.spk-sounds { padding: clamp(10px, 3vw, 12px) clamp(11px, 3.4vw, 14px); border-top: 1px solid var(--border); }
+.spk-sounds-k { font-size: 0.75rem; font-weight: 600; color: var(--text-soft); margin-bottom: 8px; }
+.spk-strip { display: flex; flex-wrap: wrap; gap: clamp(7px, 2.4vw, 10px) clamp(8px, 2.8vw, 12px); }
+.spk-wg { flex: 0 0 auto; display: grid; gap: 4px; justify-items: center; min-width: 0; max-width: 100%; }
+.spk-wt { font-family: var(--mono); font-size: clamp(0.75rem, 3vw, 0.8125rem); color: var(--text-soft);
+  max-width: 7em; overflow-wrap: anywhere; }
+.spk-phs { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; }
+.spk-ph { display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 5px; border-radius: 6px;
+  font-family: var(--mono); font-size: 0.75rem; font-weight: 500; background: var(--surface-3); color: var(--text-2); }
+.spk-ph.weak { background: var(--sun-soft); color: var(--on-sun-soft);
+  text-decoration: underline dotted; text-underline-offset: 3px; }
+.spk-ph.missing { background: var(--bad-soft); color: var(--bad-text); font-weight: 700;
+  box-shadow: inset 0 0 0 2px var(--bad); }
+
+/* 고칠 소리 — 앱의 안내 상자와 같은 모양(연한 바탕 + 왼쪽 점) */
+.spk-focus { display: flex; gap: 8px; margin: 0 clamp(11px, 3.4vw, 14px) clamp(11px, 3.4vw, 13px);
+  padding: 10px 12px; border-radius: 10px; background: var(--bad-soft); color: var(--on-bad-soft); }
+.spk-focus.ok { background: var(--sun-soft); color: var(--on-sun-soft); }
+.spk-focus > div { flex: 1; min-width: 0; }
+.spk-focus-ic { flex: 0 0 auto; width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; background: currentColor; }
+.spk-focus-h { display: block; font-size: clamp(0.75rem, 3.3vw, 0.8125rem); font-weight: 700; line-height: 1.5; }
+.spk-focus-h b { display: inline; font-family: var(--mono); font-size: 0.9375rem; }
+.spk-focus-h .spk-heard { font-weight: 600; opacity: .9; }
+.spk-focus-label { font-size: 0.75rem; font-weight: 700; margin-top: 2px; }
+.spk-focus-tip { font-size: clamp(0.75rem, 3.3vw, 0.8125rem); color: var(--text-2); margin-top: 3px; line-height: 1.55; }
+
+.spk-row { display: flex; gap: clamp(6px, 2.4vw, 10px); padding: 9px clamp(11px, 3.4vw, 14px);
+  border-top: 1px solid var(--border); font-size: clamp(0.75rem, 3.3vw, 0.8125rem); line-height: 1.55; }
+.spk-row-k { flex: 0 0 auto; width: 4.6em; font-size: 0.75rem; font-weight: 600; color: var(--text-soft); padding-top: 1px; }
+.spk-row-v { flex: 1; min-width: 0; color: var(--text-2); overflow-wrap: anywhere; }
+.spk-more { border-top: 1px solid var(--border); }
+.spk-more > summary { cursor: pointer; padding: 10px clamp(11px, 3.4vw, 14px); min-height: 44px;
+  display: flex; align-items: center; font-size: 0.75rem; font-weight: 600; color: var(--text-soft); list-style: none; }
+.spk-more > summary::-webkit-details-marker { display: none; }
+.spk-more > summary::before { content: ""; width: 5px; height: 5px; border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); margin-right: 7px; flex: 0 0 auto; }
+.spk-more[open] > summary::before { transform: rotate(45deg); }
+.spk-note { padding: 9px clamp(11px, 3.4vw, 14px) 11px; border-top: 1px solid var(--border);
+  font-size: 0.75rem; color: var(--text-soft); line-height: 1.5; }
+.spk-note b { color: var(--text-2); font-weight: 700; }
+
+/* 아주 좁은 화면(≤340px): 라벨과 값을 세로로 쌓고, 태그를 제 줄로 내린다 */
+@media (max-width: 340px) {
+  .spk-head { gap: 3px 6px; }
+  .spk-tag { margin-left: 0; }   /* 좁으면 판정 아래 왼쪽에 자연 폭으로 */
+  .spk-metric { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .spk-bar-v { justify-self: end; }
+  .spk-metric.lead .spk-bar-v { justify-self: end; }
+  .spk-row { flex-direction: column; gap: 1px; }
+  .spk-row-k { width: auto; }
+  .spk-ph { min-width: 22px; height: 22px; padding: 0 4px; }
+}
+body.is-narrow .spk-card { border-radius: 12px; }
+
+
+/* ================= 발음기호 안내 코스 (u-ipa) =================
+   한 화면 = 기호 하나. 큰 기호 > 한국어 이름 > 조음 방법 > 최소대립쌍(귀) 순서.
+   색은 기존 토큰만 쓴다(라이트/다크 자동). 글자 하한 12px 유지. */
+.ipa-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 4px 0 12px; }
+.ipa-count { font-family: var(--mono, ui-monospace), monospace; font-size: var(--fs-small); color: var(--text-soft); font-variant-numeric: tabular-nums; }
+.ipa-count b { font-size: 1.0625rem; color: var(--text); }
+.ipa-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 20px 18px 16px; text-align: center; }
+.ipa-sym { font-family: var(--mono, ui-monospace), monospace; font-size: clamp(2.25rem, 12vw, 3.25rem); font-weight: 600; line-height: 1.05; letter-spacing: -0.02em; color: var(--text); }
+.ipa-ko { margin-top: 6px; font-size: 0.9375rem; font-weight: 650; color: var(--accent-text); }
+.ipa-tip { margin: 12px 0 16px; font-size: var(--fs-small); line-height: 1.65; color: var(--text-soft); text-wrap: pretty; }
+.ipa-pairs { display: grid; gap: 8px; margin-bottom: 14px; }
+.ipa-pair { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 4px 10px; width: 100%;
+  padding: 11px 13px; background: var(--surface-3); border: 1px solid transparent; border-radius: var(--r-sm); text-align: left; cursor: pointer; }
+.ipa-pair:hover { border-color: var(--border-strong); }
+.ipa-pair b { font-size: 1rem; color: var(--text); }
+.ipa-pair span { font-size: var(--fs-small); color: var(--text-soft); }
+.ipa-pair em { font-family: var(--mono, ui-monospace), monospace; font-style: normal; font-size: var(--fs-small); color: var(--accent-text); }
+.ipa-pair small { grid-column: 1 / -1; font-size: 0.75rem; color: var(--text-soft); }
+.ipa-neigh { display: flex; gap: 8px; margin-top: 12px; }
+.ipa-neigh-b { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 8px; min-height: 44px;
+  background: transparent; border: 1px solid var(--border); border-radius: var(--r-sm); font-size: var(--fs-small); color: var(--text-soft); cursor: pointer; }
+.ipa-neigh-b span { font-family: var(--mono, ui-monospace), monospace; color: var(--text); }
+
+/* 앱바 우측 상단 발음기호 입구. 좁은 화면에서는 글자를 감추고 아이콘만 남긴다. */
+.ipa-btn { flex: none; }
+@media (max-width: 359px) { .ipa-btn span { display: none; } .ipa-btn { padding: 6px 9px; } }
+
+/* ================= 오늘의 알람 — 움직임 =================
+   규칙: 움직임은 '알람'이라는 은유 안에서만 쓴다(종이 흔들리고, 막대가 차오르고, 오늘 막대가 숨쉰다).
+   · 계속: 종 흔들림·글로우·오늘 막대 — 첫 프레임이 중립값이라 다시 그려도 눈에 띄지 않는다
+   · 한 번: 카드에 들어올 때(.alarm-fx) — 숫자·막대·레일·버튼
+   · prefers-reduced-motion: reduce 면 전부 끈다(글자·수치는 그대로 읽힌다) */
+@keyframes al-ring {
+  0%, 86%, 100% { transform: rotate(0deg); }
+  88% { transform: rotate(-13deg); }
+  91% { transform: rotate(12deg); }
+  94% { transform: rotate(-7deg); }
+  97% { transform: rotate(4deg); }
+}
+@keyframes al-rise {
+  from { opacity: 0; transform: translateY(12px) scale(.965); filter: blur(6px); }
+  to   { opacity: 1; transform: none; filter: none; }
+}
+@keyframes al-bar { from { height: 5px; opacity: .15; transform: scaleY(.35); } }
+@keyframes al-fill { from { width: 0; } }
+@keyframes al-breathe { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+@keyframes al-today {
+  0%, 100% { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--text) 32%, var(--al-bg)), 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); }
+  55% { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--text) 32%, var(--al-bg)), 0 0 0 7px transparent; }
+}
+@keyframes al-label-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes al-acts-in { from { opacity: 0; transform: translateY(14px); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .alarm-ic svg { transform-origin: 50% 22%; animation: al-ring 6.4s ease-in-out 1.1s infinite; }
+  .alarm::after { animation: al-breathe 9s ease-in-out infinite; }
+  .alarm-week i.today { animation: al-today 3.2s ease-in-out infinite; }
+
+  .alarm-fx .alarm-big { animation: al-rise .66s cubic-bezier(.16,.84,.28,1) both; }
+  .alarm-fx .alarm-label { animation: al-label-in .5s .16s cubic-bezier(.2,.8,.2,1) both; }
+  .alarm-fx .alarm-acts { animation: al-acts-in .6s .3s cubic-bezier(.2,.8,.2,1) both; }
+  .alarm-fx .alarm-week i { animation: al-bar .72s cubic-bezier(.2,.85,.25,1) both;
+    animation-delay: calc(.1s + var(--i, 0) * 55ms); }
+  .alarm-fx .alarm-week i.today { animation: al-bar .72s cubic-bezier(.2,.85,.25,1) both,
+    al-today 3.2s 1.1s ease-in-out infinite;
+    animation-delay: calc(.1s + var(--i, 0) * 55ms), 1.1s; }
+  .alarm-fx .alarm-rail i { animation: al-fill .95s .28s cubic-bezier(.2,.85,.25,1) both; }
+}

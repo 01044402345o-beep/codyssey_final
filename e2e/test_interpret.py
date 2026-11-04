@@ -40,7 +40,7 @@ with sync_playwright() as p:
     errors, posts = [], []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.on("request", lambda r: posts.append(r.url) if r.method != "GET" else None)
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(800)
     page.evaluate("S.user = DEMO_USER; ensure('plan'); go('u-home')"); page.wait_for_timeout(300)
 
     # --- 여행 전: 학습 ---

@@ -48,7 +48,7 @@ with sync_playwright() as p:
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
 
-    resp = page.goto(BASE + "/?demo=1"); page.wait_for_timeout(900)
+    resp = page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(900)
     h = resp.headers
     check("첫 화면에 CSP 강제 헤더", "content-security-policy" in h and "script-src 'self'" in h["content-security-policy"], str(h.get("content-security-policy"))[:80])
     check("클릭재킹 방지(X-Frame-Options DENY + frame-ancestors 'none')",

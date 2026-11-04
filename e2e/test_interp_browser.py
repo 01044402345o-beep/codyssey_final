@@ -57,7 +57,7 @@ def open_interp(b, mode="ok", ua=None):
     errors, sockets = [], []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.on("websocket", lambda ws: sockets.append(ws.url))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(800)
     page.evaluate("S.user = DEMO_USER; ensure('plan'); S.today = S.trip.tripStart; go('u-interp')")
     for _ in range(20):
         page.wait_for_timeout(200)

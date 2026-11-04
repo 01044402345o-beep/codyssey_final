@@ -69,7 +69,7 @@ with sync_playwright() as p:
     errors = []
     page = b.new_page(viewport={"width": 390, "height": 844})
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1", wait_until="domcontentloaded")
+    page.goto(BASE + "/?demo=1&gate=off", wait_until="domcontentloaded")
     page.wait_for_timeout(700)
 
     # --- 성공(관리자 경로): 서버 응답 2.5초 ---

@@ -13,7 +13,7 @@ def check(name, ok, note=""):
 
 
 def ready(pg):
-    pg.goto(BASE + "/?demo=1")
+    pg.goto(BASE + "/?demo=1&gate=off")
     pg.wait_for_timeout(720)
     pg.evaluate("""S.user = DEMO_USER; ensure('plan'); S.today = S.trip.studyStart; render(); ACT.tab({ dataset: { id: 'u-study' } })""")
     pg.wait_for_timeout(350)

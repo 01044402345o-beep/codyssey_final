@@ -6,7 +6,7 @@
   const WEAK_KEY = 'cd_weak';
   /* 말하기 연습 동의. 문구를 바꾸면 CONSENT_VERSION 을 올려 다시 동의를 받는다. */
   const CONSENT_KEY = 'cd_consent';
-  const CONSENT_VERSION = 8;   // v2 Gemini 무료 등급·민감정보 / v3 2단계 처리 / v4 서버 VAD + 전용 STT / v5 교차검증 전송 / v6 말소리 재확인은 서버 안(pyannoteAI 미전송) / v7 계정에 올리는 것에 여행 설정 포함 / v8 음소 분석 PC(켜져 있을 때만)
+  const CONSENT_VERSION = 9;   // v2 Gemini 무료 등급·민감정보 / v3 2단계 처리 / v4 서버 VAD + 전용 STT / v5 교차검증 전송 / v6 말소리 재확인은 서버 안(pyannoteAI 미전송) / v7 계정에 올리는 것에 여행 설정 포함 / v8 음소 분석 PC(켜져 있을 때만) / v9 PC 가 모두 꺼지면 클라우드 발음 평가(Azure·Speechace)
   /* 임시 제품 규칙: 이 점수 미만이면 "취약 상황" 후보로 저장한다. 검증된 학습 기준이 아니다. */
   const WEAK_THRESHOLD = 70;
   /* 참고 신호: 들린 문장이 목표 문장의 단어를 이 비율 미만으로 담으면 "다르게 들렸어요"로 표시한다 (저장 판정에 쓰지 않음). */
@@ -397,6 +397,44 @@
   const ITINERARY_KINDS = ['restaurant', 'cafe', 'attraction'];
   /* /speak-check 의 phonemes(app/phonemes.py consensus) → 화면 한 줄. 두 받아쓰기가 같은 차이를 낸 단어(diff)만, 최대 3개.
      받아쓴 글자에서 나온 음소라 basis 가 transcript 면 그렇게 밝힌다. 보여줄 게 없으면 ''. */
+  /* 말해보기 결과 카드용 순수 함수들 — 화면(app.js speakCardHtml)이 그대로 그린다. */
+  /* 목표 문장을 단어로 나누고, 두 받아쓰기 모두에서 들리지 않은 단어(diff.missing, 문장 순서)에 miss 표시.
+     같은 단어가 여러 번이면 앞에서부터 하나씩 짝짓는다. 원문 글자(대소문자·구두점)는 그대로 보여준다. */
+  function wordMarks(target, missing) {
+    const want = (Array.isArray(missing) ? missing : []).map(w => String(w).toLowerCase());
+    let k = 0;
+    return String(target || '').split(/\s+/).filter(Boolean).map(raw => {
+      const norm = raw.toLowerCase().replace(/’/g, "'").replace(/[^a-z0-9']/g, '');
+      const miss = !!norm && k < want.length && want[k] === norm;
+      if (miss) k += 1;
+      return { w: raw, miss };
+    });
+  }
+  /* 음소 노드 결과(phonemes_acoustic.phonemes, 시간순) → 단어별 묶음. 연속한 같은 단어끼리 묶는다. */
+  function phonemeGroups(rows) {
+    const out = [];
+    (Array.isArray(rows) ? rows : []).forEach(r => {
+      if (!r || !r.ipa || !['ok', 'weak', 'missing'].includes(r.status)) return;
+      const last = out[out.length - 1];
+      if (last && last.word === r.word) last.items.push(r); else out.push({ word: r.word || '', items: [r] });
+    });
+    return out;
+  }
+  /* 판정 한 줄. 음소 결과가 있으면 그것(실제 소리)으로, 없으면 단어 일치로만. 점수를 '발음 점수'로 부르지 않는다. */
+  function speakVerdict(score, rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const missing = list.filter(r => r && r.status === 'missing').length;
+    const weak = list.filter(r => r && r.status === 'weak').length;
+    const s = typeof score === 'number' ? score : null;
+    if (list.length) {
+      if (!missing && !weak && (s === null || s >= 90)) return { text: '아주 잘했어요', tone: 'ok' };
+      if (missing + weak <= 2) return { text: '한두 소리만 고치면 돼요', tone: 'mid' };
+      return { text: '소리를 몇 개 더 다듬어 봐요', tone: 'mid' };
+    }
+    if (s !== null && s >= 90) return { text: '단어를 모두 알아들었어요', tone: 'ok' };
+    if (s !== null && s >= 60) return { text: '빠진 단어만 채우면 돼요', tone: 'mid' };
+    return { text: '천천히 한 번 더 말해 봐요', tone: 'low' };
+  }
   function phonemeNotes(ph, max = 3) {
     if (!ph || !Array.isArray(ph.words)) return '';
     const sym = x => `/${String(x || '')}/`;
@@ -834,7 +872,7 @@
     inAppBrowser, WEAK_KEY, CONSENT_KEY, CONSENT_VERSION, loadConsent, saveConsent, withdrawConsent, WEAK_THRESHOLD, HEARD_MATCH_MIN, heardCoverage, MAX_AUDIO_BYTES, GEN_TIMEOUT_MS,
     TRIP_KEY, cleanTrip, loadTrip, saveTrip, preferTrip,
     categoryOfKind,
-    calendarToday, phonemeNotes, acousticNote, itineraryRequestBody, kindFromPrimary, foldItinerary, placeBlocksOnDays, collectItinerary,
+    calendarToday, phonemeNotes, acousticNote, wordMarks, phonemeGroups, speakVerdict, itineraryRequestBody, kindFromPrimary, foldItinerary, placeBlocksOnDays, collectItinerary,
     RESEARCH_TIMEOUT_MS, researchRequestBody, collectResearch, researchPlace, foldResearch, placeCheckResult, vocabSentences, placeVocab,
     apiBase, normalizeAiResponse, buildPools, takeForPlace, generateByCity,
     cleanWeak, upsertWeak, loadWeak, saveWeak, scopedStorage, weakIdsFor, weakReviewOf, weakDecision, shouldSaveWeak, extFor, speakCheck,
