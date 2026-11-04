@@ -36,7 +36,16 @@
         ]
       },
       {
-        "source": "**/*.@(js|css|png|svg|webp|woff2)",
+        "source": "**/*.@(js|css)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(png|svg|webp|woff2)",
         "headers": [
           {
             "key": "Cache-Control",

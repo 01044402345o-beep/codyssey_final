@@ -126,6 +126,14 @@ def public_failures(failures: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+class Cancelled(RuntimeError):
+    """호출한 쪽이 결과가 더 필요 없다고 알린 것(예: 말하기 피드백 8초 상한을 넘겨 틀 문장으로 이미 응답함).
+
+    오류가 아니다 — '오류 종류로 일찍 포기하지 않는다'(NFR-03 최소 시도 규칙)는 오류에 대한 규칙이고,
+    이 예외는 다음 시도를 부르지 않고 retry() 를 바로 끝낸다. 쓰지 않은 시도 예산은 budget_settle 이 돌려준다.
+    """
+
+
 class AttemptsExhausted(RuntimeError):
     """최소 시도 횟수를 모두 채운 뒤에도 성공하지 못함."""
 
@@ -164,6 +172,9 @@ def retry(
             attempt += 1
             try:
                 return fn(attempt), attempt, failures
+            except Cancelled:
+                log.info("%s 시도 %d 에서 호출자가 취소 — 남은 시도를 부르지 않는다", what, attempt)
+                raise
             except Exception as exc:  # noqa: BLE001 — 어떤 오류든 하한 전에는 포기하지 않는다
                 f = failure(attempt, exc, model_of(attempt))
                 failures.append(f)
@@ -648,6 +659,8 @@ def run_on(
         model = model_of(attempt)
         try:
             value = fn(client, model, attempt)
+        except Cancelled:
+            raise                     # 취소는 모델 탓이 아니다 — 쿨다운에 넣지 않는다
         except Exception as exc:
             note_failure(model, exc)
             raise

@@ -50,7 +50,9 @@
 | Groq, Inc. (미국) | **말하기 녹음 음성** | 1차 전사(들린 문장 만들기) | 서버 안 두 단계 말소리 검사(Silero·pyannote, 서버에서 실행)를 **둘 다 통과한 녹음만** | **[확인 필요]** Groq 데이터 정책 |
 | OpenAI, L.L.C. (미국) | 말하기 녹음 음성 | 1차 전사 예비(Groq 실패 시) | 위와 같음 | **[확인 필요]** API 데이터 정책(기본 학습 미사용, 남용 감시 보관) |
 | AssemblyAI, Inc. (미국) | 말하기 녹음 음성 | 교차검증 전사 | 위와 같음 | **[확인 필요]** |
-| 팀 운영 음소 분석 PC (팀원 개인 PC, **위치 [확인 필요]**) | 말하기 녹음 음성(위 두 검사를 통과하고 교차검증된 것만)·목표 문장 | 실제 소리의 음소 분석 — 운영자가 `PHONEME_REMOTE_URL`·`PHONEME_TOKEN` 을 넣었을 때만(앱 동의 v8 ④) | 우리 서버 → Tailscale Funnel HTTPS(TLS 는 그 PC 에서 끝남, 중계 서버는 내용을 못 봄) + 공유 토큰 | 저장하지 않음 — 메모리에서 분석하고 버린다, 로그에도 음성·문장 없음(`backend/app/acoustic/server.py`) |
+| 팀 운영 음소 분석 PC (팀원 개인 PC, **위치 [확인 필요]**) | 말하기 녹음 음성(위 두 검사를 통과하고 교차검증된 것만)·목표 문장 | 실제 소리의 음소 분석 — 운영자가 `PHONEME_REMOTE_URLS`·`PHONEME_TOKEN` 을 넣었을 때만(앱 동의 v8 ④) | 우리 서버 → Tailscale Funnel HTTPS(TLS 는 그 PC 에서 끝남, 중계 서버는 내용을 못 봄) + 공유 토큰 | 저장하지 않음 — 메모리에서 분석하고 버린다, 로그에도 음성·문장 없음(`backend/app/acoustic/server.py`) |
+| Microsoft Corporation — Azure AI Speech 발음 평가 (**리전은 운영 설정 `PHONEME_AZURE_REGION`, 권장 koreacentral = 국내**) | 말하기 녹음 음성(교차검증된 것만)·목표 문장 | 음소 분석 PC 가 **모두** 꺼졌거나 실패했을 때만, 하루 상한(`PHONEME_CLOUD_DAILY_CAP`) 안에서 — 키(`PHONEME_AZURE_KEY`)를 넣었을 때만(앱 동의 v9 ⑤) | 우리 서버 → HTTPS | **[확인 필요]** Azure Speech 데이터 보관 정책(실시간 인식은 기본 저장 안 함으로 알려져 있으나 계약 확인) |
+| Speechace (미국) | 위와 같음 | Azure 다음 순서, `PHONEME_SPEECHACE_KEY` 를 넣었을 때만(동의 v9 ⑤) | 우리 서버 → HTTPS | **[확인 필요]** Speechace 데이터 보관 정책 |
 | Soniox, Inc. (미국) | **실시간 통역 음성**(통역을 켠 동안 계속, 한 번 최대 3분) | 받아쓰기와 한국어↔영어 번역(기본 통역 제공자) | 우리 서버를 거쳐 WebSocket(TLS). 로그인 토큰 확인 뒤에만, 계정·IP 마다 10분에 6번까지 | **[확인 필요]** Soniox 데이터 보관·학습 사용 정책 |
 | OpenAI, L.L.C. (미국) | 실시간 통역 음성 | 운영자가 켜고(`INTERP_PROVIDERS` 기본값에 포함) 키를 넣은 경우, 사용자가 통역 엔진으로 고르거나 우선순위상 앞 엔진을 쓸 수 없을 때 — 번역 자막·번역 음성 | 위와 같음 | **[확인 필요]** API 데이터 정책 |
 | Microsoft Corporation — Azure AI Speech (미국 본사, **처리 지역은 운영 설정 `AZURE_SPEECH_REGION`**) | 실시간 통역 음성 | **운영에서 켬(10/21)**, 우선순위 2 — 사용자가 고르거나 Soniox 를 쓸 수 없을 때. 자동 언어 감지·번역 자막 | 위와 같음 | **[확인 필요]** 처리 지역이 국내(예: koreacentral)인지 국외인지, Azure 데이터 보관 정책 |
@@ -117,7 +119,8 @@
 | 녹음 최대 15초 | `mockup/app.js` `toggleSpeak` (`setTimeout(stopSpeak, 15000)`, 조사 02 §0) |
 | 두 말소리 검사를 통과한 녹음만 외부 전사로 | `backend/app/main.py` `/speak-check`, `speech_vad.py`(Silero·pyannote 로컬 모델 `models/pyannote-segmentation-3.0.onnx`) |
 | 1차 전사 Groq → OpenAI, 교차검증 AssemblyAI | `backend/app/stt_providers.py` 머리말·`PROVIDERS` |
-| 음소 분석 PC 는 교차검증된 녹음만·설정했을 때만·저장 안 함 | `main.py` `/speak-check`(`acoustic_remote.configured()`), `backend/app/acoustic/remote.py`·`server.py` |
+| 음소 분석 PC 는 교차검증된 녹음만·설정했을 때만·저장 안 함 | `main.py` `/speak-check`(`acoustic_chain.configured()`), `backend/app/acoustic/remote.py`·`server.py` |
+| 클라우드 발음 평가는 PC 가 모두 실패했을 때만·키가 있을 때만·하루 상한 | `backend/app/acoustic/chain.py`·`cloud.py`(`providers`·`PHONEME_CLOUD_DAILY_CAP`) |
 | Gemini 피드백에 상황·목표 문장·들린 문장 | `main.py` `feedback_input` |
 | 문장 만들기에 도시·장소·복습 상황 이름 | `main.py` `GenerateRequest`(`city`, `places`, `weak_expressions`) |
 | 장소 찾기: Google Places, Kakao 로컬, Overpass | `backend/app/agents/` 의 외부 주소(`places.googleapis.com`, `dapi.kakao.com`, `overpass-api.de`) |

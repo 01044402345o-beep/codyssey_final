@@ -47,15 +47,19 @@ Render → codyssey-api → Environment:
 
 | 키 | 값 |
 |---|---|
-| `PHONEME_REMOTE_URL` | `https://<PC>.<tailnet>.ts.net` (끝에 `/` 없이) |
-| `PHONEME_TOKEN` | `token.txt` 와 같은 값 |
-| `PHONEME_REMOTE_URLS` | (선택) 노드가 여러 대면 쉼표 목록 — 4-1 참고 |
+| `PHONEME_REMOTE_URLS` | `https://<PC>.<tailnet>.ts.net` (끝에 `/` 없이). PC 가 여러 대면 **쉼표로 이어 한 변수에** — `https://<PC1>.<tailnet>.ts.net,https://<PC2>.<tailnet>.ts.net`(앞에 둔 것을 먼저 쓴다, 공백 없이) |
+| `PHONEME_TOKEN` | `token.txt` 와 같은 값(모든 PC 가 같은 토큰) |
 
-저장하면 재배포된다. 둘 중 하나라도 없으면 본체는 노드를 부르지 않는다(음성이 새 수신처로 가지 않는다).
+`PHONEME_REMOTE_URL`(단일 주소)은 예전 이름이다 — 목록이 비었을 때만 읽는다. 새로 넣지 말고, 있으면 지운다.
+여러 대를 넣기 전에 `python tools\check_phoneme_nodes.py <주소1> <주소2>` 로 모두 확인한다([ADD_NODE.md](ADD_NODE.md)).
+
+저장하면 재배포된다. 주소·토큰 중 하나라도 없으면 본체는 노드를 부르지 않는다(음성이 새 수신처로 가지 않는다).
 확인: 관리자 토큰으로 `/health` 상세를 보면 `"phoneme_node": {"configured": true}`.
 말하기 결과 줄에 `소리 분석(실제 음성): …` 이 나오면 연결된 것이다.
 
 ## 4. 끄기·되돌리기
+
+노드가 모두 실패할 때 클라우드로 넘기는 대체 경로는 [FALLBACK.md](FALLBACK.md).
 
 | 하고 싶은 것 | 방법 |
 |---|---|

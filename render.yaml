@@ -23,6 +23,19 @@ services:
         sync: false
       - key: AZURE_SPEECH_REGION
         sync: false
+      # 음소 분석(실제 소리). 노드(PC·HF Space) 목록과 공유 토큰 — backend/phoneme-node/ADD_NODE.md
+      - key: PHONEME_REMOTE_URLS
+        sync: false
+      - key: PHONEME_TOKEN
+        sync: false
+      # 노드가 모두 실패할 때만 쓰는 클라우드 발음 평가(유료, 하루 상한 PHONEME_CLOUD_DAILY_CAP 기본 100) — backend/phoneme-node/FALLBACK.md
+      # 통역용 AZURE_SPEECH_KEY 와 따로 둔다. 리전은 koreacentral 권장. 동의 v9 ⑤·처리방침 표에 적은 업체만.
+      - key: PHONEME_AZURE_KEY
+        sync: false
+      - key: PHONEME_AZURE_REGION
+        sync: false
+      - key: PHONEME_SPEECHACE_KEY
+        sync: false
       # 말하기 전사(전용 STT). 순서: groq → openai → assemblyai, 키가 있는 것만 쓴다.
       - key: GROQ_API_KEY
         sync: false

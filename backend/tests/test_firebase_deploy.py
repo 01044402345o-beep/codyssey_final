@@ -32,7 +32,8 @@ class T(unittest.TestCase):
         self.assertNotIn("/interp/stream", sources)                    # Hosting 은 WS 를 중계하지 못한다
         self.assertFalse(any(s in ("**", "/**") for s in sources))     # 정적 파일까지 Cloud Run 으로 보내지 않는다
         routes = {r.path for r in main.app.routes if getattr(r, "methods", None)}
-        api = {p for p in routes if not p.startswith(("/docs", "/openapi", "/redoc"))} - {"/"}
+        # "/"·"/index.html" 은 화면 페이지다(파일 해시 버전을 붙여 내보낸다) — Hosting 은 정적 index.html 을 그대로 쓴다
+        api = {p for p in routes if not p.startswith(("/docs", "/openapi", "/redoc"))} - {"/", "/index.html"}
         covered = lambda p: any(p == s or (s.endswith("/**") and p.startswith(s[:-3])) for s in sources)
         missing = sorted(p for p in api if not covered(p) and not p.startswith("/static"))
         self.assertEqual(missing, [], "Hosting rewrite 에 빠진 API 경로")

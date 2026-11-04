@@ -131,7 +131,12 @@ def main() -> int:
         return 2
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=int(os.getenv("PHONEME_PORT", "8443")), log_level="warning",
+    # 기본은 127.0.0.1(PC 노드 — 밖으로는 Funnel 하나). 컨테이너(HF Spaces·Cloud Run)만 PHONEME_HOST=0.0.0.0
+    host = os.getenv("PHONEME_HOST", "127.0.0.1").strip()
+    if host not in ("127.0.0.1", "0.0.0.0"):
+        log.error("PHONEME_HOST 는 127.0.0.1 또는 0.0.0.0 만")
+        return 2
+    uvicorn.run(app, host=host, port=int(os.getenv("PHONEME_PORT", "8443")), log_level="warning",
                 access_log=False)
     return 0
 
