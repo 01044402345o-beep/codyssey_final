@@ -913,18 +913,19 @@ const IPA_ALL = [
 "beige"
 ],
 "note": "영국식에서는 강세 없는 음절과 프랑스어 차용어에 주로 나타나요.",
+"say": "Is there a television in the room?",
 "pair": [
 {
-"w": "measure",
-"ko": "측정하다",
+"w": "lesion",
+"ko": "병변",
 "ip": "ʒ",
 "hi": "s"
 },
 {
-"w": "mesher",
-"ko": "(비교용)",
-"ip": "ʃ",
-"hi": "sh"
+"w": "legion",
+"ko": "군단",
+"ip": "dʒ",
+"hi": "g"
 }
 ],
 "kr": true,
@@ -4574,13 +4575,13 @@ function scrIpa() {
       <span class="sr-only">${esc(p2.w)} 듣기</span></button>`;
   const pairBlock = c.pair
     ? `<div class="ipa-sec" style="grid-template-columns:minmax(0,1fr)"><div class="ipa-pair-h">
-         <span>최소대립쌍 · 한 글자만 다름</span>
+         <span>${c.pair[0].ip === c.pair[1].ip ? '같은 소리 · 두 단어' : '최소대립쌍 · 소리 하나만 달라요'}</span>
          <button class="ipa-ab" data-act="ipa-ab" data-pairs="${esc(c.pair[0].w)}|${esc(c.pair[1].w)}">A ↔ B 번갈아</button></div>
        ${row(c.pair[0], c.pair[0].ip === c.ipa ? ' on' : '')}${row(c.pair[1], c.pair[1].ip === c.ipa ? ' on' : '')}</div>`
     : '';
   const exBlock = c.ex && c.ex.length
     ? `<div class="ipa-sec"><span class="ipa-tag">as in</span><div class="ipa-ex">${c.ex.map(w =>
-        `<button class="ipa-ex-b" data-act="ipa-say" data-w="${esc(w)}">${mark(w, c.ipa === 'ə' ? '' : '')}<span class="ipa-pair-play">${I.speaker}</span>
+        `<button class="ipa-ex-b" data-act="ipa-say" data-w="${esc(w)}">${esc(w)}<span class="ipa-pair-play">${I.speaker}</span>
           <span class="sr-only">${esc(w)} 듣기</span></button>`).join('')}</div></div>` : '';
   const inner = `<div class="app-pad">
     <div class="ipa-secs" role="group" aria-label="소리 갈래">${secs}</div>
