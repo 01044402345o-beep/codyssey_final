@@ -521,7 +521,7 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   border: 3px dashed var(--accent-a55); display: grid; place-items: center; transform: rotate(-14deg);
   font-family: var(--mono); color: var(--accent-a70); font-size: 0.75rem; text-align: center; line-height: 1.6;
 }
-.login .stamp::before { content: ''; position: absolute; inset: 14px; border-radius: 50%; border: 1.5px solid var(--accent-a40); }
+.login .stamp::before { content: ''; position: absolute; inset: 14px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--accent) 40%, transparent); }
 .login h1 { font-family: var(--display); font-size: 2.75rem; line-height: 1.02; letter-spacing: -0.04em; margin: 150px 0 14px; font-weight: 600; }
 .login h1 em { font-style: italic; color: var(--accent-text); }
 /* 브랜드(마디 MADI): 앱 아이콘 + 이름 + 태그라인. 아이콘 원본은 Flutter 앱 assets/brand/madi_icon.png */
@@ -727,7 +727,7 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .face .en .ph { color: var(--sun); font-style: italic; }
 /* 따라 읽기: 지금 읽는 단어. 글자색은 그대로 두고 밑줄 + 옅은 바탕으로만 표시한다(대비 유지) */
 .w { border-radius: 4px; transition: background-color .12s; }
-.w.now { background: var(--accent-a40); box-shadow: 0 2px 0 var(--accent); }
+.w.now { background: color-mix(in srgb, var(--accent) 40%, transparent); box-shadow: 0 2px 0 var(--accent); }
 .face .ko-s { font-size: 0.875rem; color: var(--inv-text-2); margin-bottom: auto; }
 .face .hint { font-size: 0.75rem; color: var(--text-3); text-align: center; display: flex; gap: 6px; justify-content: center; align-items: center; }
 .tts-row { display: flex; gap: 8px; align-items: center; }
@@ -1191,7 +1191,7 @@ html[data-mode=demo] .side .note-card { box-shadow: none; }
 .talk-side:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
 .talk-side:disabled { opacity: .4; }
 .talk-micwrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.talk-mic { position: relative; width: 76px; height: 76px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); box-shadow: 0 6px 18px var(--accent-a40); transition: transform .1s, background .15s; }
+.talk-mic { position: relative; width: 76px; height: 76px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 40%, transparent); transition: transform .1s, background .15s; }
 .talk-mic svg { width: 32px; height: 32px; }
 .talk-mic:active { transform: scale(.96); }
 .talk-mic.rec { background: var(--bad); color: var(--on-bad); box-shadow: none; }
@@ -1562,7 +1562,7 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
 .live-turn { margin-top: 8px; }   /* 브라우저 엔진: 내 차례 ↔ 상대 차례 */
 .conv-tap { display: block; margin-top: 4px; font-size: 0.6875rem; font-weight: 700; color: var(--accent-text); }
 .conv-me { border-radius: 14px; padding: 10px 12px; background: var(--surface-3); }
-.conv-me.speaking { box-shadow: 0 0 0 2px var(--accent-a40); }
+.conv-me.speaking { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
 .conv-small { margin: 4px 0 0; font-size: 0.9375rem; line-height: 1.45; }
 .conv-who { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; font-weight: 700; color: var(--text-3); }
 .conv-hist { list-style: none; padding: 0; margin: 0 0 8px; display: flex; flex-direction: column; gap: 4px; }
@@ -1767,7 +1767,7 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .cal-d.done .mk { background: var(--ok); }
 .cal-d.miss { background: var(--bad-soft); color: var(--on-bad-soft); }
 .cal-d.miss .mk { background: var(--bad); }
-.cal-d.sel { box-shadow: 0 0 0 2px var(--accent-a40); }
+.cal-d.sel { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
 .cal-d:active { transform: scale(.96); }
 .cal-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .cal-legend { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--text-3); }
@@ -2336,7 +2336,7 @@ body.is-narrow .spk-card { border-radius: 12px; }
 @keyframes al-fill { from { width: 0; } }
 @keyframes al-breathe { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
 @keyframes al-today {
-  0%, 100% { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--text) 32%, var(--al-bg)), 0 0 0 0 var(--accent-a40); }
+  0%, 100% { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--text) 32%, var(--al-bg)), 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); }
   55% { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--text) 32%, var(--al-bg)), 0 0 0 7px transparent; }
 }
 @keyframes al-label-in { from { opacity: 0; transform: translateY(6px); } }
