@@ -2193,16 +2193,20 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
   border: 1px solid var(--border-strong); border-radius: clamp(12px, 4vw, 16px);
   padding: 0; overflow: hidden;
 }
-.spk-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 8px;
+.spk-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 8px;
   padding: clamp(11px, 3.4vw, 14px) clamp(11px, 3.4vw, 14px) clamp(10px, 3vw, 12px);
   border-bottom: 1px solid var(--border); }
-.spk-head-txt { flex: 1 1 8em; min-width: 0; }
-.spk-eyebrow { font-family: var(--mono); font-size: 0.75rem; font-weight: 700; letter-spacing: .04em;
-  text-transform: uppercase; color: var(--accent-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spk-head-txt { flex: 1 1 100%; min-width: 0; }
+/* 긴 글자는 자르지(…) 않고 화면 폭에 따라 크기를 줄인다. nowrap + overflow:visible 이라
+   좁아져도 말줄임이 생기지 않고, 글자 크기가 먼저 작아진다(최소 10px). */
+.spk-eyebrow { font-family: var(--mono); font-size: clamp(0.75rem, 3.1vw, 0.8125rem); font-weight: 700;
+  letter-spacing: .03em; text-transform: uppercase; color: var(--accent-text);
+  white-space: nowrap; overflow: visible; text-overflow: clip; }
 .spk-verdict { display: block; font-size: clamp(0.9375rem, 4vw, 1rem); font-weight: 800; letter-spacing: -0.02em;
   line-height: 1.35; color: var(--text); margin-top: 3px; text-wrap: balance; }
-.spk-tag { flex: 0 0 auto; margin-left: auto; font-size: 0.75rem; font-weight: 600; color: var(--text-soft);
-  background: var(--surface-3); border-radius: 999px; padding: 3px 9px; white-space: nowrap; align-self: flex-start; }
+.spk-tag { flex: 0 0 auto; margin-left: auto; font-size: clamp(0.75rem, 3.1vw, 0.8125rem); font-weight: 600;
+  color: var(--text-soft); background: var(--surface-3); border-radius: 999px; padding: 3px 9px;
+  white-space: nowrap; align-self: flex-start; }
 
 /* 지표 — 큰 숫자 하나 + 얇은 막대. 폭이 좁으면 숫자를 줄여 같은 줄에 유지한다 */
 .spk-metrics { display: grid; gap: clamp(10px, 3vw, 12px);
@@ -2234,8 +2238,8 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .spk-sounds-k { font-size: 0.75rem; font-weight: 600; color: var(--text-soft); margin-bottom: 8px; }
 .spk-strip { display: flex; flex-wrap: wrap; gap: clamp(7px, 2.4vw, 10px) clamp(8px, 2.8vw, 12px); }
 .spk-wg { flex: 0 0 auto; display: grid; gap: 4px; justify-items: center; min-width: 0; max-width: 100%; }
-.spk-wt { font-family: var(--mono); font-size: 0.75rem; color: var(--text-soft); max-width: 7em;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spk-wt { font-family: var(--mono); font-size: clamp(0.75rem, 3vw, 0.8125rem); color: var(--text-soft);
+  max-width: 7em; overflow-wrap: anywhere; }
 .spk-phs { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; }
 .spk-ph { display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 5px; border-radius: 6px;
   font-family: var(--mono); font-size: 0.75rem; font-weight: 500; background: var(--surface-3); color: var(--text-2); }
@@ -2273,8 +2277,8 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 
 /* 아주 좁은 화면(≤340px): 라벨과 값을 세로로 쌓고, 태그를 제 줄로 내린다 */
 @media (max-width: 340px) {
-  .spk-head { gap: 4px 6px; }
-  .spk-tag { margin-left: 0; }   /* 좁으면 판정 아래 왼쪽에 자연 폭으로 — 알약이 화면을 가로지르지 않게 */
+  .spk-head { gap: 3px 6px; }
+  .spk-tag { margin-left: 0; }   /* 좁으면 판정 아래 왼쪽에 자연 폭으로 */
   .spk-metric { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .spk-bar-v { justify-self: end; }
   .spk-metric.lead .spk-bar-v { justify-self: end; }
