@@ -25,7 +25,7 @@ with sync_playwright() as p:
     errors = []
     page = b.new_page(viewport={"width": 390, "height": 844})
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1")
+    page.goto(BASE + "/?demo=1&gate=off")
     page.wait_for_timeout(700)
 
     check("저장소를 쓸 수 있다 (없으면 아래 검사는 아무것도 못 잡는다)", page.evaluate("STORE !== null"))

@@ -2287,3 +2287,32 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
   .spk-ph { min-width: 22px; height: 22px; padding: 0 4px; }
 }
 body.is-narrow .spk-card { border-radius: 12px; }
+
+
+/* ================= 발음기호 안내 코스 (u-ipa) =================
+   한 화면 = 기호 하나. 큰 기호 > 한국어 이름 > 조음 방법 > 최소대립쌍(귀) 순서.
+   색은 기존 토큰만 쓴다(라이트/다크 자동). 글자 하한 12px 유지. */
+.ipa-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 4px 0 12px; }
+.ipa-count { font-family: var(--mono, ui-monospace), monospace; font-size: var(--fs-small); color: var(--text-soft); font-variant-numeric: tabular-nums; }
+.ipa-count b { font-size: 1.0625rem; color: var(--text); }
+.ipa-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 20px 18px 16px; text-align: center; }
+.ipa-sym { font-family: var(--mono, ui-monospace), monospace; font-size: clamp(2.25rem, 12vw, 3.25rem); font-weight: 600; line-height: 1.05; letter-spacing: -0.02em; color: var(--text); }
+.ipa-ko { margin-top: 6px; font-size: 0.9375rem; font-weight: 650; color: var(--accent-text); }
+.ipa-tip { margin: 12px 0 16px; font-size: var(--fs-small); line-height: 1.65; color: var(--text-soft); text-wrap: pretty; }
+.ipa-pairs { display: grid; gap: 8px; margin-bottom: 14px; }
+.ipa-pair { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 4px 10px; width: 100%;
+  padding: 11px 13px; background: var(--surface-3); border: 1px solid transparent; border-radius: var(--r-sm); text-align: left; cursor: pointer; }
+.ipa-pair:hover { border-color: var(--border-strong); }
+.ipa-pair b { font-size: 1rem; color: var(--text); }
+.ipa-pair span { font-size: var(--fs-small); color: var(--text-soft); }
+.ipa-pair em { font-family: var(--mono, ui-monospace), monospace; font-style: normal; font-size: var(--fs-small); color: var(--accent-text); }
+.ipa-pair small { grid-column: 1 / -1; font-size: 0.75rem; color: var(--text-soft); }
+.ipa-neigh { display: flex; gap: 8px; margin-top: 12px; }
+.ipa-neigh-b { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 8px; min-height: 44px;
+  background: transparent; border: 1px solid var(--border); border-radius: var(--r-sm); font-size: var(--fs-small); color: var(--text-soft); cursor: pointer; }
+.ipa-neigh-b span { font-family: var(--mono, ui-monospace), monospace; color: var(--text); }
+.ipa-entry { margin: 2px 0 18px; padding: 16px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-lg); }
+.ipa-entry-t { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.ipa-entry-t b { font-size: 0.9375rem; color: var(--text); }
+.ipa-entry-t span { font-family: var(--mono, ui-monospace), monospace; font-size: var(--fs-small); color: var(--text-soft); }
+.ipa-entry .small { margin: 0 0 12px; }

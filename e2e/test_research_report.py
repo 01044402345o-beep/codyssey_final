@@ -114,7 +114,7 @@ def setup(page, research=True):
     else:
         page.route("**/research**", lambda r: r.fulfill(status=200, content_type="application/json",
                                                      body='{"status":"unavailable","reason":"research_disabled"}'))
-    page.goto(BASE + "/?demo=1", wait_until="domcontentloaded")
+    page.goto(BASE + "/?demo=1&gate=off", wait_until="domcontentloaded")
     page.wait_for_timeout(800)
     page.evaluate("""() => { S.user = DEMO_USER;
       const s = Dt.add(S.today, 50), e = Dt.add(S.today, 53);

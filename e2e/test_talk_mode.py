@@ -58,7 +58,7 @@ with sync_playwright() as p:
     page = ctx.new_page()
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1", wait_until="domcontentloaded")
+    page.goto(BASE + "/?demo=1&gate=off", wait_until="domcontentloaded")
     page.wait_for_timeout(700)
     page.evaluate("ensure('plan')")
     page.evaluate("saveConsentHere(true) || (consentMem = true)")   # 동의 흐름은 test_consent 가 본다
@@ -157,7 +157,7 @@ with sync_playwright() as p:
       ? new Promise(r => setTimeout(() => r(new Response(JSON.stringify({ usable: true, mock: false, score: 80, heard: "i'm here for sightseeing", cross_validated: true }), { headers: { 'Content-Type': 'application/json' } })), 4500))
       : f(u, o); })();""")
     pg = ctx2.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto(BASE + "/?demo=1", wait_until="domcontentloaded"); pg.wait_for_timeout(700); pg.evaluate("ensure('plan')")
+    pg.goto(BASE + "/?demo=1&gate=off", wait_until="domcontentloaded"); pg.wait_for_timeout(700); pg.evaluate("ensure('plan')")
     pg.evaluate("navFromMenu('u-coll')"); pg.wait_for_timeout(300)
     pg.locator('[data-act="drill"][data-v="immigration"]').click(); pg.wait_for_timeout(300)
     pg.locator('[data-act="sheet-open"]').click(); pg.wait_for_timeout(200)

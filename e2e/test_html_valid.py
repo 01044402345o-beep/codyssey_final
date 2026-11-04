@@ -56,7 +56,7 @@ with sync_playwright() as p:
     page = b.new_page(viewport={"width": 390, "height": 844})
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(1000)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(1000)
     for name, js in STEPS:
         page.evaluate(js); page.wait_for_timeout(300)
         bad = page.evaluate(SCAN)

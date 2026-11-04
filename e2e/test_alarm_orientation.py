@@ -48,7 +48,7 @@ with sync_playwright() as p:
     pg = ctx.new_page()
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
-    pg.goto(BASE + "/?demo=1", timeout=60000); pg.wait_for_timeout(820)
+    pg.goto(BASE + "/?demo=1&gate=off", timeout=60000); pg.wait_for_timeout(820)
     # 헤드리스 Chromium 은 음성 합성이 없어 상단에 "듣기가 안 돼요" 안내가 뜬다(실기기에는 없음) — 사용자가 하듯 닫고 잰다
     pg.evaluate("() => { const b = document.querySelector('[data-inapp=close]'); if (b) b.click(); }")
     pg.evaluate("""() => { S.user = DEMO_USER; ensure('plan'); S.today = S.trip.studyStart;

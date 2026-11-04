@@ -82,6 +82,48 @@ const fbOn = () => !!(window.FirebaseAuth && FirebaseAuth.enabled);
 function userName() { return (S.user && S.user.name) || DEMO_USER.name; }
 function userEmail() { return (S.user && S.user.email) || DEMO_USER.email; }
 
+/* ================= 발음기호 안내 코스 =================
+   왜 넣나: 피드백이 /iː/ · /θ/ 같은 기호를 보여주는데, 2022 개정 영어과 교육과정에
+   '발음기호'가 한 번도 나오지 않는다(=학교에서 배웠다고 가정할 수 없다).
+   그래서 기호를 처음 보는 사람을 위한 최소 코스를 둔다.
+   다만 '코스를 마쳐야 회화 연습을 쓸 수 있다'는 강제는 두지 않는다 — 근거가 없다(아래 주석).
+   근거: (1) IPA 지도가 원어민 모방보다 낫다는 증거가 없다(한국 중학생 n=30, 4주, 모든 측정치 유의차 없음).
+         (2) 듀오링고·ELSA·스픽·케이크 중 IPA를 선행 조건으로 거는 제품이 없다.
+         (3) 온보딩에 마찰을 더하면 이탈이 커진다(업종 평균 1회 사용 후 이탈 25%).
+   그래서 '기본 경로는 코스, 탈출구는 항상 열어 둔다'로 설계한다. */
+const IPA_COURSE = [
+  { ipa: 'iː', ko: '길게 "이"', tip: '"이"를 길게. 입꼬리를 옆으로 당기고 1초 이상 끌어 주세요.',
+    pair: [['seat', '좌석', 'iː'], ['sit', '앉다', 'ɪ']], say: 'Please have a seat.' },
+  { ipa: 'ɪ', ko: '짧게 "이"', tip: '"이"와 "에" 사이. 길게 끌지 말고 툭 끊어 주세요.',
+    pair: [['sit', '앉다', 'ɪ'], ['seat', '좌석', 'iː']], say: 'Can I sit here?' },
+  { ipa: 'æ', ko: '크게 "애"', tip: '입을 크게 벌리고 "애". "에"보다 턱이 아래로 내려가요.',
+    pair: [['bad', '나쁜', 'æ'], ['bed', '침대', 'e']], say: 'That is not bad.' },
+  { ipa: 'e', ko: '작게 "에"', tip: '"애"보다 입을 덜 벌리고 "에". 턱이 덜 내려가요.',
+    pair: [['bed', '침대', 'e'], ['bad', '나쁜', 'æ']], say: 'I need a bed.' },
+  { ipa: 'ə', ko: '아주 약한 "어"', tip: '힘을 완전히 빼고 아주 짧게. 강세 없는 음절은 거의 이 소리예요.',
+    pair: [['about', '대략', 'ə'], ['butter', '버터', 'ə']], say: 'I will be there about noon.' },
+  { ipa: 'θ', ko: '혀끝 "th" (무성)', tip: '혀끝을 윗니와 아랫니 사이로 살짝 내밀고 바람만 내보내요. "스"가 아니에요.',
+    pair: [['think', '생각하다', 'θ'], ['sink', '싱크대', 's']], say: 'I think it is Thursday.' },
+  { ipa: 'ð', ko: '혀끝 "th" (유성)', tip: 'θ와 같은 자리에서 목을 울려요. "드"가 아니에요.',
+    pair: [['this', '이것', 'ð'], ['dis', '(비교용)', 'd']], say: 'Is this the right gate?' },
+  { ipa: 'r', ko: '"r"', tip: '혀끝을 입천장에 대지 말고, 입술을 살짝 오므린 채 뒤로 당겨요.',
+    pair: [['right', '오른쪽', 'r'], ['light', '빛', 'l']], say: 'Turn right at the light.' },
+  { ipa: 'l', ko: '"l"', tip: '혀끝을 윗니 바로 뒤에 붙이고 떼요. "r"처럼 오므리지 않아요.',
+    pair: [['light', '빛', 'l'], ['right', '오른쪽', 'r']], say: 'The light is on the left.' },
+  { ipa: 'f', ko: '"f" (v와 같은 입모양)', tip: '윗니로 아랫입술을 살짝 물고 바람을 내보내요. 목이 울리면 v.',
+    pair: [['fan', '선풍기', 'f'], ['pan', '냄비', 'p']], say: 'Is the fan working?' },
+];
+const IPA_ITEM = Object.fromEntries(IPA_COURSE.map(x => [x.ipa, x]));
+
+/* 게이트 상태 — 계정별(personalStore). 손님은 이 브라우저 공용 칸에 남는다.
+   'known' = 안다고 답함, 'course' = 코스를 골랐음. 둘 다 다시 묻지 않는다. */
+const IPA_GATE_KEY = 'cd_ipa_v1';
+/* 자동화·e2e 전용 탈출구. 사람이 쓰는 경로에서는 절대 켜지 않는다(?gate=off 를 직접 붙여야 한다). */
+const gateOff = () => /[?&]gate=off(&|$)/.test(location.search);
+function ipaGateGet() { try { const v = personalStore().getItem(IPA_GATE_KEY); return v === 'known' || v === 'course' ? v : null; } catch (e) { return null; } }
+function ipaGateSet(v) { try { personalStore().setItem(IPA_GATE_KEY, v); } catch (e) { /* 저장 불가(시크릿 모드): 이번 접속에서만 기억 */ } }
+const ipaState = () => (S.ipa || (S.ipa = { i: 0, seen: [] }));
+
 /* ================= 계산 규칙 (shared/rules) ================= */
 const R = {
   /* FR-TRIP-02 날짜 종류 */
@@ -1394,6 +1436,8 @@ const SCREENS = [
     tips: ['지난 여행별 완료율·학습일·학습한 문장 수를 모아 봐요.', '여행 카드를 누르면 그 여행의 학습 목록(날짜별 완료)이 펼쳐져요.', '새 여행을 만들면 기존 여행이 이 목록에 남아요(삭제되지 않아요).'] },
   { id: 'u-study', no: 'SCR-08', name: '학습 카드', fr: ['FR-STUDY-01', 'FR-STUDY-02', 'FR-STUDY-04'],
     tips: ['카드를 눌러 뒤집고 "듣기"로 영어 발음을 들어 보세요.', '모든 카드를 한 번 이상 뒤집어야 완료 버튼이 켜져요.', '[your name]·[your destination]는 채울 자리예요. 듣기도 그대로 읽어요.', '사이드바의 "TTS 미지원"을 켜면 듣기 버튼 대신 안내가 나와요.'] },
+  { id: 'u-ipa', no: 'SCR-08b', name: '발음기호 알아보기', fr: ['FR-STUDY-01', 'FR-STUDY-02'],
+    tips: ['기호 10개를 한 장씩 봐요. 소리를 듣고 따라 해 보세요.', '한 바퀴 돌면 코스가 끝나고, 회화 연습을 그대로 쓸 수 있어요.', '여기서 배운 기호가 회화 연습 결과 카드에 그대로 나와요.'] },
   { id: 'u-coll', no: 'SCR-09', name: '문장 모음', fr: ['FR-STUDY-05', 'FR-SENT-01'],
     tips: ['공통 상황과 장소별 문장을 골라 볼 수 있어요.', '"문장 모음 전용"은 일정에 넣지 않은 문장이에요.', '모든 문장에 듣기 버튼이 있어요.'] },
   { id: 'u-interp', no: 'SCR-12', name: '통역 (여행 중)', fr: ['FR-TRIP-INTERP'],
@@ -2230,6 +2274,7 @@ function userScreen() {
     case 'u-home': return scrHome();
     case 'u-sched': return scrSched();
     case 'u-study': return scrStudy();
+    case 'u-ipa': return scrIpa();
     case 'u-coll': return scrColl();
     case 'u-interp': return scrInterp();
     case 'u-past': return scrPast();
@@ -3168,10 +3213,26 @@ function schedListHtml(selDate = null) {
   return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div class="seg"><button class="${S.schedFilter === 'all' ? 'on' : ''}" data-act="sched-filter" data-v="all">전체</button><button class="${S.schedFilter === 'miss' ? 'on' : ''}" data-act="sched-filter" data-v="miss">미완료 ${pr.miss}</button></div>
       <span class="small">완료율 <b style="color:var(--text)">${Math.round(pr.rate * 100)}%</b> (${pr.done}/${pr.den})</span></div>
+    ${ipaCardHtml()}
     ${pre.length ? `<div class="phase-label">여행 전 · ${S.plan.N}일</div>${pre.map(one).join('')}` : ''}
     ${trip.length ? `<div class="phase-label">여행 중</div>${trip.map(one).join('')}` : ''}
     ${!rows.length ? `<div class="empty"><div class="ico">${I.check}</div>미완료 날짜가 없어요</div>` : ''}`;
 }
+/* 일정표 맨 위의 발음기호 코스 안내. S.sched 에 행을 넣지 않는다 —
+   넣으면 완료율 분모(progress)와 달력이 오염되고, KIND 에 없는 kind 면 렌더가 깨진다.
+   '기억이 잘 안나요'를 고른 사람에게만 보이고, 코스를 마치면 사라진다. */
+function ipaCardHtml() {
+  if (ipaGateGet() !== 'course') return '';
+  const st = ipaState(), n = IPA_COURSE.length, seen = st.seen.length;
+  if (seen >= n) return '';
+  return `<div class="ipa-entry">
+      <div class="ipa-entry-t"><b>발음기호 연습 코스</b><span>${seen}/${n} · 한 장에 기호 하나</span></div>
+      <p class="small">회화 연습 결과에 나오는 기호를 먼저 익혀 두면 피드백이 훨씬 빨리 읽혀요.</p>
+      <button class="btn primary block" data-act="ipa-open">${seen ? '이어서 하기' : '첫 기호부터 보기'}</button>
+    </div>
+    <div class="phase-label">학습 일정</div>`;
+}
+
 /* ================= 일정표 전체: 달력 =================
    한 달을 통째로 본다. 칸 색은 rowStatus() 결과를 그대로 쓴다 — 목록과 달력이 다른 말을 하지 않게.
    일정에 없는 날(학습 기간 밖)은 누를 수 없다. 날짜를 누르면 목록과 같은 동작(study-date)이다. */
@@ -3485,6 +3546,39 @@ function scrStudy() {
   const v = studyView(r);
   return frame(v.inner, { appbar: appbar('학습', { back: 'u-sched' }), bottom: v.bottom || undefined, tabbar: v.tabbar, tab: 'u-study' });
 }
+/* 발음기호 코스 화면. 카드 한 장에 기호 하나 — 기호·한국어 이름·조음 방법·최소대립쌍.
+   최소대립쌍은 '듣기'로 두 단어를 번갈아 들을 수 있게 한다(기호보다 귀가 먼저다). */
+function scrIpa() {
+  const st = ipaState();
+  const C = IPA_COURSE, n = C.length;
+  const i = Math.max(0, Math.min(st.i, n - 1));
+  const c = C[i], prev = C[(i - 1 + n) % n], next = C[(i + 1) % n];
+  const seen = new Set(st.seen), all = seen.size >= n;
+  const dots = C.map((x, k) => `<i class="${seen.has(x.ipa) ? 'seen' : ''} ${k === i ? 'cur' : ''}"></i>`).join('');
+  const pairRow = c.pair.map(([w, ko, ip], k) => `<button class="ipa-pair" data-act="ipa-say" data-w="${esc(w)}">
+      <b>${esc(w)}</b><span>${esc(ko)}</span><em>/${esc(ip)}/</em>${k === 0 ? '<small>먼저</small>' : '<small>비교</small>'}</button>`).join('');
+  const inner = `<div class="app-pad">
+    <div class="ipa-head"><div class="small">발음기호 알아보기</div>
+      <div class="ipa-count"><b>${i + 1}</b> / ${n}</div></div>
+    ${all ? `<div class="notice">${I.check}<div>기호 ${n}개를 모두 봤어요. 이제 회화 연습에서 나오는 기호를 읽을 수 있어요.</div></div>` : ''}
+    <div class="ipa-card">
+      <div class="ipa-sym">/${esc(c.ipa)}/</div>
+      <div class="ipa-ko">${esc(c.ko)}</div>
+      <p class="ipa-tip">${esc(c.tip)}</p>
+      <div class="ipa-pairs">${pairRow}</div>
+      <button class="btn soft block" data-act="ipa-say" data-w="${esc(c.say)}">${I.speaker}예문 듣기 · ${esc(c.say)}</button>
+    </div>
+    <div class="ipa-neigh"><button class="ipa-neigh-b" data-act="ipa-go" data-i="${(i - 1 + n) % n}">${I.back}<span>/${esc(prev.ipa)}/</span></button>
+      <button class="ipa-neigh-b" data-act="ipa-go" data-i="${(i + 1) % n}"><span>/${esc(next.ipa)}/</span>${I.next}</button></div>
+    <div class="dots" style="margin:14px 0 6px">${dots}</div>
+    <p class="small" style="text-align:center">회의 기호는 결과 카드에 그대로 나와요. 모르면 여기로 돌아오세요.</p>
+  </div>`;
+  const bottom = all
+    ? `<button class="btn accent block" data-act="ipa-finish">회화 연습 열기</button>`
+    : `<div style="display:flex;gap:8px"><button class="btn soft" style="flex:1" data-act="ipa-skip">건너뛰기</button><button class="btn primary" style="flex:1.4" data-act="ipa-next">다음 기호 (${i + 1}/${n})</button></div>`;
+  return frame(inner, { appbar: appbar('발음기호 알아보기', { back: 'u-sched' }), bottom, tabbar: false, tab: 'u-study' });
+}
+
 /* 모든 카드를 뒤집으면 버튼을 누르지 않아도 끝난다(팀 요청 10/19). 날짜에 따라 완료·미리 학습·연습 축하 창을 띄운다. */
 function allFlipped(r) {
   const n = r.ids.length, md = Dt.md(r.date);
@@ -5233,7 +5327,29 @@ const ACT = {
   'interp-show': el => { S.interp.show = el.dataset.id; pushOverlay('interp-show'); render(); },
   'interp-close': () => { S.interp.show = null; render(); },
   'interp-say-reply': el => { const x = S.smap[S.interp.show]; const r = x && x.talk && x.talk.replies[+el.dataset.i]; if (r) speak(r.en, el, readTarget(el)); },
-  'sheet-open': () => { S.sheet = true; pushOverlay('sheet'); render(); },
+  /* 회화 연습 입구. 발음기호를 아는지 한 번만 묻는다(계정별).
+     '네' → 바로 열고 다시 묻지 않음. '기억이 잘 안나요' → 코스를 먼저 보여주되, 코스 화면의
+     '건너뛰기'로 언제든 나올 수 있다(강제 잠금 없음 — 조사 근거는 IPA_COURSE 주석). */
+  'sheet-open': () => {
+    if (ipaGateGet() || gateOff()) { S.sheet = true; pushOverlay('sheet'); render(); return; }
+    confirmBox('발음기호, 기억나세요?',
+      `회화 연습 결과에는 <b>/iː/ · /θ/ · /ə/</b> 같은 기호가 나와요. 기호를 읽을 수 있으면 피드백이 바로 이해돼요.<br><br>
+       기억이 안 나도 괜찮아요. <b>기호 10개, 3분</b>이면 충분해요.`,
+      '네, 알아요', () => { ipaGateSet('known'); S.modal = null; S.sheet = true; pushOverlay('sheet'); render(); },
+      { cancel: '기억이 잘 안나요', onCancel: () => {
+          ipaGateSet('course'); S.modal = null;
+          if (!S.ipa) S.ipa = { i: 0, seen: [] };
+          go('u-ipa'); toast('일정표에 발음기호 코스를 넣었어요. 3분이면 끝나요.');
+        } });
+  },
+  'ipa-open': () => { go('u-ipa'); },
+  'ipa-go': el => { const st = ipaState(); st.i = +el.dataset.i; render(); window.scrollTo(0, 0); },
+  'ipa-next': () => { const st = ipaState(); const c = IPA_COURSE[st.i]; if (c && !st.seen.includes(c.ipa)) st.seen.push(c.ipa);
+    st.i = Math.min(IPA_COURSE.length - 1, st.i + 1); render(); window.scrollTo(0, 0); },
+  'ipa-say': el => { speak(el.dataset.w, el); },
+  'ipa-skip': () => { go('u-study'); S.sheet = true; pushOverlay('sheet'); render(); },
+  'ipa-finish': () => { const st = ipaState(); IPA_COURSE.forEach(c => { if (!st.seen.includes(c.ipa)) st.seen.push(c.ipa); });
+    go('u-study'); S.sheet = true; pushOverlay('sheet'); render(); toast('코스를 마쳤어요. 이제 회화 연습을 볼게요.'); },
   'sheet-close': () => closeSheet(),
   'talk-start': () => startTalk(),
   'talk-exit': () => { cancelTalk(); render(); },

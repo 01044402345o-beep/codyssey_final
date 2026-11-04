@@ -43,7 +43,7 @@ with sync_playwright() as p:
     page = b.new_page(viewport={"width": 390, "height": 844})
     page.add_init_script(STUB)
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1")
+    page.goto(BASE + "/?demo=1&gate=off")
     page.wait_for_timeout(700)
 
     check("TTS 상태가 ok (스텁 음성 인식)",

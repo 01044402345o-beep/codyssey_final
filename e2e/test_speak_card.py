@@ -56,7 +56,7 @@ with sync_playwright() as p:
         pg = b.new_page(viewport={"width": 390, "height": 844}, color_scheme=scheme)
         errors = []
         pg.on("pageerror", lambda e: errors.append(str(e)))
-        pg.goto(BASE + "/?demo=1"); pg.wait_for_timeout(2500)
+        pg.goto(BASE + "/?demo=1&gate=off"); pg.wait_for_timeout(2500)
         if pg.locator('[data-act="guest"]').count():
             pg.locator('[data-act="guest"]').first.click(); pg.wait_for_timeout(1200)
         pg.evaluate("try{saveConsentHere(true)}catch(e){}; ensure('plan'); navFromMenu('u-study')"); pg.wait_for_timeout(1200)

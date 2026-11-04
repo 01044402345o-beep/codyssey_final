@@ -421,7 +421,7 @@ with sync_playwright() as p:
     ctx.add_init_script("""(() => { const ss = window.speechSynthesis; if (!ss) return; const g = ss.getVoices.bind(ss);
       ss.getVoices = function () { setTimeout(() => ss.dispatchEvent(new Event('voiceschanged')), 30); return g(); }; })();""")
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(800)
     page.evaluate("navFromMenu('u-coll')")
     page.evaluate("(() => { window.__r = 0; const o = window.render; window.render = function () { window.__r++; return o.apply(this, arguments); }; })()")
     page.wait_for_timeout(2000)
@@ -438,7 +438,7 @@ with sync_playwright() as p:
     # --- 상황별 연습 도중 새로고침해도 날짜별 학습 진도가 남는다 (연습이 S.card 를 빌려 쓰므로 저장이 덮어쓰던 결함) ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(800)
     page.evaluate("navFromMenu('u-study')"); page.wait_for_timeout(300)
     page.evaluate("S.modal && ACT['modal-ok']()"); page.wait_for_timeout(200)
     page.locator(".flip").first.click(); page.wait_for_timeout(120)
@@ -460,7 +460,7 @@ with sync_playwright() as p:
     # --- 카드를 보다가 홈에서 새로고침해도 학습 위치가 남는다 (새로고침 직후 도착한 AI 문장이 buildPlan 으로 카드를 지우던 결함) ---
     ctx = b.new_context(viewport={"width": 390, "height": 844})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(800)
     page.evaluate("navFromMenu('u-study')"); page.wait_for_timeout(300)
     page.evaluate("S.modal && ACT['modal-ok']()"); page.wait_for_timeout(200)
     page.locator(".flip").first.click(); page.wait_for_timeout(120)

@@ -45,7 +45,7 @@ with sync_playwright() as p:
     page = ctx.new_page()
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(BASE + "/?demo=1"); page.wait_for_timeout(800)
+    page.goto(BASE + "/?demo=1&gate=off"); page.wait_for_timeout(800)
     page.evaluate("S.user = DEMO_USER; ensure('plan'); navFromMenu('u-coll')"); page.wait_for_timeout(300)
     page.locator('[data-act="drill"][data-v="airport"]').click(); page.wait_for_timeout(300)
     page.locator(".flip").first.click(); page.wait_for_timeout(700)

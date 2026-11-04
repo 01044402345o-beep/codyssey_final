@@ -93,7 +93,7 @@ with sync_playwright() as p:
     page.route("**/city-brief**", brief_route)
     page.route("**/research**", research_route)
     page.route("**/place-check", check_route)
-    page.goto(BASE + "/?demo=1", wait_until="domcontentloaded")
+    page.goto(BASE + "/?demo=1&gate=off", wait_until="domcontentloaded")
     page.wait_for_timeout(800)
     page.evaluate("""() => { S.user = DEMO_USER;
       const s = Dt.add(S.today, 50), m = Dt.add(S.today, 53), e = Dt.add(S.today, 55);

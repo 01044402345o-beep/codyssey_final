@@ -28,7 +28,7 @@ with sync_playwright() as p:
     gens = {"urls": []}
     page.on("request", lambda r: gens["urls"].append(r.url) if "/generate" in r.url else None)
 
-    page.goto(BASE + "/?demo=1", wait_until="domcontentloaded")
+    page.goto(BASE + "/?demo=1&gate=off", wait_until="domcontentloaded")
     page.wait_for_timeout(700)
     page.evaluate("ensure('plan'); go('u-home')")
     before = page.evaluate("({ places: S.places.length, sents: S.sents.length, id: S.trip.id })")
