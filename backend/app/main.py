@@ -569,7 +569,7 @@ def health_detail() -> dict[str, Any]:
         "interp_local": {"enabled": "local" in interp.enabled_providers(), "deps": interp_local.deps_ok(),
                          **interp_local.status()},
         # 음소 노드(상시 가동 PC, app/acoustic): 붙어 있는지만. 주소·토큰은 내보내지 않는다.
-        "phoneme_node": {"configured": acoustic_remote.configured()},
+        "phoneme_node": acoustic_remote.status(),
         "firebase_auth": firebase_auth.configured(),
         # 탈퇴 관리자 경로(서비스 계정)를 쓸 수 있는지만 알린다. 키 값은 노출하지 않는다.
         "admin_erase": firebase_admin.configured(),
