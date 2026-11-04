@@ -2316,3 +2316,7 @@ body.is-narrow .spk-card { border-radius: 12px; }
 .ipa-entry-t b { font-size: 0.9375rem; color: var(--text); }
 .ipa-entry-t span { font-family: var(--mono, ui-monospace), monospace; font-size: var(--fs-small); color: var(--text-soft); }
 .ipa-entry .small { margin: 0 0 12px; }
+
+/* 앱바 우측 상단 발음기호 입구. 좁은 화면에서는 글자를 감추고 아이콘만 남긴다. */
+.ipa-btn { flex: none; }
+@media (max-width: 359px) { .ipa-btn span { display: none; } .ipa-btn { padding: 6px 9px; } }

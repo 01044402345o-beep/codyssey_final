@@ -1513,3 +1513,8 @@ async def diagnostics_withdraw(request: Request, payload: WithdrawReport) -> dic
 WEB_DIR = REPO_ROOT / "mockup"
 if WEB_DIR.is_dir():
     app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
+
+
+# 발음기호 안내 1회 질문 — 사용자(계정)/IP 기준 기억. app/ipa_gate.py 참고.
+from . import ipa_gate  # noqa: E402
+app.include_router(ipa_gate.router)

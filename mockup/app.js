@@ -120,8 +120,32 @@ const IPA_ITEM = Object.fromEntries(IPA_COURSE.map(x => [x.ipa, x]));
 const IPA_GATE_KEY = 'cd_ipa_v1';
 /* 자동화·e2e 전용 탈출구. 사람이 쓰는 경로에서는 절대 켜지 않는다(?gate=off 를 직접 붙여야 한다). */
 const gateOff = () => /[?&]gate=off(&|$)/.test(location.search);
-function ipaGateGet() { try { const v = personalStore().getItem(IPA_GATE_KEY); return v === 'known' || v === 'course' ? v : null; } catch (e) { return null; } }
-function ipaGateSet(v) { try { personalStore().setItem(IPA_GATE_KEY, v); } catch (e) { /* 저장 불가(시크릿 모드): 이번 접속에서만 기억 */ } }
+
+/* '한 번만 묻는다'의 기준은 브라우저가 아니라 사람이다 — 서버가 계정 또는 IP 로 기억한다.
+   서버에 못 닿으면(오프라인·정적 목업·데모) 이 브라우저 칸으로 떨어진다. 응답이 올 때까지만 대기한다. */
+let ipaSeenMem = null;                 // 이번 접속의 판정 결과
+function ipaLocalGet() { try { const v = personalStore().getItem(IPA_GATE_KEY); return v === 'known' || v === 'course' ? v : null; } catch (e) { return null; } }
+function ipaLocalSet(v) { try { personalStore().setItem(IPA_GATE_KEY, v); } catch (e) { /* 시크릿 모드: 이번 접속만 */ } }
+
+async function ipaSeen() {
+  if (ipaSeenMem) return ipaSeenMem;
+  if (ipaLocalGet()) return (ipaSeenMem = true);
+  if (API.base === null) return false;
+  try {
+    const r = await fetch(`${API.base}/ipa/gate?uid=${encodeURIComponent(accountUid() || '')}`, { cache: 'no-store' });
+    if (r.ok) { const j = await r.json(); if (j && j.seen) { ipaSeenMem = true; return true; } }
+  } catch (e) { /* 서버 없음 → 이 브라우저 기준 */ }
+  return false;
+}
+function ipaMarkSeen(v) {
+  ipaSeenMem = true; ipaLocalSet(v);
+  if (API.base === null) return;
+  try {
+    fetch(`${API.base}/ipa/gate`, { method: 'POST', keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid: accountUid() || '', value: v }) }).catch(() => {});
+  } catch (e) { /* 기록 실패는 화면을 막지 않는다 */ }
+}
 const ipaState = () => (S.ipa || (S.ipa = { i: 0, seen: [] }));
 
 /* ================= 계산 규칙 (shared/rules) ================= */
@@ -2248,6 +2272,8 @@ function pframe(inner, o = {}) {
 }
 /* o.act: 오른쪽 위 버튼(HTML). 지금은 일정표의 '이전 여행' 하나뿐이다. */
 const appbar = (title, o = {}) => `<div class="appbar">${o.back ? `<button class="back" data-act="tab" data-id="${o.back}">${I.back}</button>` : ''}<h2>${title}</h2>${o.step ? `<span class="step">${o.step}</span>` : ''}${o.act || ''}</div>`;
+/* 발음기호 코스 입구 — 학습·상황별 연습 화면 우측 상단. 물어본 뒤에도 계속 남는다. */
+const ipaEntryBtn = () => `<button class="act ipa-btn" data-act="ipa-open" aria-label="발음기호 안내"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V7a2 2 0 0 1 2-2h5l8 14h-5L9 12"/><circle cx="17.5" cy="6.5" r="1.4" fill="currentColor" stroke="none"/></svg><span>발음기호</span></button>`;
 const pastEntryBtn = () => `<button class="act" data-act="past-go" aria-label="이전 여행 보기">${I.past}<span>이전 여행</span></button>`;
 const notice = (html, kind = '') => `<div class="notice ${kind}">${kind === 'warn' || kind === 'bad' ? I.alert : I.info}<div>${html}</div></div>`;
 function modalHtml(center = false) {
@@ -2273,7 +2299,7 @@ function userScreen() {
     case 'u-route': return scrRoute();
     case 'u-home': return scrHome();
     case 'u-sched': return scrSched();
-    case 'u-study': return scrStudy();
+    case 'u-study': setTimeout(ipaAskOnce, 400); return scrStudy();
     case 'u-ipa': return scrIpa();
     case 'u-coll': return scrColl();
     case 'u-interp': return scrInterp();
@@ -3535,16 +3561,38 @@ function deckStep(r, d) {   // 덱에서 한 장 앞(+1)/뒤(-1)
   if (deckIdx(r) === 0 && alarmFirst(r)) S.card.alarm = true; else S.card.i = Math.max(0, deckIdx(r) - 1);
 }
 
+/* 학습 화면에 처음 들어올 때 한 번만 묻는다. 사용자당(계정 또는 IP) 한 번이라
+   새 기기·새 브라우저에서도 다시 묻지 않는다. 응답 전에 그리는 것은 그대로 둔다 —
+   질문이 늦게 떠도 화면이 멈추지 않게. */
+let ipaAskStarted = false, ipaAskTries = 0;
+async function ipaAskOnce() {
+  if (ipaAskStarted || gateOff()) return;
+  // 다른 창(안내·동의)이 떠 있으면 겹쳐 띄우지 않고 잠시 뒤 다시 본다. 여기서 포기하면 영영 안 묻는다.
+  if (S.modal || S.sheet) { if (ipaAskTries++ < 10) setTimeout(ipaAskOnce, 1200); return; }
+  ipaAskStarted = true; ipaAskTries = 0;
+  if (await ipaSeen()) return;
+  confirmBox('발음기호, 기억 나세요?',
+    `회화 연습 결과에는 <b>/iː/ · /θ/ · /ə/</b> 같은 기호가 나와요. 기호를 읽을 수 있으면 피드백이 바로 이해돼요.<br><br>
+     기억이 안 나도 괜찮아요. <b>기호 10개, 3분</b>이면 충분해요.`,
+    '네, 알아요', () => { ipaMarkSeen('known'); S.modal = null; render(); },
+    { cancel: '기억이 잘 안나요', onCancel: () => {
+        ipaMarkSeen('course'); S.modal = null;
+        if (!S.ipa) S.ipa = { i: 0, seen: [] };
+        toast('학습 화면 오른쪽 위 [발음기호]에서 언제든 볼 수 있어요.');
+        go('u-ipa');
+      } });
+}
+
 function scrStudy() {
   if (S.drill) {   // 상황별 연습: 넓은 화면에서도 일정 목록 없이 카드만 (뒤로 → 문장 모음)
     const v = studyView(S.drill);
-    return frame(v.inner, { appbar: appbar('상황별 연습', { back: 'u-coll' }), bottom: v.bottom, tabbar: false, tab: 'u-study' });
+    return frame(v.inner, { appbar: appbar('상황별 연습', { back: 'u-coll', act: ipaEntryBtn() }), bottom: v.bottom, tabbar: false, tab: 'u-study' });
   }
   if (isWide()) return scrSplit('u-study');
   const r = pickRow();
   if (!r) return frame(`<div class="empty">일정이 없어요</div>`, { tabbar: true });
   const v = studyView(r);
-  return frame(v.inner, { appbar: appbar('학습', { back: 'u-sched' }), bottom: v.bottom || undefined, tabbar: v.tabbar, tab: 'u-study' });
+  return frame(v.inner, { appbar: appbar('학습', { back: 'u-sched', act: ipaEntryBtn() }), bottom: v.bottom || undefined, tabbar: v.tabbar, tab: 'u-study' });
 }
 /* 발음기호 코스 화면. 카드 한 장에 기호 하나 — 기호·한국어 이름·조음 방법·최소대립쌍.
    최소대립쌍은 '듣기'로 두 단어를 번갈아 들을 수 있게 한다(기호보다 귀가 먼저다). */
@@ -5327,21 +5375,8 @@ const ACT = {
   'interp-show': el => { S.interp.show = el.dataset.id; pushOverlay('interp-show'); render(); },
   'interp-close': () => { S.interp.show = null; render(); },
   'interp-say-reply': el => { const x = S.smap[S.interp.show]; const r = x && x.talk && x.talk.replies[+el.dataset.i]; if (r) speak(r.en, el, readTarget(el)); },
-  /* 회화 연습 입구. 발음기호를 아는지 한 번만 묻는다(계정별).
-     '네' → 바로 열고 다시 묻지 않음. '기억이 잘 안나요' → 코스를 먼저 보여주되, 코스 화면의
-     '건너뛰기'로 언제든 나올 수 있다(강제 잠금 없음 — 조사 근거는 IPA_COURSE 주석). */
-  'sheet-open': () => {
-    if (ipaGateGet() || gateOff()) { S.sheet = true; pushOverlay('sheet'); render(); return; }
-    confirmBox('발음기호, 기억나세요?',
-      `회화 연습 결과에는 <b>/iː/ · /θ/ · /ə/</b> 같은 기호가 나와요. 기호를 읽을 수 있으면 피드백이 바로 이해돼요.<br><br>
-       기억이 안 나도 괜찮아요. <b>기호 10개, 3분</b>이면 충분해요.`,
-      '네, 알아요', () => { ipaGateSet('known'); S.modal = null; S.sheet = true; pushOverlay('sheet'); render(); },
-      { cancel: '기억이 잘 안나요', onCancel: () => {
-          ipaGateSet('course'); S.modal = null;
-          if (!S.ipa) S.ipa = { i: 0, seen: [] };
-          go('u-ipa'); toast('일정표에 발음기호 코스를 넣었어요. 3분이면 끝나요.');
-        } });
-  },
+  /* 회화 연습 입구. 발음기호 질문은 여기서 하지 않는다 — 학습 화면에 들어올 때 한 번뿐이다. */
+  'sheet-open': () => { S.sheet = true; pushOverlay('sheet'); render(); },
   'ipa-open': () => { go('u-ipa'); },
   'ipa-go': el => { const st = ipaState(); st.i = +el.dataset.i; render(); window.scrollTo(0, 0); },
   'ipa-next': () => { const st = ipaState(); const c = IPA_COURSE[st.i]; if (c && !st.seen.includes(c.ipa)) st.seen.push(c.ipa);
