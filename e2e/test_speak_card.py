@@ -79,6 +79,28 @@ with sync_playwright() as p:
         if OUT:
             pg.locator(CARD).first.screenshot(path=f"{OUT}/speak_card_{scheme}.png")
 
+        # 값('100%')이 한 줄 — 글꼴이 넓은 기기(iPhone)·글자 키움에서도. 320px + 글자 150% 로 재현한다
+        show(pg, {**WITH, "score": 100})
+        pg.set_viewport_size({"width": 320, "height": 700})
+        pg.add_style_tag(content="html{font-size:150%}")
+        pg.wait_for_timeout(200)
+        bars = pg.evaluate("""() => [...document.querySelectorAll('[data-live="speak-res"][data-k="me"] .spk-bar')].map(b => {
+          const v = b.querySelector('.spk-bar-v'), l = b.querySelector('.spk-bar-l'), t = b.querySelector('.spk-track');
+          const lh = parseFloat(getComputedStyle(v).lineHeight) || parseFloat(getComputedStyle(v).fontSize) * 1.3;
+          const vr = v.getBoundingClientRect(), br = b.getBoundingClientRect();
+          return { text: v.textContent, oneLine: vr.height < lh * 1.6, inside: vr.right <= br.right + 1, track: Math.round(t.getBoundingClientRect().width),
+                   labelOneLine: l.getBoundingClientRect().height < lh * 1.6 }; })""")
+        check(tag + "막대 값 '100%' 한 줄(320px·글자 150%)", bars and all(x["oneLine"] and x["inside"] for x in bars), str(bars))
+        check(tag + "막대 이름 한 줄·막대가 남는다", bars and all(x["labelOneLine"] and x["track"] >= 40 for x in bars), str(bars))
+        pg.set_viewport_size({"width": 390, "height": 844})
+        pg.reload(); pg.wait_for_timeout(2000)
+        if pg.locator('[data-act="guest"]').count():
+            pg.locator('[data-act="guest"]').first.click(); pg.wait_for_timeout(1000)
+        pg.evaluate("try{saveConsentHere(true)}catch(e){}; ensure('plan'); navFromMenu('u-study')"); pg.wait_for_timeout(1000)
+        pg.evaluate("S.modal && ACT['modal-ok'] && ACT['modal-ok']()"); pg.wait_for_timeout(300)
+        pg.locator('[data-act="flip"]').first.click(); pg.wait_for_timeout(300)
+        pg.locator('[data-act="sheet-open"]').first.click(); pg.wait_for_timeout(600)
+
         r = show(pg, NODE_DOWN)
         check(tag + "노드 실패면 음소 줄 없이 카드(단어 쪽만)", r["card"] and r["chips"] == 0 and r["bars"] == ["단어 일치"], str(r["bars"]))
         check(tag + "노드 실패에도 안 들린 단어 표시", r["miss"] == ["seat,"])
