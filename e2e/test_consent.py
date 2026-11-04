@@ -62,7 +62,7 @@ with sync_playwright() as p:
     check("동의 전 getUserMedia 0회", gum() == 0, f"gum={gum()}")
     page.screenshot(path=f"{OUT}/1_consent_modal.png")
     txt = modal.inner_text()
-    for k in ["Google Gemini API", "저장하지 않아요", "사람 검토자", "민감한 개인정보는 말하지 마세요", "철회", "음소 분석 PC"]:
+    for k in ["Google Gemini API", "저장하지 않아요", "사람 검토자", "민감한 개인정보는 말하지 마세요", "철회", "음소 분석 PC", "클라우드 발음 평가"]:
         check(f"동의 창에 '{k}'", k in txt)
 
     # 2) 거부
@@ -75,7 +75,7 @@ with sync_playwright() as p:
     page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(300)
     page.locator('[data-act="modal-ok"]').click(); page.wait_for_timeout(3000)   # 가짜 장치 신호음이 300ms 이상 쌓이도록
     c = json.loads(ls("cd_consent") or "null")
-    check("동의 저장 (version 8·voice·at)", c and c.get("voice") is True and c.get("version") == 8 and c.get("at"), str(c))
+    check("동의 저장 (version 9·voice·at)", c and c.get("voice") is True and c.get("version") == 9 and c.get("at"), str(c))
     check("동의 후 getUserMedia 1회", gum() == 1, f"gum={gum()}")
     check("녹음 중 표시", "녹음 끝내기" in page.locator('[data-act="speak-rec"]').first.inner_text())
     page.screenshot(path=f"{OUT}/2_recording.png")

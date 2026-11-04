@@ -60,7 +60,7 @@ from . import evidence
 from . import gemini as ai
 from . import speech_compare as compare
 from . import phonemes
-from .acoustic import remote as acoustic_remote
+from .acoustic import chain as acoustic_chain
 from . import speech_vad as vad
 from . import stt_providers as stt
 from . import stt_selftest as selftest
@@ -570,7 +570,7 @@ def health_detail() -> dict[str, Any]:
         "interp_local": {"enabled": "local" in interp.enabled_providers(), "deps": interp_local.deps_ok(),
                          **interp_local.status()},
         # 음소 노드(상시 가동 PC, app/acoustic): 붙어 있는지만. 주소·토큰은 내보내지 않는다.
-        "phoneme_node": acoustic_remote.status(),
+        "phoneme_node": acoustic_chain.status(),   # 노드별 상태 + 클라우드 대체(업체·하루 사용량)
         "firebase_auth": firebase_auth.configured(),
         # 탈퇴 관리자 경로(서비스 계정)를 쓸 수 있는지만 알린다. 키 값은 노출하지 않는다.
         "admin_erase": firebase_admin.configured(),
@@ -1106,10 +1106,10 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
              [{"word": a, "note": f"'{b}'(으)로 들림"} for a, b in diff["replaced"]] + \
              [{"word": w, "note": "목표 문장에 없음"} for w in diff["extra"]]
 
-    # 음소 노드(실제 소리 → 음소, app/acoustic) — 설정돼 있을 때만, 피드백 생성과 동시에 돈다.
+    # 실제 소리 음소 분석(app/acoustic/chain: 노드 → 클라우드 대체) — 설정돼 있을 때만, 피드백 생성과 동시에 돈다.
     # 노드가 꺼져 있거나 느려도 채점·피드백은 그대로다(remote.analyze 는 예외를 내지 않는다).
-    acoustic_job = (asyncio.ensure_future(run_in_threadpool(acoustic_remote.analyze, samples, target))
-                    if acoustic_remote.configured() else None)
+    acoustic_job = (asyncio.ensure_future(run_in_threadpool(acoustic_chain.analyze, samples, target))
+                    if acoustic_chain.configured() else None)
 
     # 3) 피드백 문장 — 오디오 없이 비교 결과만 준다. 응답의 다른 키(score 등)는 버린다.
     prompt = feedback_input(situation, target, heard, diff, heard_ck)
@@ -1137,7 +1137,7 @@ async def _speak_check(request: Request, target: str, file: UploadFile, situatio
     phones_acoustic = None
     if acoustic_job is not None:
         try:
-            phones_acoustic = await asyncio.wait_for(acoustic_job, timeout=acoustic_remote.timeout() + 2)
+            phones_acoustic = await asyncio.wait_for(acoustic_job, timeout=acoustic_chain.timeout() + 2)
         except Exception as exc:  # noqa: BLE001 — 부가 정보라 응답 전체를 막지 않는다
             logging.getLogger("app.speak").warning("음소 노드 실패: %s", type(exc).__name__)
             phones_acoustic = {"status": "unavailable", "reason": type(exc).__name__, "via": "remote"}

@@ -266,7 +266,7 @@ def sanitize(raw: Any) -> dict[str, Any]:
     lex = raw.get("lexicon") if isinstance(raw.get("lexicon"), dict) else {}
     fb = lex.get("fallback_words") if isinstance(lex.get("fallback_words"), list) else []
     return {
-        "status": "ok", "basis": "acoustic", "via": "remote",
+        "status": "ok", "basis": "acoustic", "via": raw.get("via") if raw.get("via") in ("azure", "speechace") else "remote",
         "model": _short(raw.get("model"), 80),
         "phoneme_accuracy": _num(raw.get("phoneme_accuracy"), 0, 100),
         "phonemes": rows,

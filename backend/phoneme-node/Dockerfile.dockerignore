@@ -1,0 +1,13 @@
+# backend/phoneme-node/Dockerfile 전용(BuildKit). 루트 .dockerignore 는 tools 를 빼므로 이 파일이 대신 쓰인다.
+# 노드에 필요한 파일만 넣는다. 로컬 모델(.onnx)은 넣지 않는다 — 빌드 때 받아 SHA256 을 확인한다.
+**
+!backend/phoneme-node/requirements-phoneme.txt
+!backend/app/__init__.py
+!backend/app/acoustic/**
+!backend/app/lexicon/**
+!backend/app/phonemes.py
+!backend/app/speech_compare.py
+!tools/fetch_phoneme_model.py
+backend/app/acoustic/data/*.onnx
+backend/app/acoustic/data/*.part
+**/__pycache__
