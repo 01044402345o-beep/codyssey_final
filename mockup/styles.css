@@ -1001,6 +1001,10 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 0.78125rem; }
   --fs-study-en: clamp(1.625rem, 1.3rem + 1.4vw, 2.25rem);
   --fs-display: clamp(2.25rem, 1.5rem + 3vw, 3.25rem);
   --gutter: clamp(16px, 4vw, 32px);
+  /* 좌우 여백은 노치(안전 영역)를 넘는다 — 가로 모드에서 노치가 왼쪽이든 오른쪽이든 내용이 가려지지 않게.
+     레일이 있으면 왼쪽 노치는 레일이 먹으므로 --pad-l 을 거터로 되돌린다(아래 md 레일). */
+  --pad-l: max(var(--gutter), env(safe-area-inset-left, 0px));
+  --pad-r: max(var(--gutter), env(safe-area-inset-right, 0px));
   --nav-rail: 72px;
   --nav-side: 240px;
   --read-max: 40rem;
@@ -1040,17 +1044,17 @@ html[data-mode=demo] .side .note-card { box-shadow: none; }
 .pmain { grid-area: main; min-width: 0; display: flex; flex-direction: column; }
 .pcol { width: 100%; max-width: var(--read-max); margin-inline: auto; display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .pframe .app { flex: 1; overflow: visible; min-width: 0; scroll-behavior: auto; }
-.pframe .app-pad { padding: 8px var(--gutter) 28px; }
-.pframe .appbar { position: sticky; top: 0; z-index: 10; background: var(--bg); padding: max(6px, env(safe-area-inset-top, 0px)) var(--gutter) 10px; }
+.pframe .app-pad { padding: 8px var(--pad-r) 28px var(--pad-l); }
+.pframe .appbar { position: sticky; top: 0; z-index: 10; background: var(--bg); padding: max(6px, env(safe-area-inset-top, 0px)) var(--pad-r) 10px var(--pad-l); }
 .pframe .appbar h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pframe .bottombar { position: sticky; bottom: 0; z-index: 9; padding: 12px var(--gutter) calc(12px + env(safe-area-inset-bottom, 0px)); }
+.pframe .bottombar { position: sticky; bottom: 0; z-index: 9; padding: 12px var(--pad-r) calc(12px + env(safe-area-inset-bottom, 0px)) var(--pad-l); }
 .pframe.has-nav .bottombar { bottom: var(--nav-space); padding-bottom: 12px; }
 
 /* 내비: base 하단 탭바 */
 /* 폰 하단 탭은 화면에 고정한다. sticky 는 문서 흐름 안에 있어 iOS 끝까지 스크롤(바운스)할 때 내용과 함께 끌려 올라갔다(10/20 피드백). */
 .pnav { grid-area: nav; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; min-height: var(--nav-h); background: var(--surface); border-top: 1px solid var(--border); padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
 .pnav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0; min-height: 44px; padding: 6px 2px; font-size: 0.75rem; color: var(--text-3); border-radius: 12px; }
-.pnav button span { max-width: 100%; overflow-wrap: anywhere; text-align: center; line-height: 1.2; }   /* 글자 확대에서는 줄바꿈(말줄임으로 글자를 숨기지 않는다) */
+.pnav button span { max-width: 100%; word-break: keep-all; overflow-wrap: break-word; text-align: center; line-height: 1.2; }   /* 글자 확대에서는 줄바꿈(말줄임으로 글자를 숨기지 않는다) */
 .pnav button svg { width: 24px; height: 24px; flex: none; }
 .pnav button.on { color: var(--text); font-weight: 600; }
 .pnav button.on svg { color: var(--accent-text); }
@@ -1058,15 +1062,16 @@ html[data-mode=demo] .side .note-card { box-shadow: none; }
 
 /* md ≥600: 레일 */
 @media (min-width: 600px) {
-  .pframe.has-nav { grid-template-columns: var(--nav-rail) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); grid-template-areas: "nav main"; }
+  .pframe.has-nav { grid-template-columns: calc(var(--nav-rail) + env(safe-area-inset-left, 0px)) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); grid-template-areas: "nav main"; }
+  .pframe.has-nav { --pad-l: var(--gutter); }   /* 왼쪽 노치는 레일이 먹는다 */
   .pframe.has-nav { padding-bottom: 0; }
   .pnav { position: sticky; top: 0; bottom: auto; left: auto; right: auto; height: 100dvh; align-self: start; display: flex; flex-direction: column; justify-content: flex-start; gap: 4px; min-height: 0; overflow-y: auto; border-top: 0; border-right: 1px solid var(--border); padding: 12px 6px; padding-left: max(6px, env(safe-area-inset-left, 0px)); }
   .pframe.has-nav .bottombar { bottom: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 }
 /* xl ≥1200: 사이드 */
 @media (min-width: 1200px) {
-  .pframe.has-nav { grid-template-columns: var(--nav-side) minmax(0, 1fr); }
-  .pnav { padding: 16px 12px; }
+  .pframe.has-nav { grid-template-columns: calc(var(--nav-side) + env(safe-area-inset-left, 0px)) minmax(0, 1fr); }
+  .pnav { padding: 16px 12px; padding-left: max(12px, env(safe-area-inset-left, 0px)); }
   .pnav button { flex-direction: row; justify-content: flex-start; gap: 12px; font-size: 0.9375rem; padding: 10px 14px; }
   .pnav button.on { background: var(--surface-2); }
 }
@@ -1349,12 +1354,13 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
    ===================================================================== */
 :root { --wide-max: 70rem; }   /* 1120px */
 .pframe .pcol.wide { max-width: var(--wide-max); }
-.split { display: grid; grid-template-columns: minmax(18.75rem, 5fr) minmax(0, 7fr); gap: clamp(16px, 2.5vw, 32px); align-items: start; padding: 8px var(--gutter) 28px; }
+.split { display: grid; grid-template-columns: minmax(18.75rem, 5fr) minmax(0, 7fr); gap: clamp(16px, 2.5vw, 32px); align-items: start; padding: 8px var(--pad-r) 28px var(--pad-l); }
 .split-list { position: sticky; top: 3.5rem; max-height: calc(100dvh - 4.5rem); overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; min-width: 0; }
 .split-detail { min-width: 0; }
 .split .app-pad { padding-inline: 0; }
 .split-detail .bottombar { position: sticky; bottom: 0; padding-inline: 0; background: linear-gradient(to top, var(--bg) 70%, transparent); }
-.split-detail .flip { height: max(clamp(360px, 60dvh, 560px), 22.5rem); }
+/* 가로 모드 폰(높이 ~430px)에서는 22.5rem 하한이 화면보다 커진다 — 하한도 화면 높이를 넘지 않게 */
+.split-detail .flip { height: clamp(min(22.5rem, calc(100dvh - 8rem)), 60dvh, 560px); }
 .srow.sel { border-color: var(--accent-text); box-shadow: 0 0 0 1px var(--accent-text); }
 .srow.today.sel { border-color: var(--accent-text); }
 /* 문장 모음: 왼쪽 필터는 세로 목록 */
