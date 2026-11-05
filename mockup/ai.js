@@ -766,8 +766,13 @@
        화면은 그 주소를 직접 부르지 않고 GET /place-photo 로 서버가 받아 준다(CSP img-src 'self'). */
     const address = typeof d.address === 'string' ? d.address.replace(/[<>{}]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) : '';
     const im = d.image && typeof d.image === 'object' ? d.image : null;
-    const image = im && /^https:\/\/upload\.wikimedia\.org\/[^\s"'<>]+$/.test(im.src || '')
-      ? { src: im.src, page: /^https:\/\/commons\.wikimedia\.org\/[^\s"'<>]+$/.test(im.page || '') ? im.page : '', credit: 'Wikimedia Commons' } : null;
+    /* 썸네일 호스트가 upload.wikimedia.org 에서 thumb.wikimedia.org 로 바뀌었다(11/06 실측: upload 는 데이터센터 IP 에서
+       403/429, thumb 은 200). 둘 다 받는다. credit 은 이제 저작자 이름이고 license 는 그 파일의 라이선스다. */
+    const image = im && /^https:\/\/(upload|thumb)\.wikimedia\.org\/[^\s"'<>]+$/.test(im.src || '')
+      ? { src: im.src, page: /^https:\/\/commons\.wikimedia\.org\/[^\s"'<>]+$/.test(im.page || '') ? im.page : '',
+          credit: typeof im.credit === 'string' && im.credit.trim() ? im.credit.trim().slice(0, 80) : '위키미디어 공용 기여자',
+          license: typeof im.license === 'string' ? im.license.slice(0, 40) : '',
+          licenseUrl: /^https:\/\/creativecommons\.org\//.test(im.licenseUrl || '') ? im.licenseUrl : '' } : null;
     return { state: 'found', name, url: src.url, provider: prov, label: RESEARCH_PROVIDER[prov][0], license: RESEARCH_PROVIDER[prov][1],
              km: Number.isFinite(d.distance_km) ? d.distance_km : null, address,
              addressSource: typeof d.address_source === 'string' && address ? d.address_source.slice(0, 60) : '',

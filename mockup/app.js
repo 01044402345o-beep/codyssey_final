@@ -4125,7 +4125,8 @@ async function addLookRun(city) {
   addLook.state = 'found';
   addLookPaint();
   const photo = res.image ? `<span class="pc-photo"><img src="${esc(API.base)}/place-photo?src=${encodeURIComponent(res.image.src)}" alt="${esc(res.name)} 사진" loading="lazy"></span>
-      <span class="pc-credit">사진: <a href="${esc(res.image.page || res.url)}" data-act="link" rel="noopener noreferrer">${esc(res.image.credit)}</a></span>` : '<span class="pc-nophoto">사진을 찾지 못했어요</span>';
+      <span class="pc-credit">사진: <a href="${esc(res.image.page || res.url)}" data-act="link" rel="noopener noreferrer">${esc(res.image.credit)}</a>${res.image.license
+        ? ` · ${res.image.licenseUrl ? `<a href="${esc(res.image.licenseUrl)}" data-act="link" rel="noopener noreferrer">${esc(res.image.license)}</a>` : esc(res.image.license)}` : ''}</span>` : '<span class="pc-nophoto">사진을 찾지 못했어요</span>';
   confirmBox('이 장소가 맞나요?', `<div class="place-confirm">${photo}
       <div class="pc-name">${esc(res.name)}</div>
       <div class="pc-row"><span class="pc-k">주소</span><span class="pc-v">${res.address ? esc(res.address) : '<span class="pc-none">주소를 찾지 못했어요</span>'}</span></div>

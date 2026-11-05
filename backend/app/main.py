@@ -750,7 +750,7 @@ _photos: dict[str, deque[float]] = defaultdict(deque)
 _photo_cache: "OrderedDict[str, tuple[bytes, str]]" = OrderedDict()
 _photo_lock = threading.Lock()
 PHOTO_LIMIT, PHOTO_WINDOW, PHOTO_MAX_BYTES = 60, 60, 3 * 1024 * 1024
-PHOTO_HOSTS = frozenset({"upload.wikimedia.org"})
+PHOTO_HOSTS = frozenset({"upload.wikimedia.org", "thumb.wikimedia.org"})
 _IMG_MAGIC = ((b"\xff\xd8\xff", "image/jpeg"), (b"\x89PNG\r\n\x1a\n", "image/png"), (b"GIF87a", "image/gif"),
               (b"GIF89a", "image/gif"))
 

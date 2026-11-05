@@ -99,6 +99,114 @@ def commons_image(filename: str, width: int = 500) -> Optional[dict]:
             "page": "https://commons.wikimedia.org/wiki/File:" + q, "credit": "Wikimedia Commons"}
 
 
+# ── 위키미디어 공용: 좌표로 찾기(11/06) ────────────────────────────────────────────
+# 이름으로 찾으면 한국 상호에서 0건이다(하동관 0·성수동 카페 0·광장시장 식당 0 실측).
+# 좌표로 찾으면 같은 API·같은 키 없이 8~50건이 나온다. 다만 좌표 결과는 '그 집'이 아니라
+# '그 근처' 사진이므로, 파일 이름이 장소 이름과 맞을 때만 그 장소의 사진으로 인정한다.
+COMMONS_API = "https://commons.wikimedia.org/w/api.php"
+GEO_RADIUS_M = 300
+GEO_LIMIT = 20
+# 표시 의무가 없는(CC0·퍼블릭도메인) 것과, 저작자·라이선스를 붙이면 되는 것만 통과시킨다.
+# 그 밖(fair use·비자유·NC·ND)은 쓰지 않는다.
+_CC_OK = re.compile(r"^(cc0|cc[- ]by([- ]sa)?([- ]\d(\.\d)?)?|public domain|pd)", re.I)
+_CC_BAD = re.compile(r"(\bnc\b|\bnd\b|non[- ]?commercial|no[- ]?deriv|fair use|non[- ]?free)", re.I)
+
+
+def _plain_text(html: str) -> str:
+    """extmetadata 의 Artist 는 '<a href=...>이름</a>' 같은 HTML 조각으로 온다."""
+    s = re.sub(r"<[^>]{1,200}>", " ", html or "")
+    s = (s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"')
+         .replace("&#39;", "'").replace("&nbsp;", " "))
+    return re.sub(r"\s+", " ", s).strip()[:120]
+
+
+_FOLD = str.maketrans({"ō": "o", "ū": "u", "ā": "a", "ē": "e", "ī": "i", "û": "u", "ô": "o",
+                       "é": "e", "è": "e", "ê": "e", "á": "a", "à": "a", "í": "i", "ó": "o", "ú": "u",
+                       "ü": "u", "ö": "o", "ä": "a", "ñ": "n", "ç": "c", "ß": "ss"})
+
+
+def _name_tokens(s: str) -> set:
+    """비교용 낱말. 발음기호(ō·é)를 접어 'Tōdai-ji' 와 'Todai-ji' 가 같아지게 한다."""
+    return {t for t in re.findall(r"[0-9a-z가-힣]+", (s or "").casefold().translate(_FOLD)) if len(t) >= 3}
+
+
+def _title_matches(name: str, title: str) -> bool:
+    """파일 이름이 그 장소를 가리키는가 — 이름의 낱말이 **모두** 들어 있어야 한다.
+
+    처음엔 하나만 겹쳐도 통과시켰는데, 'Shibuya Sky' 조회에 'Nissin Donbei noodle stand,
+    Shibuya Sta'(라멘집)가 통과했다. 여행 앱에서 이건 그 식당 사진으로 보이므로
+    '덜 찾는' 쪽을 택한다. 대신 번역된 이름('Eiffel Tower' ↔ 'tour Eiffel')은 놓친다."""
+    nt = _name_tokens(name)
+    tt = _name_tokens(re.sub(r"\.(jpe?g|png|gif|webp|tiff?)$", "", title, flags=re.I))
+    if not nt or not tt:
+        return False
+    return nt <= tt
+
+
+def _license_ok(short: str) -> bool:
+    s = (short or "").strip()
+    if not s or _CC_BAD.search(s):
+        return False
+    return bool(_CC_OK.search(s))
+
+
+def _img_from_page(page: dict, dist: Optional[float]) -> Optional[dict]:
+    ii = (page.get("imageinfo") or [{}])[0]
+    thumb = ii.get("thumburl") or ""
+    # API 가 준 주소를 그대로 쓴다. 호스트·폭을 다시 조립하면 400/403 이 난다(400px·640px 는 400 실측).
+    if not isinstance(thumb, str) or not thumb.startswith("https://") or len(thumb) > 600:
+        return None
+    meta = ii.get("extmetadata") or {}
+    short = _plain_text(((meta.get("LicenseShortName") or {}) or {}).get("value"))
+    if not _license_ok(short):
+        return None
+    lic_url = ((meta.get("LicenseUrl") or {}) or {}).get("value") or ""
+    author = _plain_text(((meta.get("Artist") or {}) or {}).get("value")) or "위키미디어 공용 기여자"
+    title = str(page.get("title") or "").replace("File:", "")
+    return {"src": thumb, "page": "https://commons.wikimedia.org/wiki/File:" + urllib.parse.quote(title.replace(" ", "_")),
+            "credit": author, "license": short,
+            "licenseUrl": lic_url if isinstance(lic_url, str) and lic_url.startswith("https://") else "",
+            "title": title[:120], "km": None if dist is None else round(dist / 1000.0, 2)}
+
+
+def commons_geosearch(http: SafeHttp, name: str, lat: float, lon: float) -> Optional[dict]:
+    """좌표 주변 사진 중 ①이름이 맞고 ②라이선스가 통과하는 첫 장.
+    이름이 맞는 것이 없으면 None — '근처 사진'을 그 장소 사진으로 쓰지 않는다."""
+    q = {"action": "query", "format": "json", "generator": "geosearch",
+         "ggscoord": f"{lat:.6f}|{lon:.6f}", "ggsradius": str(GEO_RADIUS_M), "ggslimit": str(GEO_LIMIT),
+         "ggsnamespace": "6", "prop": "imageinfo", "iiprop": "url|extmetadata", "iiurlwidth": "500"}
+    res, d = http.get_json(COMMONS_API + "?" + urllib.parse.urlencode(q), timeout=8)
+    if not res.ok or not isinstance(d, dict):
+        return None
+    qd = d.get("query") or {}
+    pages = qd.get("pages") or {}
+    dist_by_id = {}
+    for g in (qd.get("geosearch") or []):
+        if isinstance(g, dict) and g.get("pageid") is not None:
+            try:
+                dist_by_id[str(g["pageid"])] = float(g.get("dist"))
+            except (TypeError, ValueError):
+                pass
+    rows = []
+    for page in pages.values() if isinstance(pages, dict) else []:
+        if not isinstance(page, dict):
+            continue
+        title = str(page.get("title") or "")
+        if not _title_matches(name, title):
+            continue
+        dist = dist_by_id.get(str(page.get("pageid")))
+        if dist is None:
+            try:
+                dist = float(page["dist"]) if page.get("dist") is not None else None
+            except (TypeError, ValueError):
+                dist = None
+        img = _img_from_page(page, dist)
+        if img:
+            rows.append(img)
+    rows.sort(key=lambda x: (x.get("km") if x.get("km") is not None else 99))
+    return rows[0] if rows else None
+
+
 def _wd_text(cl: dict, pid: str) -> str:
     v = wikidata._value(cl, pid)
     return str(v.get("text") or "") if isinstance(v, dict) else ""
@@ -184,11 +292,18 @@ def _by_google(http: SafeHttp, ref: dict, name: str) -> Optional[dict]:
 
 
 def _photo_near(http: SafeHttp, name: str, lat: float, lon: float) -> Optional[dict]:
-    """다른 소스로 찾은 곳: 같은 이름의 Wikidata 항목이 PHOTO_KM 안에 있으면 그 사진(P18)."""
-    got = _by_wikidata(http, {"lat": lat, "lon": lon}, name)
-    if got and got.get("image") and verify.km(lat, lon, got["lat"], got["lon"]) <= PHOTO_KM:
-        return got["image"]
-    return None
+    """사진 폴백: ① 같은 이름의 Wikidata 항목이 PHOTO_KM 안이면 P18
+    ② 아니면 공용 좌표 검색(이름 일치 + 라이선스 통과) ③ 그래도 없으면 None(사진 없이 보여 준다)."""
+    try:
+        got = _by_wikidata(http, {"lat": lat, "lon": lon}, name)
+        if got and got.get("image") and verify.km(lat, lon, got["lat"], got["lon"]) <= PHOTO_KM:
+            return got["image"]
+    except Exception:  # noqa: BLE001 — P18 실패가 좌표 검색을 막지 않게
+        pass
+    try:
+        return commons_geosearch(http, name, lat, lon)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _reverse(http: SafeHttp, lat: float, lon: float) -> str:
