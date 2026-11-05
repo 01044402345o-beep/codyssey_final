@@ -1111,7 +1111,7 @@ function ipaMarkSeen(v) {
       body: JSON.stringify({ uid: accountUid() || '', value: v }) }).catch(() => {});
   } catch (e) { /* 기록 실패는 화면을 막지 않는다 */ }
 }
-const ipaState = () => (S.ipa || (S.ipa = { i: 0, seen: [] }));
+const ipaState = () => (S.ipa || (S.ipa = { i: 0, seen: [], det: false }));
 
 /* ================= 계산 규칙 (shared/rules) ================= */
 const R = {
@@ -4694,12 +4694,12 @@ function scrIpa() {
        ${row(c.pair[0], c.pair[0].ip === c.ipa ? ' on' : '')}${row(c.pair[1], c.pair[1].ip === c.ipa ? ' on' : '')}</div>`
     : '';
   const exBlock = c.ex && c.ex.length
-    ? `<div class="ipa-sec"><span class="ipa-tag">as in</span><div class="ipa-ex">${c.ex.map(w =>
+    ? `<div class="ipa-sec ipa-det"><span class="ipa-tag">as in</span><div class="ipa-ex">${c.ex.map(w =>
         `<button class="ipa-ex-b" data-act="ipa-say" data-w="${esc(w)}">${esc(w)}<span class="ipa-pair-play">${I.speaker}</span>
           <span class="sr-only">${esc(w)} 듣기</span></button>`).join('')}</div></div>` : '';
   const inner = `<div class="app-pad">
     <div class="ipa-secs" role="group" aria-label="소리 갈래">${secs}</div>
-    <div class="ipa-wrap">
+    <div class="ipa-wrap${st.det ? ' is-det' : ''}">
     <div class="ipa-card">
       <div class="ipa-card-h"><span class="ipa-tag">${esc(c.sec)}</span>
         <span class="ipa-count"><b>${i + 1}</b> / ${n}</span></div>
@@ -4711,15 +4711,18 @@ function scrIpa() {
         <button class="ipa-hero-play" data-act="ipa-say" data-w="${esc((c.pair && c.pair[0].w) || (c.ex && c.ex[0]) || c.ipa)}"
           aria-label="${esc(c.ko)} 소리 듣기">${I.speaker}</button>
       </div>
-      ${c.kr ? `<div class="ipa-kr"><span class="ipa-kr-tag">한국인 취약</span>
+      ${c.kr ? `<div class="ipa-kr ipa-det"><span class="ipa-kr-tag">한국인 취약</span>
         <span>${esc(c.err || '')}${c.err && c.cue ? ' · ' : ''}${esc(c.cue || '')}</span></div>` : ''}
-      <div class="ipa-sec"><span class="ipa-tag">how</span><p class="ipa-tip">${esc(c.tip)}</p></div>
-      ${c.vary ? `<div class="ipa-sec"><span class="ipa-tag">us</span><p class="ipa-tip">${esc(c.vary)}</p></div>` : ''}
-      ${pairBlock}${exBlock}
-      ${c.say ? `<div class="ipa-sec"><span class="ipa-tag">eg</span>
+      <div class="ipa-sec ipa-det"><span class="ipa-tag">how</span><p class="ipa-tip">${esc(c.tip)}</p></div>
+      ${c.vary ? `<div class="ipa-sec ipa-det"><span class="ipa-tag">us</span><p class="ipa-tip">${esc(c.vary)}</p></div>` : ''}
+      ${pairBlock}
+      <button class="ipa-more-t" data-act="ipa-det" aria-expanded="${st.det ? 'true' : 'false'}">
+        <span>${st.det ? '설명 접기' : '조음 방법 · 예문 보기'}</span>${I.next}</button>
+      ${exBlock}
+      ${c.say ? `<div class="ipa-sec ipa-det"><span class="ipa-tag">eg</span>
         <button class="ipa-eg" data-act="ipa-say" data-w="${esc(c.say)}"><span class="ipa-eg-t">${esc(c.say)}</span>
           <span class="ipa-pair-play" aria-hidden="true">${I.speaker}</span><span class="sr-only">예문 듣기</span></button></div>` : ''}
-      ${c.note ? `<div class="ipa-sec"><span class="ipa-tag">note</span><p class="ipa-tip">${esc(c.note)}</p></div>` : ''}
+      ${c.note ? `<div class="ipa-sec ipa-det"><span class="ipa-tag">note</span><p class="ipa-tip">${esc(c.note)}</p></div>` : ''}
       ${done ? `<div class="ipa-done">${I.check}<span>기호 ${n}개를 모두 봤어요</span></div>` : ''}
     </div>
     <div class="ipa-strip" role="group" aria-label="기호 ${n}개">${strip}</div>
@@ -4732,7 +4735,10 @@ function scrIpa() {
   const bottom = done
     ? `<button class="btn accent block" data-act="ipa-finish">회화 연습 열기</button>`
     : `<div style="display:flex;gap:8px"><button class="btn soft" style="flex:1" data-act="ipa-skip">건너뛰기</button><button class="btn primary" style="flex:1.4" data-act="ipa-next">다음 기호</button></div>`;
-  return frame(inner, { appbar: appbar('발음기호 알아보기', { back: 'u-sched' }), bottom, tabbar: false, tab: 'u-study' });
+  const navActs = `<div class="ipa-nav-acts"><span class="ipa-nav-pos">${i + 1}/${n}</span>
+      <button data-act="ipa-go" data-i="${(i - 1 + n) % n}" aria-label="이전 기호">${I.back}</button>
+      <button data-act="ipa-go" data-i="${(i + 1) % n}" aria-label="다음 기호">${I.next}</button></div>`;
+  return frame(inner, { appbar: appbar('발음기호 알아보기', { back: 'u-sched', act: navActs }), bottom, tabbar: false, tab: 'u-study' });
 }
 
 /* 모든 카드를 뒤집으면 버튼을 누르지 않아도 끝난다(팀 요청 10/19). 날짜에 따라 완료·미리 학습·연습 축하 창을 띄운다. */
@@ -6535,6 +6541,7 @@ const ACT = {
   'ipa-next': () => { const st = ipaState(); const c = IPA_ALL[st.i]; if (c && !st.seen.includes(c.ipa)) st.seen.push(c.ipa);
     st.i = Math.min(IPA_ALL.length - 1, st.i + 1); render(); window.scrollTo(0, 0); },
   /* 갈래(단모음/이중모음/자음)로 바로 건너뛴다 */
+  'ipa-det': () => { const st = ipaState(); st.det = !st.det; render(); },
   'ipa-sec': el => { const k = IPA_ALL.findIndex(x => x.sec === el.dataset.sec); if (k >= 0) { ipaState().i = k; render(); window.scrollTo(0, 0); } },
   'ipa-say': el => { speak(el.dataset.w, el); },
   /* 두 단어를 번갈아 들려준다. 파형 도형 대신 '귀로 비교'하게 하는 장치. */
