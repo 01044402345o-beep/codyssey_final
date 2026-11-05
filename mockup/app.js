@@ -3298,7 +3298,7 @@ function modalHtml(center = false) {
   if (S.entering) return enteringHtml();           // 로그인 전환 화면(로그인 화면을 덮는다)
   if (S.withdrawing) return withdrawModalHtml();   // 탈퇴 진행 창이 다른 창보다 앞선다
   const m = S.modal; if (!m) return '';
-  return `<div class="modal-wrap ${center ? 'center' : ''}" data-act="modal-bg"><div class="modal" data-act="noop"><h3>${m.title}</h3><p>${m.body}</p>
+  return `<div class="modal-wrap ${center ? 'center' : ''}" data-act="modal-bg"><div class="modal" data-act="noop" role="dialog" aria-modal="true" aria-labelledby="mo-title"><h3 id="mo-title">${m.title}</h3>${m.block ? `<div class="mbody">${m.body}</div>` : `<p>${m.body}</p>`}
     <div class="acts"><button class="btn soft" data-act="modal-cancel">${m.cancel || '취소'}</button><button class="btn ${m.danger ? 'accent' : 'primary'}" data-act="modal-ok">${m.ok}</button></div></div></div>`;
 }
 let modalFn = null;
@@ -3902,7 +3902,8 @@ function scrReport() {
     if (meta.stale) lead += notice('자료 서버가 지금 응답하지 않아 <b>지난번에 조사한 장소</b>를 보여 드려요.', 'warn');
     if (meta.fallback) lead += notice(fallbackNotice(city, meta.fallback), 'warn');
   } else if (S.placeQuota) {
-    lead += notice(`${PLACE_QUOTA_MSG}. 내일 다시 검색하거나, 가 보고 싶은 곳을 직접 입력해 주세요.`, 'warn')
+    lead += `<div class="quota-box" role="alert"><b>${PLACE_QUOTA_MSG}</b>
+      <span class="small">내일(한국 시간 자정)에 다시 채워져요. 지금은 가 보고 싶은 곳을 직접 입력해서 추가할 수 있어요.</span></div>`
       + (locked ? '' : `<button class="btn primary block" data-act="place-manual">대신 직접 입력하기</button>`);
   } else if (S.research) {
     // 조사는 됐지만 이 도시만 장소 0곳 — 예시로 채우지 않고, 이유를 알리고 도시 브리프·직접 추가를 보인다
@@ -3933,7 +3934,7 @@ function scrReport() {
   const left = 3 - t.regenerateCount;
   const bottom = locked ? `<button class="btn primary block" data-act="tab" data-id="${t.status === 'studying' ? 'u-route' : 'u-gen'}">${t.status === 'studying' ? '방문 순서 보기' : '진행 상황 보기'}</button>`
     : `<div style="display:flex;gap:8px"><button class="btn soft" style="flex:1" data-act="regen" ${left <= 0 ? 'disabled' : ''}>다시 생성 · ${left}</button>
-       <button class="btn primary" style="flex:2" data-act="confirm-places" ${total === 0 || addLookBusy() ? 'disabled' : ''}>${total}곳으로 확정하기</button></div>
+       <button class="btn primary" style="flex:2" data-act="confirm-places" ${total === 0 || addLookBusy() ? 'disabled' : ''}>${addLookBusy() ? '장소를 확인하는 중…' : `${total}곳으로 확정하기`}</button></div>
        <div class="small" style="text-align:center">다시 생성은 성공한 경우에만 횟수가 줄어요 · 남은 횟수 ${left}번</div>`;
   return frame(inner, { appbar: appbar('보고서 · 장소 선택', { step: 'STEP 2/3' }), bottom });
 }
@@ -4046,28 +4047,46 @@ let addLook = { key: '', state: 'idle', city: '', res: null, seq: 0 };
 let addLookTimer = null;
 const addLookBusy = () => addLook.state === 'loading';
 function addPlaceForm(city) {
-  const d = addDraft[city] || { name: '', kind: '' };
-  return `<div class="card add-place" id="add-place-card"><b>장소 직접 추가</b>
+  // 종류는 처음에 '관광지'로 두어 이름만 적어도 찾기가 시작된다(비워 두면 아무 일도 안 일어나 막힌다).
+  const d = addDraft[city] || { name: '', kind: 'attraction' };
+  const st = addLookState(city);
+  return `<div class="card add-place" id="add-place-card">
+    <div class="add-place-h"><b>가고 싶은 곳이 없나요?</b><span class="add-place-sub">이름을 적으면 공개 자료에서 사진·주소를 찾아 확인해 드려요.</span></div>
     <div class="add-place-row"><input id="add-place-name" data-city="${esc(city)}" type="text" maxlength="60" autocomplete="off" value="${esc(d.name)}"
       placeholder="장소 이름 (영어로 적으면 문장에 그대로 써요)" aria-label="장소 이름">
     <select id="add-place-kind" data-city="${esc(city)}" aria-label="장소 종류"><option value=""${d.kind ? '' : ' selected'}>종류 선택</option>${Object.entries(ADD_KIND).map(([k, v]) =>
       `<option value="${k}"${d.kind === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
-    <div class="small add-place-st" id="add-place-st" aria-live="polite">${addLookLine(city)}</div></div>`;
+    <div class="small add-place-st st-${esc(st)}" id="add-place-st" aria-live="polite" aria-busy="${st === 'loading'}">${addLookLine(city)}</div></div>`;
+}
+function addLookState(city) {
+  const L = addLook, d = addDraft[city] || {};
+  if (!d.name || !d.kind) return 'idle';
+  if (L.city !== city) return 'idle';
+  return L.state === 'found' ? 'ok' : L.state;
 }
 function addLookLine(city) {
   const L = addLook, d = addDraft[city] || {};
-  if (L.city !== city || !d.name || !d.kind) return '이름과 종류를 모두 적으면 공개 자료에서 그 장소를 찾아 사진·주소를 보여 드려요.';
-  const plain = `<button type="button" class="link-btn" data-act="add-place-plain" data-city="${esc(city)}">이름만 추가(주소 없이)</button>`;
-  if (L.state === 'loading') return `‘${esc(d.name)}’을(를) 공개 자료에서 찾고 있어요 — 끝나면 장소를 확정할 수 있어요.`;
-  if (L.state === 'not_found') return `공개 자료에서 찾지 못했어요. 이름을 더 정확히(영어 이름·지점명) 적거나 ${plain}`;
-  if (L.state === 'rejected') return `찾은 장소가 아니라고 하셨어요. 이름을 더 정확히 적어 다시 찾거나 ${plain}`;
-  if (L.state === 'error') return `지금은 확인할 수 없어요. 잠시 뒤 다시 적어 보거나 ${plain}`;
+  const plain = `<button type="button" class="btn soft add-plain" data-act="add-place-plain" data-city="${esc(city)}">이름만 추가(주소 없이)</button>`;
+  if (!d.name) return '<span>가 보고 싶은 곳의 이름을 적어 주세요.</span>';
+  if (!d.kind) return '<span>종류를 고르면 공개 자료에서 찾아요.</span>';
+  if (L.city !== city) return '<span>이름을 다 적으면 찾아드려요.</span>';
+  if (L.state === 'loading') return `<span class="add-spin" aria-hidden="true"></span><span>‘${esc(d.name)}’을(를) 찾고 있어요 — 끝나면 장소를 확정할 수 있어요.</span>`;
+  if (L.state === 'not_found') return `<span>공개 자료에서 찾지 못했어요. 영어 이름이나 지점명으로 다시 적어 보세요.</span>${plain}`;
+  if (L.state === 'rejected') return `<span>찾은 장소가 아니라고 하셨어요. 이름을 고쳐 다시 찾거나, 이름만 추가할 수 있어요.</span>${plain}`;
+  if (L.state === 'error') return `<span>지금은 확인할 수 없어요. 잠시 뒤 다시 적어 보세요.</span>${plain}`;
   return '';
 }
 /* 상태 줄·확정 단추만 고친다(입력 칸을 다시 그리지 않아 커서가 그대로) */
 function addLookPaint() {
   const st = document.getElementById('add-place-st');
-  if (st) st.innerHTML = addLookLine(addLook.city);
+  const nameEl = document.getElementById('add-place-name');
+  const city = (nameEl && nameEl.dataset.city) || addLook.city;
+  if (st) {
+    const s = addLookState(city);
+    st.className = `small add-place-st st-${s}`;
+    st.setAttribute('aria-busy', String(s === 'loading'));
+    st.innerHTML = addLookLine(city);
+  }
   const btn = document.querySelector('[data-act="confirm-places"]');
   if (btn) btn.disabled = addLookBusy() || S.places.filter(p => p.selected).length === 0;
 }
@@ -4105,13 +4124,17 @@ async function addLookRun(city) {
   addLookPaint();
   const photo = res.image ? `<span class="pc-photo"><img src="${esc(API.base)}/place-photo?src=${encodeURIComponent(res.image.src)}" alt="${esc(res.name)} 사진" loading="lazy"></span>
       <span class="pc-credit">사진: <a href="${esc(res.image.page || res.url)}" data-act="link" rel="noopener noreferrer">${esc(res.image.credit)}</a></span>` : '<span class="pc-nophoto">사진을 찾지 못했어요</span>';
-  confirmBox('이 장소가 맞나요?', `<span class="place-confirm">${photo}
-      <span class="pc-row"><span class="pc-k">이름</span><b class="pc-v">${esc(res.name)}</b></span>
-      <span class="pc-row"><span class="pc-k">주소</span><span class="pc-v">${res.address ? esc(res.address) : '주소를 찾지 못했어요'}</span></span>
-      <span class="pc-row"><span class="pc-k">출처</span><span class="pc-v"><a href="${esc(res.url)}" data-act="link" rel="noopener noreferrer">${esc(res.label)}</a>${res.km != null ? ` · ${esc(city)} 중심에서 약 ${esc(String(res.km))}km` : ''}${res.addressSource ? ` · 주소: ${esc(res.addressSource)}` : ''}</span></span>
-      <span class="pc-hint">적으신 이름: ‘${esc(d.name)}’ · 맞으면 이 이름·주소로 문장을 만들어요.</span></span>`,
-    '맞아요 · 추가하기', () => { S.modal = null; addUserPlace(city, d.kind, res, true); },
-    { cancel: '아니에요', onCancel: () => { addLook.state = 'rejected'; render(); } });
+  confirmBox('이 장소가 맞나요?', `<div class="place-confirm">${photo}
+      <div class="pc-name">${esc(res.name)}</div>
+      <div class="pc-row"><span class="pc-k">주소</span><span class="pc-v">${res.address ? esc(res.address) : '<span class="pc-none">주소를 찾지 못했어요</span>'}</span></div>
+      <div class="pc-row"><span class="pc-k">출처</span><span class="pc-v"><a href="${esc(res.url)}" data-act="link" rel="noopener noreferrer">${esc(res.label)}</a>${res.km != null ? ` · ${esc(city)} 중심에서 약 ${esc(String(res.km))}km` : ''}${res.addressSource ? ` · 주소: ${esc(res.addressSource)}` : ''}</span></div>
+      <div class="pc-hint">적으신 이름 ‘${esc(d.name)}’${res.name && res.name !== d.name ? ` → 찾은 이름 ‘${esc(res.name)}’` : ''}. 맞으면 이 이름·주소가 문장에 쓰여요.</div></div>`,
+    '이대로 추가', () => { S.modal = null; addUserPlace(city, d.kind, res, true); },
+    { block: true, cancel: '이름 고치기', onCancel: () => {
+        addLook.state = 'rejected'; render();
+        const el = document.getElementById('add-place-name');
+        if (el) { el.focus({ preventScroll: false }); el.select(); }          // 바로 고쳐 쓸 수 있게
+      } });
 }
 async function placeCheckFetch(city, name, kind) {
   const { country } = briefCtx(city);

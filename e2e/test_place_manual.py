@@ -95,12 +95,15 @@ with sync_playwright() as p:
     # ── B: 빈칸을 다 채우면 저절로 찾는다 · 찾는 동안 확정 막기 ──
     pg.fill("#add-place-name", "Todai-ji")
     pg.wait_for_timeout(1000)
-    check("B1 종류가 비어 있으면 찾지 않는다", len(check_calls) == 0, len(check_calls))
+    check("B1 종류 기본값은 관광지 — 이름만 적어도 찾기 시작", pg.input_value("#add-place-kind") == "attraction")
+    pg.wait_for_function("() => /찾고 있어요/.test(document.getElementById('add-place-st').innerText) || (S.modal && /이 장소가 맞나요/.test(S.modal.title))", timeout=8000)
+    # 찾는 동안 확정 막기 — 느린 응답으로 한 번 더(이름을 비웠다가 다시 적으면 새 조회가 시작된다)
     slow = {"go": False}
     pg.unroute("**/place-check")
     pg.route("**/place-check", lambda r: (pg.wait_for_timeout(900), check_route(r)))
-    pg.select_option("#add-place-kind", "attraction")
-    pg.wait_for_function("() => /찾고 있어요/.test(document.getElementById('add-place-st').innerText)", timeout=5000)
+    pg.fill("#add-place-name", ""); pg.wait_for_timeout(150)
+    pg.fill("#add-place-name", "Todai-ji")
+    pg.wait_for_function("() => /찾고 있어요/.test(document.getElementById('add-place-st').innerText)", timeout=8000)
     check("B2 찾는 동안 안내", "끝나면 장소를 확정할 수 있어요" in pg.inner_text("#add-place-st"))
     check("B3 찾는 동안 확정 단추가 꺼진다", pg.evaluate("document.querySelector('[data-act=confirm-places]').disabled"))
     check("B4 입력 칸 포커스·글자가 그대로", pg.input_value("#add-place-name") == "Todai-ji")
