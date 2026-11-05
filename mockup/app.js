@@ -4688,7 +4688,7 @@ function scrIpa() {
       <em class="ipa-pair-ip">/${esc(p2.ip)}/</em><span class="ipa-pair-play" aria-hidden="true">${I.speaker}</span>
       <span class="sr-only">${esc(p2.w)} 듣기</span></button>`;
   const pairBlock = c.pair
-    ? `<div class="ipa-sec" style="grid-template-columns:minmax(0,1fr)"><div class="ipa-pair-h">
+    ? `<div class="ipa-sec ipa-pair-wrap" style="grid-template-columns:minmax(0,1fr)"><div class="ipa-pair-h">
          <span>${c.pair[0].ip === c.pair[1].ip ? '같은 소리 · 두 단어' : '최소대립쌍 · 소리 하나만 달라요'}</span>
          <button class="ipa-ab" data-act="ipa-ab" data-pairs="${esc(c.pair[0].w)}|${esc(c.pair[1].w)}">A ↔ B 번갈아</button></div>
        ${row(c.pair[0], c.pair[0].ip === c.ipa ? ' on' : '')}${row(c.pair[1], c.pair[1].ip === c.ipa ? ' on' : '')}</div>`
