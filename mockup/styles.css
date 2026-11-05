@@ -1045,7 +1045,8 @@ html[data-mode=demo] .side .note-card { box-shadow: none; }
 .pcol { width: 100%; max-width: var(--read-max); margin-inline: auto; display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .pframe .app { flex: 1; overflow: visible; min-width: 0; scroll-behavior: auto; }
 .pframe .app-pad { padding: 8px var(--pad-r) 28px var(--pad-l); }
-.pframe .appbar { position: sticky; top: 0; z-index: 10; background: var(--bg); padding: max(6px, env(safe-area-inset-top, 0px)) var(--pad-r) 10px var(--pad-l); }
+/* 앱바는 내용과 함께 스크롤된다(위에 붙어 따라오지 않는다) — 화면에 고정되는 띠는 내비(하단 탭·왼쪽 레일)뿐(11/05 사용자 지시) */
+.pframe .appbar { position: relative; z-index: 10; background: var(--bg); padding: max(6px, env(safe-area-inset-top, 0px)) var(--pad-r) 10px var(--pad-l); }
 .pframe .appbar h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pframe .bottombar { position: sticky; bottom: 0; z-index: 9; padding: 12px var(--pad-r) calc(12px + env(safe-area-inset-bottom, 0px)) var(--pad-l); }
 .pframe.has-nav .bottombar { bottom: var(--nav-space); padding-bottom: 12px; }
@@ -1355,7 +1356,8 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
 :root { --wide-max: 70rem; }   /* 1120px */
 .pframe .pcol.wide { max-width: var(--wide-max); }
 .split { display: grid; grid-template-columns: minmax(18.75rem, 5fr) minmax(0, 7fr); gap: clamp(16px, 2.5vw, 32px); align-items: start; padding: 8px var(--pad-r) 28px var(--pad-l); }
-.split-list { position: sticky; top: 3.5rem; max-height: calc(100dvh - 4.5rem); overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; min-width: 0; }
+.split-list { position: relative; max-height: calc(100dvh - 4.5rem);   /* 위에 붙지 않는다 — 목록 안 스크롤만 */
+  overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; min-width: 0; }
 .split-detail { min-width: 0; }
 .split .app-pad { padding-inline: 0; }
 .split-detail .bottombar { position: sticky; bottom: 0; padding-inline: 0; background: linear-gradient(to top, var(--bg) 70%, transparent); }
