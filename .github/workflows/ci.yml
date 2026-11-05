@@ -136,6 +136,7 @@ jobs:
           python ../e2e/test_liquid_glass.py http://localhost:8768   # 재질: 탭바·앱바만 실제 blur, 카드는 blur 없음, 대비, 접근성 대체(투명도·대비)
           python ../e2e/test_material_scope.py http://localhost:8768   # 재질 역할(raised·tinted·ink·glass)을 화면마다: 카드 blur 0, 경계 토큰, ink 면 1개 이하
           python ../e2e/test_alarm_study.py http://localhost:8768   # 학습 탭 덱 첫 장 = 오늘의 알람(진도 미반영), 입구별 노출, 입구가 바뀌어도 같은 문장, 유동 패딩
+          python ../e2e/test_wide_today_alarm.py http://localhost:8768   # PC 2열: 오늘을 보면 알람이 '아직 학습일이 아니에요'보다 먼저(학습·일정표), 다른 날짜는 알람 없음, 학습 메뉴는 묻지 않고 바로 카드
           python ../e2e/test_alarm_anim.py http://localhost:8768   # 오늘의 알람 카드 애니메이션: 움직이는 동안·멈춘 뒤 숫자·라벨
           python ../e2e/test_ipa_gate.py http://localhost:8768   # 발음기호: 학습 진입 1회 질문·다시 묻지 않음·앱바 입구 상시·일정표 오염 없음
           python ../e2e/test_hscroll_keep.py http://localhost:8768   # 가로 스크롤 목록: 옆으로 밀고 눌러도 처음으로 안 튐(문장 모음 칩·발음기호 눈금), 현재 항목이 보이게
