@@ -61,6 +61,8 @@ with sync_playwright() as p:
     # ── B: 발음기호 눈금 ──
     pg.evaluate("S.ipa = { i: 0, seen: [] }; go('u-ipa')"); pg.wait_for_timeout(700)
     strip = '.ipa-strip'
+    # 눈금을 화면 가운데로 먼저 — 하단바 근처에 있으면 클릭 직전 Playwright 가 스크롤해 x0 가 바뀐다(측정 오류)
+    pg.evaluate(f"document.querySelector('{strip}').scrollIntoView({{block: 'center', inline: 'nearest'}})"); pg.wait_for_timeout(150)
     pg.evaluate(f"document.querySelector('{strip}').scrollLeft = 1200"); pg.wait_for_timeout(200)
     x0 = pg.evaluate(f"document.querySelector('{strip}').scrollLeft")
     k = pg.evaluate(f"""() => {{ const l = document.querySelector('{strip}'), a = l.getBoundingClientRect();
