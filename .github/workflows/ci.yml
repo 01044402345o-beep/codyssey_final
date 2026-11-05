@@ -97,6 +97,7 @@ jobs:
           python ../e2e/test_silence.py http://localhost:8768 ../e2e-shots
           python ../e2e/test_replay_voice.py http://localhost:8768 ../e2e-shots   # 내 발음 다시 듣기(설문 Q14)
           python ../e2e/test_speak_card.py http://localhost:8768 ../e2e-shots   # 말해보기 결과 카드: 발음 점수 아님·안 들린 단어·음소 띠·노드 실패·제한 모드
+          python ../e2e/test_ph_feedback.py http://localhost:8768   # 소리별 결과 칩을 누르면 그 소리 설명(카드 안), 누른 칩만 선택, 새 결과면 닫힘, 라벨 한 줄
           python ../e2e/test_shell.py http://localhost:8768 ../e2e-shots   # 반응형 셸·터치·테마
           python ../e2e/test_speech_text.py http://localhost:8768
           python ../e2e/test_back_nav.py http://localhost:8768   # 하단 뒤로가기 = 이전 화면
