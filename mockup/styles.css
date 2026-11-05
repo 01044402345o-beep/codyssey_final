@@ -2241,8 +2241,13 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .spk-wt { font-family: var(--mono); font-size: clamp(0.75rem, 3vw, 0.8125rem); color: var(--text-soft);
   max-width: 7em; overflow-wrap: anywhere; }
 .spk-phs { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; }
+/* 소리별 결과의 칩은 이제 버튼이다. 보이는 크기는 그대로 두고(카드 밀도), 누를 수 있는 높이만
+   위아래로 넓힌다 — 옆 칩과 겹치지 않게 세로로만 넓힌다. */
 .spk-ph { display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 5px; border-radius: 6px;
+  border: 0; cursor: pointer; position: relative;
   font-family: var(--mono); font-size: 0.75rem; font-weight: 500; background: var(--surface-3); color: var(--text-2); }
+.spk-ph::after { content: ''; position: absolute; left: 0; right: 0; top: -9px; bottom: -9px; }
+.spk-ph[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--accent); color: var(--text); font-weight: 700; }
 .spk-ph.weak { background: var(--sun-soft); color: var(--on-sun-soft);
   text-decoration: underline dotted; text-underline-offset: 3px; }
 .spk-ph.missing { background: var(--bad-soft); color: var(--bad-text); font-weight: 700;
@@ -2437,3 +2442,29 @@ body.is-narrow .spk-card { border-radius: 12px; }
 .ipa-ex-b { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 6px 11px;
   border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
   font-size: 0.875rem; color: var(--text); cursor: pointer; }
+
+/* 소리 하나 설명 — 카드 안에서 펼쳐진다(시트 위에 시트를 또 띄우지 않는다) */
+.spk-phd { margin: 0 clamp(11px, 3.4vw, 14px) clamp(11px, 3.4vw, 13px); padding: 12px 13px;
+  border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface-3); }
+.spk-phd-h { display: flex; align-items: center; gap: 8px; }
+.spk-phd-ipa { font-family: var(--mono); font-size: 1.25rem; font-weight: 700; color: var(--text); }
+.spk-phd-st { font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  background: var(--surface); color: var(--text-soft); }
+.spk-phd-st.missing { background: var(--bad-soft); color: var(--bad-text); }
+.spk-phd-st.weak { background: var(--sun-soft); color: var(--on-sun-soft); }
+.spk-phd-x { margin-left: auto; width: 32px; height: 32px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--text-soft); font-size: 0.875rem; cursor: pointer; }
+.spk-phd-w { margin-top: 6px; font-size: 0.8125rem; color: var(--text-soft); }
+.spk-phd-heard { color: var(--bad-text); font-weight: 600; }
+.spk-phd-ko { margin-top: 8px; font-size: 0.9375rem; font-weight: 700; color: var(--text); }
+.spk-phd-kr { margin-left: 7px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft);
+  color: var(--accent-text); font-family: var(--mono); font-size: 0.75rem; font-weight: 500; vertical-align: 2px; }
+.spk-phd-tip { margin: 6px 0 0; font-size: 0.8125rem; line-height: 1.6; color: var(--text-2); word-break: keep-all; }
+.spk-phd-err, .spk-phd-cue, .spk-phd-vary { margin: 6px 0 0; font-size: 0.8125rem; line-height: 1.55; color: var(--text-soft); }
+.spk-phd-err b, .spk-phd-cue b { color: var(--accent-text); font-size: 0.75rem; margin-right: 4px; }
+.spk-phd-ex { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.spk-phd-ex-b { min-height: 36px; padding: 5px 11px; border: 1px solid var(--border);
+  border-radius: 999px; background: var(--surface); color: var(--text); font-size: 0.8125rem; cursor: pointer; }
+.spk-phd-all { width: 100%; margin-top: 10px; min-height: 40px; border: 1px solid var(--border-strong);
+  border-radius: 10px; background: transparent; color: var(--accent-text);
+  font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
