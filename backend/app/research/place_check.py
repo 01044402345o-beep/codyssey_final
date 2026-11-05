@@ -212,8 +212,11 @@ def _by_google(http: SafeHttp, ref: dict, name: str) -> Optional[dict]:
     if not hit:
         return None
     km = _near(ref, hit["lat"], hit["lon"])
-    return None if km is None else _found("google", hit["name"], hit["lat"], hit["lon"], hit["url"], km,
-                                          address=hit.get("address") or "")
+    if km is None:
+        return None
+    got = _found("google", hit["name"], hit["lat"], hit["lon"], hit["url"], km, address=hit.get("address") or "")
+    got["_gphoto"] = hit.get("photo")                    # 사진 참조 — 무료 사진이 없을 때만 주소로 바꾼다(저장 안 함)
+    return got
 
 
 def _photo_near(http: SafeHttp, name: str, lat: float, lon: float) -> Optional[dict]:
@@ -251,6 +254,20 @@ def _enrich(http: SafeHttp, name: str, got: dict) -> dict:
             got["image"] = commons_meta(http, got["image"])     # 저작자·라이선스를 못 알면 사진을 쓰지 않는다
         except Exception:  # noqa: BLE001
             got["image"] = None
+    if not got.get("image"):
+        # 무료 공용 사진이 없으면 Google 사진(찍은 사람 표시, 저장·캐시 안 함). 다른 소스로 찾은 곳은 Google 에서 이름으로
+        # 다시 찾되 같은 이름·1km 안일 때만 그 사진을 쓴다(근처 다른 가게 사진을 붙이지 않게)
+        try:
+            ph = got.get("_gphoto")
+            if ph is None and got["source"]["provider"] != "google" and google_places.available():
+                hit = google_places.find(http, {"lat": got["lat"], "lon": got["lon"], "population": 0}, name)
+                if hit and verify.km(got["lat"], got["lon"], hit["lat"], hit["lon"]) <= PHOTO_KM:
+                    a, b = _key(name), _key(hit.get("name") or "")
+                    ph = hit.get("photo") if a and b and (a in b or b in a) else None
+            got["image"] = google_places.photo_uri(http, ph) if ph else None
+        except Exception:  # noqa: BLE001
+            got["image"] = None
+    got.pop("_gphoto", None)
     if not got.get("address"):
         try:
             got["address"] = _clean_addr(_reverse(http, got["lat"], got["lon"]))
@@ -293,6 +310,9 @@ def check(req: dict, *, http: Optional[SafeHttp] = None, store: Any = None, cach
         if got:
             got = _enrich(http, name, got)
             if storable:
-                _memo_put(key, got)
+                keep = dict(got)
+                if (keep.get("image") or {}).get("provider") == "google":
+                    keep["image"] = None                     # Google 사진은 기억하지 않는다(약관) — 다음 확인 때 다시 받는다
+                _memo_put(key, keep)
             return got
     return {"status": "not_found"}                       # 못 찾음은 기억하지 않는다(키·한도가 바뀌면 다시 찾을 수 있게)

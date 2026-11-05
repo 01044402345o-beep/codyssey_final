@@ -47,6 +47,8 @@ def check_route(route):
                "source": {"provider": "wikidata", "url": "https://www.wikidata.org/wiki/Q186148", "title": "Tōdai-ji Temple"}}
     elif name.startswith("kasuga"):
         out = {"status": "found", "name": "Kasuga Taisha", "distance_km": 3.1, "lat": 34.68, "lon": 135.84, "address": "160 Kasuganocho, Nara",
+               "image": {"provider": "google", "src": "https://lh3.googleusercontent.com/place-photos/KasugaABC=s500",
+                         "authors": [{"name": "Kim Photo", "uri": "https://maps.google.com/maps/contrib/9"}]},
                "source": {"provider": "wikidata", "url": "https://www.wikidata.org/wiki/Q1137285", "title": "Kasuga Taisha"}}
     else:
         out = {"status": "not_found"}
@@ -75,6 +77,8 @@ with sync_playwright() as p:
     pg.route("**/city-brief**", lambda r: r.fulfill(status=503, body="{}"))
     pg.route("**/place-check", lambda r: (pg.wait_for_timeout(0), check_route(r)))
     pg.route("**/place-photo**", photo_route)
+    google_calls = []
+    pg.route("https://lh3.googleusercontent.com/**", lambda r: (google_calls.append(r.request.url), r.fulfill(status=200, content_type="image/png", body=PNG)))
     pg.route("**/generate", gen_route)
     pg.goto(BASE + "/?demo=1&gate=off", wait_until="domcontentloaded"); pg.wait_for_timeout(800)
     pg.evaluate("""() => { S.user = DEMO_USER;
@@ -130,7 +134,13 @@ with sync_playwright() as p:
     pg.fill("#add-place-name", "Kasuga")
     pg.select_option("#add-place-kind", "attraction")
     pg.wait_for_function("() => S.modal && /이 장소가 맞나요/.test(S.modal.title)", timeout=10000)
-    check("D1 사진이 없으면 '사진을 찾지 못했어요'", "사진을 찾지 못했어요" in pg.inner_text(".modal"))
+    gm = pg.inner_text(".modal")
+    gsrc = pg.evaluate("(() => { const i = document.querySelector('.modal .pc-photo img'); return i ? i.getAttribute('src') : ''; })()")
+    check("D1 공용 사진이 없으면 Google 사진 — 우리 서버를 거치지 않고 바로", gsrc == "https://lh3.googleusercontent.com/place-photos/KasugaABC=s500", gsrc)
+    pg.wait_for_timeout(300)
+    check("D1b Google 사진이 실제로 그려진다", bool(google_calls) and pg.evaluate(
+        "(() => { const i = document.querySelector('.modal .pc-photo img'); return !!i && i.complete && i.naturalWidth > 0; })()"))
+    check("D1c 찍은 사람·Google 지도 표시", "Kim Photo" in gm and "Google 지도" in gm, gm[:200])
     pg.click("[data-act=modal-cancel]"); pg.wait_for_timeout(300)
     check("D2 '아니에요' → 다시 찾거나 이름만 추가 안내", "아니라고 하셨어요" in pg.inner_text("#add-place-st")
           and pg.locator("[data-act=add-place-plain]").count() == 1)

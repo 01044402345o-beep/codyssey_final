@@ -796,6 +796,13 @@ test('장소 확인 창 응답(11/05): 주소는 글자만, 사진은 위키미�
   for (const src of ['http://upload.wikimedia.org/a.jpg', 'https://evil.example/a.jpg', 'https://upload.wikimedia.org/a b.jpg', 'javascript:alert(1)']) {
     assert.equal(AI.placeCheckResult({ ...base, image: { src, license: 'CC0' } }).image, null, src);
   }
+  // Google 사진(무료 사진이 없을 때): 화면이 바로 부르는 googleusercontent 주소 + 찍은 사람. 다른 호스트는 버린다
+  const g = AI.placeCheckResult({ ...base, image: { provider: 'google', src: 'https://lh3.googleusercontent.com/p/A=s500',
+    authors: [{ name: 'Kim <b>', uri: 'https://maps.google.com/maps/contrib/1' }, { name: '', uri: 'javascript:x' }] } });
+  assert.deepEqual(g.image, { src: 'https://lh3.googleusercontent.com/p/A=s500', provider: 'google', credit: 'Google 지도',
+    authors: [{ name: 'Kim b', uri: 'https://maps.google.com/maps/contrib/1' }, { name: 'Google 사용자', uri: '' }] });
+  assert.equal(AI.placeCheckResult({ ...base, image: { provider: 'google', src: 'https://evil.example/a.jpg' } }).image, null);
+  assert.equal(AI.placeCheckResult({ ...base, image: { provider: 'google', src: 'https://upload.wikimedia.org/a.jpg', license: 'CC0' } }).image, null);
   const bare = AI.placeCheckResult({ ...base, lat: 'x' });
   assert.deepEqual([bare.address, bare.image, bare.lat, bare.addressSource], ['', null, null, '']);
 });
