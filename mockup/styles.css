@@ -2403,11 +2403,10 @@ body.is-narrow .spk-card { border-radius: 12px; }
   font-size: 0.875rem; color: var(--text); cursor: pointer; max-width: 100%; }
 
 .ipa-strip { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0 4px; margin-top: 10px;
-  scrollbar-width: thin; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
-  scroll-snap-type: x proximity; }
+  scrollbar-width: thin; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }   /* 스냅은 두지 않는다 — 누른 뒤 위치 유지(render)와 충돌 */
 .ipa-cell { flex: none; min-width: clamp(44px, 14cqi, 58px); min-height: 44px; padding: 4px 8px;
   border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text-soft);
-  font-family: var(--mono); font-size: 0.75rem; cursor: pointer; position: relative; scroll-snap-align: center; }
+  font-family: var(--mono); font-size: 0.75rem; cursor: pointer; position: relative; }
 .ipa-cell.seen { background: var(--surface-3); color: var(--text); }
 .ipa-cell.kr::after { content: ''; position: absolute; top: 5px; right: 5px; width: 4px; height: 4px;
   border-radius: 999px; background: var(--accent); }
@@ -2450,25 +2449,25 @@ body.is-narrow .spk-card { border-radius: 12px; }
 /* 가로에서만 보이는 앱바 조작(위치·이전·다음). 세로에서는 아래 화살표 버튼을 쓴다. */
 .ipa-nav-acts { display: none; align-items: center; gap: 4px; }
 .ipa-nav-pos { font-family: var(--mono); font-size: 0.75rem; color: var(--text-soft); margin-right: 2px; }
-.ipa-nav-acts button { width: 34px; height: 34px; display: grid; place-items: center; border: 0;
+.ipa-nav-acts button { width: 44px; height: 44px; display: grid; place-items: center; border: 0;
   border-radius: 999px; background: var(--surface-3); color: var(--text); cursor: pointer; }
 .ipa-nav-acts svg { width: 15px; height: 15px; }
 
 @media (orientation: landscape) and (max-height: 620px) {
-  .pframe .appbar { padding: 0 var(--gutter) 2px; }
-  .pframe .appbar h2 { font-size: 0.9375rem; }
-  /* 가행에서는 위아래 여백이 곧 '한 화면에 담기는가'다 */
-  .pframe .app-pad { padding: 2px var(--gutter) 8px; }
+  /* 셸(앱바·본문·하단바)은 발음기호 화면에서만 줄인다(:has) — 다른 화면까지 바꾸지 않는다.
+     좌우는 노치를 넘는 --pad-l/--pad-r, 위아래는 안전 영역, 버튼은 44px 그대로. */
+  .pframe:has(.ipa-wrap) .appbar { padding: max(0px, env(safe-area-inset-top, 0px)) var(--pad-r) 2px var(--pad-l); }
+  .pframe:has(.ipa-wrap) .appbar h2 { font-size: 0.9375rem; }
+  /* 가로에서는 위아래 여백이 곧 '한 화면에 담기는가'다 */
+  .pframe:has(.ipa-wrap) .app-pad { padding: 2px var(--pad-r) 8px var(--pad-l); }
   /* 접기 토글이 sticky 하단바 뒤로 들어가 눌리지 않던 문제 — 스크롤 끝에 바 높이만큼 여백을 둔다 */
-  .pframe .app { scroll-padding-bottom: 68px; }
+  .pframe:has(.ipa-wrap) .app { scroll-padding-bottom: 68px; }
   .ipa-wrap { padding-bottom: 60px; }
-  .pframe .bottombar { padding: 4px var(--gutter); }
-  .pframe .bottombar .btn { min-height: 42px; }
-  .pframe .appbar .act { min-height: 36px; }
+  .pframe:has(.ipa-wrap) .bottombar { padding: 4px var(--pad-r) calc(4px + env(safe-area-inset-bottom, 0px)) var(--pad-l); }
 
   .ipa-ticks { margin: 0 0 6px; }
   .ipa-secs { margin: 0 0 6px; border-radius: 999px; flex-wrap: nowrap; }
-  .ipa-secs button { min-height: 36px; padding: 2px 8px; font-size: 0.75rem; }
+  .ipa-secs button { min-height: 44px; padding: 2px 8px; font-size: 0.75rem; }
   .ipa-card { padding: 4px clamp(8px, 2.6cqi, 14px) 0; border-radius: 14px; }
   .ipa-card-h { padding-bottom: 5px; }
   .ipa-hero { padding: 4px 0 2px; }
@@ -2479,9 +2478,9 @@ body.is-narrow .spk-card { border-radius: 12px; }
   .ipa-hero > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
   .ipa-ko { margin-top: 0; white-space: nowrap; }
   .ipa-kind { display: none; }
-  .ipa-ab { min-height: 32px; padding: 4px 10px; }
+  .ipa-ab { min-height: 44px; padding: 4px 10px; }
   .ipa-pair-h > span { display: none; }
-  .ipa-hero-play { width: clamp(40px, 10cqi, 46px); height: clamp(40px, 10cqi, 46px); }
+  .ipa-hero-play { width: 44px; height: 44px; }
   .ipa-sec { padding: 5px 0; }
   .ipa-foot { display: none; }
   /* 아래쪽 이전/다음·눈금·카드 머리는 가로에서 앱바 조작으로 대신한다 */
@@ -2493,7 +2492,7 @@ body.is-narrow .spk-card { border-radius: 12px; }
 
   /* 접힘: 가로에서만 토글이 보이고, 닫힌 동안 상세 섹션은 숨는다 */
   .ipa-more-t { display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    width: 100%; min-height: 40px; margin: 6px 0 0; padding: 0 10px;
+    width: 100%; min-height: 44px; margin: 6px 0 0; padding: 0 10px;
     border: 1px dashed var(--border-strong); border-radius: 10px; background: transparent;
     color: var(--accent-text); font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
   .ipa-more-t svg { width: 15px; height: 15px; transform: rotate(90deg); }
@@ -2521,14 +2520,10 @@ body.is-narrow .spk-card { border-radius: 12px; }
 @media (orientation: landscape) and (max-height: 360px) {
   .ipa-secs { display: none; }
   .ipa-hero { padding: 0; }
-  .ipa-more-t { min-height: 34px; }
   .ipa-card { padding: 4px 8px 0; }
   .ipa-card-h { padding-bottom: 3px; }
   .ipa-sec { padding: 4px 0; }
-  .ipa-more-t { min-height: 36px; margin-top: 4px; }
-  .pframe .appbar { padding: 0 var(--gutter) 4px; }
-  .pframe .bottombar { padding: 4px var(--gutter); }
-  .pframe .bottombar .btn { min-height: 40px; }
+  .ipa-more-t { margin-top: 4px; }
 }
 
 /* ── 초좁음 화면 전체(≤300px): 앱 셸 여백도 줄인다 ── */
