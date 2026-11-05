@@ -5252,7 +5252,7 @@ function preset(kind) {
 
 /* ================= 말하기 연습 (녹음 → /speak-check) =================
    작업 토큰(SPK.tok)으로 취소·늦은 응답을 구분한다. 카드 이동·화면 전환·재진입 시 cancelSpeak(). */
-const SPK = { state: 'idle', tok: 0, rec: null, stream: null, ctl: null, timer: null, sid: null, line: 'me', result: null, clip: null };
+const SPK = { state: 'idle', tok: 0, rec: null, stream: null, ctl: null, timer: null, sid: null, line: 'me', result: null, clip: null, ph: null };
 /* line = 회화 연습 시트에서 지금 말해보는 줄: 'me'(내 문장) · 'ask' · 'r0'… · 'next'. 줄마다 '듣기' 옆에 '말해보기'가 있고, 결과는 그 줄 아래에 보인다. */
 /* 내 발음 다시 듣기(설문 Q14 "내가 연습한 발음을 들어볼 수 있으면"). 녹음은 이 탭 메모리에만 둔다 —
    서버에 따로 저장하지 않고, 다시 녹음하거나 카드를 넘기면(cancelSpeak) 재생 주소를 해제한다. */
@@ -5301,6 +5301,31 @@ function spkEyebrow(rows) {
   const stamp = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
   return `SPEAK CHECK · ${stamp}`;
 }
+/* 소리 하나를 눌렀을 때의 설명. 회화 연습 카드 안에서 펼쳐진다 —
+   시트를 또 띄우면 이미 시트 안인 화면에서 겹친다.
+   말투 원칙은 카드와 같다: 점수를 말하지 않고 '들렸다/약했다/안 들렸다'만 말한다. */
+const PH_SAY = { ok: '잘 들렸어요', weak: '약하게 들렸어요', missing: '안 들렸어요' };
+function spkPhDetailHtml(r) {
+  const ipa = SPK.ph, st = SPK.phSt || 'ok';
+  const it = IPA_ITEM[ipa] || null;
+  const heard = SPK.phHeard || '';
+  const word = SPK.phWord || '';
+  const ex = it && it.ex ? it.ex.slice(0, 3) : [];
+  return `<div class="spk-phd" role="region" aria-label="/${esc(ipa)}/ 설명">
+    <div class="spk-phd-h"><span class="spk-phd-ipa">/${esc(ipa)}/</span>
+      <span class="spk-phd-st ${esc(st)}">${esc(PH_SAY[st] || '')}</span>
+      <button class="spk-phd-x" data-act="spk-ph-close" aria-label="설명 닫기">✕</button></div>
+    ${word ? `<div class="spk-phd-w">${esc(word)}${heard ? ` <span class="spk-phd-heard">→ /${esc(heard)}/처럼 들렸어요</span>` : ''}</div>` : ''}
+    ${it ? `<div class="spk-phd-ko">${esc(it.ko)}${it.kr ? '<span class="spk-phd-kr">한국인 취약</span>' : ''}</div>
+      <p class="spk-phd-tip">${esc(it.tip)}</p>
+      ${it.err ? `<p class="spk-phd-err"><b>자주 하는 실수</b> ${esc(it.err)}</p>` : ''}
+      ${it.cue ? `<p class="spk-phd-cue"><b>이렇게</b> ${esc(it.cue)}</p>` : ''}
+      ${it.vary ? `<p class="spk-phd-vary">${esc(it.vary)}</p>` : ''}
+      ${ex.length ? `<div class="spk-phd-ex">${ex.map(w => `<button class="spk-phd-ex-b" data-act="ipa-say" data-w="${esc(w)}">${esc(w)}</button>`).join('')}</div>` : ''}`
+      : `<p class="spk-phd-tip">이 기호는 아직 설명이 없어요. 조음 방법은 발음기호 화면에서 볼 수 있어요.</p>`}
+    <button class="spk-phd-all" data-act="ipa-open">발음기호 화면에서 더 보기</button>
+  </div>`;
+}
 function speakCardHtml(r, target) {
   const pa = r.phonemes_acoustic && r.phonemes_acoustic.status === 'ok' ? r.phonemes_acoustic : null;
   const rows = pa && Array.isArray(pa.phonemes)
@@ -5325,9 +5350,14 @@ function speakCardHtml(r, target) {
       `<span class="spk-words">${marks.map(m => `<span class="spk-w${m.miss ? ' miss' : ''}"${m.miss ? ' title="두 받아쓰기 모두에서 들리지 않았어요"' : ''}>${esc(m.w)}</span>`).join(' ')}</span></div>` : '') +
     (groups.length ? `<div class="spk-sounds"><div class="spk-sounds-k">소리별 결과 · ${rows.length}개 · 표시된 것만 제 의도와 조금 다르네요.</div><div class="spk-strip">` +
       groups.map(g => `<span class="spk-wg"><span class="spk-wt">${esc(g.word)}</span><span class="spk-phs">` +
-        g.items.map(p2 => `<span class="spk-ph ${esc(p2.status)}" title="${esc(PH_TITLE[p2.status] || '')}">${esc(p2.ipa)}</span>`).join('') + '</span></span>').join('') +
+        g.items.map(p2 => `<button class="spk-ph ${esc(p2.status)}" data-act="spk-ph" data-ipa="${esc(p2.ipa)}"
+          data-st="${esc(p2.status)}" data-word="${esc(p2.word || g.word || '')}" data-heard="${esc(p2.heard_as || '')}"
+          aria-pressed="${SPK.ph === p2.ipa ? 'true' : 'false'}"
+          aria-label="/${esc(p2.ipa)}/ ${esc(PH_TITLE[p2.status] || '')} — 눌러서 설명 보기"
+          title="${esc(PH_TITLE[p2.status] || '')}">${esc(p2.ipa)}</button>`).join('') + '</span></span>').join('') +
       '</div></div>' : '') +
-    (f ? `<div class="spk-focus${f.heard_as ? '' : ' ok'}"><span class="spk-focus-ic" aria-hidden="true"></span><div>` +
+    (SPK.ph ? spkPhDetailHtml(r) : '') +
+    (f && !SPK.ph ? `<div class="spk-focus${f.heard_as ? '' : ' ok'}"><span class="spk-focus-ic" aria-hidden="true"></span><div>` +
       `<div class="spk-focus-h">'${esc(f.word || '')}'의 <b>/${esc(f.ipa)}/</b>` +
       (f.heard_as ? ` <span class="spk-heard">→ /${esc(f.heard_as)}/처럼 들렸어요</span>` : ' 소리가 약했어요') + '</div>' +
       (f.label ? `<div class="spk-focus-label">${esc(f.label)}</div>` : '') + (f.tip ? `<div class="spk-focus-tip">${esc(f.tip)}</div>` : '') + '</div></div>' : '') +
@@ -6411,6 +6441,14 @@ const ACT = {
   /* 회화 연습 입구. 발음기호 질문은 여기서 하지 않는다 — 학습 화면에 들어올 때 한 번뿐이다. */
   'sheet-open': () => { S.sheet = true; pushOverlay('sheet'); render(); },
   'ipa-open': () => { go('u-ipa'); },
+  /* 소리별 결과의 기호를 누르면 그 소리 설명이 카드 안에서 펼쳐진다. 같은 기호를 다시 누르면 접힌다. */
+  'spk-ph': el => {
+    const ipa = el.dataset.ipa;
+    if (SPK.ph === ipa) { SPK.ph = null; }
+    else { SPK.ph = ipa; SPK.phSt = el.dataset.st || 'ok'; SPK.phWord = el.dataset.word || ''; SPK.phHeard = el.dataset.heard || ''; }
+    if (typeof updateSpeakUi === 'function') updateSpeakUi(); else render();
+  },
+  'spk-ph-close': () => { SPK.ph = null; if (typeof updateSpeakUi === 'function') updateSpeakUi(); else render(); },
   'ipa-go': el => { const st = ipaState(); st.i = +el.dataset.i; render(); window.scrollTo(0, 0); },
   'ipa-next': () => { const st = ipaState(); const c = IPA_ALL[st.i]; if (c && !st.seen.includes(c.ipa)) st.seen.push(c.ipa);
     st.i = Math.min(IPA_ALL.length - 1, st.i + 1); render(); window.scrollTo(0, 0); },
