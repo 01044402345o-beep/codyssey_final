@@ -4490,6 +4490,17 @@ function scrSplit(tab) {
     { appbar: appbar(tab === 'u-study' ? '학습' : '일정표', { act: tab === 'u-study' ? ipaEntryBtn() : pastEntryBtn() }), tabbar: true, tab, wide: true });
 }
 
+/* 덱의 첫 장 — 오늘의 알람 카드. 뒤집기·진도 집계 없음 */
+function alarmView(r, head, banner) {
+  const pr = progress(), total = deckLen(r);
+  return { inner: `<div class="app-pad">${head}${banner ? banner + '<div style="height:10px"></div>' : ''}
+      ${alarmCard(pr, { inDeck: true })}
+      <div class="card-nav"><button class="round" data-act="card-prev" disabled>${I.back}</button>
+        <div style="text-align:center"><div class="dots">${r.ids.map((_, k) => `<i class="${k === 0 ? 'cur' : ''}"></i>`).join('')}</div>
+        <div class="small" style="margin-top:6px" data-live="flipcount">오늘의 알람 · 문장 ${r.ids.length}개 · 덱 1/${total}</div></div>
+        <button class="round" data-act="card-next">${I.next}</button></div></div>`, bottom: '', tabbar: false };
+}
+
 /* SCR-08 */
 function studyView(r, opts = {}) {
   if (S.card.date !== r.date) resetCard(r.date);
@@ -4505,9 +4516,14 @@ function studyView(r, opts = {}) {
   /* 미래 날짜 안내는 아래 완료 버튼 옆으로 옮겼다 — 같은 말을 두 곳에서 하지 않는다 */
   else if (st === 'miss') banner = notice('지난 날짜예요. 지금 학습하면 완료로 기록돼요.', 'warn');
 
+  // 오늘의 알람이 먼저다 — '아직 학습일이 아니에요'(미래 날짜 확인)보다 앞에 둔다. 알람을 넘기면 그다음에 확인이 나온다.
+  if (deckAlarmOn(r)) return alarmView(r, head, banner);
+
   // 미래 날짜: 카드를 보여 주기 전에 확인 창(팀 요청 — 안내문이 눈에 띄지 않아 사용자 흐름이 끊겼다).
   // '미리 학습하기'를 고른 날·이미 미리 학습을 마친 날은 다시 묻지 않는다.
-  if (r.kind !== 'drill' && r.kind !== 'free' && !r.completed && !ended && r.date > S.today && !PROG.pre[r.date] && !previewOk.has(r.date)) {
+  // 학습 메뉴(학습 탭으로 들어온 학습 화면)는 예외 — 묻지 않고 바로 카드를 연다(11/05 사용자 지시). 일정표에서 들어온 길은 그대로 묻는다.
+  const askPreview = !(S.screen === 'u-study' && studyEntryIsTab());
+  if (askPreview && r.kind !== 'drill' && r.kind !== 'free' && !r.completed && !ended && r.date > S.today && !PROG.pre[r.date] && !previewOk.has(r.date)) {
     const gateBody = `${Dt.full(r.date)} 학습이에요. 지금 학습한 기록은 완료율에 바로 들어가지 않아요. <b>카드를 모두 뒤집어 두면 그날 자동으로 완료</b>돼요.`;
     if (opts.inline) {   // 넓은 화면 2열: 일정표를 여는 것만으로 창이 뜨지 않게, 오른쪽 상세 안에 같은 안내를 둔다
       return { inner: `<div class="app-pad">${head}<div class="card" style="margin-top:12px"><b>아직 학습일이 아니에요</b><p class="small" style="margin:8px 0 12px;line-height:1.6">${gateBody}</p>
@@ -4532,15 +4548,6 @@ function studyView(r, opts = {}) {
       <div class="title-lg">학습 완료!</div><p class="sub">문장 ${r.ids.length}개를 모두 확인했어요. 완료율이 <b>${Math.round(pr.rate * 100)}%</b>로 갱신됐어요.</p></div>
       <button class="btn primary block" data-act="tab" data-id="u-home">홈으로</button><div style="height:8px"></div>
       <button class="btn soft block" data-act="restudy">다시 보기</button></div>`, bottom: '', tabbar: true };
-  }
-  if (deckAlarmOn(r)) {   // 덱의 첫 장 — 알람 카드. 뒤집기·진도 집계 없음
-    const pr = progress(), total = deckLen(r);
-    return { inner: `<div class="app-pad">${head}${banner ? banner + '<div style="height:10px"></div>' : ''}
-      ${alarmCard(pr, { inDeck: true })}
-      <div class="card-nav"><button class="round" data-act="card-prev" disabled>${I.back}</button>
-        <div style="text-align:center"><div class="dots">${r.ids.map((_, k) => `<i class="${k === 0 ? 'cur' : ''}"></i>`).join('')}</div>
-        <div class="small" style="margin-top:6px" data-live="flipcount">오늘의 알람 · 문장 ${r.ids.length}개 · 덱 1/${total}</div></div>
-        <button class="round" data-act="card-next">${I.next}</button></div></div>`, bottom: '', tabbar: false };
   }
   const i = deckIdx(r), s = S.smap[r.ids[i]];
   const isNew = r.kind === 'new' || (r.newIds || []).includes(s.id);
@@ -4621,7 +4628,11 @@ function closeSheet() {
    덱 위치를 i 에 섞으면, 알람이 붙는지(입구·화면)가 바뀔 때 보던 문장이 한 칸씩 밀린다
    (예: 넓은 화면에서 학습 탭 → 일정표 오른쪽 상세, 같은 날짜를 일정표에서 다시 열기). */
 const studyEntryIsTab = () => !S.drill && S.studyEntry === 'tab';
-const alarmFirst = r => !!r && r.kind !== 'drill' && S.screen === 'u-study' && studyEntryIsTab();
+/* 오늘의 알람은 '오늘'을 보고 있을 때만 덱 맨 앞에 둔다 — 학습 탭으로 들어온 학습 화면, 그리고 넓은 화면의
+   일정표(오른쪽 상세). 사용자가 오늘이 아닌 다른 날짜를 고르면 알람 없이 그날로 바로 간다(11/05 사용자 지시). */
+const pickedToday = () => !S.studyDate || S.studyDate === S.today;
+const alarmFirst = r => !!r && r.kind !== 'drill' && r.kind !== 'free' && !S.drill && pickedToday()
+  && ((S.screen === 'u-study' && studyEntryIsTab()) || (S.screen === 'u-sched' && isWide()));
 const deckOffset = r => (alarmFirst(r) ? 1 : 0);
 const deckLen = r => r.ids.length + deckOffset(r);
 const deckAlarmOn = r => alarmFirst(r) && S.card.alarm !== false;
