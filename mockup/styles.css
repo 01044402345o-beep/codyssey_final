@@ -498,7 +498,8 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .geo-sb { position: absolute; right: 1px; width: 22px; z-index: 31; touch-action: none; cursor: pointer; }
 .geo-sb[hidden] { display: none; }
 .geo-sb::before { content: ""; position: absolute; top: 0; bottom: 0; right: 8px; width: 4px; border-radius: 999px; background: var(--surface-seg); }
-.geo-sb-thumb { position: absolute; top: 0; left: 0; right: 0; display: block; cursor: grab; }
+.geo-sb-thumb { position: absolute; top: 0; left: 0; right: 0; display: block; cursor: grab;
+  will-change: transform; backface-visibility: hidden; }   /* 손잡이를 따로 합성해 스크롤 중에도 매끄럽게 */
 .geo-sb-thumb::after { content: ""; position: absolute; top: 0; bottom: 0; right: 7px; width: 6px; border-radius: 999px; background: var(--text-3); }
 .geo-sb:active .geo-sb-thumb { cursor: grabbing; }
 .geo-opt { display: flex; flex-direction: column; gap: 2px; min-height: 44px; padding: 9px 12px; border-radius: 8px; cursor: pointer; }

@@ -3539,7 +3539,16 @@ function geoSb(ul) {
   const th = Math.max(32, Math.round(track * ul.clientHeight / ul.scrollHeight));
   sb.style.top = (ul.offsetTop + pad) + 'px'; sb.style.height = track + 'px';
   sb.firstChild.style.height = th + 'px';
-  sb.firstChild.style.transform = `translateY(${Math.round((track - th) * (max ? ul.scrollTop / max : 0))}px)`;
+  if (sb._drag) return;   // 끄는 중에는 손잡이가 손가락을 그대로 따른다(아래 pointermove) — 스크롤 값으로 되돌리면 떨린다
+  // 소수점 그대로(반올림하면 긴 목록에서 손잡이가 1px 계단으로 뚝뚝 움직인다)
+  sb.firstChild.style.transform = `translate3d(0, ${((track - th) * (max ? ul.scrollTop / max : 0)).toFixed(2)}px, 0)`;
+}
+/* 스크롤 이벤트마다 바로 그리지 않고 화면이 다시 그려지기 직전(한 프레임에 한 번)에 맞춘다 —
+   이벤트마다 크기를 읽고 스타일을 쓰면 프레임을 놓쳐 손잡이가 끊겨 보인다. */
+const GEO_SB_Q = new Set(); let geoSbRaf = 0;
+function geoSbLater(ul) {
+  GEO_SB_Q.add(ul);
+  if (!geoSbRaf) geoSbRaf = requestAnimationFrame(() => { geoSbRaf = 0; const q = [...GEO_SB_Q]; GEO_SB_Q.clear(); q.forEach(geoSb); });
 }
 /* 손잡이를 끌면 그 비율로 목록을 옮기고, 막대의 빈 곳을 누르면 거기로 건너뛴다.
    누르는 동안 칸의 포커스를 지킨다(pointerdown 기본 동작을 막는다 — 그래야 목록이 닫히지 않는다). */
@@ -3551,10 +3560,18 @@ document.addEventListener('pointerdown', e => {
   const grab = e.target === thumb ? e.clientY - t0.top : t0.height / 2;   // 손잡이를 잡은 자리(빈 곳이면 가운데)
   const move = y => { const track = r0.height, th = t0.height, max = ul.scrollHeight - ul.clientHeight;
     ul.scrollTop = Math.max(0, Math.min(1, (y - r0.top - grab) / Math.max(1, track - th))) * max; };
-  if (e.target !== thumb) move(e.clientY);
+  /* 끄는 동안: 손잡이는 손가락 위치에 곧바로(소수점까지) 두고, 목록은 프레임마다 한 번 그 비율로 옮긴다. */
+  let lastY = e.clientY, raf = 0;
+  const place = y => { const track = r0.height, th = t0.height, f = Math.max(0, Math.min(1, (y - r0.top - grab) / Math.max(1, track - th)));
+    thumb.style.transform = `translate3d(0, ${((track - th) * f).toFixed(2)}px, 0)`; };
+  const frame = () => { raf = 0; place(lastY); move(lastY); };
+  sb._drag = true; sb.classList.add('drag');
+  if (e.target !== thumb) frame();
   try { sb.setPointerCapture(e.pointerId); } catch (err) { /* 지원 안 함 */ }
-  const onMove = ev => move(ev.clientY);
-  const onUp = () => { sb.removeEventListener('pointermove', onMove); sb.removeEventListener('pointerup', onUp); sb.removeEventListener('pointercancel', onUp); };
+  const onMove = ev => { lastY = ev.clientY; if (!raf) raf = requestAnimationFrame(frame); };
+  const onUp = () => { if (raf) { cancelAnimationFrame(raf); frame(); }
+    sb._drag = false; sb.classList.remove('drag'); geoSb(ul);
+    sb.removeEventListener('pointermove', onMove); sb.removeEventListener('pointerup', onUp); sb.removeEventListener('pointercancel', onUp); };
   sb.addEventListener('pointermove', onMove); sb.addEventListener('pointerup', onUp); sb.addEventListener('pointercancel', onUp);
 });
 window.addEventListener('resize', () => document.querySelectorAll('.geo-list:not([hidden])').forEach(geoSb));
@@ -3732,7 +3749,7 @@ function geoMaybeMore() {
 document.addEventListener('scroll', e => {
   const ul = e.target;
   if (!ul || !ul.id || !/^geo-list-/.test(ul.id)) return;
-  geoSb(ul);
+  geoSbLater(ul);
   if (ul.scrollTop + ul.clientHeight >= ul.scrollHeight - 400) geoMaybeMore();
 }, true);
 function geoQueryLater(el) {
