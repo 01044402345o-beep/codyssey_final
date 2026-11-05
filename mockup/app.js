@@ -4699,6 +4699,7 @@ function scrIpa() {
           <span class="sr-only">${esc(w)} 듣기</span></button>`).join('')}</div></div>` : '';
   const inner = `<div class="app-pad">
     <div class="ipa-secs" role="group" aria-label="소리 갈래">${secs}</div>
+    <div class="ipa-wrap">
     <div class="ipa-card">
       <div class="ipa-card-h"><span class="ipa-tag">${esc(c.sec)}</span>
         <span class="ipa-count"><b>${i + 1}</b> / ${n}</span></div>
@@ -4722,6 +4723,7 @@ function scrIpa() {
       ${done ? `<div class="ipa-done">${I.check}<span>기호 ${n}개를 모두 봤어요</span></div>` : ''}
     </div>
     <div class="ipa-strip" role="group" aria-label="기호 ${n}개">${strip}</div>
+    </div>
     <div class="ipa-neigh"><button class="ipa-neigh-b" data-act="ipa-go" data-i="${(i - 1 + n) % n}">${I.back}<span>/${esc(prev.ipa)}/</span></button>
       <button class="ipa-neigh-b" data-act="ipa-go" data-i="${(i + 1) % n}"><span>/${esc(next.ipa)}/</span>${I.next}</button></div>
     <p class="small ipa-foot">밑줄은 그 소리를 만드는 철자예요. <b>한국인 취약</b>은 한국어에 같은 소리가 없어 자주 틀리는 기호예요.</p>
