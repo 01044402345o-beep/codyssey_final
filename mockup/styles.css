@@ -2457,6 +2457,11 @@ body.is-narrow .spk-card { border-radius: 12px; }
 @media (orientation: landscape) and (max-height: 620px) {
   .pframe .appbar { padding: 0 var(--gutter) 2px; }
   .pframe .appbar h2 { font-size: 0.9375rem; }
+  /* 가행에서는 위아래 여백이 곧 '한 화면에 담기는가'다 */
+  .pframe .app-pad { padding: 2px var(--gutter) 8px; }
+  /* 접기 토글이 sticky 하단바 뒤로 들어가 눌리지 않던 문제 — 스크롤 끝에 바 높이만큼 여백을 둔다 */
+  .pframe .app { scroll-padding-bottom: 68px; }
+  .ipa-wrap { padding-bottom: 60px; }
   .pframe .bottombar { padding: 4px var(--gutter); }
   .pframe .bottombar .btn { min-height: 42px; }
   .pframe .appbar .act { min-height: 36px; }
@@ -2464,7 +2469,7 @@ body.is-narrow .spk-card { border-radius: 12px; }
   .ipa-ticks { margin: 0 0 6px; }
   .ipa-secs { margin: 0 0 6px; border-radius: 999px; flex-wrap: nowrap; }
   .ipa-secs button { min-height: 36px; padding: 2px 8px; font-size: 0.75rem; }
-  .ipa-card { padding: 6px clamp(10px, 3cqi, 16px) 0; border-radius: 14px; }
+  .ipa-card { padding: 4px clamp(8px, 2.6cqi, 14px) 0; border-radius: 14px; }
   .ipa-card-h { padding-bottom: 5px; }
   .ipa-hero { padding: 4px 0 2px; }
   .ipa-ko { margin-top: 1px; font-size: 0.875rem; }
@@ -2477,7 +2482,7 @@ body.is-narrow .spk-card { border-radius: 12px; }
   .ipa-ab { min-height: 32px; padding: 4px 10px; }
   .ipa-pair-h > span { display: none; }
   .ipa-hero-play { width: clamp(40px, 10cqi, 46px); height: clamp(40px, 10cqi, 46px); }
-  .ipa-sec { padding: 6px 0; }
+  .ipa-sec { padding: 5px 0; }
   .ipa-foot { display: none; }
   /* 아래쪽 이전/다음·눈금·카드 머리는 가로에서 앱바 조작으로 대신한다 */
   .ipa-neigh { display: none; }
