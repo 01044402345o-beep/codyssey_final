@@ -3533,9 +3533,9 @@ function geoClose(onlyKey) {
   GEO.open = null;
   geoHideList(document.querySelector(`[data-geo="${CSS.escape(o.key)}"]`));
 }
-/* 목록 한 번에 그리는 줄 수. 넘으면 '더 보기'로 이어 붙인다 —
-   잘라 버리면 '생략된 목록'이 되고, 한꺼번에 다 그리면 폰이 버벅인다. */
-const GEO_PAGE = 80;
+/* 불러온 목록은 처음부터 전부 그린다(국가 248개·도시 한 쪽 500곳 — 사용자가 '더 보기'를 누르지 않아도 전체가 보인다).
+   서버에 남은 도시(큰 나라)는 목록을 끝 가까이 내리면 저절로 이어 받는다. '더 보기' 단추는 그 이어 받기가
+   실패했을 때만, 목록 안에 '다시 불러오기'로 나온다(사용자가 직접 다시 요청하는 경우). */
 function geoUnit(key) { return /^country/.test(key) ? '개국' : '곳'; }
 function geoOpts(el, items, from, to) {
   const isCountry = /^country/.test(geoKey(el)), ul = geoListEl(el);
@@ -3546,10 +3546,14 @@ function geoOpts(el, items, from, to) {
       : `<li role="option" id="${ul.id}-o${i}" class="geo-opt" data-geo-i="${i}" aria-selected="false"><b>${esc(it.label)}</b><small>${esc([it.label !== it.name ? it.name : '', it.region, it.population >= 10000 ? `인구 ${fmtPop(it.population)}` : ''].filter(Boolean).join(' · '))}</small></li>`;
   }).join('');
 }
-/* 목록 아래 '더 보기'·'전체 N 중 M 표시' 두 줄. M 은 지금 그려진 줄, 남은 수는 서버에 남은 쪽까지 센다. */
+/* 목록 아래 두 줄: 남은 줄 안내(있을 때만)·'전체 N 중 M 표시'. 남은 수는 서버에 남은 쪽까지 센다.
+   남은 줄은 내리면 저절로 이어 받는다 — 단추는 이어 받기가 실패했을 때의 '다시 불러오기'뿐이다. */
 function geoFoot(key, o) {
-  const u = geoUnit(key), left = Math.max(0, o.total - o.shown);
-  const more = left > 0 ? `<button type="button" data-act="geo-more" data-geo-key="${esc(key)}"${o.loadingMore ? ' disabled' : ''}>${o.loadingMore ? '불러오는 중…' : `＋ 나머지 ${left.toLocaleString('ko-KR')}${u} 더 보기`}</button>` : '';
+  const u = geoUnit(key), left = Math.max(0, o.total - o.shown), n = left.toLocaleString('ko-KR') + u;
+  const more = !left ? ''
+    : o.moreFailed ? `<button type="button" data-act="geo-more" data-geo-key="${esc(key)}">나머지 ${n}을 못 불러왔어요 — 다시 불러오기</button>`
+    : o.loadingMore ? `<span class="geo-more-st">나머지 ${n} 불러오는 중…</span>`
+    : `<span class="geo-more-st">아래로 내리면 나머지 ${n}을 이어서 보여드려요</span>`;
   return { more, count: `전체 ${o.total.toLocaleString('ko-KR')}${u} 중 ${o.shown.toLocaleString('ko-KR')}${u} 표시` };
 }
 function geoRender(el, items, note, total, extra = {}) {
@@ -3561,11 +3565,11 @@ function geoRender(el, items, note, total, extra = {}) {
   document.querySelectorAll('[data-geo][aria-expanded="true"]').forEach(other => { if (other !== el) geoHideList(other); });
   /* 지금 칸에 적힌 값이 목록에 있으면 그 줄까지 그려 두고 표시한다(목록을 열면 고른 곳이 보이게). */
   const cur = extra.current ? items.findIndex(it => geoNorm(isCountry ? (it.ko || it.name) : it.label) === geoNorm(extra.current)) : -1;
-  const shown = Math.min(items.length, Math.max(GEO_PAGE, cur >= 0 ? Math.ceil((cur + 1) / GEO_PAGE) * GEO_PAGE : 0));
+  const shown = items.length;   // 불러온 것은 전부 그린다
   GEO.open = { key, items, active: cur, shown, total: Math.max(total == null ? items.length : total, items.length),
-    browse: !!extra.browse, iso2: extra.iso2 || null, loadingMore: false };
+    browse: !!extra.browse, iso2: extra.iso2 || null, loadingMore: false, moreFailed: false };
   const opts = geoOpts(el, items, 0, shown);
-  /* '생략 없음'을 화면이 스스로 말한다: 전체 개수를 늘 적고, 남은 줄은 '더 보기'로 이어진다. */
+  /* '생략 없음'을 화면이 스스로 말한다: 전체 개수를 늘 적고, 서버에 남은 줄은 내리면 이어진다. */
   const foot = geoFoot(key, GEO.open);
   ul.innerHTML = (opts || '') + (foot.more ? `<li class="geo-note geo-more" role="presentation">${foot.more}</li>` : '')
     + (note ? `<li class="geo-note" role="presentation">${note}</li>` : '')
@@ -3579,9 +3583,11 @@ function geoRender(el, items, note, total, extra = {}) {
     if (li) { li.setAttribute('aria-selected', 'true'); el.setAttribute('aria-activedescendant', li.id); ul.scrollTop = Math.max(0, li.offsetTop - 8); }
   }
 }
-/* '더 보기': 다음 묶음을 뒤에 붙인다. 앞의 스크롤 위치·이미 고른 줄은 그대로 둔다. */
+/* 서버에 남은 도시 다음 쪽을 받아 뒤에 붙인다(목록을 끝 가까이 내렸을 때·실패 뒤 '다시 불러오기').
+   앞의 스크롤 위치·이미 고른 줄은 그대로 둔다. */
 async function geoMore(key) {
   const o = GEO.open; if (!o || o.key !== key || o.loadingMore) return;
+  o.moreFailed = false;
   const el = document.querySelector(`[data-geo="${CSS.escape(key)}"]`), ul = el && geoListEl(el);
   if (!ul) return;
   /* 단추 자리를 다시 그리면 포커스가 있던 단추가 사라져 포커스가 body 로 떨어지고, 그러면 '바깥으로 나갔다'고
@@ -3598,10 +3604,11 @@ async function geoMore(key) {
     const page = await geoCityPage(o.iso2, '', o.items.length);
     o.loadingMore = false;
     if (GEO.open !== o) return;                                   // 그사이 목록이 닫히거나 바뀌었다
+    if (page.error) { o.moreFailed = true; paint(); return; }     // 이때만 '다시 불러오기' 단추
     if (!page.items.length) { o.total = o.items.length; paint(); return; }
     o.items.push(...page.items); o.total = Math.max(page.total, o.items.length);
   }
-  const from = o.shown, to = Math.min(from + GEO_PAGE, o.items.length);
+  const from = o.shown, to = o.items.length;
   o.shown = to;
   const more = ul.querySelector('.geo-more');
   if (more) more.insertAdjacentHTML('beforebegin', geoOpts(el, o.items, from, to));
@@ -3616,10 +3623,11 @@ async function geoCityPage(iso2, q, offset) {
   let items = [], total = 0;
   try {
     const r = await fetch(`${API.base}/geo/cities?country=${iso2}&limit=${q ? 2000 : GEO_CITY_PAGE}&offset=${offset}&q=${encodeURIComponent(q)}`);
-    const body = r.ok ? await r.json() : null;
+    if (!r.ok) throw new Error('geo ' + r.status);
+    const body = await r.json();
     items = (body && body.cities) || [];
     total = (body && body.total) || items.length;
-  } catch (e) { items = []; total = 0; }
+  } catch (e) { return { items: [], total: 0, error: true }; }   // 실패는 캐시하지 않는다 — 다시 불러오기가 다시 받는다
   if (GEO.cities.size > 200) { const first = GEO.cities.keys().next().value; if (first !== ck) GEO.cities.delete(first); }
   GEO.cities.set(ck, { items, total });
   return { items: items.slice(), total };
@@ -3628,6 +3636,7 @@ function fmtPop(n) { return n >= 10000 ? `${Math.round(n / 10000).toLocaleString
 function geoMove(el, d) {
   const o = GEO.open; if (!o || !o.shown) return;
   o.active = (o.active + d + o.shown) % o.shown;          // 그려진 줄 안에서만 움직인다
+  if (d > 0 && o.active >= o.shown - 20) geoMaybeMore();   // 끝 가까이 오면 남은 줄을 이어 받는다(단추 없이)
   const ul = geoListEl(el);
   ul.querySelectorAll('.geo-opt').forEach((li, i) => li.setAttribute('aria-selected', i === o.active ? 'true' : 'false'));
   const cur = ul.querySelector(`[data-geo-i="${o.active}"]`);
@@ -3677,6 +3686,16 @@ async function geoQuery(el, opt = {}) {
   geoRender(el, items, items.length ? '' : (q ? '목록에 없어요 — 적은 그대로 써도 돼요.' : ''), total,
     { browse: !q, iso2: c.iso2, current: browse ? current : '' });
 }
+/* 목록을 끝 가까이 내리면 서버에 남은 줄을 이어 받는다 — 사용자가 단추를 누를 필요가 없다. */
+function geoMaybeMore() {
+  const o = GEO.open;
+  if (o && !o.loadingMore && !o.moreFailed && o.browse && o.iso2 && o.items.length < o.total) geoMore(o.key);
+}
+document.addEventListener('scroll', e => {
+  const ul = e.target;
+  if (!ul || !ul.id || !/^geo-list-/.test(ul.id) || ul.scrollTop + ul.clientHeight < ul.scrollHeight - 400) return;
+  geoMaybeMore();
+}, true);
 function geoQueryLater(el) {
   clearTimeout(GEO.timer);
   GEO.timer = setTimeout(() => geoQuery(el), geoKey(el) === 'country' ? 0 : 180);   // 도시는 입력이 멈추면 한 번
