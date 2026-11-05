@@ -3520,8 +3520,44 @@ function geoListEl(el) { return document.getElementById(el.getAttribute('aria-co
 function geoHideList(el) {
   if (!el) return;
   el.setAttribute('aria-expanded', 'false'); el.removeAttribute('aria-activedescendant');
-  const ul = geoListEl(el); if (ul) { ul.hidden = true; ul.innerHTML = ''; }
+  const ul = geoListEl(el); if (ul) { ul.hidden = true; ul.innerHTML = ''; geoSb(ul); }
 }
+/* 목록 오른쪽 스크롤 막대. 폰 브라우저(iOS·안드로이드)는 스크롤 막대를 겹쳐 그리다 금방 숨기고 꾸밈도 무시해서,
+   목록이 얼마나 긴지·어디쯤인지 안 보인다. 그래서 막대를 직접 그린다 — 손잡이를 끌거나 막대를 눌러 옮길 수 있다.
+   목록이 넘칠 때만 보인다. 기본 막대는 CSS 에서 숨겨 두 개가 겹치지 않게 한다. */
+function geoSb(ul) {
+  const box = ul && ul.parentElement; if (!box) return;
+  let sb = box.querySelector(':scope > .geo-sb');
+  const over = !ul.hidden && ul.scrollHeight > ul.clientHeight + 1;
+  if (!sb) {
+    if (!over) return;
+    sb = document.createElement('div'); sb.className = 'geo-sb'; sb.setAttribute('aria-hidden', 'true');   // 읽기 도구는 목록 자체를 읽는다
+    sb.dataset.for = ul.id; sb.innerHTML = '<i class="geo-sb-thumb"></i>'; box.appendChild(sb);
+  }
+  sb.hidden = !over; if (!over) return;
+  const pad = 6, track = ul.clientHeight - pad * 2, max = ul.scrollHeight - ul.clientHeight;
+  const th = Math.max(32, Math.round(track * ul.clientHeight / ul.scrollHeight));
+  sb.style.top = (ul.offsetTop + pad) + 'px'; sb.style.height = track + 'px';
+  sb.firstChild.style.height = th + 'px';
+  sb.firstChild.style.transform = `translateY(${Math.round((track - th) * (max ? ul.scrollTop / max : 0))}px)`;
+}
+/* 손잡이를 끌면 그 비율로 목록을 옮기고, 막대의 빈 곳을 누르면 거기로 건너뛴다.
+   누르는 동안 칸의 포커스를 지킨다(pointerdown 기본 동작을 막는다 — 그래야 목록이 닫히지 않는다). */
+document.addEventListener('pointerdown', e => {
+  const sb = e.target.closest && e.target.closest('.geo-sb'); if (!sb) return;
+  const ul = document.getElementById(sb.dataset.for); if (!ul || ul.hidden) return;
+  e.preventDefault(); GEO.keep = ul.id;
+  const thumb = sb.firstChild, r0 = sb.getBoundingClientRect(), t0 = thumb.getBoundingClientRect();
+  const grab = e.target === thumb ? e.clientY - t0.top : t0.height / 2;   // 손잡이를 잡은 자리(빈 곳이면 가운데)
+  const move = y => { const track = r0.height, th = t0.height, max = ul.scrollHeight - ul.clientHeight;
+    ul.scrollTop = Math.max(0, Math.min(1, (y - r0.top - grab) / Math.max(1, track - th))) * max; };
+  if (e.target !== thumb) move(e.clientY);
+  try { sb.setPointerCapture(e.pointerId); } catch (err) { /* 지원 안 함 */ }
+  const onMove = ev => move(ev.clientY);
+  const onUp = () => { sb.removeEventListener('pointermove', onMove); sb.removeEventListener('pointerup', onUp); sb.removeEventListener('pointercancel', onUp); };
+  sb.addEventListener('pointermove', onMove); sb.addEventListener('pointerup', onUp); sb.addEventListener('pointercancel', onUp);
+});
+window.addEventListener('resize', () => document.querySelectorAll('.geo-list:not([hidden])').forEach(geoSb));
 function geoClose(onlyKey) {
   const o = GEO.open;
   if (onlyKey) {                                        // 그 칸은 반드시 닫는다(다른 칸이 열려 있어도)
@@ -3578,9 +3614,10 @@ function geoRender(el, items, note, total, extra = {}) {
   const show = !!(opts || note);
   ul.hidden = !show;
   el.setAttribute('aria-expanded', show ? 'true' : 'false');
+  geoSb(ul);
   if (show && cur >= 0) {
     const li = ul.querySelector(`[data-geo-i="${cur}"]`);
-    if (li) { li.setAttribute('aria-selected', 'true'); el.setAttribute('aria-activedescendant', li.id); ul.scrollTop = Math.max(0, li.offsetTop - 8); }
+    if (li) { li.setAttribute('aria-selected', 'true'); el.setAttribute('aria-activedescendant', li.id); ul.scrollTop = Math.max(0, li.offsetTop - 8); geoSb(ul); }
   }
 }
 /* 서버에 남은 도시 다음 쪽을 받아 뒤에 붙인다(목록을 끝 가까이 내렸을 때·실패 뒤 '다시 불러오기').
@@ -3597,6 +3634,7 @@ async function geoMore(key) {
     const more = ul.querySelector('.geo-more'), count = ul.querySelector('.geo-count'), foot = geoFoot(key, o);
     if (more) { if (foot.more) more.innerHTML = foot.more; else more.remove(); }
     if (count) count.textContent = foot.count;
+    geoSb(ul);
   };
   if (o.shown >= o.items.length && o.items.length < o.total && o.browse && o.iso2) {
     /* 빈 칸 도시 목록: 받아 둔 줄을 다 그렸으면 서버에서 다음 쪽을 받아 이어 붙인다 — 끝까지 닿는다. */
@@ -3693,8 +3731,9 @@ function geoMaybeMore() {
 }
 document.addEventListener('scroll', e => {
   const ul = e.target;
-  if (!ul || !ul.id || !/^geo-list-/.test(ul.id) || ul.scrollTop + ul.clientHeight < ul.scrollHeight - 400) return;
-  geoMaybeMore();
+  if (!ul || !ul.id || !/^geo-list-/.test(ul.id)) return;
+  geoSb(ul);
+  if (ul.scrollTop + ul.clientHeight >= ul.scrollHeight - 400) geoMaybeMore();
 }, true);
 function geoQueryLater(el) {
   clearTimeout(GEO.timer);
