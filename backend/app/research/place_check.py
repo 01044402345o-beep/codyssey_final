@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import html
 import re
 import threading
 import time
@@ -30,6 +31,7 @@ from .sources import LICENSES, google_places, tourapi, wikidata
 MAX_KM = 40.0
 PHOTO_KM = 1.0                       # 다른 소스로 찾은 곳에 Wikidata 사진을 붙일 때 허용 거리
 NOMINATIM = "https://nominatim.openstreetmap.org/reverse"
+COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 _nominatim_lock = threading.Lock()
 _nominatim_last = [0.0]              # Nominatim 사용 정책: 초당 1회 이하
 CACHE_TTL = 7 * 86400
@@ -96,7 +98,38 @@ def commons_image(filename: str, width: int = 500) -> Optional[dict]:
     q = urllib.parse.quote(name)
     ext = ".png" if name.lower().endswith((".svg", ".tif", ".tiff")) else ""
     return {"src": f"https://upload.wikimedia.org/wikipedia/commons/thumb/{h[0]}/{h[:2]}/{q}/{width}px-{q}{ext}",
-            "page": "https://commons.wikimedia.org/wiki/File:" + q, "credit": "Wikimedia Commons"}
+            "page": "https://commons.wikimedia.org/wiki/File:" + q, "credit": "Wikimedia Commons", "file": name}
+
+
+def _plain(s: str, n: int) -> str:
+    """위키미디어 extmetadata 값(HTML 섞임) → 글자만."""
+    s = html.unescape(re.sub(r"<[^>]+>", " ", s or ""))
+    return re.sub(r"\s+", " ", s).strip()[:n]
+
+
+def commons_meta(http: SafeHttp, image: dict) -> Optional[dict]:
+    """사진의 저작자·라이선스·원본 파일 문서(CC BY-SA 표시 요건 — 저작자·라이선스·출처 링크). 공용 API 가 주는 썸네일 주소를 쓴다.
+    라이선스를 알 수 없으면 None — 표시 요건을 못 채우는 사진은 보이지 않는다."""
+    name = (image or {}).get("file") or ""
+    if not name:
+        return None
+    res, d = http.get_json(COMMONS_API + "?" + urllib.parse.urlencode({
+        "action": "query", "titles": "File:" + name, "prop": "imageinfo", "iiprop": "url|extmetadata",
+        "iiurlwidth": 500, "iiextmetadatafilter": "Artist|LicenseShortName|LicenseUrl", "format": "json"}), timeout=8)
+    if not res.ok:
+        return None
+    pages = ((d or {}).get("query") or {}).get("pages") or {}
+    info = next(iter(((p or {}).get("imageinfo") or [{}])[0] for p in pages.values()), {}) if pages else {}
+    meta = info.get("extmetadata") or {}
+    lic = _plain((meta.get("LicenseShortName") or {}).get("value", ""), 40)
+    thumb = str(info.get("thumburl") or "").split("?")[0]      # 공용 API 는 thumb.wikimedia.org(+추적 쿼리)를 준다
+    page = str(info.get("descriptionurl") or image.get("page") or "")
+    if not lic or not re.fullmatch(r"https://(upload|thumb)\.wikimedia\.org/[^\s\"'<>?]+", thumb):
+        return None
+    lic_url = str((meta.get("LicenseUrl") or {}).get("value") or "")
+    return {"src": thumb, "page": page if page.startswith("https://commons.wikimedia.org/") else image.get("page", ""),
+            "credit": "Wikimedia Commons", "author": _plain((meta.get("Artist") or {}).get("value", ""), 80) or "작자 미상",
+            "license": lic, "license_url": lic_url if re.fullmatch(r"https?://[^\s\"'<>]+", lic_url) else ""}
 
 
 def _wd_text(cl: dict, pid: str) -> str:
@@ -186,9 +219,12 @@ def _by_google(http: SafeHttp, ref: dict, name: str) -> Optional[dict]:
 def _photo_near(http: SafeHttp, name: str, lat: float, lon: float) -> Optional[dict]:
     """다른 소스로 찾은 곳: 같은 이름의 Wikidata 항목이 PHOTO_KM 안에 있으면 그 사진(P18)."""
     got = _by_wikidata(http, {"lat": lat, "lon": lon}, name)
-    if got and got.get("image") and verify.km(lat, lon, got["lat"], got["lon"]) <= PHOTO_KM:
-        return got["image"]
-    return None
+    if not got or not got.get("image") or verify.km(lat, lon, got["lat"], got["lon"]) > PHOTO_KM:
+        return None
+    a, b = _key(name), _key(got.get("name") or "")
+    if not a or not b or (a not in b and b not in a):        # 이름이 다르면 근처 다른 곳의 사진이다 — 붙이지 않는다
+        return None
+    return got["image"]
 
 
 def _reverse(http: SafeHttp, lat: float, lon: float) -> str:
@@ -208,6 +244,11 @@ def _enrich(http: SafeHttp, name: str, got: dict) -> dict:
     if not got.get("image"):
         try:
             got["image"] = _photo_near(http, name, got["lat"], got["lon"])
+        except Exception:  # noqa: BLE001
+            got["image"] = None
+    if got.get("image") and not got["image"].get("license"):
+        try:
+            got["image"] = commons_meta(http, got["image"])     # 저작자·라이선스를 못 알면 사진을 쓰지 않는다
         except Exception:  # noqa: BLE001
             got["image"] = None
     if not got.get("address"):

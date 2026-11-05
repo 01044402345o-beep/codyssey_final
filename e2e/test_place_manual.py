@@ -42,7 +42,8 @@ def check_route(route):
         out = {"status": "found", "name": "Tōdai-ji Temple", "distance_km": 2.4, "lat": 34.689, "lon": 135.8398,
                "address": "406-1 Zoshicho, Nara",
                "image": {"src": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Todaiji.jpg/500px-Todaiji.jpg",
-                         "page": "https://commons.wikimedia.org/wiki/File:Todaiji.jpg", "credit": "Wikimedia Commons"},
+                         "page": "https://commons.wikimedia.org/wiki/File:Todaiji.jpg", "credit": "Wikimedia Commons",
+                      "author": "Kim", "license": "CC BY-SA 4.0", "license_url": "https://creativecommons.org/licenses/by-sa/4.0"},
                "source": {"provider": "wikidata", "url": "https://www.wikidata.org/wiki/Q186148", "title": "Tōdai-ji Temple"}}
     elif name.startswith("kasuga"):
         out = {"status": "found", "name": "Kasuga Taisha", "distance_km": 3.1, "lat": 34.68, "lon": 135.84, "address": "160 Kasuganocho, Nara",
@@ -111,6 +112,7 @@ with sync_playwright() as p:
     # ── C: 확인 창 ──
     pg.wait_for_function("() => S.modal && /이 장소가 맞나요/.test(S.modal.title)", timeout=10000)
     modal = pg.inner_text(".modal")
+    check("C1b 사진 표시 요건: 저작자·라이선스·원본 링크", "© Kim" in modal and "CC BY-SA 4.0" in modal and "원본" in modal, modal[:300])
     check("C1 확인 창: 이름·주소·출처", "Tōdai-ji Temple" in modal and "406-1 Zoshicho, Nara" in modal and "Wikidata" in modal, modal[:240])
     src = pg.evaluate("(() => { const i = document.querySelector('.modal .pc-photo img'); return i ? i.getAttribute('src') : ''; })()")
     check("C2 사진은 서버(/place-photo)를 거친다", src.startswith("/place-photo?src=https%3A%2F%2Fupload.wikimedia.org") or "/place-photo?src=https%3A%2F%2Fupload.wikimedia.org" in src, src)
