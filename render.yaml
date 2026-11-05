@@ -88,6 +88,10 @@ services:
         sync: false
       - key: ITINERARY_DAILY_CAP
         sync: false
+      # 장소 생성 요청(보고서 장소 조사 POST /research) 하루 횟수 — 사용자(계정)/IP 당, 한국 날짜 기준. 기본 3, 0 = 제한 없음.
+      # 넘으면 '하루에 장소 검색을 할 수 있는 횟수를 초과했어요' + '대신 직접 입력하기'. 장소 한 곳 찾기(/place-check)는 세지 않는다
+      - key: PLACE_SEARCH_DAILY_LIMIT
+        sync: false
       # 한국관광공사 TourAPI(한국 도시 장소 — 저장 가능). 언어별 키가 없으면 공통 TOURAPI_SERVICE_KEY.
       # 일반 인증키는 계정당 하나라 보통 같은 값 — 서비스(언어)마다 활용신청만 따로. 조사는 영문 → 국문 순(TOURAPI_SERVICE 로 강제)
       - key: TOURAPI_SERVICE_KEY
