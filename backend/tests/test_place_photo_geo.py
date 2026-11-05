@@ -106,5 +106,45 @@ class GeoSearch(unittest.TestCase):
         self.assertIsNone(place_check.commons_geosearch(Bad(), "Shibuya Sky", 35.6, 139.7))
 
 
+class GeoEntity(unittest.TestCase):
+    """위키데이터 좌표 조회 — 다국어 라벨 대조."""
+
+    def test_korean_name_matches_korean_label(self):
+        self.assertTrue(place_check._label_tokens_match("광장시장", ["광장시장", "Gwangjang Market"]))
+        self.assertTrue(place_check._label_tokens_match("Gwangjang Market", ["광장시장", "Gwangjang Market"]))
+
+    def test_partial_place_name_rejected(self):
+        # '명동교자' 는 '명동'(동네)과 다른 곳이다 — 두 글자 낱말은 비교에서 빠진다
+        self.assertFalse(place_check._label_tokens_match("명동교자", ["명동"]))
+
+    def test_extra_words_in_label_still_match(self):
+        self.assertTrue(place_check._label_tokens_match("Eiffel Tower", ["Eiffel Tower", "에펠탑"]))
+
+    def test_sparql_row_parsing_and_exact_label_preference(self):
+        def row(item, img, dist, label):
+            return {"item": {"value": f"http://www.wikidata.org/entity/{item}"},
+                    "img": {"value": f"http://commons.wikimedia.org/wiki/Special:FilePath/{img}"},
+                    "dist": {"value": str(dist)}, "label": {"value": label}}
+        rows = [row("Q1", "Sub.jpg", 0.059, "경복궁 사정전"), row("Q2", "Main.jpg", 0.036, "경복궁"),
+                row("Q3", "Other.jpg", 0.010, "근처호텔")]
+
+        class H:
+            def __init__(self):
+                self.urls = []
+
+            def get_json(self, url, timeout=8):
+                self.urls.append(url)
+                if "sparql" in url:
+                    d = {"results": {"bindings": rows}}
+                else:      # 공용 파일 정보
+                    name = "Main.jpg" if "Main" in url else "Sub.jpg"
+                    d = {"query": {"pages": {"1": page(1, "File:" + name, THUMB, "CC BY-SA 4.0")}}}
+                return Resp(True, d), d
+        got = place_check.wikidata_geo_image(H(), "경복궁", 37.5796, 126.9770)
+        self.assertEqual(got["title"], "Main.jpg")   # 정확 라벨이 더 멀어도 이긴다
+        self.assertEqual(got["license"], "CC BY-SA 4.0")
+        self.assertEqual(got["credit"], "홍길동")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

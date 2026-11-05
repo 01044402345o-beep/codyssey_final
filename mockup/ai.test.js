@@ -787,7 +787,10 @@ test('장소 확인 창 응답(11/05): 주소는 글자만, 사진은 위키미�
   const ok = AI.placeCheckResult({ ...base, lat: 34.689, lon: 135.8398, address: ' 406-1  Zoshicho <b>Nara</b> ', address_source: 'OpenStreetMap (ODbL)',
     image: { src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/T.jpg/500px-T.jpg', page: 'https://commons.wikimedia.org/wiki/File:T.jpg' } });
   assert.deepEqual([ok.address, ok.addressSource, ok.lat, ok.lon], ['406-1 Zoshicho b Nara /b', 'OpenStreetMap (ODbL)', 34.689, 135.8398]);
-  assert.deepEqual(ok.image, { src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/T.jpg/500px-T.jpg', page: 'https://commons.wikimedia.org/wiki/File:T.jpg', credit: 'Wikimedia Commons' });
+  // 11/06: 썸네일 호스트가 thumb 으로 바뀌었고, credit 은 저작자명·license 는 그 파일의 라이선스다
+  assert.deepEqual(ok.image, { src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/T.jpg/500px-T.jpg', page: 'https://commons.wikimedia.org/wiki/File:T.jpg',
+    credit: '위키미디어 공용 기여자', license: '', licenseUrl: '' });
+  assert.ok(AI.placeCheckResult({ ...base, image: { src: 'https://thumb.wikimedia.org/x/500px-T.jpg', page: 'https://commons.wikimedia.org/wiki/File:T.jpg', credit: 'Wei-Te Wong', license: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/' } }).image, 'thumb 호스트도 받는다');
   for (const src of ['http://upload.wikimedia.org/a.jpg', 'https://evil.example/a.jpg', 'https://upload.wikimedia.org/a b.jpg', 'javascript:alert(1)']) {
     assert.equal(AI.placeCheckResult({ ...base, image: { src } }).image, null, src);
   }

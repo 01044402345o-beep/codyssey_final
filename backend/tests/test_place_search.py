@@ -97,20 +97,49 @@ class QuotaTest(unittest.TestCase):
         self.assertNotEqual(k, place_quota.key_for(uid="203.0.113.7"))      # 계정과 IP 는 다른 칸
 
 
-class EnrichTest(unittest.TestCase):
-    def test_commons_thumbnail_uses_md5_path_and_standard_width(self):
-        im = place_check.commons_image("Statue of Liberty 7.jpg")
-        self.assertEqual(im["src"], "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Statue_of_Liberty_7.jpg/500px-Statue_of_Liberty_7.jpg")
-        self.assertEqual(im["page"], "https://commons.wikimedia.org/wiki/File:Statue_of_Liberty_7.jpg")
-        self.assertTrue(place_check.commons_image("Map.svg")["src"].endswith("500px-Map.svg.png"))
-        for bad in ("", "../x.jpg", "a/b.jpg", "file.pdf"):
-            self.assertIsNone(place_check.commons_image(bad))
+class _FakeHttp:
+    """공용 API(이미지 정보)만 흉내 낸다."""
+    _PAGES = {"1": {"pageid": 1, "title": "File:X.jpg", "imageinfo": [{
+        "thumburl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/X.jpg/500px-X.jpg?utm_source=commons.wikimedia.org",
+        "extmetadata": {"LicenseShortName": {"value": "CC BY-SA 4.0"},
+                        "Artist": {"value": "<a href='#'>Wei-Te Wong</a>"},
+                        "LicenseUrl": {"value": "https://creativecommons.org/licenses/by-sa/4.0/"}}}]}}
 
+    def get_json(self, url, timeout=8):
+        import urllib.parse as up
+        title = up.parse_qs(up.urlparse(url).query).get("titles", ["File:X.jpg"])[0].replace("File:", "")
+        pg = {"pageid": 1, "title": "File:" + title, "imageinfo": [{
+            "thumburl": f"https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/{title}/500px-{title}?utm_source=commons.wikimedia.org",
+            "extmetadata": {"LicenseShortName": {"value": "CC BY-SA 4.0"},
+                            "Artist": {"value": "<a href='#'>Wei-Te Wong</a>"},
+                            "LicenseUrl": {"value": "https://creativecommons.org/licenses/by-sa/4.0/"}}}]}
+
+        class R:
+            ok = True
+        return R(), {"query": {"pages": {"1": pg}}}
+
+
+class EnrichTest(unittest.TestCase):
+    def test_commons_thumbnail_comes_from_the_api_verbatim(self):
+        """11/06: md5 로 주소를 조립하던 방식을 버렸다 — 그 주소는 upload.wikimedia.org(데이터센터 IP 403/429)로
+        가고 폭을 바꾸면 400 이 났다. 이제 공용 API 가 준 thumburl 을 글자 그대로 쓴다(utm 파라미터 포함)."""
+        with mock.patch.object(place_check, "SafeHttp", _FakeHttp):
+            im = place_check.commons_image("Statue_of_Liberty_7.jpg", 500)
+        self.assertIsNotNone(im)
+        self.assertTrue(im["src"].startswith("https://thumb.wikimedia.org/"), im["src"])
+        self.assertIn("500px-Statue_of_Liberty_7.jpg", im["src"])
+        self.assertEqual(im["license"], "CC BY-SA 4.0")
+        self.assertEqual(im["credit"], "Wei-Te Wong")            # 플랫폼 이름이 아니라 저작자
+        self.assertEqual(im["page"], "https://commons.wikimedia.org/wiki/File:Statue_of_Liberty_7.jpg")
+
+    def test_commons_rejects_non_image_name(self):
+        self.assertIsNone(place_check.commons_image("../../etc/passwd"))
+        self.assertIsNone(place_check.commons_image("thing.txt"))
     def test_wikidata_address_and_image_from_claims(self):
         cl = {"P18": [{"mainsnak": {"datavalue": {"value": "Todaiji.jpg"}}}],
               "P6375": [{"mainsnak": {"datavalue": {"value": {"text": "406-1 Zoshicho, Nara", "language": "en"}}}}]}
         self.assertEqual(place_check._wd_text(cl, "P6375"), "406-1 Zoshicho, Nara")
-        self.assertTrue(place_check._wd_image(cl)["src"].endswith("/500px-Todaiji.jpg"))
+        self.assertIn("500px-Todaiji.jpg", place_check._wd_image(cl)["src"])
         self.assertIsNone(place_check._wd_image({}))
 
     def test_enrich_fills_missing_photo_and_address_but_keeps_found(self):

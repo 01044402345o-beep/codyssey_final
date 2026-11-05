@@ -22,7 +22,7 @@ from typing import Any, Callable, Optional
 from . import config
 
 ALLOWED_HOSTS = frozenset({
-    "en.wikivoyage.org", "query.wikidata.org",
+    "en.wikivoyage.org", "query.wikidata.org", "query.wikidata.org",
     "ko.wikipedia.org", "en.wikipedia.org", "www.wikidata.org",      # 백업 경로(agents/city_research — GET /city-brief)
     "api.open-meteo.com", "archive-api.open-meteo.com",
     "api.frankfurter.dev", "api.geoapify.com", "api.tavily.com", "places.googleapis.com",
