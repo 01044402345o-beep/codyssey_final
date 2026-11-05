@@ -5306,7 +5306,7 @@ function spkEyebrow(rows) {
    말투 원칙은 카드와 같다: 점수를 말하지 않고 '들렸다/약했다/안 들렸다'만 말한다. */
 const PH_SAY = { ok: '잘 들렸어요', weak: '약하게 들렸어요', missing: '안 들렸어요' };
 function spkPhDetailHtml(r) {
-  const ipa = SPK.ph, st = SPK.phSt || 'ok';
+  const ipa = SPK.phIpa, st = SPK.phSt || 'ok';
   const it = IPA_ITEM[ipa] || null;
   const heard = SPK.phHeard || '';
   const word = SPK.phWord || '';
@@ -5338,11 +5338,16 @@ function speakCardHtml(r, target) {
   const f = pa && pa.focus && pa.focus.ipa ? pa.focus : null;
   const toneOf = x => (x >= 90 ? '' : x >= 70 ? 'mid' : 'low');
   const row = (key, val) => `<div class="spk-row"><span class="spk-row-k">${esc(key)}</span><span class="spk-row-v">${val}</span></div>`;
+  const phOpen = SPK.ph !== null && SPK.ph !== undefined && SPK.phOf === r;   // 누른 칩(이 결과의 몇 번째)
+  /* 라벨 칸은 이 카드에 나오는 가장 긴 라벨에 맞춘다(모든 줄이 같은 폭이라 값이 한 줄로 정렬된다).
+     한글 1자 ≈ 0.85em(여유 포함), 공백 ≈ 0.35em. 상한은 CSS 에서 줄 폭의 60%. */
+  const labels = [r.heard ? '귀하의 문장' : '', r.fix_one ? '한 가지만 확인 부탁드려요' : '', r.tip ? '팁' : ''].filter(Boolean);
+  const kw = Math.max(4.6, ...labels.map(l => [...l].reduce((a, ch) => a + (ch === ' ' ? 0.35 : 0.85), 0.6)));
   const savedNote = r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '';
   let metrics = '';
   metrics += spkMetricHtml('단어 일치', r.score, toneOf(r.score), acc === null);   // DOM 순서 계약: 단어 → 음소
   if (acc !== null) metrics += spkMetricHtml('음소 일치', acc, toneOf(acc), true);
-  return `<div class="speak-res spk-card-wrap"${f ? ` data-ph-focus="${esc(f.ipa)}"` : ''}><div class="spk-card">` +
+  return `<div class="speak-res spk-card-wrap"${f ? ` data-ph-focus="${esc(f.ipa)}"` : ''}><div class="spk-card" style="--spk-k:${kw.toFixed(2)}em">` +
     `<div class="spk-head"><div class="spk-head-txt"><div class="spk-eyebrow">${esc(spkEyebrow(rows))}</div>` +
       `<b class="spk-verdict">${esc(v.text)}</b></div><span class="spk-tag">발음 점수 아님</span></div>` +
     `<div class="spk-metrics">${metrics}</div>` +
@@ -5350,14 +5355,14 @@ function speakCardHtml(r, target) {
       `<span class="spk-words">${marks.map(m => `<span class="spk-w${m.miss ? ' miss' : ''}"${m.miss ? ' title="두 받아쓰기 모두에서 들리지 않았어요"' : ''}>${esc(m.w)}</span>`).join(' ')}</span></div>` : '') +
     (groups.length ? `<div class="spk-sounds"><div class="spk-sounds-k">소리별 결과 · ${rows.length}개 · 표시된 것만 제 의도와 조금 다르네요.</div><div class="spk-strip">` +
       groups.map(g => `<span class="spk-wg"><span class="spk-wt">${esc(g.word)}</span><span class="spk-phs">` +
-        g.items.map(p2 => `<button class="spk-ph ${esc(p2.status)}" data-act="spk-ph" data-ipa="${esc(p2.ipa)}"
+        g.items.map(p2 => `<button class="spk-ph ${esc(p2.status)}" data-act="spk-ph" data-ipa="${esc(p2.ipa)}" data-k="${rows.indexOf(p2)}"
           data-st="${esc(p2.status)}" data-word="${esc(p2.word || g.word || '')}" data-heard="${esc(p2.heard_as || '')}"
-          aria-pressed="${SPK.ph === p2.ipa ? 'true' : 'false'}"
+          aria-pressed="${phOpen && SPK.ph === rows.indexOf(p2) ? 'true' : 'false'}"
           aria-label="/${esc(p2.ipa)}/ ${esc(PH_TITLE[p2.status] || '')} — 눌러서 설명 보기"
           title="${esc(PH_TITLE[p2.status] || '')}">${esc(p2.ipa)}</button>`).join('') + '</span></span>').join('') +
       '</div></div>' : '') +
-    (SPK.ph ? spkPhDetailHtml(r) : '') +
-    (f && !SPK.ph ? `<div class="spk-focus${f.heard_as ? '' : ' ok'}"><span class="spk-focus-ic" aria-hidden="true"></span><div>` +
+    (phOpen ? spkPhDetailHtml(r) : '') +
+    (f && !phOpen ? `<div class="spk-focus${f.heard_as ? '' : ' ok'}"><span class="spk-focus-ic" aria-hidden="true"></span><div>` +
       `<div class="spk-focus-h">'${esc(f.word || '')}'의 <b>/${esc(f.ipa)}/</b>` +
       (f.heard_as ? ` <span class="spk-heard">→ /${esc(f.heard_as)}/처럼 들렸어요</span>` : ' 소리가 약했어요') + '</div>' +
       (f.label ? `<div class="spk-focus-label">${esc(f.label)}</div>` : '') + (f.tip ? `<div class="spk-focus-tip">${esc(f.tip)}</div>` : '') + '</div></div>' : '') +
@@ -6443,9 +6448,9 @@ const ACT = {
   'ipa-open': () => { go('u-ipa'); },
   /* 소리별 결과의 기호를 누르면 그 소리 설명이 카드 안에서 펼쳐진다. 같은 기호를 다시 누르면 접힌다. */
   'spk-ph': el => {
-    const ipa = el.dataset.ipa;
-    if (SPK.ph === ipa) { SPK.ph = null; }
-    else { SPK.ph = ipa; SPK.phSt = el.dataset.st || 'ok'; SPK.phWord = el.dataset.word || ''; SPK.phHeard = el.dataset.heard || ''; }
+    const k = +el.dataset.k;
+    if (SPK.ph === k && SPK.phOf === SPK.result) { SPK.ph = null; }
+    else { SPK.ph = k; SPK.phOf = SPK.result; SPK.phIpa = el.dataset.ipa; SPK.phSt = el.dataset.st || 'ok'; SPK.phWord = el.dataset.word || ''; SPK.phHeard = el.dataset.heard || ''; }
     if (typeof updateSpeakUi === 'function') updateSpeakUi(); else render();
   },
   'spk-ph-close': () => { SPK.ph = null; if (typeof updateSpeakUi === 'function') updateSpeakUi(); else render(); },

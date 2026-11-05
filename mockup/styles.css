@@ -2188,7 +2188,7 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
    앱과 같은 언어: 종이 위 흰 카드 + 1px 테두리 + 안내 상자 + mono 숫자.
    폭은 전부 유동(clamp)이고, 아주 좁은 화면(≤340px)에서는 줄을 세로로 쌓는다.
    상태 구분은 색 + 굵기 + 테두리 두께로 한다(문자 표시를 넣지 않는다). */
-.spk-card {
+.spk-card { --spk-k: 4.6em;   /* 라벨 칸 폭 — speakCardHtml 이 가장 긴 라벨에 맞춰 덮는다 */
   background: var(--surface); text-align: left; min-width: 0; word-break: keep-all;
   border: 1px solid var(--border-strong); border-radius: clamp(12px, 4vw, 16px);
   padding: 0; overflow: hidden;
@@ -2267,7 +2267,8 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 
 .spk-row { display: flex; gap: clamp(6px, 2.4vw, 10px); padding: 9px clamp(11px, 3.4vw, 14px);
   border-top: 1px solid var(--border); font-size: clamp(0.75rem, 3.3vw, 0.8125rem); line-height: 1.55; }
-.spk-row-k { flex: 0 0 auto; width: 4.6em; font-size: 0.75rem; font-weight: 600; color: var(--text-soft); padding-top: 1px; }
+/* 라벨 폭은 카드가 정한다(--spk-k = 이 카드의 가장 긴 라벨) — '한 가지만 확인 부탁드려요'가 세 줄로 꺾이지 않게. 상한은 줄 폭의 60% */
+.spk-row-k { flex: 0 0 auto; width: min(var(--spk-k), 60%); font-size: 0.75rem; font-weight: 600; color: var(--text-soft); padding-top: 1px; word-break: keep-all; }
 .spk-row-v { flex: 1; min-width: 0; color: var(--text-2); overflow-wrap: anywhere; }
 .spk-more { border-top: 1px solid var(--border); }
 .spk-more > summary { cursor: pointer; padding: 10px clamp(11px, 3.4vw, 14px); min-height: 44px;
@@ -2452,7 +2453,7 @@ body.is-narrow .spk-card { border-radius: 12px; }
   background: var(--surface); color: var(--text-soft); }
 .spk-phd-st.missing { background: var(--bad-soft); color: var(--bad-text); }
 .spk-phd-st.weak { background: var(--sun-soft); color: var(--on-sun-soft); }
-.spk-phd-x { margin-left: auto; width: 32px; height: 32px; border: 0; border-radius: 999px;
+.spk-phd-x { margin-left: auto; width: 44px; height: 44px; margin-right: -8px; border: 0; border-radius: 999px;
   background: transparent; color: var(--text-soft); font-size: 0.875rem; cursor: pointer; }
 .spk-phd-w { margin-top: 6px; font-size: 0.8125rem; color: var(--text-soft); }
 .spk-phd-heard { color: var(--bad-text); font-weight: 600; }
@@ -2463,8 +2464,8 @@ body.is-narrow .spk-card { border-radius: 12px; }
 .spk-phd-err, .spk-phd-cue, .spk-phd-vary { margin: 6px 0 0; font-size: 0.8125rem; line-height: 1.55; color: var(--text-soft); }
 .spk-phd-err b, .spk-phd-cue b { color: var(--accent-text); font-size: 0.75rem; margin-right: 4px; }
 .spk-phd-ex { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.spk-phd-ex-b { min-height: 36px; padding: 5px 11px; border: 1px solid var(--border);
+.spk-phd-ex-b { min-height: 44px; padding: 5px 11px; border: 1px solid var(--border);
   border-radius: 999px; background: var(--surface); color: var(--text); font-size: 0.8125rem; cursor: pointer; }
-.spk-phd-all { width: 100%; margin-top: 10px; min-height: 40px; border: 1px solid var(--border-strong);
+.spk-phd-all { width: 100%; margin-top: 10px; min-height: 44px; border: 1px solid var(--border-strong);
   border-radius: 10px; background: transparent; color: var(--accent-text);
   font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
