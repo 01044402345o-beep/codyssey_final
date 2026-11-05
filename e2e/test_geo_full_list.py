@@ -6,7 +6,10 @@
       화면 어디에도 '몇 개 중 몇 개'인지 적히지 않아 잘린 것을 알 수 없었다.
 원인 2: 칸에 값이 이미 있으면(고른 나라·저장된 여행) 열자마자 그 값으로 걸러 '미국' 하나만 보였다.
 원인 3: 서버가 도시를 첫 샤드(인구 상위)·한 번 2000곳까지만 줘서 큰 나라는 끝까지 닿을 수 없었다.
-       → 빈 칸 목록은 서버가 쪽(offset)으로 그 나라 전체를 주고, '더 보기'가 다음 쪽을 받는다.
+       → 빈 칸 목록은 서버가 쪽(offset)으로 그 나라 전체를 준다.
+11/05 사용자 지시: '더 보기'를 누르지 않아도 불러온 전체 목록이 보여야 한다.
+       → 불러온 것은 처음부터 전부 그리고(국가 248·도시 한 쪽 500), 서버에 남은 도시는 목록을 내리면 저절로 이어 받는다.
+         '더 보기'(다시 불러오기) 단추는 이어 받기가 실패했을 때만 목록 안에 나온다.
 
     python3 test_geo_full_list.py http://127.0.0.1:8772
 """
@@ -31,9 +34,10 @@ def check(name, ok, note=""):
 COUNTRIES = [{"iso2": "US", "name": "United States", "ko": "미국", "capital": "Washington", "population": 327000000, "continent": "NA"},
              {"iso2": "JP", "name": "Japan", "ko": "일본", "capital": "Tokyo", "population": 126000000, "continent": "AS"}] + \
             [{"iso2": "X%02d" % i, "name": "Testland %03d" % i, "ko": "테스트국 %03d" % i, "capital": "", "population": 1000 + i, "continent": "EU"} for i in range(246)]
-# 도시 1,234곳 — 서버 한 쪽(500)보다 많아 '더 보기'가 서버에서 다음 쪽을 받아야 끝까지 닿는다
+# 도시 1,234곳 — 서버 한 쪽(500)보다 많아, 목록을 내려 서버에서 다음 쪽을 이어 받아야 끝까지 닿는다
 CITIES = [{"id": i, "name": "City %04d" % i, "ko": "", "label": "City %04d" % i, "region": "R", "population": 100000 - i} for i in range(1234)]
 city_calls = []
+FAIL_ONCE = set()   # 이 offset 은 한 번 실패시킨다(다시 불러오기 검사)
 
 
 def route(r):
@@ -47,9 +51,15 @@ def route(r):
         q = qs.get("q", [""])[0].strip().lower()
         off, lim = int(qs.get("offset", ["0"])[0]), int(qs.get("limit", ["20"])[0])
         city_calls.append((q, off, lim))
+        if off in FAIL_ONCE:
+            FAIL_ONCE.discard(off); r.fulfill(status=503, body="busy"); return
         rows = [c for c in CITIES if not q or q in (c["name"] + c["label"]).lower()]
         body = {"country": "US", "cities": rows[off:off + lim], "total": len(rows), "attribution": "GeoNames, CC BY 4.0"}
     r.fulfill(status=200, content_type="application/json", body=json.dumps(body, ensure_ascii=False))
+
+
+def scroll_end(pg, sel):
+    pg.evaluate("(() => { const u = document.querySelector('%s'); u.scrollTop = u.scrollHeight; u.dispatchEvent(new Event('scroll')); })()" % sel)
 
 
 def opts(pg, sel):
@@ -66,52 +76,20 @@ with sync_playwright() as p:
     pg.goto(BASE + "/?demo=1&gate=off"); pg.wait_for_timeout(720)
     pg.evaluate("S.user = DEMO_USER; go('u-input')"); pg.wait_for_timeout(320)
 
-    # ── 1. 국가: 빈 칸 → 전체 248개국 ──
+    # ── 1. 국가: 빈 칸 → 처음부터 248개국 전부(더 보기 없이) ──
     pg.fill("#geo-country", ""); pg.focus("#geo-country"); pg.wait_for_timeout(420)
     n1 = len(opts(pg, "#geo-list-country"))
-    more = pg.evaluate("!!document.querySelector('#geo-list-country .geo-more')")
-    check("빈 칸: 국가 목록이 60개에서 잘리지 않는다", n1 > 60, f"{n1}개")
-    check("빈 칸: 첫 묶음은 80줄", n1 == 80, f"{n1}개")
-    check("빈 칸: 남은 줄은 '더 보기'로 이어진다", more)
+    check("빈 칸: 국가 248개국이 처음부터 전부 보인다", n1 == 248, f"{n1}개")
+    check("빈 칸: '더 보기' 단추가 없다", not pg.evaluate("!!document.querySelector('#geo-list-country [data-act=geo-more]')"))
     cnt = pg.inner_text("#geo-list-country .geo-count")
-    check("빈 칸: '전체 248개국'을 화면에 적는다", "248" in cnt and "개국" in cnt, cnt)
+    check("빈 칸: '전체 248개국 중 248개국 표시'", "248개국 중 248개국" in cnt, cnt)
+    labels0 = opts(pg, "#geo-list-country")
+    check("빠지거나 겹친 나라가 없다", len(set(labels0)) == 248)
 
-    # ── 2. 더 보기 → 전부 도달(생략 없음). 손가락 탭으로 누른다 — 터치는 pointerup 뒤에 포커스가 옮겨 가서
-    #       마우스 클릭으로는 안 잡히던 '누르면 목록이 닫히는' 문제가 있었다 ──
-    stayed = []
-    for _ in range(4):
-        btn = pg.locator("#geo-list-country [data-act='geo-more']")
-        if not btn.count():
-            break
-        btn.tap(); pg.wait_for_timeout(300)
-        stayed.append(pg.evaluate("!document.getElementById('geo-list-country').hidden && document.activeElement && document.activeElement.id === 'geo-country'"))
-    check("'더 보기'를 탭해도 목록이 닫히지 않고 칸이 포커스를 지킨다", stayed and all(stayed), str(stayed))
-    # 실기기(배포본)에서 잡힌 순서를 그대로 재현: pointerdown → pointerup → (타이머가 돈 뒤) 단추로 포커스 → click.
-    # 예전 코드는 이 순서에서 칸의 focusout 이 목록을 닫았다. 타이밍에 따라 안 잡히는 탭 대신 순서를 고정해 본다.
-    pg.fill("#geo-country", ""); pg.evaluate("document.activeElement.blur()"); pg.wait_for_timeout(200)
-    pg.focus("#geo-country"); pg.wait_for_timeout(400)
-    pd = pg.evaluate("""() => { const b = document.querySelector('#geo-list-country [data-act=geo-more]');
-      const ev = new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch' });
-      b.dispatchEvent(ev); b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' }));
-      return ev.defaultPrevented; }""")
-    pg.wait_for_timeout(50)
-    pg.evaluate("() => { const b = document.querySelector('#geo-list-country [data-act=geo-more]'); b.focus(); b.click(); }")
-    pg.wait_for_timeout(400)
-    check("'더 보기'는 눌러도 칸의 포커스를 빼앗지 않는다(pointerdown 기본 동작 막음)", pd)
-    check("포커스가 '더 보기' 단추로 옮겨 가도 목록은 열린 채(160줄)",
-          not pg.evaluate("document.getElementById('geo-list-country').hidden") and len(opts(pg, "#geo-list-country")) == 160,
-          str(len(opts(pg, "#geo-list-country"))))
+    # ── 2. 목록 안에서 바깥으로 포커스가 나가면 닫힌다 ──
     pg.evaluate("document.activeElement.blur()"); pg.wait_for_timeout(300)
-    check("목록 안에서 바깥으로 포커스가 나가면 닫힌다", pg.evaluate("document.getElementById('geo-list-country').hidden"))
+    check("바깥으로 포커스가 나가면 목록이 닫힌다", pg.evaluate("document.getElementById('geo-list-country').hidden"))
     pg.focus("#geo-country"); pg.wait_for_timeout(400)
-    for _ in range(4):
-        btn = pg.locator("#geo-list-country [data-act='geo-more']")
-        if not btn.count():
-            break
-        btn.tap(); pg.wait_for_timeout(300)
-    n2 = len(opts(pg, "#geo-list-country"))
-    check("더 보기를 끝까지 누르면 248개국 전부", n2 == 248, f"{n2}개")
-    check("전부 나오면 '더 보기'가 사라진다", not pg.evaluate("!!document.querySelector('#geo-list-country .geo-more')"))
 
     # ── 2-1. 칸에 이미 나라가 있어도(고른 뒤·저장된 여행) 열면 전체 목록, 적힌 나라는 표시만 ──
     pg.locator("#geo-list-country .geo-opt", has_text="미국").first.click(); pg.wait_for_timeout(200)
@@ -119,7 +97,7 @@ with sync_playwright() as p:
     pg.evaluate("document.activeElement.blur()"); pg.wait_for_timeout(250)
     pg.focus("#geo-country"); pg.wait_for_timeout(400)
     n3 = len(opts(pg, "#geo-list-country"))
-    check("값이 있는 칸을 열어도 '미국' 하나로 걸러지지 않는다(전체 목록)", n3 >= 80, f"{n3}개")
+    check("값이 있는 칸을 열어도 '미국' 하나로 걸러지지 않는다(전체 248개국)", n3 == 248, f"{n3}개")
     check("적힌 나라가 목록에서 선택 표시된다", pg.evaluate(
         "(() => { const li = document.querySelector('#geo-list-country .geo-opt[aria-selected=\"true\"] b'); return li && li.textContent; })()") == "미국")
     pg.keyboard.type("일"); pg.wait_for_timeout(300)
@@ -127,32 +105,54 @@ with sync_playwright() as p:
     pg.keyboard.press("Escape"); pg.fill("#geo-country", "미국"); pg.keyboard.press("Escape")
     pg.evaluate("S.draft.countries[0] = '미국'; draftSync(S.draft)"); pg.wait_for_timeout(80)
 
-    # ── 3. 도시: 빈 칸 → 서버 쪽을 이어 받아 1,234곳 전부 + 전체 개수 ──
+    # ── 3. 도시: 빈 칸 → 받은 쪽(500곳) 전부 + 내리면 서버의 다음 쪽을 저절로 이어 받아 1,234곳 전부 ──
     pg.fill('[data-geo="city.0"]', ""); pg.focus('[data-geo="city.0"]'); pg.wait_for_timeout(500)
     c1 = len(opts(pg, "#geo-list-city-0"))
     ccnt = pg.inner_text("#geo-list-city-0 .geo-count")
-    check("도시도 20곳에서 잘리지 않는다", c1 > 20, f"{c1}곳")
-    check("도시 전체 개수(서버의 그 나라 전부)를 화면에 적는다", "1,234" in ccnt and "80곳 표시" in ccnt, ccnt)
-    for _ in range(40):
-        btn = pg.locator("#geo-list-city-0 [data-act='geo-more']")
-        if not btn.count():
-            break
-        btn.tap(); pg.wait_for_timeout(260)
+    check("도시: 받은 한 쪽(500곳)이 처음부터 전부 보인다", c1 == 500, f"{c1}곳")
+    check("도시 전체 개수(서버의 그 나라 전부)를 화면에 적는다", "1,234" in ccnt and "500곳 표시" in ccnt, ccnt)
+    check("도시: '더 보기' 단추가 없다(남은 줄은 안내만)",
+          not pg.evaluate("!!document.querySelector('#geo-list-city-0 [data-act=geo-more]')")
+          and "내리면" in pg.inner_text("#geo-list-city-0 .geo-more"), pg.inner_text("#geo-list-city-0 .geo-more"))
+    for _ in range(6):
+        scroll_end(pg, "#geo-list-city-0"); pg.wait_for_timeout(350)
     c2 = len(opts(pg, "#geo-list-city-0"))
-    check("더 보기로 서버의 다음 쪽까지 받아 1,234곳 전부", c2 == 1234, f"{c2}곳")
+    check("내리기만 해도 서버의 다음 쪽까지 받아 1,234곳 전부", c2 == 1234, f"{c2}곳")
     check("빈 칸 목록은 offset 으로 쪽을 받는다(500·1000)", {o for q, o, _ in city_calls if not q} >= {0, 500, 1000}, str(city_calls))
-    check("끝까지 보면 '전체 1,234곳 중 1,234곳 표시'·더 보기 없음",
+    check("끝까지 보면 '전체 1,234곳 중 1,234곳 표시'·남은 줄 안내 없음",
           "1,234곳 중 1,234곳" in pg.inner_text("#geo-list-city-0 .geo-count")
           and not pg.evaluate("!!document.querySelector('#geo-list-city-0 .geo-more')"))
     labels = opts(pg, "#geo-list-city-0")
     check("빠지거나 겹친 줄이 없다", len(set(labels)) == 1234 and labels[0] == "City 0000" and labels[-1] == "City 1233")
+    check("목록은 내리는 동안 열린 채, 칸이 포커스를 지킨다",
+          not pg.evaluate("document.getElementById('geo-list-city-0').hidden") and pg.evaluate("document.activeElement.dataset.geo") == "city.0")
+
+    # ── 3-0. 이어 받기가 실패했을 때만 목록 안에 '다시 불러오기' 단추 ──
+    pg.evaluate("document.activeElement.blur()"); pg.wait_for_timeout(250)
+    pg.evaluate("GEO.cities.clear()"); FAIL_ONCE.add(500)
+    pg.fill('[data-geo="city.0"]', ""); pg.focus('[data-geo="city.0"]'); pg.wait_for_timeout(500)
+    scroll_end(pg, "#geo-list-city-0"); pg.wait_for_timeout(450)
+    btn = pg.locator("#geo-list-city-0 [data-act='geo-more']")
+    check("실패하면 그때만 '다시 불러오기' 단추가 나온다", btn.count() == 1 and "다시 불러오기" in btn.inner_text(), btn.count())
+    check("실패해도 이미 받은 500곳은 그대로", len(opts(pg, "#geo-list-city-0")) == 500)
+    pd = pg.evaluate("""() => { const b = document.querySelector('#geo-list-city-0 [data-act=geo-more]');
+      const ev = new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch' });
+      b.dispatchEvent(ev); return ev.defaultPrevented; }""")
+    check("'다시 불러오기'는 눌러도 칸의 포커스를 빼앗지 않는다", pd)
+    btn.tap(); pg.wait_for_timeout(450)
+    check("'다시 불러오기'를 누르면 다음 쪽을 받고 목록은 열린 채",
+          len(opts(pg, "#geo-list-city-0")) >= 1000 and not pg.evaluate("document.getElementById('geo-list-city-0').hidden"),
+          len(opts(pg, "#geo-list-city-0")))
+    for _ in range(4):
+        scroll_end(pg, "#geo-list-city-0"); pg.wait_for_timeout(300)
+    check("다시 불러온 뒤에도 끝까지 닿는다(1,234곳)", len(opts(pg, "#geo-list-city-0")) == 1234)
 
     # ── 3-1. 칸에 도시가 이미 있어도 열면 전체(인구순) 목록 ──
     pg.locator("#geo-list-city-0 .geo-opt", has_text="City 0005").first.click(); pg.wait_for_timeout(200)
     pg.evaluate("document.activeElement.blur()"); pg.wait_for_timeout(250)
     pg.focus('[data-geo="city.0"]'); pg.wait_for_timeout(450)
     c4 = len(opts(pg, "#geo-list-city-0"))
-    check("값이 있는 도시 칸을 열어도 전체 목록", c4 >= 80, f"{c4}곳")
+    check("값이 있는 도시 칸을 열어도 전체 목록(받은 500곳)", c4 >= 500, f"{c4}곳")
     check("적힌 도시가 목록에서 선택 표시된다", pg.evaluate(
         "(() => { const li = document.querySelector('#geo-list-city-0 .geo-opt[aria-selected=\"true\"] b'); return li && li.textContent; })()") == "City 0005")
 

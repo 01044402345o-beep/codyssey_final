@@ -2138,12 +2138,13 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .add-country { margin-top: 10px; }
 @media (min-width: 620px) { .geo-par { grid-template-columns: 1fr 1fr; } }
 @media (min-width: 940px) { .geo-par { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); } }
-/* 목록의 전체 개수·출처 줄과 '더 보기' */
+/* 목록의 전체 개수·출처 줄, 남은 줄 안내 · 실패 시 '다시 불러오기' */
 .geo-note.geo-count { color: var(--text-3); font-size: var(--fs-caption); text-align: center; }
 .geo-note.geo-more { padding: 4px; }
 .geo-note.geo-more button { width: 100%; min-height: 44px; border: 1.5px dashed var(--border-strong); border-radius: 8px;
   background: none; color: var(--text-soft); font-weight: 600; font-size: 0.875rem; }
 .geo-note.geo-more button:hover { border-color: var(--text); color: var(--text); }
+.geo-more-st { display: block; padding: 8px 6px; text-align: center; color: var(--text-3); font-size: var(--fs-caption); }   /* 남은 줄 안내(단추 아님) */
 /* 도시 조사 — 보고서의 '현지 정보' 카드와 출처 표기(app.js researchInfo · researchCredits) */
 .rinfo { margin-bottom: 14px; }
 .rinfo > summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
