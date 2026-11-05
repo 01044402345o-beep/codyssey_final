@@ -60,7 +60,8 @@ def build_csp(host: str) -> str:
         "script-src 'self' https://www.gstatic.com https://apis.google.com",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
-        "img-src 'self' data: blob:",
+        # 장소 확인 창의 Google 사진(photoUri) — 약관상 저장·중계하지 않고 화면이 바로 부른다. 키는 주소에 없다
+        "img-src 'self' data: blob: https://*.googleusercontent.com",
         "media-src 'self' blob:",                 # 내 발음 다시 듣기(녹음 blob)
         "connect-src " + " ".join(connect),
         f"frame-src {frame}",

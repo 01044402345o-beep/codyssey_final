@@ -4124,10 +4124,15 @@ async function addLookRun(city) {
   if (res.state !== 'found') { addLook.state = res.state === 'not_found' ? 'not_found' : 'error'; addLookPaint(); return; }
   addLook.state = 'found';
   addLookPaint();
-  const photo = res.image ? `<span class="pc-photo"><img src="${esc(API.base)}/place-photo?src=${encodeURIComponent(res.image.src)}" alt="${esc(res.name)} 사진" loading="lazy"></span>
-      <span class="pc-credit">사진: © ${esc(res.image.author)} · ${res.image.licenseUrl
+  // Google 사진은 약관상 우리 서버를 거치지 않고(저장·캐시 금지) 화면이 바로 부른다. 공용 사진은 /place-photo 를 거친다
+  const imgSrc = res.image && res.image.provider === 'google' ? res.image.src : res.image ? `${API.base}/place-photo?src=${encodeURIComponent(res.image.src)}` : '';
+  const gcredit = res.image && res.image.provider === 'google'
+    ? `<span class="pc-credit">사진: ${res.image.authors.length ? res.image.authors.map(a => a.uri
+        ? `<a href="${esc(a.uri)}" data-act="link" rel="noopener noreferrer">${esc(a.name)}</a>` : esc(a.name)).join(', ') : 'Google 사용자'} · Google 지도</span>` : '';
+  const photo = res.image ? `<span class="pc-photo"><img src="${esc(imgSrc)}" alt="${esc(res.name)} 사진" loading="lazy" referrerpolicy="no-referrer"></span>
+      ${gcredit || `<span class="pc-credit">사진: © ${esc(res.image.author)} · ${res.image.licenseUrl
         ? `<a href="${esc(res.image.licenseUrl)}" data-act="link" rel="noopener noreferrer">${esc(res.image.license)}</a>` : esc(res.image.license)}${res.image.page
-        ? ` · <a href="${esc(res.image.page)}" data-act="link" rel="noopener noreferrer">원본(${esc(res.image.credit)})</a>` : ''}</span>` : '<span class="pc-nophoto">사진을 찾지 못했어요</span>';
+        ? ` · <a href="${esc(res.image.page)}" data-act="link" rel="noopener noreferrer">원본(${esc(res.image.credit)})</a>` : ''}</span>`}` : '<span class="pc-nophoto">사진을 찾지 못했어요</span>';
   confirmBox('이 장소가 맞나요?', `<div class="place-confirm">${photo}
       <div class="pc-name">${esc(res.name)}</div>
       <div class="pc-row"><span class="pc-k">주소</span><span class="pc-v">${res.address ? esc(res.address) : '<span class="pc-none">주소를 찾지 못했어요</span>'}</span></div>
@@ -4163,7 +4168,8 @@ function addUserPlace(city, kind, res, verified) {
   Object.assign(p, { attribution: '직접 추가', user: true, selected: !meta.base || selCount(city) < meta.base, isCandidate: false });
   if (verified && res) {
     Object.assign(p, { verified: true, address: res.address || '', area: res.address || '', lat: res.lat, lon: res.lon,
-      image: res.image || null, sources: [{ url: res.url, title: `${res.label} · ${res.name}` }],
+      // Google 사진(짧게 쓰는 주소)은 장소에 남기지 않는다 — 약관상 저장 금지, 확인 창에서만 보였다
+      image: res.image && res.image.provider !== 'google' ? res.image : null, sources: [{ url: res.url, title: `${res.label} · ${res.name}` }],
       attribution: `직접 추가 · 사용자 확인(${res.license})`, check: { ...res, suggest: '' } });
   }
   S.places.push(p);

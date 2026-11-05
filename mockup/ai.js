@@ -768,10 +768,15 @@
     const im = d.image && typeof d.image === 'object' ? d.image : null;
     // 사진은 저작자·라이선스가 있을 때만(CC BY-SA 표시 요건: 저작자 · 라이선스 · 원본 링크)
     const txt = (v, n) => typeof v === 'string' ? v.replace(/[<>{}]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n) : '';
-    const image = im && /^https:\/\/(upload|thumb)\.wikimedia\.org\/[^\s"'<>]+$/.test(im.src || '') && txt(im.license, 40)
+    // Google 사진: 화면이 바로 부르는 짧게 쓰는 주소(googleusercontent) + 찍은 사람 표시. 저장하지 않는다
+    const gimage = im && im.provider === 'google' && /^https:\/\/[a-z0-9-]+\.googleusercontent\.com\/[^\s"'<>]+$/.test(im.src || '')
+      ? { src: im.src, provider: 'google', credit: 'Google 지도',
+          authors: (Array.isArray(im.authors) ? im.authors : []).slice(0, 3).map(a => ({ name: txt(a && a.name, 60) || 'Google 사용자',
+            uri: /^https:\/\/[^\s"'<>]+$/.test((a && a.uri) || '') ? a.uri : '' })) } : null;
+    const image = gimage || (im && im.provider !== 'google' && /^https:\/\/(upload|thumb)\.wikimedia\.org\/[^\s"'<>]+$/.test(im.src || '') && txt(im.license, 40)
       ? { src: im.src, page: /^https:\/\/commons\.wikimedia\.org\/[^\s"'<>]+$/.test(im.page || '') ? im.page : '', credit: 'Wikimedia Commons',
           author: txt(im.author, 80) || '작자 미상', license: txt(im.license, 40),
-          licenseUrl: /^https?:\/\/[^\s"'<>]+$/.test(im.license_url || '') ? im.license_url : '' } : null;
+          licenseUrl: /^https?:\/\/[^\s"'<>]+$/.test(im.license_url || '') ? im.license_url : '' } : null);
     return { state: 'found', name, url: src.url, provider: prov, label: RESEARCH_PROVIDER[prov][0], license: RESEARCH_PROVIDER[prov][1],
              km: Number.isFinite(d.distance_km) ? d.distance_km : null, address,
              addressSource: typeof d.address_source === 'string' && address ? d.address_source.slice(0, 60) : '',

@@ -160,6 +160,83 @@ class EnrichTest(unittest.TestCase):
         self.assertEqual((r["address"], r["image"]), ("전북 군산시 해망로 240", None))
 
 
+class GooglePhotoTest(unittest.TestCase):
+    """무료 공용 사진이 없을 때만 Google 사진 — 화면이 바로 부르는 photoUri + 찍은 사람 표시, 저장·캐시하지 않는다."""
+    ITEM = {"photos": [{"name": "places/ChIJabc/photos/AU3ubuXYZ",
+                        "authorAttributions": [{"displayName": "Kim <b>", "uri": "//maps.google.com/maps/contrib/123"}]}]}
+
+    def test_first_photo_reads_reference_and_author(self):
+        from app.research.sources import google_places as gp
+        self.assertEqual(gp._first_photo(self.ITEM), {"name": "places/ChIJabc/photos/AU3ubuXYZ",
+                                                       "authors": [{"name": "Kim", "uri": "https://maps.google.com/maps/contrib/123"}]})
+        self.assertIsNone(gp._first_photo({"photos": [{"name": "../../etc"}]}))
+        self.assertIsNone(gp._first_photo({}))
+
+    @mock.patch.dict(os.environ, {"GOOGLE_MAPS_API_KEY": "SECRET", "RESEARCH_SOURCES": "", "ITINERARY_DAILY_CAP": "50"})
+    def test_photo_uri_keeps_key_in_header_and_only_googleusercontent(self):
+        from app.agents import itinerary
+        from app.research.sources import google_places as gp
+        itinerary.reset_daily_cap()
+        seen = {}
+
+        def req(method, url, headers=None, **kw):
+            seen.update(url=url, headers=headers)
+            return net.Response(200, b'{"photoUri": "https://lh3.googleusercontent.com/place-photos/AbC=s500"}')
+        http = mock.Mock(request=req)
+        got = gp.photo_uri(http, gp._first_photo(self.ITEM))
+        self.assertEqual(got["src"], "https://lh3.googleusercontent.com/place-photos/AbC=s500")
+        self.assertEqual((got["provider"], got["authors"][0]["name"]), ("google", "Kim"))
+        self.assertNotIn("SECRET", seen["url"])                                           # 키는 주소가 아니라 머리글에
+        self.assertEqual(seen["headers"]["X-Goog-Api-Key"], "SECRET")
+        self.assertIn("skipHttpRedirect=true", seen["url"])
+        http2 = mock.Mock(request=lambda *a, **k: net.Response(200, b'{"photoUri": "https://evil.example/x.jpg"}'))
+        self.assertIsNone(gp.photo_uri(http2, gp._first_photo(self.ITEM)))
+        with mock.patch.object(itinerary, "_reserve", return_value=0):
+            self.assertIsNone(gp.photo_uri(http, gp._first_photo(self.ITEM)))              # 일 한도를 다 쓰면 부르지 않는다
+
+    def test_google_photo_only_when_no_free_photo_and_never_remembered(self):
+        from app.research.sources import google_places as gp
+        gimg = {"src": "https://lh3.googleusercontent.com/p/A=s500", "provider": "google", "credit": "Google 지도", "authors": []}
+        wd = {"status": "found", "name": "Myeongdong Kyoja", "lat": 37.5638, "lon": 126.9853, "distance_km": 1.0, "kind": "",
+              "address": "", "image": None, "source": {"provider": "wikidata", "url": "https://www.wikidata.org/wiki/Q1", "title": "x", "license": "CC0"}}
+        hit = {"name": "Myeongdong Kyoja Main", "lat": 37.5639, "lon": 126.9854, "url": "https://maps.google.com/?cid=1", "address": "",
+               "photo": {"name": "places/x/photos/y", "authors": []}}
+        place_check.clear()
+        with mock.patch.object(place_check, "_photo_near", return_value=None),                 mock.patch.object(place_check, "_reverse", return_value="서울 중구 명동10길 29"),                 mock.patch.object(gp, "available", return_value=True),                 mock.patch.object(gp, "find", return_value=hit),                 mock.patch.object(gp, "photo_uri", return_value=gimg) as pu:
+            out = place_check._enrich(None, "Myeongdong Kyoja", dict(wd))
+            self.assertEqual(out["image"], gimg)
+            pu.assert_called_once()
+            # 이름이 다르면(근처 다른 가게) Google 사진도 붙이지 않는다
+            other = dict(hit, name="Jamba Juice")
+            with mock.patch.object(gp, "find", return_value=other):
+                self.assertIsNone(place_check._enrich(None, "Myeongdong Kyoja", dict(wd))["image"])
+        # 공용 사진이 있으면 Google 은 부르지 않는다
+        free = dict(wd, image={"src": "https://upload.wikimedia.org/a.jpg", "license": "CC BY-SA 4.0"})
+        with mock.patch.object(gp, "find") as f, mock.patch.object(gp, "photo_uri") as pu2,                 mock.patch.object(place_check, "_reverse", return_value=""):
+            self.assertEqual(place_check._enrich(None, "x", dict(free))["image"]["license"], "CC BY-SA 4.0")
+            f.assert_not_called(); pu2.assert_not_called()
+
+    def test_check_does_not_memo_google_photo(self):
+        place_check.clear()
+        gimg = {"src": "https://lh3.googleusercontent.com/p/A=s500", "provider": "google"}
+        found = {"status": "found", "name": "X", "lat": 1.0, "lon": 2.0, "image": None, "address": "a",
+                 "source": {"provider": "wikidata"}}
+        with mock.patch.object(place_check.config, "research_enabled", return_value=True),                 mock.patch.object(place_check.identity, "resolve", return_value={"cities": [{"ref": {"key": "JP_1", "lat": 1.0, "lon": 2.0}}]}),                 mock.patch.object(place_check.nodes, "enrich_unresolved"),                 mock.patch.object(place_check, "_by_tourapi", return_value=None),                 mock.patch.object(place_check, "_by_wikidata", return_value=dict(found)),                 mock.patch.object(place_check, "_enrich", side_effect=lambda h, n, g: {**g, "image": gimg}):
+            r = place_check.check({"country": {"name": "일본"}, "city": {"name": "나라"}, "place": {"name": "X"}},
+                                  http=mock.Mock(), store=mock.Mock(), cache=mock.Mock())
+            self.assertEqual(r["image"], gimg)                                               # 이번 확인 창에는 보이고
+            again = place_check.check({"country": {"name": "일본"}, "city": {"name": "나라"}, "place": {"name": "X"}},
+                                      http=mock.Mock(), store=mock.Mock(), cache=mock.Mock())
+        self.assertTrue(again.get("cached"))
+        self.assertIsNone(again["image"])                                                    # 기억한 결과에는 Google 사진이 없다
+
+    def test_csp_allows_google_photo_host_only_for_images(self):
+        csp = TestClient(main.app).get("/health").headers.get("content-security-policy", "")
+        img = next(p for p in csp.split(";") if p.strip().startswith("img-src"))
+        self.assertIn("https://*.googleusercontent.com", img)
+        self.assertNotIn("googleusercontent", csp.replace(img, ""))                          # 스크립트·연결에는 열지 않는다
+
+
 class PhotoProxyTest(unittest.TestCase):
     def setUp(self):
         main._photos.clear(); main._photo_cache.clear()
