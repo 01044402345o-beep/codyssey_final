@@ -2439,30 +2439,93 @@ body.is-narrow .spk-card { border-radius: 12px; }
   .ipa-eg { padding: 8px; }
   .ipa-eg-t { font-size: 1rem; }
 }
-/* ── 가로 모드(높이 부족): 세로 리듬을 압축하고 폭을 넓게 쓴다 ──
-   폰을 가로로 들면 높이가 320~430px 뿐이다. 카드가 569px 이면 스크롤 없이는 아무것도 못 본다.
-   그래서 ① 위아래 여백을 줄이고 ② 기호·조음·대립쌍을 2단으로 펴고 ③ 눈금은 접는다. */
-@media (orientation: landscape) and (max-height: 560px) {
-  .ipa-ticks { margin: 0 0 8px; }
-  .ipa-secs { margin: 0 0 8px; }
-  .ipa-secs button { min-height: 40px; padding: 4px 10px; }
-  .ipa-card { padding: 8px clamp(10px, 3cqi, 16px) 0; border-radius: 14px; }
-  .ipa-card-h { padding-bottom: 6px; }
-  .ipa-hero { padding: 6px 0 4px; }
-  .ipa-ko { margin-top: 2px; }
-  .ipa-sec { padding: 7px 0; }
-  .ipa-strip { margin-top: 4px; padding-top: 6px; }
-  .ipa-neigh { margin-top: 8px; }
-  .ipa-foot { display: none; }        /* 가로에서는 설명 문단을 접는다(내용은 화면에 이미 있다) */
-  .ipa-card { display: flow-root; }
+/* ── 가로 모드: '한 화면에 담기' ──
+   iPhone 가로는 높이가 320~440px 뿐이다(Safari 크롬까지 빼면 280~390). 카드가 569px 이면
+   스크롤 없이는 아무것도 못 본다. 그래서 정보를 '접는' 구조로 바꾼다:
+     ① 조음법·미국식·예시·예문·주의 → 토글로 접는다(기본 접힘). 가로에서만 토글이 보인다.
+     ② 최소대립쌍 두 개를 좌우 2열로 펴서 세로 44px 를 아낀다.
+     ③ 앱바·하단바·카드 여백을 줄이고, 설명 문단은 숨긴다(내용은 토글 안에 있다).
+   세로(portrait)에서는 접지 않는다 — 높이가 남으므로 접을 이유가 없다. */
+.ipa-more-t { display: none; }
+/* 가로에서만 보이는 앱바 조작(위치·이전·다음). 세로에서는 아래 화살표 버튼을 쓴다. */
+.ipa-nav-acts { display: none; align-items: center; gap: 4px; }
+.ipa-nav-pos { font-family: var(--mono); font-size: 0.75rem; color: var(--text-soft); margin-right: 2px; }
+.ipa-nav-acts button { width: 34px; height: 34px; display: grid; place-items: center; border: 0;
+  border-radius: 999px; background: var(--surface-3); color: var(--text); cursor: pointer; }
+.ipa-nav-acts svg { width: 15px; height: 15px; }
+
+@media (orientation: landscape) and (max-height: 620px) {
+  .pframe .appbar { padding: 0 var(--gutter) 2px; }
+  .pframe .appbar h2 { font-size: 0.9375rem; }
+  .pframe .bottombar { padding: 4px var(--gutter); }
+  .pframe .bottombar .btn { min-height: 42px; }
+  .pframe .appbar .act { min-height: 36px; }
+
+  .ipa-ticks { margin: 0 0 6px; }
+  .ipa-secs { margin: 0 0 6px; border-radius: 999px; flex-wrap: nowrap; }
+  .ipa-secs button { min-height: 36px; padding: 2px 8px; font-size: 0.75rem; }
+  .ipa-card { padding: 6px clamp(10px, 3cqi, 16px) 0; border-radius: 14px; }
+  .ipa-card-h { padding-bottom: 5px; }
+  .ipa-hero { padding: 4px 0 2px; }
+  .ipa-ko { margin-top: 1px; font-size: 0.875rem; }
+  .ipa-sym { font-size: clamp(1.5rem, min(13cqi, 11dvh), 2.5rem); }
+  .ipa-hero { padding: 0; gap: 8px; }
+  /* 기호와 한국어 이름을 한 줄에 — 가로에서는 세로 20px 가 아깝다 */
+  .ipa-hero > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .ipa-ko { margin-top: 0; white-space: nowrap; }
+  .ipa-kind { display: none; }
+  .ipa-ab { min-height: 32px; padding: 4px 10px; }
+  .ipa-pair-h > span { display: none; }
+  .ipa-hero-play { width: clamp(40px, 10cqi, 46px); height: clamp(40px, 10cqi, 46px); }
+  .ipa-sec { padding: 6px 0; }
+  .ipa-foot { display: none; }
+  /* 아래쪽 이전/다음·눈금·카드 머리는 가로에서 앱바 조작으로 대신한다 */
+  .ipa-neigh { display: none; }
+  .ipa-strip { display: none; }
+  .ipa-card-h { display: none; }
+  .ipa-nav-acts { display: flex; }
+  .ipa-card { border-top-left-radius: 14px; border-top-right-radius: 14px; }
+
+  /* 접힘: 가로에서만 토글이 보이고, 닫힌 동안 상세 섹션은 숨는다 */
+  .ipa-more-t { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; min-height: 40px; margin: 6px 0 0; padding: 0 10px;
+    border: 1px dashed var(--border-strong); border-radius: 10px; background: transparent;
+    color: var(--accent-text); font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
+  .ipa-more-t svg { width: 15px; height: 15px; transform: rotate(90deg); }
+  .ipa-wrap:not(.is-det) .ipa-sec.ipa-det { display: none; }
+  .ipa-wrap.is-det .ipa-more-t { border-style: solid; }
 }
+
+/* 아주 낮은 가로(≤460): 대립쌍을 좌우 2열로 펴고 눈금 띠를 접는다 */
 @media (orientation: landscape) and (max-height: 460px) {
-  .ipa-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 10px; align-items: start; }
-  .ipa-card { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 12px; }
-  .ipa-card-h, .ipa-done { grid-column: 1 / -1; }
-  .ipa-hero { grid-column: 1; }
-  .ipa-sec { border-top: 1px solid var(--border); }
+  /* 두 대립쌍을 좌우로 편다 — 세로 44px 를 아끼는 것이 한 화면에 담기의 핵심이다.
+     .ipa-sec 에 인라인 grid-template-columns 가 걸려 있어 선택자를 구체적으로 쓴다. */
+  .ipa-card .ipa-sec { grid-template-columns: minmax(0, 1fr) !important; }
+  .ipa-card .ipa-pair-wrap { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 6px; align-items: start; }
+  .ipa-card .ipa-pair-h { grid-column: 1 / -1; margin-bottom: 0; }
+  .ipa-card .ipa-pair { margin-top: 0; padding: 5px 8px; gap: 2px 6px; }
+  .ipa-card .ipa-pair.on { padding: 4px 7px; }
+  .ipa-card .ipa-pair-k { margin-top: 0; }
+  .ipa-strip { display: none; }
+  .ipa-neigh { margin-top: 4px; }
+  .ipa-foot { display: none; }
 }
+
+/* 가장 낮은 가로(≤360, SE·구형): 갈래 탭을 접고 여백을 최소로 */
+@media (orientation: landscape) and (max-height: 360px) {
+  .ipa-secs { display: none; }
+  .ipa-hero { padding: 0; }
+  .ipa-more-t { min-height: 34px; }
+  .ipa-card { padding: 4px 8px 0; }
+  .ipa-card-h { padding-bottom: 3px; }
+  .ipa-sec { padding: 4px 0; }
+  .ipa-more-t { min-height: 36px; margin-top: 4px; }
+  .pframe .appbar { padding: 0 var(--gutter) 4px; }
+  .pframe .bottombar { padding: 4px var(--gutter); }
+  .pframe .bottombar .btn { min-height: 40px; }
+}
+
 /* ── 초좁음 화면 전체(≤300px): 앱 셸 여백도 줄인다 ── */
 @media (max-width: 300px) {
   :root { --gutter: 10px; }
