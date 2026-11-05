@@ -491,7 +491,16 @@ input, select, textarea { min-width: 0; max-width: 100%; }
 .geo-pick { position: relative; }
 .geo-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; max-height: min(320px, 50vh); overflow-y: auto;
   overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y;   /* 목록 끝에서 화면이 따라 스크롤되지 않게 */
-  margin: 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow); }
+  margin: 0; padding: 4px 22px 4px 4px; list-style: none; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow);
+  scrollbar-width: none; }   /* 기본 막대는 숨기고 오른쪽 22px 에 직접 그린 막대(.geo-sb)를 둔다 */
+.geo-list::-webkit-scrollbar { display: none; }
+/* 목록 오른쪽 스크롤 막대(app.js geoSb) — 보이는 폭은 6px, 누를 수 있는 폭은 22px */
+.geo-sb { position: absolute; right: 1px; width: 22px; z-index: 31; touch-action: none; cursor: pointer; }
+.geo-sb[hidden] { display: none; }
+.geo-sb::before { content: ""; position: absolute; top: 0; bottom: 0; right: 8px; width: 4px; border-radius: 999px; background: var(--surface-seg); }
+.geo-sb-thumb { position: absolute; top: 0; left: 0; right: 0; display: block; cursor: grab; }
+.geo-sb-thumb::after { content: ""; position: absolute; top: 0; bottom: 0; right: 7px; width: 6px; border-radius: 999px; background: var(--text-3); }
+.geo-sb:active .geo-sb-thumb { cursor: grabbing; }
 .geo-opt { display: flex; flex-direction: column; gap: 2px; min-height: 44px; padding: 9px 12px; border-radius: 8px; cursor: pointer; }
 .geo-opt b { font-weight: 600; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
 .geo-opt small { color: var(--text-3); font-size: var(--fs-caption); overflow-wrap: anywhere; }

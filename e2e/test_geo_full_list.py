@@ -161,6 +161,41 @@ with sync_playwright() as p:
     c3 = opts(pg, "#geo-list-city-0")
     check("검색하면 결과만 남고 개수도 그에 맞다", c3 == ["City 0012"] and "전체 1곳" in pg.inner_text("#geo-list-city-0 .geo-count"), str(c3))
 
+    # ── 4-1. 팝업 오른쪽 스크롤 막대: 넘치면 보이고, 스크롤을 따라가고, 끌거나 눌러 옮길 수 있다 ──
+    pg.keyboard.press("Escape"); pg.evaluate("document.activeElement.blur()"); pg.wait_for_timeout(250)
+    pg.fill("#geo-country", ""); pg.focus("#geo-country"); pg.wait_for_timeout(450)
+    SB = """() => { const u = document.getElementById('geo-list-country'), sb = u.parentElement.querySelector('.geo-sb');
+      if (!sb || sb.hidden) return null; const a = u.getBoundingClientRect(), r = sb.getBoundingClientRect(), t = sb.firstChild.getBoundingClientRect();
+      return { inside: r.left >= a.left - 1 && r.right <= a.right + 1 && r.top >= a.top - 1 && r.bottom <= a.bottom + 1,
+               w: r.width, th: t.height, trk: r.height, tt: t.top - r.top, st: u.scrollTop, max: u.scrollHeight - u.clientHeight,
+               x: r.left + r.width / 2, y0: r.top, thumbY: t.top + t.height / 2 }; }"""
+    s0 = pg.evaluate(SB)
+    check("국가 목록이 넘치면 오른쪽에 스크롤 막대가 보인다", s0 is not None)
+    if s0:
+        check("막대는 팝업 안쪽 오른쪽에 있다", s0["inside"], s0)
+        check("손잡이 길이는 보이는 비율만큼(막대보다 짧다)", 32 <= s0["th"] < s0["trk"], s0)
+        check("누를 수 있는 폭 22px 이상", s0["w"] >= 22, s0["w"])
+        pg.evaluate("(() => { const u = document.getElementById('geo-list-country'); u.scrollTop = (u.scrollHeight - u.clientHeight) / 2; })()")
+        pg.wait_for_timeout(150)
+        s1 = pg.evaluate(SB)
+        check("목록을 스크롤하면 손잡이가 따라 내려간다", s1["tt"] > s0["tt"] + 10, (s0["tt"], s1["tt"]))
+        # 손잡이를 맨 아래로 끈다(손가락 끌기)
+        pg.mouse.move(s1["x"], s1["thumbY"]); pg.mouse.down(); pg.mouse.move(s1["x"], s1["y0"] + s1["trk"] + 40, steps=6); pg.mouse.up()
+        pg.wait_for_timeout(200)
+        s2 = pg.evaluate(SB)
+        check("손잡이를 끌면 목록이 끝까지 내려간다", s2["st"] >= s2["max"] - 2, (s2["st"], s2["max"]))
+        # 막대 위쪽 빈 곳을 누르면 거기로 건너뛴다
+        pg.mouse.click(s2["x"], s2["y0"] + 4); pg.wait_for_timeout(200)
+        s3 = pg.evaluate(SB)
+        check("막대 위쪽을 누르면 목록이 위로 건너뛴다", s3["st"] < s2["max"] * 0.2, (s3["st"], s2["max"]))
+        check("막대를 만져도 목록은 열린 채, 칸이 포커스를 지킨다",
+              not pg.evaluate("document.getElementById('geo-list-country').hidden") and pg.evaluate("document.activeElement.id") == "geo-country")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+    check("목록을 닫으면 막대도 사라진다", pg.evaluate(
+        "(() => { const sb = document.getElementById('geo-list-country').parentElement.querySelector('.geo-sb'); return !sb || sb.hidden; })()"))
+    check("기본 스크롤 막대는 숨긴다(두 개가 겹치지 않게)", pg.evaluate(
+        "getComputedStyle(document.getElementById('geo-list-country')).scrollbarWidth") == "none")
+
     # ── 5. 넓은 화면/좁은 화면 모두 넘침 없음 ──
     for w in (320, 390, 820):
         pg.set_viewport_size({"width": w, "height": 800}); pg.wait_for_timeout(200)
