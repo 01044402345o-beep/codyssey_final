@@ -190,6 +190,26 @@ with sync_playwright() as p:
         check("막대 위쪽을 누르면 목록이 위로 건너뛴다", s3["st"] < s2["max"] * 0.2, (s3["st"], s2["max"]))
         check("막대를 만져도 목록은 열린 채, 칸이 포커스를 지킨다",
               not pg.evaluate("document.getElementById('geo-list-country').hidden") and pg.evaluate("document.activeElement.id") == "geo-country")
+        # 매끄러움: 프레임마다 손잡이가 스크롤 값과 같은 자리(소수점까지)에 있다 — 1px 계단·한 프레임 늦음 없음
+        sm = pg.evaluate("""async () => { const u = document.getElementById('geo-list-country'), sb = u.parentElement.querySelector('.geo-sb'), t = sb.firstChild;
+          const raf = () => new Promise(r => requestAnimationFrame(r)); u.scrollTop = 0; await raf(); await raf();
+          const errs = [], pos = [];
+          for (let i = 0; i < 40; i++) { u.scrollTop += 23; await raf(); await raf();
+            const track = sb.getBoundingClientRect().height, th = t.getBoundingClientRect().height, max = u.scrollHeight - u.clientHeight;
+            const want = (track - th) * u.scrollTop / max, got = t.getBoundingClientRect().top - sb.getBoundingClientRect().top;
+            errs.push(Math.abs(want - got)); pos.push(got); }
+          return { maxErr: Math.max(...errs), frac: pos.some(v => Math.abs(v - Math.round(v)) > 0.05) }; }""")
+        check("스크롤하는 프레임마다 손잡이가 제자리(오차 0.6px 미만)", sm["maxErr"] < 0.6, sm)
+        check("손잡이는 소수점 위치로 움직인다(1px 계단 아님)", sm["frac"], sm)
+        s4 = pg.evaluate(SB)
+        pg.mouse.move(s4["x"], s4["thumbY"]); pg.mouse.down()
+        gaps = []
+        for k in range(1, 9):
+            y = s4["thumbY"] + k * 9
+            pg.mouse.move(s4["x"], y); pg.wait_for_timeout(40)
+            gaps.append(pg.evaluate("(y) => { const t = document.querySelector('#geo-list-country ~ .geo-sb .geo-sb-thumb').getBoundingClientRect(); return y - (t.top + t.height / 2); }", y))
+        pg.mouse.up(); pg.wait_for_timeout(100)
+        check("끄는 동안 손잡이가 손가락을 그대로 따라간다(간격 일정)", max(gaps) - min(gaps) < 1.0, [round(g, 2) for g in gaps])
     pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
     check("목록을 닫으면 막대도 사라진다", pg.evaluate(
         "(() => { const sb = document.getElementById('geo-list-country').parentElement.querySelector('.geo-sb'); return !sb || sb.hidden; })()"))
