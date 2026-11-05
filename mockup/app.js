@@ -4052,10 +4052,12 @@ function addPlaceForm(city) {
   const st = addLookState(city);
   return `<div class="card add-place" id="add-place-card">
     <div class="add-place-h"><b>가고 싶은 곳이 없나요?</b><span class="add-place-sub">이름을 적으면 공개 자료에서 사진·주소를 찾아 확인해 드려요.</span></div>
-    <div class="add-place-row"><input id="add-place-name" data-city="${esc(city)}" type="text" maxlength="60" autocomplete="off" value="${esc(d.name)}"
-      placeholder="장소 이름 (영어로 적으면 문장에 그대로 써요)" aria-label="장소 이름">
-    <select id="add-place-kind" data-city="${esc(city)}" aria-label="장소 종류"><option value=""${d.kind ? '' : ' selected'}>종류 선택</option>${Object.entries(ADD_KIND).map(([k, v]) =>
-      `<option value="${k}"${d.kind === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+    <div class="add-place-row">
+      <span class="ap-field ap-name"><input id="add-place-name" data-city="${esc(city)}" type="text" maxlength="60" autocomplete="off" value="${esc(d.name)}"
+        placeholder="예: Shibuya Sky" aria-label="장소 이름"></span>
+      <span class="ap-field ap-kind"><select id="add-place-kind" data-city="${esc(city)}" aria-label="장소 종류"><option value=""${d.kind ? '' : ' selected'}>종류 선택</option>${Object.entries(ADD_KIND).map(([k, v]) =>
+        `<option value="${k}"${d.kind === k ? ' selected' : ''}>${v}</option>`).join('')}</select></span>
+    </div>
     <div class="small add-place-st st-${esc(st)}" id="add-place-st" aria-live="polite" aria-busy="${st === 'loading'}">${addLookLine(city)}</div></div>`;
 }
 function addLookState(city) {
