@@ -213,7 +213,9 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 1280, "height": 800})
     page = ctx.new_page(); page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(BASE + "/?gate=off#u-sched"); page.wait_for_timeout(700)
-    # 미래 날짜는 일정표를 여는 것만으로 창을 띄우지 않고, 오른쪽 상세 안에 '미리 학습하기'를 둔다
+    # 오늘을 보고 있으면 오늘의 알람이 먼저(11/05 사용자 지시), 넘기면 미래 날짜 확인 — 창이 아니라 오른쪽 상세 안의 '미리 학습하기'
+    check("1280px 일정표: 오늘의 알람이 먼저(창 없음)", page.evaluate("S.modal") is None and page.locator(".split-detail .alarm").count() == 1)
+    page.locator(".split-detail [data-act=card-next]").first.click(); page.wait_for_timeout(300)
     check("1280px 미래 날짜: 창 없이 상세 안에 '미리 학습하기'", page.evaluate("S.modal") is None and page.locator(".split-detail [data-act=preview-ok]").count() == 1)
     page.locator(".split-detail [data-act=preview-ok]").click(); page.wait_for_timeout(300)
     check("1280px 일정표: 2열(목록+상세)", page.locator(".split-list .srow").count() >= 6 and page.locator(".split-detail .flip").count() == 1)
