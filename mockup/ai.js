@@ -766,8 +766,12 @@
        화면은 그 주소를 직접 부르지 않고 GET /place-photo 로 서버가 받아 준다(CSP img-src 'self'). */
     const address = typeof d.address === 'string' ? d.address.replace(/[<>{}]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) : '';
     const im = d.image && typeof d.image === 'object' ? d.image : null;
-    const image = im && /^https:\/\/upload\.wikimedia\.org\/[^\s"'<>]+$/.test(im.src || '')
-      ? { src: im.src, page: /^https:\/\/commons\.wikimedia\.org\/[^\s"'<>]+$/.test(im.page || '') ? im.page : '', credit: 'Wikimedia Commons' } : null;
+    // 사진은 저작자·라이선스가 있을 때만(CC BY-SA 표시 요건: 저작자 · 라이선스 · 원본 링크)
+    const txt = (v, n) => typeof v === 'string' ? v.replace(/[<>{}]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n) : '';
+    const image = im && /^https:\/\/(upload|thumb)\.wikimedia\.org\/[^\s"'<>]+$/.test(im.src || '') && txt(im.license, 40)
+      ? { src: im.src, page: /^https:\/\/commons\.wikimedia\.org\/[^\s"'<>]+$/.test(im.page || '') ? im.page : '', credit: 'Wikimedia Commons',
+          author: txt(im.author, 80) || '작자 미상', license: txt(im.license, 40),
+          licenseUrl: /^https?:\/\/[^\s"'<>]+$/.test(im.license_url || '') ? im.license_url : '' } : null;
     return { state: 'found', name, url: src.url, provider: prov, label: RESEARCH_PROVIDER[prov][0], license: RESEARCH_PROVIDER[prov][1],
              km: Number.isFinite(d.distance_km) ? d.distance_km : null, address,
              addressSource: typeof d.address_source === 'string' && address ? d.address_source.slice(0, 60) : '',

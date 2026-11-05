@@ -86,7 +86,7 @@ class NetTest(unittest.TestCase):
             "api.geoapify.com", "api.tavily.com", "places.googleapis.com", "overpass-api.de",
             "de.wikivoyage.org", "it.wikivoyage.org", "fr.wikivoyage.org", "es.wikivoyage.org", "ja.wikivoyage.org",
             "zh.wikivoyage.org", "apis.data.go.kr",
-            "upload.wikimedia.org", "nominatim.openstreetmap.org"}))           # 장소 확인 창의 사진·주소(11/05)
+            "upload.wikimedia.org", "nominatim.openstreetmap.org", "commons.wikimedia.org", "thumb.wikimedia.org"}))           # 장소 확인 창의 사진·주소(11/05)
 
     def test_user_agent_names_app_and_contact(self):
         seen = {}

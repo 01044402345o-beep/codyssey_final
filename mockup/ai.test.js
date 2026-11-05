@@ -785,11 +785,16 @@ test('직접 추가 장소 확인 응답: found 만 링크·이름을 싣고, ht
 test('장소 확인 창 응답(11/05): 주소는 글자만, 사진은 위키미디어 공용 썸네일만, 좌표는 숫자만', () => {
   const base = { status: 'found', name: 'Tōdai-ji Temple', source: { provider: 'wikidata', url: 'https://www.wikidata.org/wiki/Q186148' } };
   const ok = AI.placeCheckResult({ ...base, lat: 34.689, lon: 135.8398, address: ' 406-1  Zoshicho <b>Nara</b> ', address_source: 'OpenStreetMap (ODbL)',
-    image: { src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/T.jpg/500px-T.jpg', page: 'https://commons.wikimedia.org/wiki/File:T.jpg' } });
+    image: { src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/T.jpg/500px-T.jpg', page: 'https://commons.wikimedia.org/wiki/File:T.jpg',
+             author: ' Kim <b>Lee</b> ', license: 'CC BY-SA 4.0', license_url: 'https://creativecommons.org/licenses/by-sa/4.0' } });
   assert.deepEqual([ok.address, ok.addressSource, ok.lat, ok.lon], ['406-1 Zoshicho b Nara /b', 'OpenStreetMap (ODbL)', 34.689, 135.8398]);
-  assert.deepEqual(ok.image, { src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/T.jpg/500px-T.jpg', page: 'https://commons.wikimedia.org/wiki/File:T.jpg', credit: 'Wikimedia Commons' });
+  assert.deepEqual(ok.image, { src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/T.jpg/500px-T.jpg', page: 'https://commons.wikimedia.org/wiki/File:T.jpg',
+    credit: 'Wikimedia Commons', author: 'Kim b Lee /b', license: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0' });
+  // 저작자·라이선스 표시 요건 — 라이선스가 없으면 사진을 쓰지 않는다. 공용 API 의 thumb 호스트는 받는다
+  assert.equal(AI.placeCheckResult({ ...base, image: { src: 'https://upload.wikimedia.org/a.jpg' } }).image, null);
+  assert.equal(AI.placeCheckResult({ ...base, image: { src: 'https://thumb.wikimedia.org/a.jpg', license: 'CC0' } }).image.author, '작자 미상');
   for (const src of ['http://upload.wikimedia.org/a.jpg', 'https://evil.example/a.jpg', 'https://upload.wikimedia.org/a b.jpg', 'javascript:alert(1)']) {
-    assert.equal(AI.placeCheckResult({ ...base, image: { src } }).image, null, src);
+    assert.equal(AI.placeCheckResult({ ...base, image: { src, license: 'CC0' } }).image, null, src);
   }
   const bare = AI.placeCheckResult({ ...base, lat: 'x' });
   assert.deepEqual([bare.address, bare.image, bare.lat, bare.addressSource], ['', null, null, '']);

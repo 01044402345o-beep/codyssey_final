@@ -72,7 +72,8 @@ def check_route(route):
     out = ({"status": "found", "name": "Tōdai-ji Temple", "distance_km": 2.4, "lat": 34.689, "lon": 135.8398,
             "address": "406-1 Zoshicho, Nara",
             "image": {"src": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Todaiji.jpg/500px-Todaiji.jpg",
-                      "page": "https://commons.wikimedia.org/wiki/File:Todaiji.jpg", "credit": "Wikimedia Commons"},
+                      "page": "https://commons.wikimedia.org/wiki/File:Todaiji.jpg", "credit": "Wikimedia Commons",
+                      "author": "Kim", "license": "CC BY-SA 4.0", "license_url": "https://creativecommons.org/licenses/by-sa/4.0"},
             "source": {"provider": "wikidata", "url": "https://www.wikidata.org/wiki/Q186148", "title": "Tōdai-ji Temple"}}
            if name.lower().startswith("tōdai") else {"status": "not_found"})
     route.fulfill(status=200, content_type="application/json", body=json.dumps(out, ensure_ascii=False))

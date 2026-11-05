@@ -115,7 +115,7 @@ class EnrichTest(unittest.TestCase):
 
     def test_enrich_fills_missing_photo_and_address_but_keeps_found(self):
         got = {"status": "found", "name": "X", "lat": 1.0, "lon": 2.0, "address": "", "image": None}
-        img = {"src": "https://upload.wikimedia.org/a.jpg", "page": "", "credit": "Wikimedia Commons"}
+        img = {"src": "https://upload.wikimedia.org/a.jpg", "page": "", "credit": "Wikimedia Commons", "license": "CC BY-SA 4.0"}
         with mock.patch.object(place_check, "_photo_near", return_value=img), \
                 mock.patch.object(place_check, "_reverse", return_value="1 <b>Main</b> St https://evil.example"):
             out = place_check._enrich(None, "X", dict(got))
@@ -124,6 +124,36 @@ class EnrichTest(unittest.TestCase):
                 mock.patch.object(place_check, "_reverse", side_effect=RuntimeError):
             out = place_check._enrich(None, "X", dict(got))
         self.assertEqual((out["status"], out["image"], out["address"]), ("found", None, ""))   # 보강 실패해도 찾은 결과는 그대로
+
+    def test_photo_without_license_is_dropped(self):
+        got = {"status": "found", "name": "X", "lat": 1.0, "lon": 2.0, "address": "a",
+               "image": place_check.commons_image("X.jpg")}
+        with mock.patch.object(place_check, "commons_meta", return_value=None):
+            self.assertIsNone(place_check._enrich(None, "X", dict(got))["image"])      # 저작자·라이선스를 못 알면 사진 없음
+
+    def test_commons_meta_reads_author_license_and_api_thumb(self):
+        api = {"query": {"pages": {"1": {"imageinfo": [{
+            "thumburl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/63/G.jpg/500px-G.jpg?utm_source=x",
+            "descriptionurl": "https://commons.wikimedia.org/wiki/File:G.jpg",
+            "extmetadata": {"Artist": {"value": '<a href="//commons.wikimedia.org/wiki/User:Kim">Kim &amp; Lee</a>'},
+                            "LicenseShortName": {"value": "CC BY-SA 4.0"},
+                            "LicenseUrl": {"value": "https://creativecommons.org/licenses/by-sa/4.0"}}}]}}}}
+        http = mock.Mock()
+        http.get_json.return_value = (net.Response(200, b"{}"), api)
+        m = place_check.commons_meta(http, place_check.commons_image("G.jpg"))
+        self.assertEqual(m, {"src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/63/G.jpg/500px-G.jpg",
+                             "page": "https://commons.wikimedia.org/wiki/File:G.jpg", "credit": "Wikimedia Commons",
+                             "author": "Kim & Lee", "license": "CC BY-SA 4.0",
+                             "license_url": "https://creativecommons.org/licenses/by-sa/4.0"})
+        api["query"]["pages"]["1"]["imageinfo"][0]["extmetadata"].pop("LicenseShortName")
+        self.assertIsNone(place_check.commons_meta(http, place_check.commons_image("G.jpg")))
+
+    def test_borrowed_photo_needs_same_name(self):
+        near = {"status": "found", "name": "Jamba Juice Shibuya", "lat": 35.66, "lon": 139.70,
+                "image": {"src": "https://upload.wikimedia.org/j.jpg"}}
+        with mock.patch.object(place_check, "_by_wikidata", return_value=near):
+            self.assertIsNone(place_check._photo_near(None, "Blue Bottle Coffee Shibuya", 35.66, 139.70))
+            self.assertEqual(place_check._photo_near(None, "Jamba Juice", 35.66, 139.70), near["image"])
 
     def test_found_result_carries_address_and_image_fields(self):
         r = place_check._found("tourapi", "근대역사박물관", 35.98, 126.71, "https://x", 0.5, "attraction", address="전북 군산시 해망로 240")
@@ -136,7 +166,8 @@ class PhotoProxyTest(unittest.TestCase):
         self.http = TestClient(main.app)
 
     def test_only_wikimedia_images(self):
-        for src in ("http://upload.wikimedia.org/a.jpg", "https://evil.example/a.jpg", "https://upload.wikimedia.org@evil.example/a.jpg"):
+        for src in ("http://upload.wikimedia.org/a.jpg", "https://evil.example/a.jpg", "https://upload.wikimedia.org@evil.example/a.jpg",
+                    "https://169.254.169.254/latest/meta-data", "https://commons.wikimedia.org/wiki/File:a.jpg"):
             self.assertEqual(self.http.get("/place-photo", params={"src": src}).status_code, 404, src)
 
     def test_returns_image_only_by_magic_bytes_and_caches(self):
@@ -149,10 +180,11 @@ class PhotoProxyTest(unittest.TestCase):
         with mock.patch.object(net.SafeHttp, "request", fake):
             r = self.http.get("/place-photo", params={"src": "https://upload.wikimedia.org/x/a.jpg"})
             r2 = self.http.get("/place-photo", params={"src": "https://upload.wikimedia.org/x/a.jpg"})
+            r3 = self.http.get("/place-photo", params={"src": "https://thumb.wikimedia.org/x/b.jpg"})
             bad = self.http.get("/place-photo", params={"src": "https://upload.wikimedia.org/x/a.png"})
         self.assertEqual((r.status_code, r.headers["content-type"], r.content), (200, "image/jpeg", jpg))
-        self.assertEqual(r2.status_code, 200)
-        self.assertEqual(len([c for c in calls if c.endswith(".jpg")]), 1)                 # 두 번째는 캐시
+        self.assertEqual((r2.status_code, r3.status_code), (200, 200))      # 공용 API 가 주는 thumb 호스트도
+        self.assertEqual(len([c for c in calls if c.endswith("/a.jpg")]), 1)                 # 두 번째는 캐시
         self.assertEqual(bad.status_code, 404)                                              # 이미지가 아니면 내보내지 않는다
 
 
