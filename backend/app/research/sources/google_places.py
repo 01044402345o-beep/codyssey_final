@@ -82,7 +82,7 @@ def adapter(deps: Any, tc: dict, want: dict) -> dict:
 
 def find(http: SafeHttp, ref: dict, name: str) -> "dict | None":
     """사용자가 적은 장소 이름 하나를 도시 근처에서 찾는다(place_check). 종류 제한 없이, 결과는 저장하지 않는다.
-    → {name, lat, lon, url} 또는 None. 일 한도(ITINERARY_DAILY_CAP)를 1 쓴다."""
+    → {name, lat, lon, url, address} 또는 None. 일 한도(ITINERARY_DAILY_CAP)를 1 쓴다."""
     from ...agents import itinerary
     if not available() or ref.get("lat") is None or itinerary._reserve(1) <= 0:
         return None
@@ -98,7 +98,8 @@ def find(http: SafeHttp, ref: dict, name: str) -> "dict | None":
     for item in (data or {}).get("places") or []:
         p = itinerary._place_from(item, fetched)
         if p:
-            return {"name": p["name"], "lat": p["lat"], "lon": p["lon"], "url": p["source_url"]}
+            return {"name": p["name"], "lat": p["lat"], "lon": p["lon"], "url": p["source_url"],
+                    "address": ((p.get("data") or {}).get("formatted_address") or "")}
     return None
 
 

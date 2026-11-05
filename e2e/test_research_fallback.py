@@ -69,7 +69,10 @@ def check_route(route):
     body = json.loads(route.request.post_data or "{}")
     check_calls.append(body)
     name = (body.get("place") or {}).get("name", "")
-    out = ({"status": "found", "name": "Tōdai-ji Temple", "distance_km": 2.4,
+    out = ({"status": "found", "name": "Tōdai-ji Temple", "distance_km": 2.4, "lat": 34.689, "lon": 135.8398,
+            "address": "406-1 Zoshicho, Nara",
+            "image": {"src": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Todaiji.jpg/500px-Todaiji.jpg",
+                      "page": "https://commons.wikimedia.org/wiki/File:Todaiji.jpg", "credit": "Wikimedia Commons"},
             "source": {"provider": "wikidata", "url": "https://www.wikidata.org/wiki/Q186148", "title": "Tōdai-ji Temple"}}
            if name.lower().startswith("tōdai") else {"status": "not_found"})
     route.fulfill(status=200, content_type="application/json", body=json.dumps(out, ensure_ascii=False))
@@ -111,7 +114,7 @@ with sync_playwright() as p:
     card = page.locator(".place", has_text="Sensō-ji").first.inner_text()
     check("도쿄: 대체 소스 출처 이름·라이선스(Wikidata·Wikipedia)", "Wikidata · Sensō-ji" in card and "Wikipedia · Sensō-ji" in card
           and "Wikidata (CC0)" in card and "Wikipedia (CC BY-SA 4.0)" in card, card)
-    check("도쿄: 직접 추가 칸은 없다(장소가 있는 도시)", page.locator(".add-place").count() == 0)
+    check("도쿄: 조사가 성공해도 직접 추가 칸이 있다", page.locator(".add-place").count() == 1)
     check("출처 표기에 대체 소스", "Wikidata (CC0)" in page.inner_text(".rinfo-credits"))
 
     page.locator(".city-tabs button", has_text="나라").click()
@@ -123,35 +126,38 @@ with sync_playwright() as p:
     check("나라: 도시 브리프 카드(백업 경로)", "나라는 일본 나라현의 도시" in page.inner_text(".brief-card") and len(brief_calls) == 1)
     check("나라: 다시 조사하기 버튼", page.locator("[data-act=research-retry]").count() == 1)
 
+    # 빈칸(이름·종류)을 다 채우면 저절로 찾고 → 확인 창(사진·이름·주소) → '맞아요'면 찾은 이름·주소로 추가
     page.fill("#add-place-name", "  Tōdai-ji  ")
     page.select_option("#add-place-kind", "attraction")
-    page.click("[data-act=add-place]")
+    page.wait_for_function("() => S.modal && /이 장소가 맞나요/.test(S.modal.title)", timeout=10000)
+    modal = page.inner_text(".modal")
+    check("확인 창: 찾은 이름·주소·출처", "Tōdai-ji Temple" in modal and "406-1 Zoshicho, Nara" in modal and "Wikidata" in modal, modal[:200])
+    check("확인 창: 사진은 서버(/place-photo)를 거친다", page.evaluate(
+        "(() => { const i = document.querySelector('.modal .pc-photo img'); return !!i && i.getAttribute('src').includes('/place-photo?src=https%3A%2F%2Fupload.wikimedia.org'); })()"))
+    page.click("[data-act=modal-ok]")
     page.wait_for_timeout(200)
-    added = page.evaluate("S.places.filter(p => p.city === '나라').map(p => [p.name, p.kind, p.selected, p.attribution, p.research])")
-    check("직접 추가: 이름 정리·종류·선택됨·출처 '직접 추가'", len(added) == 1 and added[0][:3] == ["Tōdai-ji", "attraction", True]
-          and added[0][3].startswith("직접 추가") and added[0][4] is True, str(added))       # 뒤이은 확인이 '출처 확인'을 붙일 수 있다
-    check("직접 추가한 장소 카드가 그려진다", "직접 추가" in page.locator(".place", has_text="Tōdai-ji").first.inner_text())
-    page.fill("#add-place-name", "tōdai-ji")
-    page.click("[data-act=add-place]")
-    page.fill("#add-place-name", "<b>x</b>")
-    page.click("[data-act=add-place]")
-    page.fill("#add-place-name", "Kakinoha Sushi")
-    page.select_option("#add-place-kind", "restaurant")
-    page.click("[data-act=add-place]")
-    names = page.evaluate("S.places.filter(p => p.city === '나라').map(p => p.name)")
-    check("중복·위험한 이름은 막고 정상 이름은 추가", names == ["Tōdai-ji", "Kakinoha Sushi"], str(names))
-    page.wait_for_function("() => S.places.filter(p => p.user).every(p => p.check && p.check.state !== 'loading')", timeout=10000)
+    added = page.evaluate("S.places.filter(p => p.city === '나라').map(p => [p.name, p.kind, p.selected, p.attribution, p.research, p.verified, p.address])")
+    check("확인한 장소: 찾은 이름·종류·선택됨·확인 표시·주소", len(added) == 1 and added[0][:3] == ["Tōdai-ji Temple", "attraction", True]
+          and added[0][3].startswith("직접 추가") and added[0][4] is True and added[0][5] is True and added[0][6] == "406-1 Zoshicho, Nara", str(added))
+    todai = page.locator(".place", has_text="Tōdai-ji Temple").first.inner_text()
+    check("확인한 장소 카드: 주소·출처", "406-1 Zoshicho" in todai and "Wikidata · Tōdai-ji Temple" in todai, todai)
     sent = check_calls[0] if check_calls else {}
     check("장소 확인 요청: 나라 ISO2·도시 gid·장소 이름·종류(사용자 정보 없음)",
           sent.get("country") == {"name": "일본", "iso2": "JP"} and sent.get("city") == {"name": "나라", "gid": 1855612}
           and sent.get("place") == {"name": "Tōdai-ji", "kind": "attraction"} and "uid" not in json.dumps(sent), str(sent))
-    todai = page.locator(".place", has_text="Tōdai-ji").first.inner_text()
-    check("확인된 장소: 출처 링크·거리·이름 바꾸기 제안", "공개 자료에서 확인했어요" in todai and "Wikidata · Tōdai-ji Temple" in todai
-          and "2.4km" in todai and "바꾸기" in todai, todai)
-    check("못 찾은 장소: 안내만 하고 그대로 둔다", "찾지 못했어요" in page.locator(".place", has_text="Kakinoha").first.inner_text()
-          and page.evaluate("S.places.some(p => p.name === 'Kakinoha Sushi' && p.selected)"))
-    page.click("[data-act=place-rename]")
-    check("이름 바꾸기 → 찾은 이름으로", page.evaluate("S.places.some(p => p.name === 'Tōdai-ji Temple' && p.user)"))
+    n_calls = len(check_calls)
+    page.fill("#add-place-name", "<b>x</b>"); page.select_option("#add-place-kind", "attraction"); page.wait_for_timeout(1100)
+    check("위험한 이름은 찾지 않는다", len(check_calls) == n_calls, len(check_calls))
+    # 못 찾으면 안내 + '이름만 추가'
+    page.fill("#add-place-name", "Kakinoha Sushi")
+    page.select_option("#add-place-kind", "restaurant")
+    page.wait_for_function("() => /찾지 못했어요/.test(document.getElementById('add-place-st').innerText)", timeout=10000)
+    page.click("[data-act=add-place-plain]")
+    page.wait_for_timeout(200)
+    names = page.evaluate("S.places.filter(p => p.city === '나라').map(p => p.name)")
+    check("못 찾은 장소는 '이름만 추가'로", names == ["Tōdai-ji Temple", "Kakinoha Sushi"], str(names))
+    check("이름만 추가한 장소는 주소 없음·확인 표시 없음", page.evaluate(
+        "S.places.some(p => p.name === 'Kakinoha Sushi' && p.selected && !p.verified && !p.address)"))
     for w in (320, 390):
         page.set_viewport_size({"width": w, "height": 800}); page.wait_for_timeout(150)
         check(f"{w}px: 가로 넘침 없음", page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
@@ -164,7 +170,9 @@ with sync_playwright() as p:
 
     page.locator(".city-tabs button", has_text="나라").click()
     page.fill("#add-place-name", "Nara Park")
-    page.click("[data-act=add-place]")
+    page.select_option("#add-place-kind", "attraction")
+    page.wait_for_function("() => /찾지 못했어요/.test(document.getElementById('add-place-st').innerText)", timeout=10000)
+    page.click("[data-act=add-place-plain]")
     page.evaluate("() => { S.modal = null; S.trip.status = 'route_requested'; request('route'); }")
     page.wait_for_function("() => S.screen === 'u-route'", timeout=40000)
     nara_ids = page.evaluate("S.places.filter(p => p.city === '나라' && p.selected).map(p => p.id)")

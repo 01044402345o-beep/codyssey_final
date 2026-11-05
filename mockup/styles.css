@@ -2168,6 +2168,20 @@ html[data-mode=legacy] .il-slot { position: absolute; inset: 0; }
 .check-line .link-btn { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
 .add-place-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .add-place-row input { flex: 1 1 180px; min-width: 0; }
+.add-place-row select { flex: 0 1 auto; min-height: 44px; }
+/* 직접 추가: 상태 줄(찾는 중·못 찾음·이름만 추가) */
+.add-place-st { color: var(--text-3); line-height: 1.55; }
+.add-place-st .link-btn { background: none; border: 0; padding: 0; min-height: 44px; color: var(--accent-text); text-decoration: underline; cursor: pointer; font: inherit; font-weight: 600; }
+/* 장소 확인 창(사진·이름·주소) — 창 본문이 <p> 안이라 span 을 블록으로 쓴다 */
+.place-confirm { display: grid; gap: 8px; margin-top: 4px; }
+.place-confirm > span { display: block; }
+.pc-photo { display: block; border-radius: 12px; overflow: hidden; background: var(--surface-3); aspect-ratio: 16 / 10; }
+.pc-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pc-credit, .pc-nophoto, .pc-hint { font-size: var(--fs-caption); color: var(--text-3); }
+.pc-nophoto { padding: 10px; border-radius: 10px; background: var(--surface-3); text-align: center; }
+.place-confirm > .pc-row { display: grid; grid-template-columns: 2.6em minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.pc-k { font-size: var(--fs-caption); font-weight: 600; color: var(--text-3); }
+.pc-v { min-width: 0; overflow-wrap: anywhere; color: var(--text); }
 .rinfo-quote { margin: 4px 0 6px; padding-left: 10px; border-left: 2px solid var(--border); color: var(--text-3); font-size: 0.8125rem; line-height: 1.5; overflow-wrap: anywhere; }
 .place .desc .why { color: var(--text-3); }
 .place .desc.en-sub { color: var(--text-3); font-size: 0.8125rem; }

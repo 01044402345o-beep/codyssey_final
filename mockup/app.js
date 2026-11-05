@@ -1920,7 +1920,8 @@ async function runAi(tok) {
   S.places.filter(p => p.selected && sentenceCategory(p)).forEach(p => {
     const cat = sentenceCategory(p);
     (groups[aiKey(p.city, cat)] ??= { name: p.city, categoryId: cat, places: [], researchKey: researchKeyOf(p.city) })
-      .places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind, user: !!(p.user || (p.research && p.provider === 'google')) });
+      .places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind, user: !!(p.user || (p.research && p.provider === 'google')),
+        ...(p.user && p.verified && p.address ? { address: p.address } : {}) });   // 사용자가 확인한 주소만 사실로 쓴다
   });
   const cities = Object.values(groups);
   if (!cities.length) return;
@@ -1950,7 +1951,8 @@ async function refreshAiSentences() {
   S.places.filter(p => p.selected && sentenceCategory(p)).forEach(p => {
     const cat = sentenceCategory(p);
     (groups[aiKey(p.city, cat)] ??= { name: p.city, categoryId: cat, places: [], researchKey: researchKeyOf(p.city) })
-      .places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind, user: !!(p.user || (p.research && p.provider === 'google')) });
+      .places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind, user: !!(p.user || (p.research && p.provider === 'google')),
+        ...(p.user && p.verified && p.address ? { address: p.address } : {}) });   // 사용자가 확인한 주소만 사실로 쓴다
   });
   const cities = Object.values(groups);
   let out;
@@ -1993,8 +1995,13 @@ async function startResearch(tok) {
   try { await geoCountries(); } catch (e) { /* 나라 목록이 없으면 이름만 보낸다 */ }
   const t = S.trip;
   const body = AI.researchRequestBody(t, researchCaps(t.cities), n => (countryByName(n) || {}).iso2 || '');
+  // 장소 생성 하루 한도는 로그인했으면 계정으로 센다(아니면 IP) — 조사 시작 요청에만 토큰을 붙인다
+  let token = '';
+  if (window.FirebaseAuth && FirebaseAuth.idToken && S.user && S.user !== DEMO_USER) { try { token = await FirebaseAuth.idToken() || ''; } catch (e) { token = ''; } }
+  const fetchImpl = (u, o = {}) => (token && (o.method || 'GET').toUpperCase() === 'POST'
+    ? fetch(u, { ...o, headers: { ...(o.headers || {}), Authorization: 'Bearer ' + token } }) : fetch(u, o));
   return AI.collectResearch({
-    fetchImpl: (u, o) => fetch(u, o), base: API.base, body, signal: ctl.signal,
+    fetchImpl, base: API.base, body, signal: ctl.signal,
     onProgress: evs => {
       if (tok !== genToken || !S.gen || !evs.length) return;
       const last = evs[evs.length - 1], done = evs.filter(e => e.state === 'done').length;
@@ -2009,11 +2016,18 @@ async function runReport(tok) {
   S.reportPlaces = null;
   S.reportMetaLive = null;
   S.research = null;
+  S.placeQuota = false;
   if (API.base === null || !S.trip) return;
   try {
     const res = await (researchRun || startResearch(tok));
     researchRun = null;
     if (tok !== genToken) return;
+    if (res && res.reason === 'http_429') {   // 장소 생성 하루 한도 초과 — 빈 목록 + 안내 + '대신 직접 입력하기'
+      const caps = researchCaps(S.trip.cities), meta = {};
+      S.trip.cities.forEach(c => { const k = caps[c.name] || {}; meta[c.name] = { base: (k.attr || 0) + (k.rest || 0), found: 0, mode: 'empty', reason: 'quota' }; });
+      S.placeQuota = true; S.reportMode = 'empty'; S.reportPlaces = []; S.reportMetaLive = meta;
+      return;
+    }
     const folded = AI.foldResearch(S.trip.cities, res, researchCaps(S.trip.cities), S.trip.reportRound);
     if (folded.mode !== 'example') {
       S.reportMode = folded.mode === 'research' ? 'research' : 'empty';
@@ -2058,7 +2072,7 @@ function succeed(stage) {
     S.cityTab = t.cities[0].name; S.showCand = {};
     S.screen = 'u-report'; render();
     const again = t.reportRound > 1 ? `보고서를 다시 만들었어요. 남은 다시 생성 ${3 - t.regenerateCount}번` : '보고서가 준비됐어요. 가지 않을 장소를 빼 주세요.';
-    toast(S.reportMode === 'empty' ? '확인된 장소가 없어요.' : S.reportMode === 'live' ? '확인한 장소를 골랐어요. 가지 않을 장소를 빼 주세요.'
+    toast(S.placeQuota ? `${PLACE_QUOTA_MSG}. 직접 입력해 주세요.` : S.reportMode === 'empty' ? '확인된 장소가 없어요.' : S.reportMode === 'live' ? '확인한 장소를 골랐어요. 가지 않을 장소를 빼 주세요.'
       : S.reportMode === 'research' ? '여행 가이드에서 조사한 장소예요. 가지 않을 장소를 빼 주세요.' : again);
   } else if (stage === 'route') {
     if (S.itineraryBlocks) {
@@ -3887,6 +3901,9 @@ function scrReport() {
     lead += notice(`공개 여행 자료(위키보이지·위키데이터 등)에서 <b>실제로 조사한 장소</b>예요 — 이 도시 ${meta.total}곳 중 여행 일정에 맞춰 골랐어요. 영업시간·가격은 방문 전에 확인해 주세요.`);
     if (meta.stale) lead += notice('자료 서버가 지금 응답하지 않아 <b>지난번에 조사한 장소</b>를 보여 드려요.', 'warn');
     if (meta.fallback) lead += notice(fallbackNotice(city, meta.fallback), 'warn');
+  } else if (S.placeQuota) {
+    lead += notice(`${PLACE_QUOTA_MSG}. 내일 다시 검색하거나, 가 보고 싶은 곳을 직접 입력해 주세요.`, 'warn')
+      + (locked ? '' : `<button class="btn primary block" data-act="place-manual">대신 직접 입력하기</button>`);
   } else if (S.research) {
     // 조사는 됐지만 이 도시만 장소 0곳 — 예시로 채우지 않고, 이유를 알리고 도시 브리프·직접 추가를 보인다
     lead += notice(PLACE_NONE_KO[meta.reason] || PLACE_NONE_KO.no_sources, 'warn');
@@ -3910,13 +3927,13 @@ function scrReport() {
     <div class="city-head"><h3>${esc(city)}</h3><span class="cnt"><b>${sel}</b> / 최대 ${meta.base}곳</span></div>
     ${base.map(p => placeCard(p, locked)).join('')}
     ${cands.length ? `<button class="cand-toggle" data-act="cand" data-city="${esc(city)}">${open ? '후보 접기' : `후보 더 보기 (${cands.length})`}</button>${open ? cands.map(p => placeCard(p, locked)).join('') : ''}` : ''}
-    ${S.research && meta.mode === 'empty' && !locked ? addPlaceForm(city) : ''}
+    ${!locked ? addPlaceForm(city) : ''}
     ${researchCredits()}
   </div>`;
   const left = 3 - t.regenerateCount;
   const bottom = locked ? `<button class="btn primary block" data-act="tab" data-id="${t.status === 'studying' ? 'u-route' : 'u-gen'}">${t.status === 'studying' ? '방문 순서 보기' : '진행 상황 보기'}</button>`
     : `<div style="display:flex;gap:8px"><button class="btn soft" style="flex:1" data-act="regen" ${left <= 0 ? 'disabled' : ''}>다시 생성 · ${left}</button>
-       <button class="btn primary" style="flex:2" data-act="confirm-places" ${total === 0 ? 'disabled' : ''}>${total}곳으로 확정하기</button></div>
+       <button class="btn primary" style="flex:2" data-act="confirm-places" ${total === 0 || addLookBusy() ? 'disabled' : ''}>${total}곳으로 확정하기</button></div>
        <div class="small" style="text-align:center">다시 생성은 성공한 경우에만 횟수가 줄어요 · 남은 횟수 ${left}번</div>`;
   return frame(inner, { appbar: appbar('보고서 · 장소 선택', { step: 'STEP 2/3' }), bottom });
 }
@@ -4019,37 +4036,118 @@ const PLACE_NONE_KO = {
 };
 PLACE_NONE_KO.no_places = PLACE_NONE_KO.no_article = PLACE_NONE_KO.no_sources;
 const ADD_KIND = { attraction: '관광지', restaurant: '맛집', cafe: '카페' };
+const PLACE_QUOTA_MSG = '하루에 장소 검색을 할 수 있는 횟수를 초과했어요';
+/* 장소 직접 추가(11/05) — 조사가 성공하든 실패하든(한도 초과 포함) 보고서에서 늘 쓸 수 있다.
+   이 카드의 빈칸(장소 이름·종류)을 모두 채우면 저절로 서버가 공개 자료(TourAPI·Wikidata·Google)에서 그 장소를 찾고,
+   사진·이름·주소를 확인 창으로 보여 준다. '맞아요'로 확인한 주소만 그 장소에 붙여 문장 생성의 사실로 쓴다.
+   찾는 동안에는 장소를 확정(→ 문장 생성)할 수 없다. 찾기는 장소 생성 하루 한도에 세지 않는다. */
+const addDraft = {};      // 도시별 { name, kind } — 화면을 다시 그려도 적던 글자가 남게
+let addLook = { key: '', state: 'idle', city: '', res: null, seq: 0 };
+let addLookTimer = null;
+const addLookBusy = () => addLook.state === 'loading';
 function addPlaceForm(city) {
-  return `<div class="card add-place"><b>장소 직접 추가</b>
-    <div class="add-place-row"><input id="add-place-name" type="text" maxlength="60" autocomplete="off" placeholder="장소 이름 (영어로 적으면 문장에 그대로 써요)" aria-label="장소 이름">
-    <select id="add-place-kind" aria-label="장소 종류">${Object.entries(ADD_KIND).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
-    <button type="button" class="btn primary" data-act="add-place" data-city="${esc(city)}">추가</button></div>
-    <div class="small">직접 추가한 장소는 출처가 없어요. 방문 전에 위치·영업 여부를 확인해 주세요.</div></div>`;
+  const d = addDraft[city] || { name: '', kind: '' };
+  return `<div class="card add-place" id="add-place-card"><b>장소 직접 추가</b>
+    <div class="add-place-row"><input id="add-place-name" data-city="${esc(city)}" type="text" maxlength="60" autocomplete="off" value="${esc(d.name)}"
+      placeholder="장소 이름 (영어로 적으면 문장에 그대로 써요)" aria-label="장소 이름">
+    <select id="add-place-kind" data-city="${esc(city)}" aria-label="장소 종류"><option value=""${d.kind ? '' : ' selected'}>종류 선택</option>${Object.entries(ADD_KIND).map(([k, v]) =>
+      `<option value="${k}"${d.kind === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+    <div class="small add-place-st" id="add-place-st" aria-live="polite">${addLookLine(city)}</div></div>`;
 }
-/* 직접 추가한 장소 확인(POST /place-check): 도시 근처에서 이름을 찾아 출처를 붙인다. 못 찾아도 장소는 그대로 둔다. */
-async function placeCheck(p) {
-  if (API.base === null || !S.trip) return;
-  const { country } = briefCtx(p.city);
-  const c = S.trip.cities.find(x => x.name === p.city);
+function addLookLine(city) {
+  const L = addLook, d = addDraft[city] || {};
+  if (L.city !== city || !d.name || !d.kind) return '이름과 종류를 모두 적으면 공개 자료에서 그 장소를 찾아 사진·주소를 보여 드려요.';
+  const plain = `<button type="button" class="link-btn" data-act="add-place-plain" data-city="${esc(city)}">이름만 추가(주소 없이)</button>`;
+  if (L.state === 'loading') return `‘${esc(d.name)}’을(를) 공개 자료에서 찾고 있어요 — 끝나면 장소를 확정할 수 있어요.`;
+  if (L.state === 'not_found') return `공개 자료에서 찾지 못했어요. 이름을 더 정확히(영어 이름·지점명) 적거나 ${plain}`;
+  if (L.state === 'rejected') return `찾은 장소가 아니라고 하셨어요. 이름을 더 정확히 적어 다시 찾거나 ${plain}`;
+  if (L.state === 'error') return `지금은 확인할 수 없어요. 잠시 뒤 다시 적어 보거나 ${plain}`;
+  return '';
+}
+/* 상태 줄·확정 단추만 고친다(입력 칸을 다시 그리지 않아 커서가 그대로) */
+function addLookPaint() {
+  const st = document.getElementById('add-place-st');
+  if (st) st.innerHTML = addLookLine(addLook.city);
+  const btn = document.querySelector('[data-act="confirm-places"]');
+  if (btn) btn.disabled = addLookBusy() || S.places.filter(p => p.selected).length === 0;
+}
+function addDraftFromDom() {
+  const n = document.getElementById('add-place-name'), k = document.getElementById('add-place-kind');
+  if (!n || !k) return null;
+  const city = n.dataset.city;
+  addDraft[city] = { name: String(n.value || '').replace(/\s+/g, ' ').trim().slice(0, 60), kind: ADD_KIND[k.value] ? k.value : '' };
+  return city;
+}
+/* 빈칸을 다 채우면 잠깐(0.8초) 기다렸다가 찾는다 — 치는 도중마다 부르지 않는다 */
+function addLookSchedule() {
+  const city = addDraftFromDom(); if (!city) return;
+  const d = addDraft[city];
+  clearTimeout(addLookTimer);
+  if (!d.name || d.name.length < 2 || /[<>{}]/.test(d.name) || !d.kind) {
+    addLook = { ...addLook, key: '', state: 'idle', city, seq: addLook.seq + 1 };   // 늦게 온 결과는 버린다
+    addLookPaint(); return;
+  }
+  addLookTimer = setTimeout(() => addLookRun(city), 800);
+}
+async function addLookRun(city) {
+  const d = addDraft[city]; if (!d || !d.name || !d.kind || !S.trip) return;
+  const key = `${city}|${d.kind}|${d.name.toLowerCase()}`;
+  if (addLook.key === key && addLook.state !== 'error') return;          // 같은 것을 또 찾지 않는다
+  if (S.places.some(p => p.city === city && p.name.toLowerCase() === d.name.toLowerCase())) { toast('이미 목록에 있는 장소예요.'); return; }
+  const seq = addLook.seq + 1;
+  addLook = { key, state: 'loading', city, res: null, seq };
+  addLookPaint();
+  const res = API.base === null ? { state: 'error' } : AI.placeCheckResult(await placeCheckFetch(city, d.name, d.kind));
+  if (seq !== addLook.seq) return;                                       // 그사이 다른 이름을 적었다
+  addLook.res = res;
+  if (res.state !== 'found') { addLook.state = res.state === 'not_found' ? 'not_found' : 'error'; addLookPaint(); return; }
+  addLook.state = 'found';
+  addLookPaint();
+  const photo = res.image ? `<span class="pc-photo"><img src="${esc(API.base)}/place-photo?src=${encodeURIComponent(res.image.src)}" alt="${esc(res.name)} 사진" loading="lazy"></span>
+      <span class="pc-credit">사진: <a href="${esc(res.image.page || res.url)}" data-act="link" rel="noopener noreferrer">${esc(res.image.credit)}</a></span>` : '<span class="pc-nophoto">사진을 찾지 못했어요</span>';
+  confirmBox('이 장소가 맞나요?', `<span class="place-confirm">${photo}
+      <span class="pc-row"><span class="pc-k">이름</span><b class="pc-v">${esc(res.name)}</b></span>
+      <span class="pc-row"><span class="pc-k">주소</span><span class="pc-v">${res.address ? esc(res.address) : '주소를 찾지 못했어요'}</span></span>
+      <span class="pc-row"><span class="pc-k">출처</span><span class="pc-v"><a href="${esc(res.url)}" data-act="link" rel="noopener noreferrer">${esc(res.label)}</a>${res.km != null ? ` · ${esc(city)} 중심에서 약 ${esc(String(res.km))}km` : ''}${res.addressSource ? ` · 주소: ${esc(res.addressSource)}` : ''}</span></span>
+      <span class="pc-hint">적으신 이름: ‘${esc(d.name)}’ · 맞으면 이 이름·주소로 문장을 만들어요.</span></span>`,
+    '맞아요 · 추가하기', () => { S.modal = null; addUserPlace(city, d.kind, res, true); },
+    { cancel: '아니에요', onCancel: () => { addLook.state = 'rejected'; render(); } });
+}
+async function placeCheckFetch(city, name, kind) {
+  const { country } = briefCtx(city);
+  const c = S.trip.cities.find(x => x.name === city);
   const iso2 = (countryByName(country) || {}).iso2;
-  p.check = { state: 'loading' };
-  if (S.screen === 'u-report') render();
-  let d = null;
   try {
     const r = await fetch(`${API.base}/place-check`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ country: { name: country || p.city, ...(iso2 ? { iso2 } : {}) },
-                             city: { name: p.city, ...(c && c.gid ? { gid: c.gid } : {}) }, place: { name: p.name, kind: p.kind } }) });
-    d = r.ok ? await r.json() : null;
-  } catch (e) { d = null; }
-  const res = AI.placeCheckResult(d);
-  if (res.state === 'found') {
-    p.sources = [{ url: res.url, title: `${res.label} · ${res.name}` }];
-    p.attribution = `직접 추가 · 출처 확인(${res.license})`;
-    res.suggest = res.name.toLowerCase() !== p.name.toLowerCase() ? res.name : '';
-  }
-  p.check = res;
-  if (S.screen === 'u-report') render();
+      body: JSON.stringify({ country: { name: country || city, ...(iso2 ? { iso2 } : {}) },
+                             city: { name: city, ...(c && c.gid ? { gid: c.gid } : {}) }, place: { name, kind } }) });
+    return r.ok ? await r.json() : null;
+  } catch (e) { return null; }
 }
+/* 목록에 넣는다. verified=확인 창에서 '맞아요' — 그때만 찾은 이름·주소·좌표·출처를 붙인다 */
+function addUserPlace(city, kind, res, verified) {
+  const d = addDraft[city] || {};
+  const name = verified && res ? res.name : d.name;
+  if (!name) { toast('장소 이름을 1~60자로 적어 주세요.'); return; }
+  if (S.places.some(p => p.city === city && p.name.toLowerCase() === name.toLowerCase())) { toast('이미 목록에 있는 장소예요.'); return; }
+  const meta = S.reportMeta[city] || (S.reportMeta[city] = { base: 0, found: 0, mode: 'empty' });
+  const seq = S.places.length + 1;
+  const p = AI.researchPlace({ id: 'user:' + seq, name, kind: ADD_KIND[kind] ? kind : 'attraction', sources: [] }, city, 'u' + seq);
+  Object.assign(p, { attribution: '직접 추가', user: true, selected: !meta.base || selCount(city) < meta.base, isCandidate: false });
+  if (verified && res) {
+    Object.assign(p, { verified: true, address: res.address || '', area: res.address || '', lat: res.lat, lon: res.lon,
+      image: res.image || null, sources: [{ url: res.url, title: `${res.label} · ${res.name}` }],
+      attribution: `직접 추가 · 사용자 확인(${res.license})`, check: { ...res, suggest: '' } });
+  }
+  S.places.push(p);
+  meta.found = (meta.found || 0) + 1;
+  addDraft[city] = { name: '', kind: '' };
+  addLook = { key: '', state: 'idle', city, res: null, seq: addLook.seq + 1 };
+  render();
+  toast(verified ? `‘${name}’을(를) 확인한 주소로 추가했어요.` : `‘${name}’을(를) 이름만으로 추가했어요(주소 없음).`);
+}
+document.addEventListener('input', e => { if (e.target && (e.target.id === 'add-place-name' || e.target.id === 'add-place-kind')) addLookSchedule(); });
+document.addEventListener('change', e => { if (e.target && e.target.id === 'add-place-kind') addLookSchedule(); });
 function placeCheckLine(p) {
   const c = p.check;
   if (!c) return '';
@@ -6339,20 +6437,10 @@ const ACT = {
   'geo-more': el => geoMore(el.dataset.geoKey || (GEO.open && GEO.open.key)),
   'brief-retry': el => { briefLoad(el.dataset.city, true); render(); },
   'research-retry': () => { if (S.trip && S.trip.status === 'report_done') request('report', false); },
-  'add-place': el => {
-    const city = el.dataset.city, input = document.getElementById('add-place-name'), kindEl = document.getElementById('add-place-kind');
-    const name = String(input && input.value || '').replace(/\s+/g, ' ').trim();
-    const kind = ADD_KIND[kindEl && kindEl.value] ? kindEl.value : 'attraction';
-    if (!name || name.length > 60 || /[<>{}]/.test(name)) { toast('장소 이름을 1~60자로 적어 주세요.'); return; }
-    if (S.places.some(p => p.city === city && p.name.toLowerCase() === name.toLowerCase())) { toast('이미 목록에 있는 장소예요.'); return; }
-    const meta = S.reportMeta[city] || (S.reportMeta[city] = { base: 0, found: 0, mode: 'empty' });
-    const seq = S.places.length + 1;
-    const p = AI.researchPlace({ id: 'user:' + seq, name, kind, sources: [] }, city, 'u' + seq);
-    Object.assign(p, { attribution: '직접 추가', user: true, selected: selCount(city) < meta.base, isCandidate: false });
-    S.places.push(p);
-    meta.found = (meta.found || 0) + 1;
-    render();
-    placeCheck(p);
+  'add-place-plain': el => { const city = el.dataset.city; addDraftFromDom(); addUserPlace(city, (addDraft[city] || {}).kind || 'attraction', null, false); },
+  'place-manual': () => {   // 한도 초과 → 직접 입력 칸으로
+    const c = document.getElementById('add-place-card');
+    if (c) { c.scrollIntoView({ block: 'center' }); const n = document.getElementById('add-place-name'); if (n) n.focus({ preventScroll: true }); }
   },
   'place-rename': el => {
     const p = S.places.find(x => x.id === el.dataset.id);
@@ -6433,6 +6521,7 @@ const ACT = {
     confirmBox('보고서를 다시 만들까요?', `지금 보고서와 체크 상태가 초기화돼요. 성공하면 남은 횟수가 ${left}번에서 ${left - 1}번으로 줄어요.`, '다시 만들기', () => { S.modal = null; request('report'); });
   },
   'confirm-places': () => {
+    if (addLookBusy()) { toast('직접 추가한 장소를 확인하는 중이에요. 끝나면 확정할 수 있어요.'); return; }
     const n = S.places.filter(p => p.selected).length;
     confirmBox('장소를 확정할까요?', `선택한 ${n}곳으로 방문 순서와 문장을 만들어요. 확정한 뒤에는 장소를 바꿀 수 없어요.`, '확정하기', () => { S.modal = null; S.trip.status = 'route_requested'; request('route'); });
   },

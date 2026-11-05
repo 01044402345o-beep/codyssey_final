@@ -125,7 +125,9 @@
         // 사용자가 직접 추가했거나 실시간(Google) 장소는 user 로 표시 — 조사 캐시와 맞춰 보지 않는다.
         return postJson(fetchImpl, base + '/generate', {
           category_id: cat, city: c.name,
-          places: c.places.map(p => ({ name: p.en || p.name, place_type: p.kind || cat, ...(p.user ? { user: true } : {}) })),
+          // 사용자가 확인 창에서 '맞아요'로 확인한 주소만 함께 보낸다(서버 USER_CONFIRMED_PLACES — 지어내지 않게)
+          places: c.places.map(p => ({ name: p.en || p.name, place_type: p.kind || cat, ...(p.user ? { user: true } : {}),
+            ...(p.user && typeof p.address === 'string' && p.address ? { address: p.address.slice(0, 200) } : {}) })),
           weak_expressions: weak,
           ...(RESEARCH_KEY_RE.test(c.researchKey || '') ? { research_key: c.researchKey } : {}),
         }, t.signal);
@@ -760,8 +762,16 @@
     const name = typeof d.name === 'string' ? d.name.replace(/\s+/g, ' ').trim().slice(0, 120) : '';
     if (d.status !== 'found' || !name || /[<>{}]/.test(name) || !/^https:\/\/[^\s"'<>]+$/.test(src.url || '')) return { state: 'error' };
     const prov = RESEARCH_PROVIDER[src.provider] ? src.provider : 'wikidata';
+    /* 확인 창에 보일 주소·사진(11/05). 주소는 글자만, 사진은 위키미디어 공용 썸네일 주소만 받는다 —
+       화면은 그 주소를 직접 부르지 않고 GET /place-photo 로 서버가 받아 준다(CSP img-src 'self'). */
+    const address = typeof d.address === 'string' ? d.address.replace(/[<>{}]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) : '';
+    const im = d.image && typeof d.image === 'object' ? d.image : null;
+    const image = im && /^https:\/\/upload\.wikimedia\.org\/[^\s"'<>]+$/.test(im.src || '')
+      ? { src: im.src, page: /^https:\/\/commons\.wikimedia\.org\/[^\s"'<>]+$/.test(im.page || '') ? im.page : '', credit: 'Wikimedia Commons' } : null;
     return { state: 'found', name, url: src.url, provider: prov, label: RESEARCH_PROVIDER[prov][0], license: RESEARCH_PROVIDER[prov][1],
-             km: Number.isFinite(d.distance_km) ? d.distance_km : null };
+             km: Number.isFinite(d.distance_km) ? d.distance_km : null, address,
+             addressSource: typeof d.address_source === 'string' && address ? d.address_source.slice(0, 60) : '',
+             lat: Number.isFinite(d.lat) ? d.lat : null, lon: Number.isFinite(d.lon) ? d.lon : null, image };
   }
   /* 조사 보고서 → 화면 장소. 종류(관광지 / 맛집·카페)마다 기본 caps 개 + 후보 2개(genReport 와 같은 규칙),
      '다시 생성'(round)은 순위를 2칸씩 돌린다(추가 호출 없음). 도시 순서는 요청 순서(idx)로 맞춘다. */

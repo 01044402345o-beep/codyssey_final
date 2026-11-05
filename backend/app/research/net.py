@@ -30,6 +30,8 @@ ALLOWED_HOSTS = frozenset({
     "de.wikivoyage.org", "it.wikivoyage.org", "fr.wikivoyage.org", "es.wikivoyage.org", "ja.wikivoyage.org",
     "zh.wikivoyage.org",                                                # 다른 언어판 위키보이지(sources/wikivoyage_intl)
     "apis.data.go.kr",                                                  # 한국관광공사 TourAPI(sources/tourapi)
+    "upload.wikimedia.org",                                             # 장소 확인 창 사진(위키미디어 공용 썸네일, GET /place-photo)
+    "nominatim.openstreetmap.org",                                      # 장소 확인 창 주소(좌표 → 주소, place_check._reverse)
 })
 WIKIMEDIA = frozenset({"en.wikivoyage.org", "query.wikidata.org", "ko.wikipedia.org", "en.wikipedia.org", "www.wikidata.org",
                        "de.wikivoyage.org", "it.wikivoyage.org", "fr.wikivoyage.org", "es.wikivoyage.org",
