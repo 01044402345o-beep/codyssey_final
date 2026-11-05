@@ -2618,3 +2618,39 @@ body.is-narrow .spk-card { border-radius: 12px; }
 .spk-phd-all { width: 100%; margin-top: 10px; min-height: 44px; border: 1px solid var(--border-strong);
   border-radius: 10px; background: transparent; color: var(--accent-text);
   font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
+
+/* ── 장소 직접 추가(사용자 친화 개정) ─────────────────────────────────────── */
+.add-place-h { display: grid; gap: 2px; }
+.add-place-h b { font-size: 0.9375rem; }
+.add-place-sub { font-size: var(--fs-caption); color: var(--text-3); line-height: 1.5; word-break: keep-all; }
+.add-place-row { align-items: stretch; }
+.add-place-row input, .add-place-row select { min-height: 44px; }
+/* 상태 줄: 색만으로 구분하지 않는다 — 점/스피너 + 문장이 함께 바뀐다 */
+.add-place-st { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text-3); line-height: 1.5; }
+.add-place-st > span:first-child { min-width: 0; flex: 1 1 auto; }
+.add-place-st.st-idle > span:first-child::before,
+.add-place-st.st-not_found > span:first-child::before,
+.add-place-st.st-rejected > span:first-child::before,
+.add-place-st.st-error > span:first-child::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 7px; vertical-align: middle; background: var(--border-strong); }
+.add-place-st.st-not_found, .add-place-st.st-rejected, .add-place-st.st-error { color: var(--text-soft); }
+.add-place-st.st-not_found > span:first-child::before, .add-place-st.st-error > span:first-child::before { background: var(--accent); }
+.add-place-st.st-rejected > span:first-child::before { background: var(--accent-text); }
+.add-spin { width: 16px; height: 16px; flex: none; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--accent); animation: add-spin .9s linear infinite; }
+@keyframes add-spin { to { transform: rotate(360deg); } }
+.add-plain { width: 100%; min-height: 44px; }
+/* 확인 창 — 사진이 주인공이 아니라 '이름·주소가 맞는지'가 주인공이다 */
+.modal .mbody { margin: 8px 0 14px; }
+.place-confirm { display: grid; gap: 10px; }
+.pc-photo { display: block; border-radius: 12px; overflow: hidden; background: var(--surface-3); aspect-ratio: 16 / 9; max-height: 148px; }
+.pc-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pc-name { font-size: 1.0625rem; font-weight: 700; color: var(--text); line-height: 1.35; }
+.pc-credit, .pc-nophoto { font-size: var(--fs-caption); color: var(--text-3); line-height: 1.5; }
+.pc-hint { font-size: var(--fs-caption); color: var(--text-soft); line-height: 1.55; }
+.pc-nophoto { padding: 10px; border-radius: 10px; background: var(--surface-3); text-align: center; }
+.pc-row { display: grid; grid-template-columns: 2.6em minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.pc-none { color: var(--text-3); }
+.quota-box { display: grid; gap: 4px; padding: 12px 14px; border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border)); }
+.quota-box b { font-size: 0.9375rem; line-height: 1.45; word-break: keep-all; }
+.quota-box .small { color: var(--text-soft); }
+@media (prefers-reduced-motion: reduce) { .add-spin { animation: none; } }
