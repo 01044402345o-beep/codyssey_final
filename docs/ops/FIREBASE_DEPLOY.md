@@ -4,7 +4,35 @@
 > 같은 엔드포인트를 양쪽에 두지 않는다 — 속도 제한·키 쿨다운이 프로세스 메모리라 두 벌이면 두 배로 약해진다
 > (`docs/ops/API_KEY_AND_REQUEST_POLICY.md` §4).
 
-## 0. 이 문서의 상태
+## 지금 구성 (11/06) — Hosting(화면) + Render(API), Cloud Run 은 보류
+
+| 무엇 | 어디서 | 비고 |
+|---|---|---|
+| 화면(`mockup/` 정적 파일) | **Firebase Hosting** `https://com-example-myapplicatio-3bb36.web.app` | `firebase deploy --only hosting` |
+| HTTP API 전부(`/health` `/generate` `/research` `/place-check` `/place-photo` …) | **Render** `https://codyssey-final.onrender.com` | 화면이 `*.web.app`·`*.firebaseapp.com` 에서 열리면 `AI.apiBase` 가 Render 를 고른다(교차 출처) |
+| 통역 WebSocket | **Render** `wss://codyssey-final.onrender.com/interp/stream` | `API.base` 에서 만든다 |
+| Render 자체 화면 | `https://codyssey-final.onrender.com` | 그대로(같은 출처) |
+
+- `firebase.json` 에는 **rewrite 가 없다** — 예전 rewrite 는 없는 Cloud Run 서비스(`codyssey-api`)로 보내 모든 API 가 실패했을 것이다.
+- Hosting CSP(지금 Report-Only)의 `connect-src` 에 Render(https·wss), `img-src` 에 Render(`/place-photo`)·`*.googleusercontent.com`(Google 사진).
+- Render 의 CORS 는 `ALLOW_ORIGINS` 가 비어 `*` 다(11/06 실측: `access-control-allow-origin: *`). 좁히려면
+  `ALLOW_ORIGINS=https://codyssey-final.onrender.com,https://com-example-myapplicatio-3bb36.web.app,https://com-example-myapplicatio-3bb36.firebaseapp.com`.
+- 로그인: Firebase Auth 승인 도메인에 `*.web.app`·`*.firebaseapp.com` 은 기본으로 들어 있다.
+
+### Cloud Run 을 보류한 이유 — 마감(11/08 18:00)의 한계
+
+아래 §2~§6 의 Cloud Run 구성은 **하지 않았다**(11/06 확인: `gcloud run services list` 0개). 마감 전에는 위험·비용이 이익보다 크다.
+
+1. **요금제·비용**: Cloud Run·Cloud Build·Secret Manager 는 Blaze(종량제)가 필요하다. 이 앱은 인스턴스당 2Gi 메모리·2 CPU(onnxruntime·VAD 모델)라 `--min-instances 0` 이면 첫 요청이 느리고, 1 이면 상시 비용이 든다.
+2. **비밀 13개 이전**: Gemini·Groq·OpenAI·AssemblyAI·Soniox·Azure·Firebase 서비스 계정 등 키를 Secret Manager 로 옮기고 전용 서비스 계정 권한을 줘야 한다 — 하나라도 빠지면 그 기능만 조용히 꺼진다.
+3. **이미지 빌드 미검증**: `backend/Dockerfile` 은 한 번도 빌드해 본 적이 없다(첫 빌드 로그를 봐야 한다). 모델 파일·ffmpeg 포함 1GB 안팎.
+4. **카운터 이중화**: 속도 제한·키 쿨다운·장소 생성 하루 한도(`place_quota`)·발음기호 기억이 **프로세스 메모리**라, Render 와 Cloud Run 이 같은 API 를 나눠 받으면 한도가 두 배로 약해지고 '하루 3번'이 지켜지지 않는다. 한쪽으로 모아야 한다.
+5. **프록시 홉 재측정**: Hosting → Cloud Run 은 홉이 하나 더 생겨 `TRUSTED_PROXY_HOPS` 를 로그로 다시 정해야 한다(틀리면 모든 사용자가 한 IP).
+6. **검증 시간**: 배포 뒤 통역 WS(`INTERP_WS_URL`)·로그인·음성 채점·음소 노드(Tailscale)·조사 잡 폴링을 모두 다시 확인해야 하는데, 마감 전 남은 시간으로는 Render 와 같은 수준의 확인이 안 된다.
+
+**마감 뒤에 Cloud Run 으로 옮길 때**: §2~§6 순서대로 하고, `firebase.json` 에 API rewrite 를 되돌리고(`git log -- firebase.json` 의 11/06 이전 형태), `mockup/ai.js` 의 `HOSTED_API` 분기를 지워 같은 출처로 돌린다. 그 전에 위 4번(카운터를 한쪽으로)을 먼저 정한다.
+
+## 0. 이 문서의 상태 (10/21 작성 — Cloud Run 준비 단계의 기록)
 
 - **실제 배포는 아직 하지 않았다.** 이 작업 환경에는 `gcloud`·`firebase` CLI 가 없고(`exit 127`), GCP 자격증명도 없다.
 - `backend/Dockerfile`·`firebase.json`·이 문서는 **배포 가능한 형태로 준비한 것**이고, 이미지 빌드는 이 환경에서 검증하지 못했다

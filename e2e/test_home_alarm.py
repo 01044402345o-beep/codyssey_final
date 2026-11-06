@@ -130,7 +130,13 @@ with sync_playwright() as p:
 
     # ── 다른 화면 ──
     pg.evaluate("go('u-sched')"); pg.wait_for_timeout(240)
-    check("다른 화면에는 없다", pg.locator(".alarm").count() == 0)
+    # 넓은 일정표는 오늘을 보고 있으면 오른쪽 상세 덱 첫 장에 알람을 둔다(11/05 사용자 지시) — 목록 쪽에는 없다
+    check("넓은 일정표: 알람은 오른쪽 상세에만(목록에는 없다)",
+          pg.locator(".split-list .alarm").count() == 0 and pg.locator(".split-detail .alarm").count() == 1)
+    pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(240)
+    pg.evaluate("go('u-sched')"); pg.wait_for_timeout(240)
+    check("폰 일정표에는 없다", pg.locator(".alarm").count() == 0)
+    pg.set_viewport_size({"width": 1280, "height": 900}); pg.wait_for_timeout(240)
     pg.evaluate("ACT.tab({ dataset: { id: 'u-study' } })"); pg.wait_for_timeout(240)
     check("홈으로 돌아오면 다시 있다", pg.locator(".alarm").count() == 1)
 

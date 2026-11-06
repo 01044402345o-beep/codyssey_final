@@ -21,6 +21,9 @@
   /* ---------- 서버 주소 ----------
      ?api=https://host 는 이번 방문에서만 쓰고 저장하지 않는다. 녹음이 전송될 서버를 바꾸므로 external 로 알린다.
      http(s) 로 열렸으면 같은 출처(''), file:// 이면 null(폴백 전용). */
+  /* Firebase Hosting(*.web.app · *.firebaseapp.com)은 화면(정적 파일)만 낸다 — API·통역 WebSocket 은 Render 서버로 간다
+     (11/06: Cloud Run 은 마감 때문에 보류, docs/ops/FIREBASE_DEPLOY.md §0). ?api= 가 있으면 그것이 먼저다. */
+  const HOSTED_API = 'https://codyssey-final.onrender.com';
   function apiBase(loc) {
     const protocol = loc.protocol || '';
     const own = protocol === 'http:' || protocol === 'https:';
@@ -34,6 +37,9 @@
           return { base: origin, external: !own || origin !== loc.origin, host: u.host };
         }
       } catch (e) { /* 잘못된 주소는 무시 */ }
+    }
+    if (own && /\.(web\.app|firebaseapp\.com)$/i.test(String(loc.hostname || loc.host || '').replace(/:\d+$/, ''))) {
+      return { base: HOSTED_API, external: false, host: HOSTED_API.replace(/^https:\/\//, '') };   // 우리 서버라 '외부 서버' 안내는 띄우지 않는다
     }
     if (own) return { base: '', external: false, host: loc.host || '' };
     return { base: null, external: false, host: '' };
@@ -125,7 +131,9 @@
         // 사용자가 직접 추가했거나 실시간(Google) 장소는 user 로 표시 — 조사 캐시와 맞춰 보지 않는다.
         return postJson(fetchImpl, base + '/generate', {
           category_id: cat, city: c.name,
-          places: c.places.map(p => ({ name: p.en || p.name, place_type: p.kind || cat, ...(p.user ? { user: true } : {}) })),
+          // 사용자가 확인 창에서 '맞아요'로 확인한 주소만 함께 보낸다(서버 USER_CONFIRMED_PLACES — 지어내지 않게)
+          places: c.places.map(p => ({ name: p.en || p.name, place_type: p.kind || cat, ...(p.user ? { user: true } : {}),
+            ...(p.user && typeof p.address === 'string' && p.address ? { address: p.address.slice(0, 200) } : {}) })),
           weak_expressions: weak,
           ...(RESEARCH_KEY_RE.test(c.researchKey || '') ? { research_key: c.researchKey } : {}),
         }, t.signal);
@@ -760,8 +768,25 @@
     const name = typeof d.name === 'string' ? d.name.replace(/\s+/g, ' ').trim().slice(0, 120) : '';
     if (d.status !== 'found' || !name || /[<>{}]/.test(name) || !/^https:\/\/[^\s"'<>]+$/.test(src.url || '')) return { state: 'error' };
     const prov = RESEARCH_PROVIDER[src.provider] ? src.provider : 'wikidata';
+    /* 확인 창에 보일 주소·사진(11/05). 주소는 글자만, 사진은 위키미디어 공용 썸네일 주소만 받는다 —
+       화면은 그 주소를 직접 부르지 않고 GET /place-photo 로 서버가 받아 준다(CSP img-src 'self'). */
+    const address = typeof d.address === 'string' ? d.address.replace(/[<>{}]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) : '';
+    const im = d.image && typeof d.image === 'object' ? d.image : null;
+    // 사진은 저작자·라이선스가 있을 때만(CC BY-SA 표시 요건: 저작자 · 라이선스 · 원본 링크)
+    const txt = (v, n) => typeof v === 'string' ? v.replace(/[<>{}]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n) : '';
+    // Google 사진: 화면이 바로 부르는 짧게 쓰는 주소(googleusercontent) + 찍은 사람 표시. 저장하지 않는다
+    const gimage = im && im.provider === 'google' && /^https:\/\/[a-z0-9-]+\.googleusercontent\.com\/[^\s"'<>]+$/.test(im.src || '')
+      ? { src: im.src, provider: 'google', credit: 'Google 지도',
+          authors: (Array.isArray(im.authors) ? im.authors : []).slice(0, 3).map(a => ({ name: txt(a && a.name, 60) || 'Google 사용자',
+            uri: /^https:\/\/[^\s"'<>]+$/.test((a && a.uri) || '') ? a.uri : '' })) } : null;
+    const image = gimage || (im && im.provider !== 'google' && /^https:\/\/(upload|thumb)\.wikimedia\.org\/[^\s"'<>]+$/.test(im.src || '') && txt(im.license, 40)
+      ? { src: im.src, page: /^https:\/\/commons\.wikimedia\.org\/[^\s"'<>]+$/.test(im.page || '') ? im.page : '', credit: 'Wikimedia Commons',
+          author: txt(im.author, 80) || '작자 미상', license: txt(im.license, 40),
+          licenseUrl: /^https?:\/\/[^\s"'<>]+$/.test(im.license_url || '') ? im.license_url : '' } : null);
     return { state: 'found', name, url: src.url, provider: prov, label: RESEARCH_PROVIDER[prov][0], license: RESEARCH_PROVIDER[prov][1],
-             km: Number.isFinite(d.distance_km) ? d.distance_km : null };
+             km: Number.isFinite(d.distance_km) ? d.distance_km : null, address,
+             addressSource: typeof d.address_source === 'string' && address ? d.address_source.slice(0, 60) : '',
+             lat: Number.isFinite(d.lat) ? d.lat : null, lon: Number.isFinite(d.lon) ? d.lon : null, image };
   }
   /* 조사 보고서 → 화면 장소. 종류(관광지 / 맛집·카페)마다 기본 caps 개 + 후보 2개(genReport 와 같은 규칙),
      '다시 생성'(round)은 순위를 2칸씩 돌린다(추가 호출 없음). 도시 순서는 요청 순서(idx)로 맞춘다. */

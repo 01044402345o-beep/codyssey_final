@@ -1111,7 +1111,7 @@ function ipaMarkSeen(v) {
       body: JSON.stringify({ uid: accountUid() || '', value: v }) }).catch(() => {});
   } catch (e) { /* 기록 실패는 화면을 막지 않는다 */ }
 }
-const ipaState = () => (S.ipa || (S.ipa = { i: 0, seen: [] }));
+const ipaState = () => (S.ipa || (S.ipa = { i: 0, seen: [], det: false }));
 
 /* ================= 계산 규칙 (shared/rules) ================= */
 const R = {
@@ -1920,7 +1920,8 @@ async function runAi(tok) {
   S.places.filter(p => p.selected && sentenceCategory(p)).forEach(p => {
     const cat = sentenceCategory(p);
     (groups[aiKey(p.city, cat)] ??= { name: p.city, categoryId: cat, places: [], researchKey: researchKeyOf(p.city) })
-      .places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind, user: !!(p.user || (p.research && p.provider === 'google')) });
+      .places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind, user: !!(p.user || (p.research && p.provider === 'google')),
+        ...(p.user && p.verified && p.address ? { address: p.address } : {}) });   // 사용자가 확인한 주소만 사실로 쓴다
   });
   const cities = Object.values(groups);
   if (!cities.length) return;
@@ -1950,7 +1951,8 @@ async function refreshAiSentences() {
   S.places.filter(p => p.selected && sentenceCategory(p)).forEach(p => {
     const cat = sentenceCategory(p);
     (groups[aiKey(p.city, cat)] ??= { name: p.city, categoryId: cat, places: [], researchKey: researchKeyOf(p.city) })
-      .places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind, user: !!(p.user || (p.research && p.provider === 'google')) });
+      .places.push({ id: p.id, name: p.name, en: p.en, kind: p.kind, user: !!(p.user || (p.research && p.provider === 'google')),
+        ...(p.user && p.verified && p.address ? { address: p.address } : {}) });   // 사용자가 확인한 주소만 사실로 쓴다
   });
   const cities = Object.values(groups);
   let out;
@@ -1993,8 +1995,13 @@ async function startResearch(tok) {
   try { await geoCountries(); } catch (e) { /* 나라 목록이 없으면 이름만 보낸다 */ }
   const t = S.trip;
   const body = AI.researchRequestBody(t, researchCaps(t.cities), n => (countryByName(n) || {}).iso2 || '');
+  // 장소 생성 하루 한도는 로그인했으면 계정으로 센다(아니면 IP) — 조사 시작 요청에만 토큰을 붙인다
+  let token = '';
+  if (window.FirebaseAuth && FirebaseAuth.idToken && S.user && S.user !== DEMO_USER) { try { token = await FirebaseAuth.idToken() || ''; } catch (e) { token = ''; } }
+  const fetchImpl = (u, o = {}) => (token && (o.method || 'GET').toUpperCase() === 'POST'
+    ? fetch(u, { ...o, headers: { ...(o.headers || {}), Authorization: 'Bearer ' + token } }) : fetch(u, o));
   return AI.collectResearch({
-    fetchImpl: (u, o) => fetch(u, o), base: API.base, body, signal: ctl.signal,
+    fetchImpl, base: API.base, body, signal: ctl.signal,
     onProgress: evs => {
       if (tok !== genToken || !S.gen || !evs.length) return;
       const last = evs[evs.length - 1], done = evs.filter(e => e.state === 'done').length;
@@ -2009,11 +2016,18 @@ async function runReport(tok) {
   S.reportPlaces = null;
   S.reportMetaLive = null;
   S.research = null;
+  S.placeQuota = false;
   if (API.base === null || !S.trip) return;
   try {
     const res = await (researchRun || startResearch(tok));
     researchRun = null;
     if (tok !== genToken) return;
+    if (res && res.reason === 'http_429') {   // 장소 생성 하루 한도 초과 — 빈 목록 + 안내 + '대신 직접 입력하기'
+      const caps = researchCaps(S.trip.cities), meta = {};
+      S.trip.cities.forEach(c => { const k = caps[c.name] || {}; meta[c.name] = { base: (k.attr || 0) + (k.rest || 0), found: 0, mode: 'empty', reason: 'quota' }; });
+      S.placeQuota = true; S.reportMode = 'empty'; S.reportPlaces = []; S.reportMetaLive = meta;
+      return;
+    }
     const folded = AI.foldResearch(S.trip.cities, res, researchCaps(S.trip.cities), S.trip.reportRound);
     if (folded.mode !== 'example') {
       S.reportMode = folded.mode === 'research' ? 'research' : 'empty';
@@ -2058,7 +2072,7 @@ function succeed(stage) {
     S.cityTab = t.cities[0].name; S.showCand = {};
     S.screen = 'u-report'; render();
     const again = t.reportRound > 1 ? `보고서를 다시 만들었어요. 남은 다시 생성 ${3 - t.regenerateCount}번` : '보고서가 준비됐어요. 가지 않을 장소를 빼 주세요.';
-    toast(S.reportMode === 'empty' ? '확인된 장소가 없어요.' : S.reportMode === 'live' ? '확인한 장소를 골랐어요. 가지 않을 장소를 빼 주세요.'
+    toast(S.placeQuota ? `${PLACE_QUOTA_MSG}. 직접 입력해 주세요.` : S.reportMode === 'empty' ? '확인된 장소가 없어요.' : S.reportMode === 'live' ? '확인한 장소를 골랐어요. 가지 않을 장소를 빼 주세요.'
       : S.reportMode === 'research' ? '여행 가이드에서 조사한 장소예요. 가지 않을 장소를 빼 주세요.' : again);
   } else if (stage === 'route') {
     if (S.itineraryBlocks) {
@@ -3284,7 +3298,7 @@ function modalHtml(center = false) {
   if (S.entering) return enteringHtml();           // 로그인 전환 화면(로그인 화면을 덮는다)
   if (S.withdrawing) return withdrawModalHtml();   // 탈퇴 진행 창이 다른 창보다 앞선다
   const m = S.modal; if (!m) return '';
-  return `<div class="modal-wrap ${center ? 'center' : ''}" data-act="modal-bg"><div class="modal" data-act="noop"><h3>${m.title}</h3><p>${m.body}</p>
+  return `<div class="modal-wrap ${center ? 'center' : ''}" data-act="modal-bg"><div class="modal" data-act="noop" role="dialog" aria-modal="true" aria-labelledby="mo-title"><h3 id="mo-title">${m.title}</h3>${m.block ? `<div class="mbody">${m.body}</div>` : `<p>${m.body}</p>`}
     <div class="acts"><button class="btn soft" data-act="modal-cancel">${m.cancel || '취소'}</button><button class="btn ${m.danger ? 'accent' : 'primary'}" data-act="modal-ok">${m.ok}</button></div></div></div>`;
 }
 let modalFn = null;
@@ -3520,8 +3534,61 @@ function geoListEl(el) { return document.getElementById(el.getAttribute('aria-co
 function geoHideList(el) {
   if (!el) return;
   el.setAttribute('aria-expanded', 'false'); el.removeAttribute('aria-activedescendant');
-  const ul = geoListEl(el); if (ul) { ul.hidden = true; ul.innerHTML = ''; }
+  const ul = geoListEl(el); if (ul) { ul.hidden = true; ul.innerHTML = ''; geoSb(ul); }
 }
+/* 목록 오른쪽 스크롤 막대. 폰 브라우저(iOS·안드로이드)는 스크롤 막대를 겹쳐 그리다 금방 숨기고 꾸밈도 무시해서,
+   목록이 얼마나 긴지·어디쯤인지 안 보인다. 그래서 막대를 직접 그린다 — 손잡이를 끌거나 막대를 눌러 옮길 수 있다.
+   목록이 넘칠 때만 보인다. 기본 막대는 CSS 에서 숨겨 두 개가 겹치지 않게 한다. */
+function geoSb(ul) {
+  const box = ul && ul.parentElement; if (!box) return;
+  let sb = box.querySelector(':scope > .geo-sb');
+  const over = !ul.hidden && ul.scrollHeight > ul.clientHeight + 1;
+  if (!sb) {
+    if (!over) return;
+    sb = document.createElement('div'); sb.className = 'geo-sb'; sb.setAttribute('aria-hidden', 'true');   // 읽기 도구는 목록 자체를 읽는다
+    sb.dataset.for = ul.id; sb.innerHTML = '<i class="geo-sb-thumb"></i>'; box.appendChild(sb);
+  }
+  sb.hidden = !over; if (!over) return;
+  const pad = 6, track = ul.clientHeight - pad * 2, max = ul.scrollHeight - ul.clientHeight;
+  const th = Math.max(32, Math.round(track * ul.clientHeight / ul.scrollHeight));
+  sb.style.top = (ul.offsetTop + pad) + 'px'; sb.style.height = track + 'px';
+  sb.firstChild.style.height = th + 'px';
+  if (sb._drag) return;   // 끄는 중에는 손잡이가 손가락을 그대로 따른다(아래 pointermove) — 스크롤 값으로 되돌리면 떨린다
+  // 소수점 그대로(반올림하면 긴 목록에서 손잡이가 1px 계단으로 뚝뚝 움직인다)
+  sb.firstChild.style.transform = `translate3d(0, ${((track - th) * (max ? ul.scrollTop / max : 0)).toFixed(2)}px, 0)`;
+}
+/* 스크롤 이벤트마다 바로 그리지 않고 화면이 다시 그려지기 직전(한 프레임에 한 번)에 맞춘다 —
+   이벤트마다 크기를 읽고 스타일을 쓰면 프레임을 놓쳐 손잡이가 끊겨 보인다. */
+const GEO_SB_Q = new Set(); let geoSbRaf = 0;
+function geoSbLater(ul) {
+  GEO_SB_Q.add(ul);
+  if (!geoSbRaf) geoSbRaf = requestAnimationFrame(() => { geoSbRaf = 0; const q = [...GEO_SB_Q]; GEO_SB_Q.clear(); q.forEach(geoSb); });
+}
+/* 손잡이를 끌면 그 비율로 목록을 옮기고, 막대의 빈 곳을 누르면 거기로 건너뛴다.
+   누르는 동안 칸의 포커스를 지킨다(pointerdown 기본 동작을 막는다 — 그래야 목록이 닫히지 않는다). */
+document.addEventListener('pointerdown', e => {
+  const sb = e.target.closest && e.target.closest('.geo-sb'); if (!sb) return;
+  const ul = document.getElementById(sb.dataset.for); if (!ul || ul.hidden) return;
+  e.preventDefault(); GEO.keep = ul.id;
+  const thumb = sb.firstChild, r0 = sb.getBoundingClientRect(), t0 = thumb.getBoundingClientRect();
+  const grab = e.target === thumb ? e.clientY - t0.top : t0.height / 2;   // 손잡이를 잡은 자리(빈 곳이면 가운데)
+  const move = y => { const track = r0.height, th = t0.height, max = ul.scrollHeight - ul.clientHeight;
+    ul.scrollTop = Math.max(0, Math.min(1, (y - r0.top - grab) / Math.max(1, track - th))) * max; };
+  /* 끄는 동안: 손잡이는 손가락 위치에 곧바로(소수점까지) 두고, 목록은 프레임마다 한 번 그 비율로 옮긴다. */
+  let lastY = e.clientY, raf = 0;
+  const place = y => { const track = r0.height, th = t0.height, f = Math.max(0, Math.min(1, (y - r0.top - grab) / Math.max(1, track - th)));
+    thumb.style.transform = `translate3d(0, ${((track - th) * f).toFixed(2)}px, 0)`; };
+  const frame = () => { raf = 0; place(lastY); move(lastY); };
+  sb._drag = true; sb.classList.add('drag');
+  if (e.target !== thumb) frame();
+  try { sb.setPointerCapture(e.pointerId); } catch (err) { /* 지원 안 함 */ }
+  const onMove = ev => { lastY = ev.clientY; if (!raf) raf = requestAnimationFrame(frame); };
+  const onUp = () => { if (raf) { cancelAnimationFrame(raf); frame(); }
+    sb._drag = false; sb.classList.remove('drag'); geoSb(ul);
+    sb.removeEventListener('pointermove', onMove); sb.removeEventListener('pointerup', onUp); sb.removeEventListener('pointercancel', onUp); };
+  sb.addEventListener('pointermove', onMove); sb.addEventListener('pointerup', onUp); sb.addEventListener('pointercancel', onUp);
+});
+window.addEventListener('resize', () => document.querySelectorAll('.geo-list:not([hidden])').forEach(geoSb));
 function geoClose(onlyKey) {
   const o = GEO.open;
   if (onlyKey) {                                        // 그 칸은 반드시 닫는다(다른 칸이 열려 있어도)
@@ -3533,9 +3600,9 @@ function geoClose(onlyKey) {
   GEO.open = null;
   geoHideList(document.querySelector(`[data-geo="${CSS.escape(o.key)}"]`));
 }
-/* 목록 한 번에 그리는 줄 수. 넘으면 '더 보기'로 이어 붙인다 —
-   잘라 버리면 '생략된 목록'이 되고, 한꺼번에 다 그리면 폰이 버벅인다. */
-const GEO_PAGE = 80;
+/* 불러온 목록은 처음부터 전부 그린다(국가 248개·도시 한 쪽 500곳 — 사용자가 '더 보기'를 누르지 않아도 전체가 보인다).
+   서버에 남은 도시(큰 나라)는 목록을 끝 가까이 내리면 저절로 이어 받는다. '더 보기' 단추는 그 이어 받기가
+   실패했을 때만, 목록 안에 '다시 불러오기'로 나온다(사용자가 직접 다시 요청하는 경우). */
 function geoUnit(key) { return /^country/.test(key) ? '개국' : '곳'; }
 function geoOpts(el, items, from, to) {
   const isCountry = /^country/.test(geoKey(el)), ul = geoListEl(el);
@@ -3546,10 +3613,14 @@ function geoOpts(el, items, from, to) {
       : `<li role="option" id="${ul.id}-o${i}" class="geo-opt" data-geo-i="${i}" aria-selected="false"><b>${esc(it.label)}</b><small>${esc([it.label !== it.name ? it.name : '', it.region, it.population >= 10000 ? `인구 ${fmtPop(it.population)}` : ''].filter(Boolean).join(' · '))}</small></li>`;
   }).join('');
 }
-/* 목록 아래 '더 보기'·'전체 N 중 M 표시' 두 줄. M 은 지금 그려진 줄, 남은 수는 서버에 남은 쪽까지 센다. */
+/* 목록 아래 두 줄: 남은 줄 안내(있을 때만)·'전체 N 중 M 표시'. 남은 수는 서버에 남은 쪽까지 센다.
+   남은 줄은 내리면 저절로 이어 받는다 — 단추는 이어 받기가 실패했을 때의 '다시 불러오기'뿐이다. */
 function geoFoot(key, o) {
-  const u = geoUnit(key), left = Math.max(0, o.total - o.shown);
-  const more = left > 0 ? `<button type="button" data-act="geo-more" data-geo-key="${esc(key)}"${o.loadingMore ? ' disabled' : ''}>${o.loadingMore ? '불러오는 중…' : `＋ 나머지 ${left.toLocaleString('ko-KR')}${u} 더 보기`}</button>` : '';
+  const u = geoUnit(key), left = Math.max(0, o.total - o.shown), n = left.toLocaleString('ko-KR') + u;
+  const more = !left ? ''
+    : o.moreFailed ? `<button type="button" data-act="geo-more" data-geo-key="${esc(key)}">나머지 ${n}을 못 불러왔어요 — 다시 불러오기</button>`
+    : o.loadingMore ? `<span class="geo-more-st">나머지 ${n} 불러오는 중…</span>`
+    : `<span class="geo-more-st">아래로 내리면 나머지 ${n}을 이어서 보여드려요</span>`;
   return { more, count: `전체 ${o.total.toLocaleString('ko-KR')}${u} 중 ${o.shown.toLocaleString('ko-KR')}${u} 표시` };
 }
 function geoRender(el, items, note, total, extra = {}) {
@@ -3561,11 +3632,11 @@ function geoRender(el, items, note, total, extra = {}) {
   document.querySelectorAll('[data-geo][aria-expanded="true"]').forEach(other => { if (other !== el) geoHideList(other); });
   /* 지금 칸에 적힌 값이 목록에 있으면 그 줄까지 그려 두고 표시한다(목록을 열면 고른 곳이 보이게). */
   const cur = extra.current ? items.findIndex(it => geoNorm(isCountry ? (it.ko || it.name) : it.label) === geoNorm(extra.current)) : -1;
-  const shown = Math.min(items.length, Math.max(GEO_PAGE, cur >= 0 ? Math.ceil((cur + 1) / GEO_PAGE) * GEO_PAGE : 0));
+  const shown = items.length;   // 불러온 것은 전부 그린다
   GEO.open = { key, items, active: cur, shown, total: Math.max(total == null ? items.length : total, items.length),
-    browse: !!extra.browse, iso2: extra.iso2 || null, loadingMore: false };
+    browse: !!extra.browse, iso2: extra.iso2 || null, loadingMore: false, moreFailed: false };
   const opts = geoOpts(el, items, 0, shown);
-  /* '생략 없음'을 화면이 스스로 말한다: 전체 개수를 늘 적고, 남은 줄은 '더 보기'로 이어진다. */
+  /* '생략 없음'을 화면이 스스로 말한다: 전체 개수를 늘 적고, 서버에 남은 줄은 내리면 이어진다. */
   const foot = geoFoot(key, GEO.open);
   ul.innerHTML = (opts || '') + (foot.more ? `<li class="geo-note geo-more" role="presentation">${foot.more}</li>` : '')
     + (note ? `<li class="geo-note" role="presentation">${note}</li>` : '')
@@ -3574,14 +3645,17 @@ function geoRender(el, items, note, total, extra = {}) {
   const show = !!(opts || note);
   ul.hidden = !show;
   el.setAttribute('aria-expanded', show ? 'true' : 'false');
+  geoSb(ul);
   if (show && cur >= 0) {
     const li = ul.querySelector(`[data-geo-i="${cur}"]`);
-    if (li) { li.setAttribute('aria-selected', 'true'); el.setAttribute('aria-activedescendant', li.id); ul.scrollTop = Math.max(0, li.offsetTop - 8); }
+    if (li) { li.setAttribute('aria-selected', 'true'); el.setAttribute('aria-activedescendant', li.id); ul.scrollTop = Math.max(0, li.offsetTop - 8); geoSb(ul); }
   }
 }
-/* '더 보기': 다음 묶음을 뒤에 붙인다. 앞의 스크롤 위치·이미 고른 줄은 그대로 둔다. */
+/* 서버에 남은 도시 다음 쪽을 받아 뒤에 붙인다(목록을 끝 가까이 내렸을 때·실패 뒤 '다시 불러오기').
+   앞의 스크롤 위치·이미 고른 줄은 그대로 둔다. */
 async function geoMore(key) {
   const o = GEO.open; if (!o || o.key !== key || o.loadingMore) return;
+  o.moreFailed = false;
   const el = document.querySelector(`[data-geo="${CSS.escape(key)}"]`), ul = el && geoListEl(el);
   if (!ul) return;
   /* 단추 자리를 다시 그리면 포커스가 있던 단추가 사라져 포커스가 body 로 떨어지고, 그러면 '바깥으로 나갔다'고
@@ -3591,6 +3665,7 @@ async function geoMore(key) {
     const more = ul.querySelector('.geo-more'), count = ul.querySelector('.geo-count'), foot = geoFoot(key, o);
     if (more) { if (foot.more) more.innerHTML = foot.more; else more.remove(); }
     if (count) count.textContent = foot.count;
+    geoSb(ul);
   };
   if (o.shown >= o.items.length && o.items.length < o.total && o.browse && o.iso2) {
     /* 빈 칸 도시 목록: 받아 둔 줄을 다 그렸으면 서버에서 다음 쪽을 받아 이어 붙인다 — 끝까지 닿는다. */
@@ -3598,10 +3673,11 @@ async function geoMore(key) {
     const page = await geoCityPage(o.iso2, '', o.items.length);
     o.loadingMore = false;
     if (GEO.open !== o) return;                                   // 그사이 목록이 닫히거나 바뀌었다
+    if (page.error) { o.moreFailed = true; paint(); return; }     // 이때만 '다시 불러오기' 단추
     if (!page.items.length) { o.total = o.items.length; paint(); return; }
     o.items.push(...page.items); o.total = Math.max(page.total, o.items.length);
   }
-  const from = o.shown, to = Math.min(from + GEO_PAGE, o.items.length);
+  const from = o.shown, to = o.items.length;
   o.shown = to;
   const more = ul.querySelector('.geo-more');
   if (more) more.insertAdjacentHTML('beforebegin', geoOpts(el, o.items, from, to));
@@ -3616,10 +3692,11 @@ async function geoCityPage(iso2, q, offset) {
   let items = [], total = 0;
   try {
     const r = await fetch(`${API.base}/geo/cities?country=${iso2}&limit=${q ? 2000 : GEO_CITY_PAGE}&offset=${offset}&q=${encodeURIComponent(q)}`);
-    const body = r.ok ? await r.json() : null;
+    if (!r.ok) throw new Error('geo ' + r.status);
+    const body = await r.json();
     items = (body && body.cities) || [];
     total = (body && body.total) || items.length;
-  } catch (e) { items = []; total = 0; }
+  } catch (e) { return { items: [], total: 0, error: true }; }   // 실패는 캐시하지 않는다 — 다시 불러오기가 다시 받는다
   if (GEO.cities.size > 200) { const first = GEO.cities.keys().next().value; if (first !== ck) GEO.cities.delete(first); }
   GEO.cities.set(ck, { items, total });
   return { items: items.slice(), total };
@@ -3628,6 +3705,7 @@ function fmtPop(n) { return n >= 10000 ? `${Math.round(n / 10000).toLocaleString
 function geoMove(el, d) {
   const o = GEO.open; if (!o || !o.shown) return;
   o.active = (o.active + d + o.shown) % o.shown;          // 그려진 줄 안에서만 움직인다
+  if (d > 0 && o.active >= o.shown - 20) geoMaybeMore();   // 끝 가까이 오면 남은 줄을 이어 받는다(단추 없이)
   const ul = geoListEl(el);
   ul.querySelectorAll('.geo-opt').forEach((li, i) => li.setAttribute('aria-selected', i === o.active ? 'true' : 'false'));
   const cur = ul.querySelector(`[data-geo-i="${o.active}"]`);
@@ -3677,6 +3755,17 @@ async function geoQuery(el, opt = {}) {
   geoRender(el, items, items.length ? '' : (q ? '목록에 없어요 — 적은 그대로 써도 돼요.' : ''), total,
     { browse: !q, iso2: c.iso2, current: browse ? current : '' });
 }
+/* 목록을 끝 가까이 내리면 서버에 남은 줄을 이어 받는다 — 사용자가 단추를 누를 필요가 없다. */
+function geoMaybeMore() {
+  const o = GEO.open;
+  if (o && !o.loadingMore && !o.moreFailed && o.browse && o.iso2 && o.items.length < o.total) geoMore(o.key);
+}
+document.addEventListener('scroll', e => {
+  const ul = e.target;
+  if (!ul || !ul.id || !/^geo-list-/.test(ul.id)) return;
+  geoSbLater(ul);
+  if (ul.scrollTop + ul.clientHeight >= ul.scrollHeight - 400) geoMaybeMore();
+}, true);
 function geoQueryLater(el) {
   clearTimeout(GEO.timer);
   GEO.timer = setTimeout(() => geoQuery(el), geoKey(el) === 'country' ? 0 : 180);   // 도시는 입력이 멈추면 한 번
@@ -3812,6 +3901,10 @@ function scrReport() {
     lead += notice(`공개 여행 자료(위키보이지·위키데이터 등)에서 <b>실제로 조사한 장소</b>예요 — 이 도시 ${meta.total}곳 중 여행 일정에 맞춰 골랐어요. 영업시간·가격은 방문 전에 확인해 주세요.`);
     if (meta.stale) lead += notice('자료 서버가 지금 응답하지 않아 <b>지난번에 조사한 장소</b>를 보여 드려요.', 'warn');
     if (meta.fallback) lead += notice(fallbackNotice(city, meta.fallback), 'warn');
+  } else if (S.placeQuota) {
+    lead += `<div class="quota-box" role="alert"><b>${PLACE_QUOTA_MSG}</b>
+      <span class="small">내일(한국 시간 자정)에 다시 채워져요. 지금은 가 보고 싶은 곳을 직접 입력해서 추가할 수 있어요.</span></div>`
+      + (locked ? '' : `<button class="btn primary block" data-act="place-manual">대신 직접 입력하기</button>`);
   } else if (S.research) {
     // 조사는 됐지만 이 도시만 장소 0곳 — 예시로 채우지 않고, 이유를 알리고 도시 브리프·직접 추가를 보인다
     lead += notice(PLACE_NONE_KO[meta.reason] || PLACE_NONE_KO.no_sources, 'warn');
@@ -3835,13 +3928,13 @@ function scrReport() {
     <div class="city-head"><h3>${esc(city)}</h3><span class="cnt"><b>${sel}</b> / 최대 ${meta.base}곳</span></div>
     ${base.map(p => placeCard(p, locked)).join('')}
     ${cands.length ? `<button class="cand-toggle" data-act="cand" data-city="${esc(city)}">${open ? '후보 접기' : `후보 더 보기 (${cands.length})`}</button>${open ? cands.map(p => placeCard(p, locked)).join('') : ''}` : ''}
-    ${S.research && meta.mode === 'empty' && !locked ? addPlaceForm(city) : ''}
+    ${!locked ? addPlaceForm(city) : ''}
     ${researchCredits()}
   </div>`;
   const left = 3 - t.regenerateCount;
   const bottom = locked ? `<button class="btn primary block" data-act="tab" data-id="${t.status === 'studying' ? 'u-route' : 'u-gen'}">${t.status === 'studying' ? '방문 순서 보기' : '진행 상황 보기'}</button>`
     : `<div style="display:flex;gap:8px"><button class="btn soft" style="flex:1" data-act="regen" ${left <= 0 ? 'disabled' : ''}>다시 생성 · ${left}</button>
-       <button class="btn primary" style="flex:2" data-act="confirm-places" ${total === 0 ? 'disabled' : ''}>${total}곳으로 확정하기</button></div>
+       <button class="btn primary" style="flex:2" data-act="confirm-places" ${total === 0 || addLookBusy() ? 'disabled' : ''}>${addLookBusy() ? '장소를 확인하는 중…' : `${total}곳으로 확정하기`}</button></div>
        <div class="small" style="text-align:center">다시 생성은 성공한 경우에만 횟수가 줄어요 · 남은 횟수 ${left}번</div>`;
   return frame(inner, { appbar: appbar('보고서 · 장소 선택', { step: 'STEP 2/3' }), bottom });
 }
@@ -3944,37 +4037,150 @@ const PLACE_NONE_KO = {
 };
 PLACE_NONE_KO.no_places = PLACE_NONE_KO.no_article = PLACE_NONE_KO.no_sources;
 const ADD_KIND = { attraction: '관광지', restaurant: '맛집', cafe: '카페' };
+const PLACE_QUOTA_MSG = '하루에 장소 검색을 할 수 있는 횟수를 초과했어요';
+/* 장소 직접 추가(11/05) — 조사가 성공하든 실패하든(한도 초과 포함) 보고서에서 늘 쓸 수 있다.
+   이 카드의 빈칸(장소 이름·종류)을 모두 채우면 저절로 서버가 공개 자료(TourAPI·Wikidata·Google)에서 그 장소를 찾고,
+   사진·이름·주소를 확인 창으로 보여 준다. '맞아요'로 확인한 주소만 그 장소에 붙여 문장 생성의 사실로 쓴다.
+   찾는 동안에는 장소를 확정(→ 문장 생성)할 수 없다. 찾기는 장소 생성 하루 한도에 세지 않는다. */
+const addDraft = {};      // 도시별 { name, kind } — 화면을 다시 그려도 적던 글자가 남게
+let addLook = { key: '', state: 'idle', city: '', res: null, seq: 0 };
+let addLookTimer = null;
+const addLookBusy = () => addLook.state === 'loading';
 function addPlaceForm(city) {
-  return `<div class="card add-place"><b>장소 직접 추가</b>
-    <div class="add-place-row"><input id="add-place-name" type="text" maxlength="60" autocomplete="off" placeholder="장소 이름 (영어로 적으면 문장에 그대로 써요)" aria-label="장소 이름">
-    <select id="add-place-kind" aria-label="장소 종류">${Object.entries(ADD_KIND).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
-    <button type="button" class="btn primary" data-act="add-place" data-city="${esc(city)}">추가</button></div>
-    <div class="small">직접 추가한 장소는 출처가 없어요. 방문 전에 위치·영업 여부를 확인해 주세요.</div></div>`;
+  // 종류는 처음에 '관광지'로 두어 이름만 적어도 찾기가 시작된다(비워 두면 아무 일도 안 일어나 막힌다).
+  const d = addDraft[city] || { name: '', kind: 'attraction' };
+  const st = addLookState(city);
+  return `<div class="card add-place" id="add-place-card">
+    <div class="add-place-h"><b>가고 싶은 곳이 없나요?</b><span class="add-place-sub">이름을 적으면 공개 자료에서 사진·주소를 찾아 확인해 드려요.</span></div>
+    <div class="add-place-row">
+      <span class="ap-field ap-name"><input id="add-place-name" data-city="${esc(city)}" type="text" maxlength="60" autocomplete="off" value="${esc(d.name)}"
+        placeholder="예: Shibuya Sky" aria-label="장소 이름"></span>
+      <span class="ap-field ap-kind"><select id="add-place-kind" data-city="${esc(city)}" aria-label="장소 종류"><option value=""${d.kind ? '' : ' selected'}>종류 선택</option>${Object.entries(ADD_KIND).map(([k, v]) =>
+        `<option value="${k}"${d.kind === k ? ' selected' : ''}>${v}</option>`).join('')}</select></span>
+    </div>
+    <div class="small add-place-st st-${esc(st)}" id="add-place-st" aria-live="polite" aria-busy="${st === 'loading'}">${addLookLine(city)}</div></div>`;
 }
-/* 직접 추가한 장소 확인(POST /place-check): 도시 근처에서 이름을 찾아 출처를 붙인다. 못 찾아도 장소는 그대로 둔다. */
-async function placeCheck(p) {
-  if (API.base === null || !S.trip) return;
-  const { country } = briefCtx(p.city);
-  const c = S.trip.cities.find(x => x.name === p.city);
+function addLookState(city) {
+  const L = addLook, d = addDraft[city] || {};
+  if (!d.name || !d.kind) return 'idle';
+  if (L.city !== city) return 'idle';
+  return L.state === 'found' ? 'ok' : L.state;
+}
+function addLookLine(city) {
+  const L = addLook, d = addDraft[city] || {};
+  const plain = `<button type="button" class="btn soft add-plain" data-act="add-place-plain" data-city="${esc(city)}">이름만 추가(주소 없이)</button>`;
+  if (!d.name) return '<span>가 보고 싶은 곳의 이름을 적어 주세요.</span>';
+  if (!d.kind) return '<span>종류를 고르면 공개 자료에서 찾아요.</span>';
+  if (L.city !== city) return '<span>이름을 다 적으면 찾아드려요.</span>';
+  if (L.state === 'loading') return `<span class="add-spin" aria-hidden="true"></span><span>‘${esc(d.name)}’을(를) 찾고 있어요 — 끝나면 장소를 확정할 수 있어요.</span>`;
+  if (L.state === 'not_found') return `<span>공개 자료에서 찾지 못했어요. 영어 이름이나 지점명으로 다시 적어 보세요.</span>${plain}`;
+  if (L.state === 'rejected') return `<span>찾은 장소가 아니라고 하셨어요. 이름을 고쳐 다시 찾거나, 이름만 추가할 수 있어요.</span>${plain}`;
+  if (L.state === 'error') return `<span>지금은 확인할 수 없어요. 잠시 뒤 다시 적어 보세요.</span>${plain}`;
+  return '';
+}
+/* 상태 줄·확정 단추만 고친다(입력 칸을 다시 그리지 않아 커서가 그대로) */
+function addLookPaint() {
+  const st = document.getElementById('add-place-st');
+  const nameEl = document.getElementById('add-place-name');
+  const city = (nameEl && nameEl.dataset.city) || addLook.city;
+  if (st) {
+    const s = addLookState(city);
+    st.className = `small add-place-st st-${s}`;
+    st.setAttribute('aria-busy', String(s === 'loading'));
+    st.innerHTML = addLookLine(city);
+  }
+  const btn = document.querySelector('[data-act="confirm-places"]');
+  if (btn) btn.disabled = addLookBusy() || S.places.filter(p => p.selected).length === 0;
+}
+function addDraftFromDom() {
+  const n = document.getElementById('add-place-name'), k = document.getElementById('add-place-kind');
+  if (!n || !k) return null;
+  const city = n.dataset.city;
+  addDraft[city] = { name: String(n.value || '').replace(/\s+/g, ' ').trim().slice(0, 60), kind: ADD_KIND[k.value] ? k.value : '' };
+  return city;
+}
+/* 빈칸을 다 채우면 잠깐(0.8초) 기다렸다가 찾는다 — 치는 도중마다 부르지 않는다 */
+function addLookSchedule() {
+  const city = addDraftFromDom(); if (!city) return;
+  const d = addDraft[city];
+  clearTimeout(addLookTimer);
+  if (!d.name || d.name.length < 2 || /[<>{}]/.test(d.name) || !d.kind) {
+    addLook = { ...addLook, key: '', state: 'idle', city, seq: addLook.seq + 1 };   // 늦게 온 결과는 버린다
+    addLookPaint(); return;
+  }
+  addLookTimer = setTimeout(() => addLookRun(city), 800);
+}
+async function addLookRun(city) {
+  const d = addDraft[city]; if (!d || !d.name || !d.kind || !S.trip) return;
+  const key = `${city}|${d.kind}|${d.name.toLowerCase()}`;
+  if (addLook.key === key && addLook.state !== 'error') return;          // 같은 것을 또 찾지 않는다
+  if (S.places.some(p => p.city === city && p.name.toLowerCase() === d.name.toLowerCase())) { toast('이미 목록에 있는 장소예요.'); return; }
+  const seq = addLook.seq + 1;
+  addLook = { key, state: 'loading', city, res: null, seq };
+  addLookPaint();
+  const res = API.base === null ? { state: 'error' } : AI.placeCheckResult(await placeCheckFetch(city, d.name, d.kind));
+  if (seq !== addLook.seq) return;                                       // 그사이 다른 이름을 적었다
+  addLook.res = res;
+  if (res.state !== 'found') { addLook.state = res.state === 'not_found' ? 'not_found' : 'error'; addLookPaint(); return; }
+  addLook.state = 'found';
+  addLookPaint();
+  // Google 사진은 약관상 우리 서버를 거치지 않고(저장·캐시 금지) 화면이 바로 부른다. 공용 사진은 /place-photo 를 거친다
+  const imgSrc = res.image && res.image.provider === 'google' ? res.image.src : res.image ? `${API.base}/place-photo?src=${encodeURIComponent(res.image.src)}` : '';
+  const gcredit = res.image && res.image.provider === 'google'
+    ? `<span class="pc-credit">사진: ${res.image.authors.length ? res.image.authors.map(a => a.uri
+        ? `<a href="${esc(a.uri)}" data-act="link" rel="noopener noreferrer">${esc(a.name)}</a>` : esc(a.name)).join(', ') : 'Google 사용자'} · Google 지도</span>` : '';
+  const photo = res.image ? `<span class="pc-photo"><img src="${esc(imgSrc)}" alt="${esc(res.name)} 사진" loading="lazy" referrerpolicy="no-referrer"></span>
+      ${gcredit || `<span class="pc-credit">사진: © ${esc(res.image.author)} · ${res.image.licenseUrl
+        ? `<a href="${esc(res.image.licenseUrl)}" data-act="link" rel="noopener noreferrer">${esc(res.image.license)}</a>` : esc(res.image.license)}${res.image.page
+        ? ` · <a href="${esc(res.image.page)}" data-act="link" rel="noopener noreferrer">원본(${esc(res.image.credit)})</a>` : ''}</span>`}` : '<span class="pc-nophoto">사진을 찾지 못했어요</span>';
+  confirmBox('이 장소가 맞나요?', `<div class="place-confirm">${photo}
+      <div class="pc-name">${esc(res.name)}</div>
+      <div class="pc-row"><span class="pc-k">주소</span><span class="pc-v">${res.address ? esc(res.address) : '<span class="pc-none">주소를 찾지 못했어요</span>'}</span></div>
+      <div class="pc-row"><span class="pc-k">출처</span><span class="pc-v"><a href="${esc(res.url)}" data-act="link" rel="noopener noreferrer">${esc(res.label)}</a>${res.km != null ? ` · ${esc(city)} 중심에서 약 ${esc(String(res.km))}km` : ''}${res.addressSource ? ` · 주소: ${esc(res.addressSource)}` : ''}</span></div>
+      <div class="pc-hint">적으신 이름 ‘${esc(d.name)}’${res.name && res.name !== d.name ? ` → 찾은 이름 ‘${esc(res.name)}’` : ''}. 맞으면 이 이름·주소가 문장에 쓰여요.</div></div>`,
+    '이대로 추가', () => { S.modal = null; addUserPlace(city, d.kind, res, true); },
+    { block: true, cancel: '이름 고치기', onCancel: () => {
+        addLook.state = 'rejected'; render();
+        const el = document.getElementById('add-place-name');
+        if (el) { el.focus({ preventScroll: false }); el.select(); }          // 바로 고쳐 쓸 수 있게
+      } });
+}
+async function placeCheckFetch(city, name, kind) {
+  const { country } = briefCtx(city);
+  const c = S.trip.cities.find(x => x.name === city);
   const iso2 = (countryByName(country) || {}).iso2;
-  p.check = { state: 'loading' };
-  if (S.screen === 'u-report') render();
-  let d = null;
   try {
     const r = await fetch(`${API.base}/place-check`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ country: { name: country || p.city, ...(iso2 ? { iso2 } : {}) },
-                             city: { name: p.city, ...(c && c.gid ? { gid: c.gid } : {}) }, place: { name: p.name, kind: p.kind } }) });
-    d = r.ok ? await r.json() : null;
-  } catch (e) { d = null; }
-  const res = AI.placeCheckResult(d);
-  if (res.state === 'found') {
-    p.sources = [{ url: res.url, title: `${res.label} · ${res.name}` }];
-    p.attribution = `직접 추가 · 출처 확인(${res.license})`;
-    res.suggest = res.name.toLowerCase() !== p.name.toLowerCase() ? res.name : '';
-  }
-  p.check = res;
-  if (S.screen === 'u-report') render();
+      body: JSON.stringify({ country: { name: country || city, ...(iso2 ? { iso2 } : {}) },
+                             city: { name: city, ...(c && c.gid ? { gid: c.gid } : {}) }, place: { name, kind } }) });
+    return r.ok ? await r.json() : null;
+  } catch (e) { return null; }
 }
+/* 목록에 넣는다. verified=확인 창에서 '맞아요' — 그때만 찾은 이름·주소·좌표·출처를 붙인다 */
+function addUserPlace(city, kind, res, verified) {
+  const d = addDraft[city] || {};
+  const name = verified && res ? res.name : d.name;
+  if (!name) { toast('장소 이름을 1~60자로 적어 주세요.'); return; }
+  if (S.places.some(p => p.city === city && p.name.toLowerCase() === name.toLowerCase())) { toast('이미 목록에 있는 장소예요.'); return; }
+  const meta = S.reportMeta[city] || (S.reportMeta[city] = { base: 0, found: 0, mode: 'empty' });
+  const seq = S.places.length + 1;
+  const p = AI.researchPlace({ id: 'user:' + seq, name, kind: ADD_KIND[kind] ? kind : 'attraction', sources: [] }, city, 'u' + seq);
+  Object.assign(p, { attribution: '직접 추가', user: true, selected: !meta.base || selCount(city) < meta.base, isCandidate: false });
+  if (verified && res) {
+    Object.assign(p, { verified: true, address: res.address || '', area: res.address || '', lat: res.lat, lon: res.lon,
+      // Google 사진(짧게 쓰는 주소)은 장소에 남기지 않는다 — 약관상 저장 금지, 확인 창에서만 보였다
+      image: res.image && res.image.provider !== 'google' ? res.image : null, sources: [{ url: res.url, title: `${res.label} · ${res.name}` }],
+      attribution: `직접 추가 · 사용자 확인(${res.license})`, check: { ...res, suggest: '' } });
+  }
+  S.places.push(p);
+  meta.found = (meta.found || 0) + 1;
+  addDraft[city] = { name: '', kind: '' };
+  addLook = { key: '', state: 'idle', city, res: null, seq: addLook.seq + 1 };
+  render();
+  toast(verified ? `‘${name}’을(를) 확인한 주소로 추가했어요.` : `‘${name}’을(를) 이름만으로 추가했어요(주소 없음).`);
+}
+document.addEventListener('input', e => { if (e.target && (e.target.id === 'add-place-name' || e.target.id === 'add-place-kind')) addLookSchedule(); });
+document.addEventListener('change', e => { if (e.target && e.target.id === 'add-place-kind') addLookSchedule(); });
 function placeCheckLine(p) {
   const c = p.check;
   if (!c) return '';
@@ -4415,6 +4621,17 @@ function scrSplit(tab) {
     { appbar: appbar(tab === 'u-study' ? '학습' : '일정표', { act: tab === 'u-study' ? ipaEntryBtn() : pastEntryBtn() }), tabbar: true, tab, wide: true });
 }
 
+/* 덱의 첫 장 — 오늘의 알람 카드. 뒤집기·진도 집계 없음 */
+function alarmView(r, head, banner) {
+  const pr = progress(), total = deckLen(r);
+  return { inner: `<div class="app-pad">${head}${banner ? banner + '<div style="height:10px"></div>' : ''}
+      ${alarmCard(pr, { inDeck: true })}
+      <div class="card-nav"><button class="round" data-act="card-prev" disabled>${I.back}</button>
+        <div style="text-align:center"><div class="dots">${r.ids.map((_, k) => `<i class="${k === 0 ? 'cur' : ''}"></i>`).join('')}</div>
+        <div class="small" style="margin-top:6px" data-live="flipcount">오늘의 알람 · 문장 ${r.ids.length}개 · 덱 1/${total}</div></div>
+        <button class="round" data-act="card-next">${I.next}</button></div></div>`, bottom: '', tabbar: false };
+}
+
 /* SCR-08 */
 function studyView(r, opts = {}) {
   if (S.card.date !== r.date) resetCard(r.date);
@@ -4430,9 +4647,14 @@ function studyView(r, opts = {}) {
   /* 미래 날짜 안내는 아래 완료 버튼 옆으로 옮겼다 — 같은 말을 두 곳에서 하지 않는다 */
   else if (st === 'miss') banner = notice('지난 날짜예요. 지금 학습하면 완료로 기록돼요.', 'warn');
 
+  // 오늘의 알람이 먼저다 — '아직 학습일이 아니에요'(미래 날짜 확인)보다 앞에 둔다. 알람을 넘기면 그다음에 확인이 나온다.
+  if (deckAlarmOn(r)) return alarmView(r, head, banner);
+
   // 미래 날짜: 카드를 보여 주기 전에 확인 창(팀 요청 — 안내문이 눈에 띄지 않아 사용자 흐름이 끊겼다).
   // '미리 학습하기'를 고른 날·이미 미리 학습을 마친 날은 다시 묻지 않는다.
-  if (r.kind !== 'drill' && r.kind !== 'free' && !r.completed && !ended && r.date > S.today && !PROG.pre[r.date] && !previewOk.has(r.date)) {
+  // 학습 메뉴(학습 탭으로 들어온 학습 화면)는 예외 — 묻지 않고 바로 카드를 연다(11/05 사용자 지시). 일정표에서 들어온 길은 그대로 묻는다.
+  const askPreview = !(S.screen === 'u-study' && studyEntryIsTab());
+  if (askPreview && r.kind !== 'drill' && r.kind !== 'free' && !r.completed && !ended && r.date > S.today && !PROG.pre[r.date] && !previewOk.has(r.date)) {
     const gateBody = `${Dt.full(r.date)} 학습이에요. 지금 학습한 기록은 완료율에 바로 들어가지 않아요. <b>카드를 모두 뒤집어 두면 그날 자동으로 완료</b>돼요.`;
     if (opts.inline) {   // 넓은 화면 2열: 일정표를 여는 것만으로 창이 뜨지 않게, 오른쪽 상세 안에 같은 안내를 둔다
       return { inner: `<div class="app-pad">${head}<div class="card" style="margin-top:12px"><b>아직 학습일이 아니에요</b><p class="small" style="margin:8px 0 12px;line-height:1.6">${gateBody}</p>
@@ -4457,15 +4679,6 @@ function studyView(r, opts = {}) {
       <div class="title-lg">학습 완료!</div><p class="sub">문장 ${r.ids.length}개를 모두 확인했어요. 완료율이 <b>${Math.round(pr.rate * 100)}%</b>로 갱신됐어요.</p></div>
       <button class="btn primary block" data-act="tab" data-id="u-home">홈으로</button><div style="height:8px"></div>
       <button class="btn soft block" data-act="restudy">다시 보기</button></div>`, bottom: '', tabbar: true };
-  }
-  if (deckAlarmOn(r)) {   // 덱의 첫 장 — 알람 카드. 뒤집기·진도 집계 없음
-    const pr = progress(), total = deckLen(r);
-    return { inner: `<div class="app-pad">${head}${banner ? banner + '<div style="height:10px"></div>' : ''}
-      ${alarmCard(pr, { inDeck: true })}
-      <div class="card-nav"><button class="round" data-act="card-prev" disabled>${I.back}</button>
-        <div style="text-align:center"><div class="dots">${r.ids.map((_, k) => `<i class="${k === 0 ? 'cur' : ''}"></i>`).join('')}</div>
-        <div class="small" style="margin-top:6px" data-live="flipcount">오늘의 알람 · 문장 ${r.ids.length}개 · 덱 1/${total}</div></div>
-        <button class="round" data-act="card-next">${I.next}</button></div></div>`, bottom: '', tabbar: false };
   }
   const i = deckIdx(r), s = S.smap[r.ids[i]];
   const isNew = r.kind === 'new' || (r.newIds || []).includes(s.id);
@@ -4546,7 +4759,11 @@ function closeSheet() {
    덱 위치를 i 에 섞으면, 알람이 붙는지(입구·화면)가 바뀔 때 보던 문장이 한 칸씩 밀린다
    (예: 넓은 화면에서 학습 탭 → 일정표 오른쪽 상세, 같은 날짜를 일정표에서 다시 열기). */
 const studyEntryIsTab = () => !S.drill && S.studyEntry === 'tab';
-const alarmFirst = r => !!r && r.kind !== 'drill' && S.screen === 'u-study' && studyEntryIsTab();
+/* 오늘의 알람은 '오늘'을 보고 있을 때만 덱 맨 앞에 둔다 — 학습 탭으로 들어온 학습 화면, 그리고 넓은 화면의
+   일정표(오른쪽 상세). 사용자가 오늘이 아닌 다른 날짜를 고르면 알람 없이 그날로 바로 간다(11/05 사용자 지시). */
+const pickedToday = () => !S.studyDate || S.studyDate === S.today;
+const alarmFirst = r => !!r && r.kind !== 'drill' && r.kind !== 'free' && !S.drill && pickedToday()
+  && ((S.screen === 'u-study' && studyEntryIsTab()) || (S.screen === 'u-sched' && isWide()));
 const deckOffset = r => (alarmFirst(r) ? 1 : 0);
 const deckLen = r => r.ids.length + deckOffset(r);
 const deckAlarmOn = r => alarmFirst(r) && S.card.alarm !== false;
@@ -4613,17 +4830,18 @@ function scrIpa() {
       <em class="ipa-pair-ip">/${esc(p2.ip)}/</em><span class="ipa-pair-play" aria-hidden="true">${I.speaker}</span>
       <span class="sr-only">${esc(p2.w)} 듣기</span></button>`;
   const pairBlock = c.pair
-    ? `<div class="ipa-sec" style="grid-template-columns:minmax(0,1fr)"><div class="ipa-pair-h">
+    ? `<div class="ipa-sec ipa-pair-wrap" style="grid-template-columns:minmax(0,1fr)"><div class="ipa-pair-h">
          <span>${c.pair[0].ip === c.pair[1].ip ? '같은 소리 · 두 단어' : '최소대립쌍 · 소리 하나만 달라요'}</span>
          <button class="ipa-ab" data-act="ipa-ab" data-pairs="${esc(c.pair[0].w)}|${esc(c.pair[1].w)}">A ↔ B 번갈아</button></div>
        ${row(c.pair[0], c.pair[0].ip === c.ipa ? ' on' : '')}${row(c.pair[1], c.pair[1].ip === c.ipa ? ' on' : '')}</div>`
     : '';
   const exBlock = c.ex && c.ex.length
-    ? `<div class="ipa-sec"><span class="ipa-tag">as in</span><div class="ipa-ex">${c.ex.map(w =>
+    ? `<div class="ipa-sec ipa-det"><span class="ipa-tag">as in</span><div class="ipa-ex">${c.ex.map(w =>
         `<button class="ipa-ex-b" data-act="ipa-say" data-w="${esc(w)}">${esc(w)}<span class="ipa-pair-play">${I.speaker}</span>
           <span class="sr-only">${esc(w)} 듣기</span></button>`).join('')}</div></div>` : '';
   const inner = `<div class="app-pad">
     <div class="ipa-secs" role="group" aria-label="소리 갈래">${secs}</div>
+    <div class="ipa-wrap${st.det ? ' is-det' : ''}">
     <div class="ipa-card">
       <div class="ipa-card-h"><span class="ipa-tag">${esc(c.sec)}</span>
         <span class="ipa-count"><b>${i + 1}</b> / ${n}</span></div>
@@ -4635,18 +4853,22 @@ function scrIpa() {
         <button class="ipa-hero-play" data-act="ipa-say" data-w="${esc((c.pair && c.pair[0].w) || (c.ex && c.ex[0]) || c.ipa)}"
           aria-label="${esc(c.ko)} 소리 듣기">${I.speaker}</button>
       </div>
-      ${c.kr ? `<div class="ipa-kr"><span class="ipa-kr-tag">한국인 취약</span>
+      ${c.kr ? `<div class="ipa-kr ipa-det"><span class="ipa-kr-tag">한국인 취약</span>
         <span>${esc(c.err || '')}${c.err && c.cue ? ' · ' : ''}${esc(c.cue || '')}</span></div>` : ''}
-      <div class="ipa-sec"><span class="ipa-tag">how</span><p class="ipa-tip">${esc(c.tip)}</p></div>
-      ${c.vary ? `<div class="ipa-sec"><span class="ipa-tag">us</span><p class="ipa-tip">${esc(c.vary)}</p></div>` : ''}
-      ${pairBlock}${exBlock}
-      ${c.say ? `<div class="ipa-sec"><span class="ipa-tag">eg</span>
+      <div class="ipa-sec ipa-det"><span class="ipa-tag">how</span><p class="ipa-tip">${esc(c.tip)}</p></div>
+      ${c.vary ? `<div class="ipa-sec ipa-det"><span class="ipa-tag">us</span><p class="ipa-tip">${esc(c.vary)}</p></div>` : ''}
+      ${pairBlock}
+      <button class="ipa-more-t" data-act="ipa-det" aria-expanded="${st.det ? 'true' : 'false'}">
+        <span>${st.det ? '설명 접기' : '조음 방법 · 예문 보기'}</span>${I.next}</button>
+      ${exBlock}
+      ${c.say ? `<div class="ipa-sec ipa-det"><span class="ipa-tag">eg</span>
         <button class="ipa-eg" data-act="ipa-say" data-w="${esc(c.say)}"><span class="ipa-eg-t">${esc(c.say)}</span>
           <span class="ipa-pair-play" aria-hidden="true">${I.speaker}</span><span class="sr-only">예문 듣기</span></button></div>` : ''}
-      ${c.note ? `<div class="ipa-sec"><span class="ipa-tag">note</span><p class="ipa-tip">${esc(c.note)}</p></div>` : ''}
+      ${c.note ? `<div class="ipa-sec ipa-det"><span class="ipa-tag">note</span><p class="ipa-tip">${esc(c.note)}</p></div>` : ''}
       ${done ? `<div class="ipa-done">${I.check}<span>기호 ${n}개를 모두 봤어요</span></div>` : ''}
     </div>
     <div class="ipa-strip" role="group" aria-label="기호 ${n}개">${strip}</div>
+    </div>
     <div class="ipa-neigh"><button class="ipa-neigh-b" data-act="ipa-go" data-i="${(i - 1 + n) % n}">${I.back}<span>/${esc(prev.ipa)}/</span></button>
       <button class="ipa-neigh-b" data-act="ipa-go" data-i="${(i + 1) % n}"><span>/${esc(next.ipa)}/</span>${I.next}</button></div>
     <p class="small ipa-foot">밑줄은 그 소리를 만드는 철자예요. <b>한국인 취약</b>은 한국어에 같은 소리가 없어 자주 틀리는 기호예요.</p>
@@ -4655,7 +4877,10 @@ function scrIpa() {
   const bottom = done
     ? `<button class="btn accent block" data-act="ipa-finish">회화 연습 열기</button>`
     : `<div style="display:flex;gap:8px"><button class="btn soft" style="flex:1" data-act="ipa-skip">건너뛰기</button><button class="btn primary" style="flex:1.4" data-act="ipa-next">다음 기호</button></div>`;
-  return frame(inner, { appbar: appbar('발음기호 알아보기', { back: 'u-sched' }), bottom, tabbar: false, tab: 'u-study' });
+  const navActs = `<div class="ipa-nav-acts"><span class="ipa-nav-pos">${i + 1}/${n}</span>
+      <button data-act="ipa-go" data-i="${(i - 1 + n) % n}" aria-label="이전 기호">${I.back}</button>
+      <button data-act="ipa-go" data-i="${(i + 1) % n}" aria-label="다음 기호">${I.next}</button></div>`;
+  return frame(inner, { appbar: appbar('발음기호 알아보기', { back: 'u-sched', act: navActs }), bottom, tabbar: false, tab: 'u-study' });
 }
 
 /* 모든 카드를 뒤집으면 버튼을 누르지 않아도 끝난다(팀 요청 10/19). 날짜에 따라 완료·미리 학습·연습 축하 창을 띄운다. */
@@ -5252,7 +5477,7 @@ function preset(kind) {
 
 /* ================= 말하기 연습 (녹음 → /speak-check) =================
    작업 토큰(SPK.tok)으로 취소·늦은 응답을 구분한다. 카드 이동·화면 전환·재진입 시 cancelSpeak(). */
-const SPK = { state: 'idle', tok: 0, rec: null, stream: null, ctl: null, timer: null, sid: null, line: 'me', result: null, clip: null };
+const SPK = { state: 'idle', tok: 0, rec: null, stream: null, ctl: null, timer: null, sid: null, line: 'me', result: null, clip: null, ph: null };
 /* line = 회화 연습 시트에서 지금 말해보는 줄: 'me'(내 문장) · 'ask' · 'r0'… · 'next'. 줄마다 '듣기' 옆에 '말해보기'가 있고, 결과는 그 줄 아래에 보인다. */
 /* 내 발음 다시 듣기(설문 Q14 "내가 연습한 발음을 들어볼 수 있으면"). 녹음은 이 탭 메모리에만 둔다 —
    서버에 따로 저장하지 않고, 다시 녹음하거나 카드를 넘기면(cancelSpeak) 재생 주소를 해제한다. */
@@ -5301,6 +5526,31 @@ function spkEyebrow(rows) {
   const stamp = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
   return `SPEAK CHECK · ${stamp}`;
 }
+/* 소리 하나를 눌렀을 때의 설명. 회화 연습 카드 안에서 펼쳐진다 —
+   시트를 또 띄우면 이미 시트 안인 화면에서 겹친다.
+   말투 원칙은 카드와 같다: 점수를 말하지 않고 '들렸다/약했다/안 들렸다'만 말한다. */
+const PH_SAY = { ok: '잘 들렸어요', weak: '약하게 들렸어요', missing: '안 들렸어요' };
+function spkPhDetailHtml(r) {
+  const ipa = SPK.phIpa, st = SPK.phSt || 'ok';
+  const it = IPA_ITEM[ipa] || null;
+  const heard = SPK.phHeard || '';
+  const word = SPK.phWord || '';
+  const ex = it && it.ex ? it.ex.slice(0, 3) : [];
+  return `<div class="spk-phd" role="region" aria-label="/${esc(ipa)}/ 설명">
+    <div class="spk-phd-h"><span class="spk-phd-ipa">/${esc(ipa)}/</span>
+      <span class="spk-phd-st ${esc(st)}">${esc(PH_SAY[st] || '')}</span>
+      <button class="spk-phd-x" data-act="spk-ph-close" aria-label="설명 닫기">✕</button></div>
+    ${word ? `<div class="spk-phd-w">${esc(word)}${heard ? ` <span class="spk-phd-heard">→ /${esc(heard)}/처럼 들렸어요</span>` : ''}</div>` : ''}
+    ${it ? `<div class="spk-phd-ko">${esc(it.ko)}${it.kr ? '<span class="spk-phd-kr">한국인 취약</span>' : ''}</div>
+      <p class="spk-phd-tip">${esc(it.tip)}</p>
+      ${it.err ? `<p class="spk-phd-err"><b>자주 하는 실수</b> ${esc(it.err)}</p>` : ''}
+      ${it.cue ? `<p class="spk-phd-cue"><b>이렇게</b> ${esc(it.cue)}</p>` : ''}
+      ${it.vary ? `<p class="spk-phd-vary">${esc(it.vary)}</p>` : ''}
+      ${ex.length ? `<div class="spk-phd-ex">${ex.map(w => `<button class="spk-phd-ex-b" data-act="ipa-say" data-w="${esc(w)}">${esc(w)}</button>`).join('')}</div>` : ''}`
+      : `<p class="spk-phd-tip">이 기호는 아직 설명이 없어요. 조음 방법은 발음기호 화면에서 볼 수 있어요.</p>`}
+    <button class="spk-phd-all" data-act="ipa-open">발음기호 화면에서 더 보기</button>
+  </div>`;
+}
 function speakCardHtml(r, target) {
   const pa = r.phonemes_acoustic && r.phonemes_acoustic.status === 'ok' ? r.phonemes_acoustic : null;
   const rows = pa && Array.isArray(pa.phonemes)
@@ -5313,11 +5563,16 @@ function speakCardHtml(r, target) {
   const f = pa && pa.focus && pa.focus.ipa ? pa.focus : null;
   const toneOf = x => (x >= 90 ? '' : x >= 70 ? 'mid' : 'low');
   const row = (key, val) => `<div class="spk-row"><span class="spk-row-k">${esc(key)}</span><span class="spk-row-v">${val}</span></div>`;
+  const phOpen = SPK.ph !== null && SPK.ph !== undefined && SPK.phOf === r;   // 누른 칩(이 결과의 몇 번째)
+  /* 라벨 칸은 이 카드에 나오는 가장 긴 라벨에 맞춘다(모든 줄이 같은 폭이라 값이 한 줄로 정렬된다).
+     한글 1자 ≈ 0.85em(여유 포함), 공백 ≈ 0.35em. 상한은 CSS 에서 줄 폭의 60%. */
+  const labels = [r.heard ? '귀하의 문장' : '', r.fix_one ? '한 가지만 확인 부탁드려요' : '', r.tip ? '팁' : ''].filter(Boolean);
+  const kw = Math.max(4.6, ...labels.map(l => [...l].reduce((a, ch) => a + (ch === ' ' ? 0.35 : 0.85), 0.6)));
   const savedNote = r.saved ? (r.savedBy === 'user' ? '복습 목록에 저장했어요(직접 선택)' : '복습 목록에 자동 저장했어요(점수 기반 임시 규칙)') : '';
   let metrics = '';
   metrics += spkMetricHtml('단어 일치', r.score, toneOf(r.score), acc === null);   // DOM 순서 계약: 단어 → 음소
   if (acc !== null) metrics += spkMetricHtml('음소 일치', acc, toneOf(acc), true);
-  return `<div class="speak-res spk-card-wrap"${f ? ` data-ph-focus="${esc(f.ipa)}"` : ''}><div class="spk-card">` +
+  return `<div class="speak-res spk-card-wrap"${f ? ` data-ph-focus="${esc(f.ipa)}"` : ''}><div class="spk-card" style="--spk-k:${kw.toFixed(2)}em">` +
     `<div class="spk-head"><div class="spk-head-txt"><div class="spk-eyebrow">${esc(spkEyebrow(rows))}</div>` +
       `<b class="spk-verdict">${esc(v.text)}</b></div><span class="spk-tag">발음 점수 아님</span></div>` +
     `<div class="spk-metrics">${metrics}</div>` +
@@ -5325,9 +5580,14 @@ function speakCardHtml(r, target) {
       `<span class="spk-words">${marks.map(m => `<span class="spk-w${m.miss ? ' miss' : ''}"${m.miss ? ' title="두 받아쓰기 모두에서 들리지 않았어요"' : ''}>${esc(m.w)}</span>`).join(' ')}</span></div>` : '') +
     (groups.length ? `<div class="spk-sounds"><div class="spk-sounds-k">소리별 결과 · ${rows.length}개 · 표시된 것만 제 의도와 조금 다르네요.</div><div class="spk-strip">` +
       groups.map(g => `<span class="spk-wg"><span class="spk-wt">${esc(g.word)}</span><span class="spk-phs">` +
-        g.items.map(p2 => `<span class="spk-ph ${esc(p2.status)}" title="${esc(PH_TITLE[p2.status] || '')}">${esc(p2.ipa)}</span>`).join('') + '</span></span>').join('') +
+        g.items.map(p2 => `<button class="spk-ph ${esc(p2.status)}" data-act="spk-ph" data-ipa="${esc(p2.ipa)}" data-k="${rows.indexOf(p2)}"
+          data-st="${esc(p2.status)}" data-word="${esc(p2.word || g.word || '')}" data-heard="${esc(p2.heard_as || '')}"
+          aria-pressed="${phOpen && SPK.ph === rows.indexOf(p2) ? 'true' : 'false'}"
+          aria-label="/${esc(p2.ipa)}/ ${esc(PH_TITLE[p2.status] || '')} — 눌러서 설명 보기"
+          title="${esc(PH_TITLE[p2.status] || '')}">${esc(p2.ipa)}</button>`).join('') + '</span></span>').join('') +
       '</div></div>' : '') +
-    (f ? `<div class="spk-focus${f.heard_as ? '' : ' ok'}"><span class="spk-focus-ic" aria-hidden="true"></span><div>` +
+    (phOpen ? spkPhDetailHtml(r) : '') +
+    (f && !phOpen ? `<div class="spk-focus${f.heard_as ? '' : ' ok'}"><span class="spk-focus-ic" aria-hidden="true"></span><div>` +
       `<div class="spk-focus-h">'${esc(f.word || '')}'의 <b>/${esc(f.ipa)}/</b>` +
       (f.heard_as ? ` <span class="spk-heard">→ /${esc(f.heard_as)}/처럼 들렸어요</span>` : ' 소리가 약했어요') + '</div>' +
       (f.label ? `<div class="spk-focus-label">${esc(f.label)}</div>` : '') + (f.tip ? `<div class="spk-focus-tip">${esc(f.tip)}</div>` : '') + '</div></div>' : '') +
@@ -6210,20 +6470,10 @@ const ACT = {
   'geo-more': el => geoMore(el.dataset.geoKey || (GEO.open && GEO.open.key)),
   'brief-retry': el => { briefLoad(el.dataset.city, true); render(); },
   'research-retry': () => { if (S.trip && S.trip.status === 'report_done') request('report', false); },
-  'add-place': el => {
-    const city = el.dataset.city, input = document.getElementById('add-place-name'), kindEl = document.getElementById('add-place-kind');
-    const name = String(input && input.value || '').replace(/\s+/g, ' ').trim();
-    const kind = ADD_KIND[kindEl && kindEl.value] ? kindEl.value : 'attraction';
-    if (!name || name.length > 60 || /[<>{}]/.test(name)) { toast('장소 이름을 1~60자로 적어 주세요.'); return; }
-    if (S.places.some(p => p.city === city && p.name.toLowerCase() === name.toLowerCase())) { toast('이미 목록에 있는 장소예요.'); return; }
-    const meta = S.reportMeta[city] || (S.reportMeta[city] = { base: 0, found: 0, mode: 'empty' });
-    const seq = S.places.length + 1;
-    const p = AI.researchPlace({ id: 'user:' + seq, name, kind, sources: [] }, city, 'u' + seq);
-    Object.assign(p, { attribution: '직접 추가', user: true, selected: selCount(city) < meta.base, isCandidate: false });
-    S.places.push(p);
-    meta.found = (meta.found || 0) + 1;
-    render();
-    placeCheck(p);
+  'add-place-plain': el => { const city = el.dataset.city; addDraftFromDom(); addUserPlace(city, (addDraft[city] || {}).kind || 'attraction', null, false); },
+  'place-manual': () => {   // 한도 초과 → 직접 입력 칸으로
+    const c = document.getElementById('add-place-card');
+    if (c) { c.scrollIntoView({ block: 'center' }); const n = document.getElementById('add-place-name'); if (n) n.focus({ preventScroll: true }); }
   },
   'place-rename': el => {
     const p = S.places.find(x => x.id === el.dataset.id);
@@ -6304,6 +6554,7 @@ const ACT = {
     confirmBox('보고서를 다시 만들까요?', `지금 보고서와 체크 상태가 초기화돼요. 성공하면 남은 횟수가 ${left}번에서 ${left - 1}번으로 줄어요.`, '다시 만들기', () => { S.modal = null; request('report'); });
   },
   'confirm-places': () => {
+    if (addLookBusy()) { toast('직접 추가한 장소를 확인하는 중이에요. 끝나면 확정할 수 있어요.'); return; }
     const n = S.places.filter(p => p.selected).length;
     confirmBox('장소를 확정할까요?', `선택한 ${n}곳으로 방문 순서와 문장을 만들어요. 확정한 뒤에는 장소를 바꿀 수 없어요.`, '확정하기', () => { S.modal = null; S.trip.status = 'route_requested'; request('route'); });
   },
@@ -6411,10 +6662,19 @@ const ACT = {
   /* 회화 연습 입구. 발음기호 질문은 여기서 하지 않는다 — 학습 화면에 들어올 때 한 번뿐이다. */
   'sheet-open': () => { S.sheet = true; pushOverlay('sheet'); render(); },
   'ipa-open': () => { go('u-ipa'); },
+  /* 소리별 결과의 기호를 누르면 그 소리 설명이 카드 안에서 펼쳐진다. 같은 기호를 다시 누르면 접힌다. */
+  'spk-ph': el => {
+    const k = +el.dataset.k;
+    if (SPK.ph === k && SPK.phOf === SPK.result) { SPK.ph = null; }
+    else { SPK.ph = k; SPK.phOf = SPK.result; SPK.phIpa = el.dataset.ipa; SPK.phSt = el.dataset.st || 'ok'; SPK.phWord = el.dataset.word || ''; SPK.phHeard = el.dataset.heard || ''; }
+    if (typeof updateSpeakUi === 'function') updateSpeakUi(); else render();
+  },
+  'spk-ph-close': () => { SPK.ph = null; if (typeof updateSpeakUi === 'function') updateSpeakUi(); else render(); },
   'ipa-go': el => { const st = ipaState(); st.i = +el.dataset.i; render(); window.scrollTo(0, 0); },
   'ipa-next': () => { const st = ipaState(); const c = IPA_ALL[st.i]; if (c && !st.seen.includes(c.ipa)) st.seen.push(c.ipa);
     st.i = Math.min(IPA_ALL.length - 1, st.i + 1); render(); window.scrollTo(0, 0); },
   /* 갈래(단모음/이중모음/자음)로 바로 건너뛴다 */
+  'ipa-det': () => { const st = ipaState(); st.det = !st.det; render(); },
   'ipa-sec': el => { const k = IPA_ALL.findIndex(x => x.sec === el.dataset.sec); if (k >= 0) { ipaState().i = k; render(); window.scrollTo(0, 0); } },
   'ipa-say': el => { speak(el.dataset.w, el); },
   /* 두 단어를 번갈아 들려준다. 파형 도형 대신 '귀로 비교'하게 하는 장치. */

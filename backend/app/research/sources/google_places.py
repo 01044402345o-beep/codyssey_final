@@ -12,6 +12,8 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
+import urllib.parse
 from typing import Any
 
 from .. import config, verify
@@ -82,7 +84,7 @@ def adapter(deps: Any, tc: dict, want: dict) -> dict:
 
 def find(http: SafeHttp, ref: dict, name: str) -> "dict | None":
     """사용자가 적은 장소 이름 하나를 도시 근처에서 찾는다(place_check). 종류 제한 없이, 결과는 저장하지 않는다.
-    → {name, lat, lon, url} 또는 None. 일 한도(ITINERARY_DAILY_CAP)를 1 쓴다."""
+    → {name, lat, lon, url, address} 또는 None. 일 한도(ITINERARY_DAILY_CAP)를 1 쓴다."""
     from ...agents import itinerary
     if not available() or ref.get("lat") is None or itinerary._reserve(1) <= 0:
         return None
@@ -90,16 +92,52 @@ def find(http: SafeHttp, ref: dict, name: str) -> "dict | None":
     body = {"textQuery": name, "languageCode": "en", "maxResultCount": 3,
             "locationBias": {"circle": {"center": {"latitude": float(ref["lat"]), "longitude": float(ref["lon"])},
                                         "radius": float(min(50000, radius_m(int(ref.get("population") or 0)) * chain.scale(ref)))}}}
+    # 장소 확인 창: 사진 참조(places.photos)도 함께 받는다 — 무료 공용 사진이 없을 때만 쓴다(photo_uri)
     headers = {"Content-Type": "application/json", "X-Goog-Api-Key": (os.getenv("GOOGLE_MAPS_API_KEY") or "").strip(),
-               "X-Goog-FieldMask": itinerary.FIELD_MASK}
+               "X-Goog-FieldMask": itinerary.FIELD_MASK + ",places.photos"}
     res = http.request("POST", itinerary.SEARCH_URL, body=json.dumps(body).encode("utf-8"), headers=headers, timeout=8)
     data = res.json() if res.ok else None
     fetched = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     for item in (data or {}).get("places") or []:
         p = itinerary._place_from(item, fetched)
         if p:
-            return {"name": p["name"], "lat": p["lat"], "lon": p["lon"], "url": p["source_url"]}
+            return {"name": p["name"], "lat": p["lat"], "lon": p["lon"], "url": p["source_url"],
+                    "address": ((p.get("data") or {}).get("formatted_address") or ""), "photo": _first_photo(item)}
     return None
+
+
+def _first_photo(item: Any) -> "dict | None":
+    """첫 사진의 참조 이름과 찍은 사람(표시 의무 — authorAttributions). 참조 이름은 오래 두지 않는다."""
+    for ph in (item or {}).get("photos") or []:
+        name = str((ph or {}).get("name") or "")
+        if not re.fullmatch(r"places/[A-Za-z0-9_-]{1,300}/photos/[A-Za-z0-9_-]{1,800}", name):
+            continue
+        authors = []
+        for a in (ph.get("authorAttributions") or [])[:3]:
+            n = re.sub(r"<[^>]*>|[<>{}]", " ", str((a or {}).get("displayName") or ""))   # 태그는 통째로, 남은 꺾쇠도 지운다
+            n = re.sub(r"\s+", " ", n).strip()[:60]
+            u = str((a or {}).get("uri") or "")
+            if u.startswith("//"):
+                u = "https:" + u
+            authors.append({"name": n or "Google 사용자", "uri": u if re.fullmatch(r"https://[^\s\"'<>]+", u) else ""})
+        return {"name": name, "authors": authors}
+    return None
+
+
+def photo_uri(http: SafeHttp, photo: dict, width: int = 500) -> "dict | None":
+    """사진 참조 → 화면에 바로 넣을 짧게 쓰는 주소(photoUri, googleusercontent — API 키가 들어 있지 않다).
+    Google 약관: 사진·주소를 저장·캐시하지 않는다 — 이 결과는 그 확인 창 한 번에만 쓴다. 일 한도를 1 쓴다."""
+    from ...agents import itinerary
+    if not photo or not available() or itinerary._reserve(1) <= 0:
+        return None
+    url = (f"https://places.googleapis.com/v1/{photo['name']}/media?"
+           + urllib.parse.urlencode({"maxWidthPx": width, "skipHttpRedirect": "true"}))
+    res = http.request("GET", url, headers={"X-Goog-Api-Key": (os.getenv("GOOGLE_MAPS_API_KEY") or "").strip()}, timeout=8)
+    uri = str(((res.json() or {}) if res.ok else {}).get("photoUri") or "")
+    if not re.fullmatch(r"https://[a-z0-9-]+\.googleusercontent\.com/[^\s\"'<>]+", uri):
+        return None
+    return {"src": uri, "provider": "google", "credit": "Google 지도", "authors": photo.get("authors") or [],
+            "license": "Google Maps"}
 
 
 def available() -> bool:
