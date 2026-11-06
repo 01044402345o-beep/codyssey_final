@@ -28,15 +28,17 @@ class T(unittest.TestCase):
         self.assertEqual(cfg["firestore"], [{"database": "(default)", "rules": "firestore.rules",
                                              "indexes": "firestore.indexes.json"}])
         self.assertTrue((ROOT / "firestore.indexes.json").is_file())
-        sources = [r["source"] for r in cfg["hosting"]["rewrites"]]
-        self.assertNotIn("/interp/stream", sources)                    # Hosting 은 WS 를 중계하지 못한다
-        self.assertFalse(any(s in ("**", "/**") for s in sources))     # 정적 파일까지 Cloud Run 으로 보내지 않는다
-        routes = {r.path for r in main.app.routes if getattr(r, "methods", None)}
-        # "/"·"/index.html" 은 화면 페이지다(파일 해시 버전을 붙여 내보낸다) — Hosting 은 정적 index.html 을 그대로 쓴다
-        api = {p for p in routes if not p.startswith(("/docs", "/openapi", "/redoc"))} - {"/", "/index.html"}
-        covered = lambda p: any(p == s or (s.endswith("/**") and p.startswith(s[:-3])) for s in sources)
-        missing = sorted(p for p in api if not covered(p) and not p.startswith("/static"))
-        self.assertEqual(missing, [], "Hosting rewrite 에 빠진 API 경로")
+        # 11/06: Hosting 은 화면(정적 파일)만 — API·통역 WS 는 Render(화면 ai.js apiBase 가 *.web.app 이면 Render 로).
+        # Cloud Run(codyssey-api)은 마감 때문에 보류라 없다 — 없는 서비스로 보내는 rewrite 를 두지 않는다(FIREBASE_DEPLOY.md §0)
+        self.assertNotIn("rewrites", cfg["hosting"])
+        self.assertEqual(cfg["hosting"]["public"], "mockup")
+        csp = next(h["value"] for b in cfg["hosting"]["headers"] for h in b["headers"] if h["key"].startswith("Content-Security"))
+        connect = next(p for p in csp.split(";") if p.strip().startswith("connect-src"))
+        img = next(p for p in csp.split(";") if p.strip().startswith("img-src"))
+        self.assertIn("https://codyssey-final.onrender.com", connect)
+        self.assertIn("wss://codyssey-final.onrender.com", connect)     # 통역 WebSocket
+        self.assertIn("https://codyssey-final.onrender.com", img)        # 장소 확인 창 사진(/place-photo)
+        self.assertIn("https://*.googleusercontent.com", img)            # Google 사진(바로 표시)
 
     def test_ws_url_only_when_valid(self):
         for value, want in [("", None), ("https://x.run.app/interp/stream", None), ("wss://x.run.app/other", None),

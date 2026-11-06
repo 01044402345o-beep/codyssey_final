@@ -14,6 +14,13 @@ test('apiBase: ?api= 는 저장하지 않고 external 로 표시, file:// 은 �
   const ext = AI.apiBase({ protocol: 'https:', host: 'a.onrender.com', origin: 'https://a.onrender.com', search: '?api=https://evil.example' });
   assert.equal(ext.base, 'https://evil.example'); assert.equal(ext.external, true);
   assert.equal(AI.apiBase({ protocol: 'file:', host: '', origin: 'null', search: '' }).base, null);
+  // Firebase Hosting 에서 열면 화면만 Firebase, API 는 Render(외부 서버 안내 없음). ?api= 가 있으면 그것이 먼저
+  for (const host of ['com-example-myapplicatio-3bb36.web.app', 'com-example-myapplicatio-3bb36.firebaseapp.com']) {
+    assert.deepEqual(AI.apiBase({ protocol: 'https:', host, hostname: host, origin: 'https://' + host, search: '' }),
+      { base: 'https://codyssey-final.onrender.com', external: false, host: 'codyssey-final.onrender.com' }, host);
+  }
+  assert.equal(AI.apiBase({ protocol: 'https:', host: 'x.web.app', hostname: 'x.web.app', origin: 'https://x.web.app', search: '?api=https://evil.example' }).base, 'https://evil.example');
+  assert.equal(AI.apiBase({ protocol: 'https:', host: 'web.app.evil.example', hostname: 'web.app.evil.example', origin: 'https://web.app.evil.example', search: '' }).base, '');
   assert.equal(AI.apiBase({ protocol: 'file:', host: '', origin: 'null', search: '?api=javascript:alert(1)' }).base, null);
   assert.equal(AI.apiBase({ protocol: 'https:', host: 'a', origin: 'https://a', search: '?api=ftp://x' }).base, '');
 });
