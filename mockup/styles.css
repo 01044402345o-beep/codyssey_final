@@ -2823,3 +2823,10 @@ body.is-narrow .spk-card { border-radius: 12px; }
     font-size: var(--fs-caption, 0.75rem); color: var(--text-soft); }
   .face.back .face-count { color: inherit; opacity: .75; }
 }
+
+/* 일정 요약 둘째 줄: 한 줄 말줄임 → 두 줄까지(터치에는 말줄임을 펼칠 방법이 없다 — 320px 에서 46줄 중 32줄이 잘렸다, 11/07 측정) */
+.pframe .srow .ct .line2 { white-space: normal; text-overflow: clip; overflow: hidden; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+/* 회화 연습 시트: 닫기 버튼이 긴 내용 맨 아래(화면보다 700~1000px 아래)에 있었다 — 시트 안에서 아래에 붙여 늘 보이게 */
+.sheet > .btn[data-act="sheet-close"] { position: sticky; bottom: 0; z-index: 2; margin-top: 12px;
+  box-shadow: 0 -10px 14px -6px var(--bg); }
