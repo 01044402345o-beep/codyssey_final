@@ -5179,6 +5179,7 @@ function ilogBytes(list) {
   const t = JSON.stringify({ v: 1, consent: { version: ILOG_CONSENT_VERSION, at: Date.now() }, list: ilogWire(list) });
   try { return new TextEncoder().encode(t).length; } catch (e) { return t.length * 3; }
 }
+let ilogDropped = 0;   // 이번 접속에서 상한 때문에 정리된 대화 수 — 한 번만 알린다
 function ilogSave(noSync) {
   const all = (S.ilog || []).filter(x => x.lines && x.lines.length);
   const keep = []; let n = 0;   // 최근 것부터 세어 상한 안의 세션만 남긴다
@@ -5187,6 +5188,8 @@ function ilogSave(noSync) {
     n += all[i].lines.length; keep.unshift(all[i]);
   }
   while (keep.length > 1 && ilogBytes(keep) > ILOG_BYTES) keep.shift();
+  const dropped = all.length - keep.length;
+  if (dropped > 0) ilogDropped = dropped;
   S.ilog = keep;
   const box = ilogBox();
   try { if (box) box.setItem(ILOG_KEY, JSON.stringify({ v: 1, list: keep })); } catch (e) { /* 저장소 막힘: 이번 접속에서만 */ }
@@ -5354,11 +5357,15 @@ function ilogSyncCard() {
   return `<div class="ilog-sync on"><p class="small"><b>계정에 저장 중</b> · ${Dt.full(ilogDay(sync.at))} 동의${ILOG_UI.busy ? ' · 저장하는 중…' : ''}${ILOG_UI.err ? `<br>${esc(ILOG_UI.err)}` : ''}</p>
     <button class="btn soft" data-act="ilog-revoke" ${ILOG_UI.busy ? 'disabled' : ''}>계정 저장 끄기</button></div>`;
 }
+const ILOG_LIMIT_NOTE = `최근 ${ILOG_SESS}개 대화 · ${ILOG_LINES}문장까지 남아요. 넘으면 오래된 대화부터 자동으로 정리돼요.`;
 const ilogSessions = () => ilogLoad().filter(x => x.lines && x.lines.length).slice().sort((a, b) => b.at - a.at);
 const ilogDay = ms => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };   // 기기 시간대의 날짜(UTC 날짜와 시각이 어긋나지 않게)
 const ilogTime = ms => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 function ilogCard(x, open) {
   const n = x.lines.length, route = x.trip && x.trip.route ? x.trip.route : '여행 없이';
+  /* 접힌 카드에서 30개를 구분할 단서가 시각뿐이었다(경로 부제는 같은 여행이면 전부 같다).
+     내가 한 말을 먼저 보여 준다 — 상대방 발화가 목록에 늘 노출되지 않게. */
+  const peekLine = x.lines.find(l => l.s === 'ko') || x.lines[0];
   const lines = x.lines.map((l, i) => `<div class="ilog-line">
       <div><span class="ilog-who ${l.s === 'ko' ? 'me' : 'other'}">${l.s === 'ko' ? '나' : '상대'} · ${LANG_NAME[l.s] || l.s}</span>
         <p class="ilog-src" lang="${esc(l.s)}">${esc(l.src)}</p>
@@ -5368,7 +5375,8 @@ function ilogCard(x, open) {
   return `<article class="ilog-card" data-live="ilog-${esc(x.id)}">
     <button class="ilog-head" data-act="ilog-open" data-id="${esc(x.id)}" aria-expanded="${open ? 'true' : 'false'}">
       <span class="t"><b>${Dt.full(ilogDay(x.at))} · ${ilogTime(x.at)}</b>
-        <span class="small">${esc(route)} · ${LANG_NAME[x.a] || x.a} ↔ ${LANG_NAME[x.b] || x.b}</span></span>
+        <span class="small">${esc(route)} · ${LANG_NAME[x.a] || x.a} ↔ ${LANG_NAME[x.b] || x.b}</span>
+        ${open ? '' : `<span class="ilog-peek">${esc(peekLine.src)}</span>`}</span>
       <span class="ilog-count">${n}문장</span></button>
     ${open ? `<div class="ilog-body">${lines}
       <button class="ilog-del" data-act="ilog-del" data-id="${esc(x.id)}">이 대화 기록 지우기</button></div>` : ''}
@@ -5380,7 +5388,7 @@ function scrCollLog() {
   const seg = collSegHtml('log');
   if (!list.length) {
     return frame(`<div class="app-pad ilog-pad">${seg}
-      <div class="empty" style="padding:40px 0"><div class="ico">${I.past}</div>
+      <div class="empty" style="padding:30px 0"><div class="ico">${I.past}</div>
         <b style="color:var(--text);font-size:1.0625rem">아직 통역 기록이 없어요</b>
         <p>통역 화면에서 마이크를 켜고 이야기하면<br>주고받은 문장이 여기에 차례로 쌓여요.</p></div>
       ${ilogSyncCard()}
@@ -5390,7 +5398,7 @@ function scrCollLog() {
   const total = list.reduce((a, x) => a + x.lines.length, 0);
   const foot = `${ilogSyncCard()}<p class="small">음성은 저장하지 않고 확정된 글자만 남겨요 · ${total}문장</p>`;
   if (isWide()) {
-    const btns = list.map(x => `<button class="ilog-pick ${open === x.id ? 'on' : ''}" data-act="ilog-open" data-id="${esc(x.id)}">
+    const btns = list.map(x => `<button class="ilog-pick ${open === x.id ? 'on' : ''}" data-act="ilog-open" data-id="${esc(x.id)}" aria-current="${open === x.id ? 'true' : 'false'}">
         <b>${Dt.full(ilogDay(x.at))} ${ilogTime(x.at)}</b>
         <span class="small">${esc(x.trip && x.trip.route ? x.trip.route : '여행 없이')} · ${x.lines.length}문장</span></button>`).join('');
     return frame(`<div class="split coll"><div class="split-list">${seg}<div class="ilog-picks">${btns}</div>
@@ -5398,7 +5406,17 @@ function scrCollLog() {
       <div class="split-detail">${ilogCard(list.find(x => x.id === open) || list[0], true)}${foot}</div></div>`,
       { appbar: appbar('문장 모음'), tabbar: true, wide: true });
   }
-  return frame(`<div class="app-pad ilog-pad">${seg}${list.map(x => ilogCard(x, open === x.id)).join('')}
+  /* 날짜가 유일한 축인데 시각 문자열 30개로 흩어져 있었다 → 하루 단위로 묶어 '3일차 블록'을 건너뛸 수 있게 */
+  const todayMs = Date.parse(S.today), yesterdayMs = todayMs - 86400000;
+  let lastDay = null;
+  const dayLabel = ms => { const d = Date.parse(ilogDay(ms)); return d === todayMs ? '오늘' : d === yesterdayMs ? '어제' : `${Dt.full(ilogDay(ms))}`; };
+  const rows = list.map(x => {
+    const d = ilogDay(x.at), head = d === lastDay ? '' : `<div class="ilog-day">${esc(dayLabel(x.at))}</div>`;
+    lastDay = d;
+    return head + ilogCard(x, open === x.id);
+  }).join('');
+  const limitNote = `${ILOG_LIMIT_NOTE}${ilogDropped ? `<br><b>오래된 대화 ${ilogDropped}개를 정리했어요.</b>` : ''}`;
+  return frame(`<div class="app-pad ilog-pad">${seg}${notice(limitNote, 'plain')}<div style="height:10px"></div>${rows}
     <button class="ilog-clear" data-act="ilog-clear">기록 모두 지우기</button>${foot}</div>`,
     { appbar: appbar('문장 모음'), tabbar: true, tab: 'u-coll' });
 }
