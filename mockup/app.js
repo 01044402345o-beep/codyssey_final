@@ -3885,6 +3885,22 @@ document.addEventListener('focusout', e => {      // 포커스가 목록 안에 
     geoClose(el.dataset.geo);
   }, 120);
 });
+/* 학습 카드 키보드(휴대폰 외장 키보드·컴퓨터 모두): ↑·↓ 뒤집기, ←·→ 이전·다음 카드.
+   글자를 쓰는 칸·창·회화 연습 시트가 열려 있을 때와 조합 키(Ctrl·Alt·Meta·Shift)는 건드리지 않는다.
+   넘기기는 ‹ › 버튼을 그대로 눌러 첫·마지막 장의 막힘(disabled)도 같이 따른다(세로가 좁아 줄을 숨긴 때도) */
+document.addEventListener('keydown', e => {
+  if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+  if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || e.isComposing) return;
+  const t = e.target;
+  if (t && t.closest && t.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], .modal, .sheet, .drawer, [role="dialog"]')) return;
+  if (S.modal || S.sheet) return;
+  const card = document.querySelector('.pmain .flip[data-act="flip"]');
+  if (!card) return;
+  e.preventDefault();   // 문서가 위아래로 스크롤되지 않게
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { ACT.flip(card); return; }
+  const btn = document.querySelector(`.pmain .card-nav [data-act="${e.key === 'ArrowRight' ? 'card-next' : 'card-prev'}"]`);
+  if (btn && !btn.disabled) ACT[btn.dataset.act](btn);
+});
 document.addEventListener('keydown', e => {
   const el = e.target;
   if (!el.dataset || !el.dataset.geo) return;
