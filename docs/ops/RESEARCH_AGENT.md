@@ -40,7 +40,7 @@ POST /research {countries:[{name, iso2?}], cities:[{name, gid?, ci, start, end, 
 ```
 
 그래프: `planner → (country × 나라, city × 도시) → writer`, 도시 안은 `guide(Wikidata → 위키보이지) ∥ climate(Open-Meteo) → extract(LLM) → finalize`.
-- 장소는 위키보이지 listing 템플릿에서만 나온다(코드 파싱). 도시 중심 50km 밖·이상한 이름은 버린다.
+- 장소는 위키보이지 listing 템플릿이 기본이고, 종류별 목표에 모자라면 `RESEARCH_PLACE_CHAIN` 순서로 대체 소스에 묻는다. 도시 중심 50km 밖·이상한 이름은 버린다.
 - 소스 실패는 status(`unavailable`·`rate_limited`·`empty`·`disabled`)로 남고 보고서는 계속 만들어진다(`quality: full|reduced|failed`).
 - 같은 요청은 같은 잡(single-flight). 화면이 기다리기를 멈춰도 잡은 끝까지 돌아 캐시를 데운다. 서버 재시작 시 잡은 사라진다(404 → 다시 요청, 끝난 도시는 캐시).
 

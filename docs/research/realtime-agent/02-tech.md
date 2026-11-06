@@ -9,10 +9,10 @@
 
 | 항목 | 위치 | 내용 |
 |---|---|---|
-| 녹음 | `mockup/app.js` `toggleSpeak`(2272행) | 버튼을 누르면 `getUserMedia` 다음 `MediaRecorder` 로 녹음하고 **15초에 자동으로 멈춘다**(`setTimeout(stopSpeak, 15000)`). blob 은 `uploadSpeech` 가 한 번에 올린다. 동의하기 전에는 마이크를 열지 않는다(`askVoiceConsent`). |
-| 채점 | `backend/app/main.py` `/speak-check`(703행) | `rate_limit` → 디코드 → Silero VAD → pyannote VAD 순서로 확인한다. **두 VAD 가 모두** 말소리를 찾을 때만 Groq(1차)와 AssemblyAI(교차) 로 동시에 전사한다. `compare_consensus(target, heard, heard_ck)` 로 **목표 문장과의 단어 일치율**(`score_kind: word_match_consensus`)을 내고, Gemini 텍스트로 `fix_one`·`tip` 을 만든다. 응답에는 `timing_ms` 가 붙는다. |
-| 제한 | `main.py` 91행 | `RATE_LIMIT=20` 요청 / `RATE_WINDOW=60`초. IP 기준 프로세스 메모리 슬라이딩 윈도라 **단일 인스턴스를 전제**로 한다. |
-| TTS | `app.js` `speak()`(1075행) | `speechSynthesis`, `en-US`, 속도는 `S.ttsRate`. 사용할 수 없으면 `ttsOffMsg()` 를 띄운다(카톡 Android 안내 포함). |
+| 녹음 | `mockup/app.js` `toggleSpeak()` | 버튼을 누르면 `getUserMedia` 다음 `MediaRecorder` 로 녹음하고 **15초에 자동으로 멈춘다**(`setTimeout(stopSpeak, 15000)`). blob 은 `uploadSpeech` 가 한 번에 올린다. 동의하기 전에는 마이크를 열지 않는다(`askVoiceConsent`). |
+| 채점 | `backend/app/main.py` `/speak-check`(함수 `post_speak_check`) | `rate_limit` → 디코드 → Silero VAD → pyannote VAD 순서로 확인한다. **두 VAD 가 모두** 말소리를 찾을 때만 Groq(1차)와 AssemblyAI(교차) 로 동시에 전사한다. `compare_consensus(target, heard, heard_ck)` 로 **목표 문장과의 단어 일치율**(`score_kind: word_match_consensus`)을 내고, Gemini 텍스트로 `fix_one`·`tip` 을 만든다. 응답에는 `timing_ms` 가 붙는다. |
+| 제한 | `main.py` `RATE_LIMIT`·`RATE_WINDOW` 정의부 | `RATE_LIMIT=20` 요청 / `RATE_WINDOW=60`초. IP 기준 프로세스 메모리 슬라이딩 윈도라 **단일 인스턴스를 전제**로 한다. |
+| TTS | `app.js` `speak()` | `speechSynthesis`, `en-US`, 속도는 `S.ttsRate`. 사용할 수 없으면 `ttsOffMsg()` 를 띄운다(카톡 Android 안내 포함). |
 | 회화 시트 | `app.js` `sheetHtml()`(1801행) | `talk.ask` 가 있으면 '상대가 먼저' 를 보여 준다. 그 아래로 내 문장(`s.en`), 말해보기(`speakHtml`), '상대방의 예상 답변'(`replies[]`, `label`), '내가 이어서'(`next`) 순서다. |
 | 대화 데이터 | `mockup/data.js` | 공통 상황 7묶음(`airport`, `immigration`, `hotel`, `transit`, `shopping`, `emergency`, `emergency_call`)이 있다. 예: `'Chicken, please.'` 의 `talk: { ask: 'Would you like chicken or beef?', replies: [{label:'있는 경우'…}, {label:'떨어진 경우', en:"Sorry, we're out of chicken. Is beef okay?"}], next: 'Beef is fine, thank you.' }` |
 | 배포 | `render.yaml` | `plan: free`, `uvicorn app.main:app` 단일 프로세스. 런북 기준으로 15분 동안 요청이 없으면 스핀다운되고, 다시 켜지는 데 약 1분 걸린다. |

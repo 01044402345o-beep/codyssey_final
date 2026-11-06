@@ -320,7 +320,7 @@ curl -s -H "X-Admin-Token: $HEALTH_DETAIL_TOKEN" https://<앱>.onrender.com/heal
 
 - **증상**: 한 사람이 몇 번 쓰지 않았는데 `요청이 너무 많습니다` (우리 서버 429). 여러 테스터가 동시에 겪음
 - **원인**: 앱은 Render 프록시 뒤에 있어 연결 상대(`request.client`)가 프록시입니다. `TRUSTED_PROXY_HOPS=0`(기본)이면 모든 사용자가 **한 IP 로 묶여** `RATE_LIMIT` 를 나눠 씁니다.
-  uvicorn 은 `127.0.0.1` 에서 온 `X-Forwarded-For` 만 믿으므로 Render 에서는 자동으로 풀리지 않습니다
+  기동 옵션이 `--no-proxy-headers` 라 uvicorn 은 `X-Forwarded-For` 를 읽지 않습니다. 그래서 앱이 `TRUSTED_PROXY_HOPS` 로 직접 셉니다
 - **확인 (배포 후 1회, 2분)**
   1. 내 공인 IP 확인: 브라우저로 `https://ifconfig.me`
   2. 배포 주소 `/health` 를 한 번 열기 (아무 요청이나 됩니다. 프로세스마다 첫 요청 한 번만 기록)
@@ -373,7 +373,7 @@ git push origin main
 구현자가 1명일 때 **가장 빠른 복구**입니다. Render → Environment → 값 변경 → 자동 재시작.
 
 > **기본값 주의 (코드 기준)**: `RATE_LIMIT=20`, `RATE_WINDOW=60`, `TRUSTED_PROXY_HOPS=0`, `CONFIG_STRICT=0`, `ALLOW_ORIGINS=*`, `AI_MIN_ATTEMPTS=30`(하한, 낮출 수 없음).
-> 현재 `render.yaml` 에는 `PYTHON_VERSION`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `ASSEMBLYAI_API_KEY`, `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_APP_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON` 가 정의돼 있습니다(뒤 둘은 `sync: false` 로 값은 대시보드에서). 모델은 실행 중 목록에서 고릅니다. `STT_SELFTEST=1` 은 검증할 때만 넣고 끝나면 지웁니다.
+> 현재 `render.yaml` 에는 `PYTHON_VERSION`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `ASSEMBLYAI_API_KEY`, `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`, `FIREBASE_APP_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON` 가 정의돼 있습니다(`PYTHON_VERSION` 외 전부 `sync: false` — 값은 대시보드. 키는 모두 37개이고 전체 목록은 `render.yaml` 참조). 모델은 실행 중 목록에서 고릅니다. `STT_SELFTEST=1` 은 검증할 때만 넣고 끝나면 지웁니다.
 > 아래 표의 "평상시" 값은 **Render Environment 에 직접 추가해야** 적용됩니다.
 > 교육장처럼 한 공용 IP 에서 여러 명이 테스트하면 `RATE_LIMIT=20/60s` 에 걸릴 수 있으니 테스트 전에 올려 두세요.
 
