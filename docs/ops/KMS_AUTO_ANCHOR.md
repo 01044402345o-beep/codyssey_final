@@ -9,7 +9,7 @@
 | CI 인증 | **Workload Identity Federation** — GitHub OIDC 토큰을 15분짜리 GCP 토큰으로 바꾼다. 서비스 계정 키 파일을 GitHub 에 넣지 않는다 |
 | 체크포인트 저장 | Firestore `evidence_checkpoints/{seq 8자리}` — **만들기만** 가능(createDocument, 같은 seq 면 409). CI 계정에는 수정·삭제 권한을 주지 않는다 |
 | 신뢰 뿌리 | 여전히 **관리자 핀**. KMS 공개키는 관리자가 직접 핀에 넣고(`kms-pin-add`), CI 는 Actions 변수로 받은 핀으로만 검증한다 |
-| 오프사이트 기록 | 성공한 실행도 GitHub 이슈 `[evidence-anchor] 일일 오프사이트 앵커`에 `/health` 공개 지문·마지막 체인 위치·실행 링크를 댓글로 남긴다. Render·Firestore와 별도인 관리 plane의 감사 이력이다 |
+| 오프사이트 기록 | 성공한 실행도 GitHub 이슈 `[evidence-anchor] 일일 오프사이트 앵커`에 Render `/health` 공개 지문·`deploy.commit`·Firebase Hosting `/`, `/index.html`, `ai.js`, `auth.js`, `app.js`의 SHA-256/ETag/CSP 모드/캐시 정책·마지막 체인 위치·실행 링크를 댓글로 남긴다. Render·Firebase·Firestore와 별도인 관리 plane의 감사 이력이다 |
 | 실패 알림 | 검증 실패·체크포인트가 13시간보다 오래됨(자동 앵커가 멈춤)·권한 오류 → GitHub 이슈 `[evidence-anchor] 자동 앵커 실패` 하나에 모은다 |
 | 켜기 | 저장소 변수 `EVIDENCE_AUTO_ANCHOR=on` 일 때만 돈다. 그 전에는 워크플로가 건너뛴다(빨간 크론 없음) |
 
@@ -104,6 +104,7 @@ CLI 로는: `python -m opsarchive kms-check --kms-key <이름> --sa <JSON>` → 
 | `EVIDENCE_PIN_SIGNING_KEYS` | 6단계에서 자동으로 올라감 |
 | `EVIDENCE_AUTO_ANCHOR` | **마지막에** `on` |
 | `EVIDENCE_HEALTH_URL` | 공개 `/health` 주소(생략 시 `https://codyssey-final.onrender.com/health`) |
+| `EVIDENCE_HOSTING_URL` | Firebase Hosting 주소(생략 시 `https://com-example-myapplicatio-3bb36.web.app`) |
 
 전부 **변수**입니다(비밀 아님 — 공개키·리소스 이름뿐). 비밀(Secrets)은 하나도 필요 없습니다.
 

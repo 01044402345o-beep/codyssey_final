@@ -149,9 +149,20 @@ app.add_middleware(body_limit.BodyLimitMiddleware, default=64 * 1024, limits={
     "/generate": 64 * 1024,
     "/research": 16 * 1024,      # 나라 4 × 80자 + 도시 5 × (80자 + 날짜·숫자) — 2KB 안팎
 })
+
+
+def effective_cors_origins() -> list[str]:
+    """관리형 배포에서는 ALLOW_ORIGINS 누락·와일드카드를 허용하지 않는다."""
+    raw = (os.getenv("ALLOW_ORIGINS") or "").strip()
+    managed = bool(os.getenv("RENDER") or os.getenv("K_SERVICE"))
+    if managed and (not raw or raw == "*" or "*" in raw):
+        return []
+    return [origin.strip() for origin in (raw or "*").split(",") if origin.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=(os.getenv("ALLOW_ORIGINS") or "*").split(","),
+    allow_origins=effective_cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -7,6 +7,22 @@ from app import main
 
 
 class SecurityReviewTest(unittest.TestCase):
+    def test_관리형에서_CORS_누락과_와일드카드는_fail_closed(self):
+        with mock.patch.dict(os.environ, {"RENDER": "1"}, clear=False):
+            for value in (None, "", "*"):
+                if value is None:
+                    os.environ.pop("ALLOW_ORIGINS", None)
+                else:
+                    os.environ["ALLOW_ORIGINS"] = value
+                self.assertEqual(main.effective_cors_origins(), [], value)
+
+    def test_관리형에서_명시적_출처만_허용한다(self):
+        with mock.patch.dict(os.environ, {
+            "RENDER": "1",
+            "ALLOW_ORIGINS": "https://a.example, https://b.example",
+        }, clear=False):
+            self.assertEqual(main.effective_cors_origins(), ["https://a.example", "https://b.example"])
+
     def test_기본값에서는_CORS_와_프록시_경고가_나온다(self):
         with mock.patch.dict(os.environ, {"RENDER": "1"}, clear=False):
             os.environ.pop("ALLOW_ORIGINS", None)

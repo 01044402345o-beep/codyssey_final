@@ -58,6 +58,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ANCHOR_HEALTH_URL: ${{ vars.EVIDENCE_HEALTH_URL || 'https://codyssey-final.onrender.com/health' }}
+          ANCHOR_HOSTING_URL: ${{ vars.EVIDENCE_HOSTING_URL || 'https://com-example-myapplicatio-3bb36.web.app' }}
         run: python3 .github/scripts/offsite_anchor.py anchor-result.json
 
       - name: 실패하면 이슈로 알림

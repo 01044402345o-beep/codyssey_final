@@ -80,7 +80,7 @@ python scripts/check_negatives.py
 | `AI_BACKOFF_BASE` / `AI_BACKOFF_MAX` | `0.5` / `4` (초) | 실패 후 대기: 0.5→1→2→4→4… |
 | `AI_CALL_TIMEOUT` | `60` (초) | API 요청 1회의 제한 시간 (전체 제한 시간은 없음) |
 | `AI_MODELS_TTL` | `600` (초) | 모델 목록 캐시 시간 |
-| `ALLOW_ORIGINS` | 프론트 배포 주소 | 기본 `*` |
+| `ALLOW_ORIGINS` | 프론트 배포 주소 | 관리형 배포에서 필수. 비어 있거나 `*`이면 CORS를 닫는다. 로컬에서만 기본 `*` |
 | `EVIDENCE_PUBKEY` | 관리자 공개키 `x25519:<base64url>` | 탈퇴 실패 **증거 봉인**의 수신자 공개키. **없으면 기능 전체가 꺼진다**(기본 꺼짐). 개인키는 관리자 로컬(`tools/opsarchive`)에만 있고 앱은 복호화할 수 없다. `docs/ops/EVIDENCE_SEAL.md` 참조 |
 | `EVIDENCE_KEY_GENERATION` | 정수(기본 1) | 키 회전 세대. `/health` 의 `evidence.generation` 으로 노출되어 핀 검증이 대조한다(회전과 대입 구분) |
 | `EVIDENCE_GH_TOKEN` / `EVIDENCE_GH_REPO` | PAT(`issues:write` 한정) / `owner/repo` | 증거 이슈 통보용. 없으면 보관만 하고 통보는 건너뛴다. 이슈에는 **메타데이터만** 간다 |

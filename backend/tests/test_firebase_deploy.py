@@ -32,6 +32,8 @@ class T(unittest.TestCase):
         # Cloud Run(codyssey-api)은 마감 때문에 보류라 없다 — 없는 서비스로 보내는 rewrite 를 두지 않는다(FIREBASE_DEPLOY.md §0)
         self.assertNotIn("rewrites", cfg["hosting"])
         self.assertEqual(cfg["hosting"]["public"], "mockup")
+        root = next(b for b in cfg["hosting"]["headers"] if b["source"] == "/")
+        self.assertEqual(root["headers"][0], {"key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate"})
         csp_header = next(h for b in cfg["hosting"]["headers"] for h in b["headers"] if h["key"].startswith("Content-Security"))
         self.assertEqual(csp_header["key"], "Content-Security-Policy")
         csp = csp_header["value"]
