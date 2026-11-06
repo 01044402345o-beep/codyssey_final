@@ -2781,3 +2781,14 @@ body.is-narrow .spk-card { border-radius: 12px; }
     padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow);
     font-size: var(--fs-caption, 0.8125rem); font-weight: 400; line-height: 1.45; color: var(--text); white-space: normal; letter-spacing: 0; }
 }
+
+/* 세로가 아주 좁을 때: 카드 아래 점·쪽수·‹ › 줄을 접고 카드 오른쪽 위에 '1 / 5 · 뒤집은 카드 1'(앞·뒷면).
+   줄은 숨기기만 한다(밀어 넘기기가 그 버튼·점을 읽는다). 넘기기는 좌우로 밀기 */
+.face-count { display: none; }
+@media (max-height: 480px) {
+  .pframe .flip ~ .card-nav { display: none; }
+  .face .ctx { position: relative; }
+  .face-count { display: inline-block; margin-inline-start: auto; align-self: center; white-space: nowrap;
+    font-size: var(--fs-caption, 0.75rem); color: var(--text-soft); }
+  .face.back .face-count { color: inherit; opacity: .75; }
+}
