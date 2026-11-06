@@ -4775,12 +4775,14 @@ function studyView(r, opts = {}) {
     ? `<div class="tts-row"><button class="tts-btn" data-act="speak-card">${I.speaker}듣기</button><button class="tts-rate" data-act="rate">${S.ttsRate < 0.9 ? '느리게' : '보통 속도'}</button></div>`
     : `<div class="tts-off">${ttsOffMsg()}</div>`;
   // 완료 안내는 위(제목 아래)로 옮겼다 — 아래쪽은 '회화 연습' 시트 자리다(목업 #97).
+  // 세로가 아주 좁을 때는 카드 아래 점·쪽수·‹ › 줄을 접고 카드 오른쪽 위에 쪽수를 둔다(앞·뒷면 모두). 줄은 숨기기만 한다 — 밀어 넘기기가 그 버튼·점을 쓴다
+  const faceCount = `<span class="face-count" data-live="flipcount-mini">${i + 1} / ${r.ids.length} · 뒤집은 카드 ${S.card.flipped.size}</span>`;
   const inner = `<div class="app-pad">${head}<div class="study-status" data-live="status">${completeBtn(r)}</div>${banner}
     <div class="flip ${S.card.back === S.card.i ? 'flipped' : ''}" data-act="flip">
       <div class="flip-inner">
-        <div class="face front"><div class="ctx">${tag}${aiBadges(s)}${isNew ? '<span class="badge b-new">새 문장</span>' : ''}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
+        <div class="face front"><div class="ctx">${tag}${aiBadges(s)}${isNew ? '<span class="badge b-new">새 문장</span>' : ''}${faceCount}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
           <div class="ko">${phHtml(s.ko)}</div><div class="hint">탭해서 영어 문장 보기 ↻</div></div>
-        <div class="face back"><div class="ctx">${tag}${aiBadges(s)}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
+        <div class="face back"><div class="ctx">${tag}${aiBadges(s)}${faceCount}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
           <div class="en" data-read>${enHtml(s.en)}</div><div class="ko-s">${phHtml(s.ko)}</div>${tts}</div>
       </div>
     </div>
@@ -5023,6 +5025,7 @@ function updateStudyLive() {
   if (fc) fc.textContent = deckAlarmOn(r)
     ? `오늘의 알람 · 문장 ${r.ids.length}개 · 덱 1/${deckLen(r)}`
     : `${deckIdx(r) + 1} / ${r.ids.length} · 뒤집은 카드 ${S.card.flipped.size}`;
+  document.querySelectorAll('[data-live=flipcount-mini]').forEach(e => { e.textContent = `${deckIdx(r) + 1} / ${r.ids.length} · 뒤집은 카드 ${S.card.flipped.size}`; });
   const st = $('[data-live=status]'); if (st) st.innerHTML = completeBtn(r);
   const sm = $('[data-live=status-mini]'); if (sm) sm.innerHTML = completeMini(r);
 }

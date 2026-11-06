@@ -5,6 +5,7 @@
   B 상황별 연습도 같은 방식
   C 세로(390×844)·넓은 화면은 그대로 큰 버튼, 한 줄은 안 보인다
   E 안내 상자('지난 날짜예요'·'완료한 날이에요'·상황별 연습 설명)는 좁을 때 제목 옆 ⓘ 말풍선으로
+  F 카드 아래 점·쪽수·‹ › 줄을 접고 카드 오른쪽 위에 '1 / 5 · 뒤집은 카드 n', 밀어 넘기기는 한 장씩
   D 같은 조건에서 제목 아래 머리를 접고 앱바 제목 자리에 학습은 '날짜 (요일)', 상황별 연습은 상황 이름(세로는 '학습'·'상황별 연습' 그대로)
 """
 import sys
@@ -105,6 +106,40 @@ with sync_playwright() as p:
     pg.evaluate(PAST); pg.wait_for_timeout(600)
     t3 = pg.evaluate(TIP)
     check("E 세로는 안내 상자 그대로, ⓘ 없음", t3["banner"] and not t3["tip"], t3)
+    pg.close()
+    # ── F: 카드 아래 점·쪽수·‹ › 줄을 접고 카드 오른쪽 위에 쪽수(앞·뒷면), 밀어 넘기기는 그대로 한 장씩 ──
+    NAV = """() => { const v = e => !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0;
+      const face = document.querySelector(S.card.back === S.card.i ? '.pmain .face.back' : '.pmain .face.front');
+      const c = face && face.querySelector('.face-count'), fr = face && face.getBoundingClientRect(), cr = c && c.getBoundingClientRect();
+      return { nav: v(document.querySelector('.pmain .card-nav')), count: v(c) ? c.textContent.trim() : null,
+               topRight: !!(cr && fr && cr.right > fr.left + fr.width * 0.6 && cr.top < fr.top + fr.height * 0.35), i: S.card.i }; }"""
+    ctx = b.new_context(viewport={"width": 844, "height": 390}, has_touch=True, is_mobile=True)
+    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
+    cdp = ctx.new_cdp_session(pg)
+    pg.goto(BASE + "/?demo=1&gate=off", timeout=60000); pg.wait_for_timeout(2000)
+    if pg.locator('[data-act="guest"]').count():
+        pg.locator('[data-act="guest"]').first.click(); pg.wait_for_timeout(800)
+    pg.evaluate("try{saveConsentHere(true)}catch(e){}; ensure('plan')")
+    to_drill(pg); pg.evaluate("scrollTo(0, 0)")
+    n0 = pg.evaluate(NAV)
+    check("F 카드 아래 줄(점·쪽수·‹ ›) 접힘, 카드 오른쪽 위에 '1 / 5 · 뒤집은 카드 0'", not n0["nav"] and n0["count"] == "1 / 5 · 뒤집은 카드 0" and n0["topRight"], n0)
+    pg.locator('.pmain .flip').first.click(); pg.wait_for_timeout(400)
+    n1 = pg.evaluate(NAV)
+    check("F 뒤집으면 뒷면 오른쪽 위에 '뒤집은 카드 1'", n1["count"] == "1 / 5 · 뒤집은 카드 1" and n1["topRight"], n1)
+    box = pg.locator(".pmain .flip").first.bounding_box()
+    x0, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x0, "y": y}]})
+    for k in range(1, 7):
+        cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": x0 - 220 * k / 6, "y": y}]}); pg.wait_for_timeout(16)
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []}); pg.wait_for_timeout(600)
+    n2 = pg.evaluate(NAV)
+    check("F 버튼 없이 왼쪽으로 밀면 한 장 넘어가고 쪽수가 '2 / 5'", n2["i"] == 1 and n2["count"] and n2["count"].startswith("2 / 5"), n2)
+    check("F 자바스크립트 오류 없음", not errs, errs[:2])
+    ctx.close()
+    pg, errs = open_page(b, 390, 844)
+    to_drill(pg)
+    n3 = pg.evaluate(NAV)
+    check("F 세로는 카드 아래 줄 그대로, 카드 안 쪽수 없음", n3["nav"] and n3["count"] is None, n3)
     pg.close()
     b.close()
 
