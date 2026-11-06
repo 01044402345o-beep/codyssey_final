@@ -1,6 +1,6 @@
 # Android 에뮬레이터로 배포본 확인하기 (터미널만 사용)
 
-문서 목록: [docs/README.md](../README.md) · 결과 기록: [results.md](results.md) 6.2절
+문서 목록: [docs/README.md](../README.md) · 결과 기록: [user-test/results.md](../user-test/results.md)
 
 Android Studio 없이 **PowerShell 명령만으로** Android SDK·에뮬레이터를 설치하고, 가상 휴대폰의 **실제 Chrome** 에서 배포본(https://codyssey-final.onrender.com)을 열어 확인하는 방법이다. Android 를 한 번도 설치해 본 적 없는 사람을 기준으로 쓴다. 관리자 권한은 필요 없다(가상화가 꺼져 있을 때만 예외 — 5단계).
 

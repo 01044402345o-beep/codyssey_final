@@ -40,7 +40,7 @@
 | 카드 학습·듣기(TTS)·문장 모음 | 동작 | 브라우저 음성 합성 |
 | **말해 보기** — 녹음 → 받아쓰기 → 채점·피드백 | 동작 | `POST /speak-check`, 녹음 전 동의 |
 | 어려워한 상황 **기억** → 다음 생성에 반영 | 동작 | 브라우저 저장. 로그인한 계정은 `PUT /user/state` 로 같은 목록을 서버에도 둔다 |
-| 보고서(관광지·맛집)·방문 순서 AI | 동작 | `POST /research` 가 공개 자료를 조사해 도시별 장소를 만들고, `POST /itinerary`(Google Places, 키가 있을 때)로 실시간 보강. 조사가 꺼진 환경(오프라인 시연)만 예시 목록 + 고지 |
+| 보고서(관광지·맛집)·방문 순서 AI | 부분 | `POST /research` 가 공개 자료를 조사해 도시별 장소를 만들고, `POST /itinerary`(Google Places, 키가 있을 때)로 실시간 보강. 조사가 꺼진 환경(오프라인 시연)만 예시 목록 + 고지 |
 | 장소 직접 추가 | 동작 | 이름을 적으면 `POST /place-check` 가 공개 자료에서 주소·사진을 찾아 확인 창에 보이고, 사용자가 확인한 주소만 문장 생성에 실린다. 하루 검색 한도 초과 시 '대신 직접 입력하기' |
 | 로그인·계정 기록 | 부분 | Firebase 가 설정되면 구글·이메일 로그인. 진도·복습·동의에 더해 **여행 입력(나라·도시·날짜·학습 시작일)**을 서버에 둔다. 장소·문장 본문은 그 입력으로 화면이 규칙을 다시 돌려 만든다. 홈 D-Day 카드에서 그 입력을 고치고, 맨 아래 계정 카드에서 로그아웃한다. 없으면 데모 사용자 |
 
@@ -84,7 +84,7 @@ FastAPI (backend/app/main.py) ─ Render
 
 | 확인 | 방법 | 결과 |
 |---|---|---|
-| 배포 커밋 | `GET /health` → `deploy.commit` | `1546fe6` (platform `render`) |
+| 배포 커밋 | `GET /health` → `deploy.commit` | `6ff2b452d0b2f1e31a7b547b5f4dbcc956f1829d` (platform `render`) |
 | 도시 조사 | `POST /research` | `202 {"status":"running","job_id":…}` — **켜져 있음**(꺼져 있으면 즉시 `unavailable`) |
 | 도시 브리프 | `GET /city-brief?city=Kyoto` | `200`, `confidence:"verified"`, 좌표·절 포함 |
 | 장소 확인·사진 | `POST /place-check` | `200 found`, 주소·좌표·사진 URL·저작자·라이선스 반환 |
@@ -93,7 +93,7 @@ FastAPI (backend/app/main.py) ─ Render
 - **환경에 따라 꺼지는 것**: Google Places 실시간 보강(`GOOGLE_MAPS_API_KEY`), 실시간 통역(`INTERP_PROVIDERS`), 음소 단위 발음 분석(무료 플랜 메모리 한도 때문에 서버에서 끔 — 켜려면 외부 노드 필요).
 - **확인하지 못한 것**: 위 플래그들의 실제 값은 Render 대시보드에만 있어 이 문서에서 단정하지 않는다. 배포 직후 `/health` 와 위 세 응답으로 다시 확인할 것.
 
-## 6. 핵심 AI 활용 (필수 기술 요소 중 3개)
+## 7. 핵심 AI 활용 (필수 기술 요소 중 3개)
 
 ### 6-1. AI Agent — 생성 → 검증 → 재생성 (`/generate`)
 - 담당자별 **카테고리 계약**(상황 목록·프롬프트·좋은 예·금지 예)으로 프롬프트를 만든다.
@@ -120,7 +120,7 @@ FastAPI (backend/app/main.py) ─ Render
 - 서버는 그 상황의 문장이 실제로 생성됐는지 검증한다(`weak_not_covered` 이면 재생성).
 - 한계: 브라우저(기기)별 저장이라 다른 기기에서는 이어지지 않는다.
 
-## 7. AI 윤리
+## 8. AI 윤리
 
 - AI 가 만든 문장에는 **'AI 생성'**, 규칙으로 만든 샘플에는 **'샘플'** 배지가 붙는다. 조사한 장소에는 출처(위키보이지·위키데이터 등)가 함께 붙고, 예시로 채운 경우에만 예시라고 고지한다.
 - 말하기는 선택 기능이다. **처음 녹음할 때 동의**를 받는다. 동의 창에는 다음을 적는다.
@@ -129,7 +129,7 @@ FastAPI (backend/app/main.py) ─ Render
 - 거부해도 나머지 기능은 그대로 쓸 수 있다. 홈 "AI · 개인정보" 카드에서 철회하면 복습 목록도 지운다.
 - 서버는 녹음을 저장하지 않는다. 말소리가 없으면 외부 AI 로 보내지 않는다.
 
-## 8. 실행 방법
+## 9. 실행 방법
 
 ### 요구사항
 - Python 3.11, Node.js 20(프론트 단위 테스트), Playwright(E2E, 선택)
@@ -152,14 +152,14 @@ uvicorn app.main:app --reload      # http://127.0.0.1:8000  (화면도 같은 �
 ### 테스트
 ```bash
 cd backend
-python -m unittest discover -s tests -t .          # 백엔드 227
+python -m unittest discover -s tests -t .          # 백엔드 705 (2026-11-06 실행: failures=1, skipped=3)
 python scripts/check_negatives.py                   # 카테고리 금지 예 검사
-node --test ../mockup/ai.test.js                    # 프론트 34 (tokens.test.js 7)
+node --test ../mockup/ai.test.js                    # 프론트 63 (tokens.test.js 7)
 # E2E (서버를 켠 뒤)
 python ../e2e/test_silence.py http://localhost:8000 && python ../e2e/test_consent.py http://localhost:8000
 ```
 
-## 9. 결과
+## 10. 결과
 
 ### 말하기 채점 — 배포 서버 실측 (`docs/measurement/score_측정_실행법.md`)
 | 입력 | 처음 구조 (Gemini 에 녹음 + 목표 문장) | 현재 (신경망 VAD 2개 + 전용 STT 교차검증) |
@@ -177,10 +177,10 @@ python ../e2e/test_silence.py http://localhost:8000 && python ../e2e/test_consen
 - 점수는 '두 전사 모두에서 들린 단어 일치율'이다. 음소·억양 같은 발음 품질은 재지 않는다.
 - Whisper 가 학습자 오류를 교정해 받아쓸 수 있다.
 - 두 검출기 AND 는 작게 말하거나 서툰 발화를 놓칠 수 있다.
-- 예시 장소는 관광지·맛집뿐이다. 화면은 장소 종류로 카테고리를 정하지만(`mockup/ai.js` `categoryOfKind`), 관광지는 계약 밖이라 생성 요청은 식당만 나간다. 교통·숙소 계약은 서버에 있다.
+- 예시 장소는 관광지·맛집뿐이다. 화면은 장소 종류로 카테고리를 정하지만(`mockup/ai.js` `categoryOfKind`), 장소 종류에 따라 관광지·식당·교통·숙소 4개 계약으로 요청이 나간다.
 - Render 무료 플랜은 콜드스타트가 있다. 서버를 재시작하면 모델 상태 기억이 사라진다.
 
-## 10. 문서
+## 11. 문서
 
 | 문서 | 내용 |
 |---|---|
