@@ -2764,3 +2764,20 @@ body.is-narrow .spk-card { border-radius: 12px; }
   .appbar .ab-short { display: inline; }
   .pframe:has(.appbar .ab-short) .study-head { display: none; }
 }
+
+.study-banner { margin-bottom: 10px; }
+/* 세로가 아주 좁을 때: 안내 상자('지난 날짜예요'·'완료한 날이에요' 등)를 접고 제목(날짜·상황) 옆 ⓘ 말풍선으로 */
+@media (max-height: 480px) {
+  .pframe:has(.appbar .ab-tip) .study-banner { display: none; }
+  .appbar .ab-short { display: inline-flex; align-items: center; gap: 2px; }
+  .appbar h2:has(.ab-tip) { overflow: visible; }
+  .ab-tip-wrap { position: relative; display: inline-flex; }
+  .ab-tip { display: inline-grid; place-items: center; min-width: 44px; min-height: 44px; margin: -10px -8px; padding: 0;
+    background: none; border: 0; color: var(--text-soft); cursor: pointer; }
+  .ab-tip svg { width: 18px; height: 18px; }
+  .ab-tip.warn { color: var(--on-sun-soft-2); }
+  .ab-tip[aria-expanded="true"] { color: var(--accent-text); }
+  .ab-tip-pop { position: absolute; top: calc(100% + 8px); left: -8px; z-index: 60; width: max-content; max-width: min(300px, 70vw);
+    padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow);
+    font-size: var(--fs-caption, 0.8125rem); font-weight: 400; line-height: 1.45; color: var(--text); white-space: normal; letter-spacing: 0; }
+}

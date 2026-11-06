@@ -3370,7 +3370,16 @@ const appbar = (title, o = {}) => `<div class="appbar">${o.back ? `<button class
 /* 발음기호 코스 입구 — 학습·상황별 연습 화면 우측 상단. 물어본 뒤에도 계속 남는다. */
 /* mini: 세로가 아주 좁을 때(가로 폰) 완료 안내 버튼 대신 발음기호 옆에 작게 보이는 한 줄(completeMini). 평소에는 CSS 가 숨긴다 */
 /* 앱바 제목 두 벌: 평소에는 full, 세로가 아주 좁을 때(≤480px)는 short — 그때 제목 아래 머리(.study-head)를 접고 그 내용을 앱바로 올린다 */
-const abTitle = (full, short) => short ? `<span class="ab-full">${full}</span><span class="ab-short">${short}</span>` : full;
+/* tip: 그 화면의 안내 상자('지난 날짜예요' 등)를 접었을 때 제목 옆 ⓘ 를 누르면 말풍선으로 보인다(studyTip) */
+const abTitle = (full, short, tip = null) => short ? `<span class="ab-full">${full}</span><span class="ab-short">${short}${tip ? `<span class="ab-tip-wrap"><button class="ab-tip ${tip.kind || ''}" data-act="ab-tip" aria-label="안내 보기" aria-expanded="false">${I.info}</button><span class="ab-tip-pop" role="tooltip" hidden>${tip.text}</span></span>` : ''}</span>` : full;
+/* 학습 화면 안내 상자의 말을 한 곳에서 — 상자(banner)와 앱바 말풍선(abTitle tip)이 같은 말을 쓴다 */
+function studyTip(r) {
+  if (r.kind === 'drill') return { text: '문장 모음에서 고른 묶음이에요. 완료율에는 들어가지 않아요.', kind: 'plain' };
+  if (S.today > S.trip.tripEnd) return { text: '여행이 끝나 더 이상 완료 처리할 수 없어요.', kind: 'plain' };
+  if (r.completed) return { text: '완료한 날이에요. 다시 학습해도 완료 상태는 유지돼요.', kind: 'plain' };
+  if (rowStatus(r) === 'miss') return { text: '지난 날짜예요. 지금 학습하면 완료로 기록돼요.', kind: 'warn' };
+  return null;
+}
 const ipaEntryBtn = (mini = '') => `${mini ? `<span class="done-mini" data-live="status-mini" role="status">${mini}</span>` : ''}<button class="act ipa-btn" data-act="ipa-open" aria-label="발음기호 안내"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V7a2 2 0 0 1 2-2h5l8 14h-5L9 12"/><circle cx="17.5" cy="6.5" r="1.4" fill="currentColor" stroke="none"/></svg><span>발음기호</span></button>`;
 const pastEntryBtn = () => `<button class="act" data-act="past-go" aria-label="이전 여행 보기">${I.past}<span>이전 여행</span></button>`;
 const notice = (html, kind = '') => `<div class="notice ${kind}">${kind === 'warn' || kind === 'bad' ? I.alert : I.info}<div>${html}</div></div>`;
@@ -4698,13 +4707,13 @@ function scrSplit(tab) {
   let detail = `<div class="empty">일정이 없어요</div>`;
   if (r) { const v = studyView(r, { inline: true }); detail = `${v.inner}${v.bottom ? `<div class="bottombar">${v.bottom}</div>` : ''}`; }
   return frame(`<div class="split"><div class="split-list">${calHtml(true)}${schedListHtml(r ? r.date : null)}</div><div class="split-detail">${detail}</div></div>`,
-    { appbar: appbar(tab === 'u-study' ? abTitle('학습', r ? Dt.full(r.date) : '') : '일정표', { act: tab === 'u-study' ? ipaEntryBtn(r ? completeMini(r) : '') : pastEntryBtn() }), tabbar: true, tab, wide: true });
+    { appbar: appbar(tab === 'u-study' ? abTitle('학습', r ? Dt.full(r.date) : '', r ? studyTip(r) : null) : '일정표', { act: tab === 'u-study' ? ipaEntryBtn(r ? completeMini(r) : '') : pastEntryBtn() }), tabbar: true, tab, wide: true });
 }
 
 /* 덱의 첫 장 — 오늘의 알람 카드. 뒤집기·진도 집계 없음 */
 function alarmView(r, head, banner) {
   const pr = progress(), total = deckLen(r);
-  return { inner: `<div class="app-pad">${head}${banner ? banner + '<div style="height:10px"></div>' : ''}
+  return { inner: `<div class="app-pad">${head}${banner}
       ${alarmCard(pr, { inDeck: true })}
       <div class="card-nav"><button class="round" data-act="card-prev" disabled>${I.back}</button>
         <div style="text-align:center"><div class="dots">${r.ids.map((_, k) => `<i class="${k === 0 ? 'cur' : ''}"></i>`).join('')}</div>
@@ -4720,12 +4729,9 @@ function studyView(r, opts = {}) {
     ? `<div class="study-head"><div><div class="small">문장 모음에서 고른 묶음 · 완료율에는 들어가지 않아요</div><b style="font-size:1.1875rem">${esc(r.label)}</b></div><span class="badge ${KIND.drill.cls}">${KIND.drill.label}</span></div>`
     : `<div class="study-head"><div><div class="small">${r.phase === 'trip' ? `${esc(r.day.city)} · ${r.day.types.map(ty => DAYTYPE[ty].label).join('·')}` : '여행 전 학습'}</div>
     <b style="font-size:1.1875rem">${Dt.full(r.date)}</b></div><span class="badge ${KIND[r.kind].cls}">${KIND[r.kind].label}</span></div>`;
-  let banner = '';
-  if (r.kind === 'drill') banner = '';
-  else if (ended) banner = notice('여행이 끝나 더 이상 완료 처리할 수 없어요.', 'plain');
-  else if (r.completed) banner = notice('완료한 날이에요. 다시 학습해도 완료 상태는 유지돼요.', 'plain');
-  /* 미래 날짜 안내는 아래 완료 버튼 옆으로 옮겼다 — 같은 말을 두 곳에서 하지 않는다 */
-  else if (st === 'miss') banner = notice('지난 날짜예요. 지금 학습하면 완료로 기록돼요.', 'warn');
+  /* 미래 날짜 안내는 아래 완료 버튼 옆으로 옮겼다 — 같은 말을 두 곳에서 하지 않는다. 상황별 연습은 머리에 같은 말이 있어 상자를 두지 않는다 */
+  const tip = r.kind === 'drill' ? null : studyTip(r);
+  const banner = tip ? `<div class="study-banner">${notice(tip.text, tip.kind)}</div>` : '';
 
   // 오늘의 알람이 먼저다 — '아직 학습일이 아니에요'(미래 날짜 확인)보다 앞에 둔다. 알람을 넘기면 그다음에 확인이 나온다.
   if (deckAlarmOn(r)) return alarmView(r, head, banner);
@@ -4769,7 +4775,7 @@ function studyView(r, opts = {}) {
     ? `<div class="tts-row"><button class="tts-btn" data-act="speak-card">${I.speaker}듣기</button><button class="tts-rate" data-act="rate">${S.ttsRate < 0.9 ? '느리게' : '보통 속도'}</button></div>`
     : `<div class="tts-off">${ttsOffMsg()}</div>`;
   // 완료 안내는 위(제목 아래)로 옮겼다 — 아래쪽은 '회화 연습' 시트 자리다(목업 #97).
-  const inner = `<div class="app-pad">${head}<div class="study-status" data-live="status">${completeBtn(r)}</div>${banner ? banner + '<div style="height:10px"></div>' : ''}
+  const inner = `<div class="app-pad">${head}<div class="study-status" data-live="status">${completeBtn(r)}</div>${banner}
     <div class="flip ${S.card.back === S.card.i ? 'flipped' : ''}" data-act="flip">
       <div class="flip-inner">
         <div class="face front"><div class="ctx">${tag}${aiBadges(s)}${isNew ? '<span class="badge b-new">새 문장</span>' : ''}</div><div class="sit" style="margin-top:8px">${esc(s.situation)}</div>
@@ -4880,13 +4886,13 @@ async function ipaAskOnce() {
 function scrStudy() {
   if (S.drill) {   // 상황별 연습: 넓은 화면에서도 일정 목록 없이 카드만 (뒤로 → 문장 모음)
     const v = studyView(S.drill);
-    return frame(v.inner, { appbar: appbar(abTitle('상황별 연습', esc(S.drill.label)), { back: 'u-coll', act: ipaEntryBtn(completeMini(S.drill)) }), bottom: v.bottom, tabbar: false, tab: 'u-study' });
+    return frame(v.inner, { appbar: appbar(abTitle('상황별 연습', esc(S.drill.label), studyTip(S.drill)), { back: 'u-coll', act: ipaEntryBtn(completeMini(S.drill)) }), bottom: v.bottom, tabbar: false, tab: 'u-study' });
   }
   if (isWide()) return scrSplit('u-study');
   const r = pickRow();
   if (!r) return frame(`<div class="empty">일정이 없어요</div>`, { appbar: appbar('학습', { back: 'u-sched', act: ipaEntryBtn() }), tabbar: true, tab: 'u-study' });
   const v = studyView(r);
-  return frame(v.inner, { appbar: appbar(abTitle('학습', Dt.full(r.date)), { back: 'u-sched', act: ipaEntryBtn(completeMini(r)) }), bottom: v.bottom || undefined, tabbar: v.tabbar, tab: 'u-study' });
+  return frame(v.inner, { appbar: appbar(abTitle('학습', Dt.full(r.date), studyTip(r)), { back: 'u-sched', act: ipaEntryBtn(completeMini(r)) }), bottom: v.bottom || undefined, tabbar: v.tabbar, tab: 'u-study' });
 }
 /* 발음기호 코스 화면. 카드 한 장에 기호 하나 — 기호·한국어 이름·조음 방법·최소대립쌍.
    최소대립쌍은 '듣기'로 두 단어를 번갈아 들을 수 있게 한다(기호보다 귀가 먼저다). */
@@ -6684,6 +6690,12 @@ const ACT = {
   },
   'card-prev': () => { cancelSpeak(); S.sheet = false; const r = pickRow(); if (r) deckStep(r, -1); render(); },
   'card-next': () => { cancelSpeak(); S.sheet = false; const r = pickRow(); if (r) deckStep(r, 1); render(); },
+  /* 앱바 ⓘ: 접은 안내 상자를 말풍선으로 열고 닫는다(다시 그리지 않고 그 자리에서) */
+  'ab-tip': el => {
+    const pop = el.parentElement.querySelector('.ab-tip-pop'); if (!pop) return;
+    const open = pop.hidden;
+    pop.hidden = !open; el.setAttribute('aria-expanded', open ? 'true' : 'false');
+  },
   'speak-card': el => { const r = pickRow(); speak(S.smap[r.ids[deckIdx(r)]].en, el, readTarget(el)); },
   speak: el => speak(S.smap[el.dataset.id].en, el, readTarget(el)),
   'live-start': () => { loadLiveProviders(); startLive(); },
@@ -6845,6 +6857,9 @@ const ACT = {
   'cs-reset': () => { S.commonsDraft = JSON.parse(JSON.stringify(S.commons)); render(); },
 };
 
+document.addEventListener('click', e => {   // 말풍선 밖을 누르면 닫는다
+  if (!e.target.closest('.ab-tip-wrap')) document.querySelectorAll('.ab-tip-pop:not([hidden])').forEach(p => { p.hidden = true; const b = p.parentElement.querySelector('.ab-tip'); if (b) b.setAttribute('aria-expanded', 'false'); });
+}, true);
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
