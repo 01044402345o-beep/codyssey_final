@@ -5363,6 +5363,7 @@ const ilogDay = ms => { const d = new Date(ms); return `${d.getFullYear()}-${Str
 const ilogTime = ms => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 function ilogCard(x, open) {
   const n = x.lines.length, route = x.trip && x.trip.route ? x.trip.route : '여행 없이';
+  const canTts = ttsState() === 'ok';   // 카톡 인앱처럼 TTS 가 막힌 곳에서 죽은 버튼을 그리지 않는다
   /* 접힌 카드에서 30개를 구분할 단서가 시각뿐이었다(경로 부제는 같은 여행이면 전부 같다).
      내가 한 말을 먼저 보여 준다 — 상대방 발화가 목록에 늘 노출되지 않게. */
   const peekLine = x.lines.find(l => l.s === 'ko') || x.lines[0];
@@ -5370,7 +5371,10 @@ function ilogCard(x, open) {
       <div><span class="ilog-who ${l.s === 'ko' ? 'me' : 'other'}">${l.s === 'ko' ? '나' : '상대'} · ${LANG_NAME[l.s] || l.s}</span>
         <p class="ilog-src" lang="${esc(l.s)}">${esc(l.src)}</p>
         <p class="ilog-dst" lang="${esc(l.t)}">${esc(l.dst)}</p></div>
-      <button class="ilog-cp" data-act="ilog-copy" data-id="${esc(x.id)}:${i}" aria-label="이 줄 번역 복사 — ${l.s === 'ko' ? '나' : '상대'} 말 ${i + 1}번째">복사</button>
+      <span class="ilog-acts">
+        ${canTts ? `<button class="ilog-cp ilog-play" data-act="ilog-speak" data-id="${esc(x.id)}:${i}" aria-label="이 줄 번역을 소리로 듣기 — ${l.s === 'ko' ? '나' : '상대'} 말 ${i + 1}번째">${I.speaker}</button>` : ''}
+        <button class="ilog-cp" data-act="ilog-copy" data-id="${esc(x.id)}:${i}" aria-label="이 줄 번역 복사 — ${l.s === 'ko' ? '나' : '상대'} 말 ${i + 1}번째">복사</button>
+      </span>
     </div>`).join('');
   return `<article class="ilog-card" data-live="ilog-${esc(x.id)}">
     <button class="ilog-head" data-act="ilog-open" data-id="${esc(x.id)}" aria-expanded="${open ? 'true' : 'false'}">
@@ -6838,6 +6842,15 @@ const ACT = {
     /* 접을 때는 높이가 줄어 브라우저가 스크롤을 위로 당긴다 → 그 머리가 있던 자리에 그대로 붙여 둔다 */
     ILOG_LAND = { id, scroll: !closing, backTo: closing ? Math.round(window.scrollY) : null };
     render();
+  },
+  'ilog-speak': (el, e) => {
+    const [sid, i] = el.dataset.id.split(':');
+    const x = ilogLoad().find(v => v.id === sid), ln = x && x.lines[+i];
+    if (!ln) return;
+    /* 듣기는 영어 발음 연습용이다. 상대가 한 말이면 영어 원문, 내가 한 말이면 그 번역(영어)을 읽는다. */
+    const en = ln.s === 'en' ? ln.src : ln.t;
+    if (!en || !/[A-Za-z]/.test(en)) { toast('이 줄은 영어 문장이 없어 들을 수 없어요.'); return; }
+    speak(en, el);
   },
   'ilog-copy': el => {
     const [sid, i] = el.dataset.id.split(':');
