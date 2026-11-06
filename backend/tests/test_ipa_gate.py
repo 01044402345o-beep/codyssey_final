@@ -97,3 +97,21 @@ class EndpointTest(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ThrottleTest(Base):
+    """인증 없는 쓰기(POST /ipa/gate)는 IP 당 분당 30번까지 — 반복 호출로 파일 쓰기를 몰아 서버를 세우지 못하게(보안 점검 A1)."""
+
+    def test_thirty_per_minute_per_ip(self) -> None:
+        for _ in range(self.m.THROTTLE_PER_MIN):
+            self.assertFalse(self.m._throttled("203.0.113.9"))
+        self.assertTrue(self.m._throttled("203.0.113.9"))          # 31번째는 막힌다
+        self.assertFalse(self.m._throttled("198.51.100.4"))        # 다른 IP 는 따로 센다
+
+    def test_window_slides(self) -> None:
+        with mock.patch.object(self.m.time, "time", return_value=1000.0):
+            for _ in range(self.m.THROTTLE_PER_MIN):
+                self.m._throttled("203.0.113.9")
+            self.assertTrue(self.m._throttled("203.0.113.9"))
+        with mock.patch.object(self.m.time, "time", return_value=1061.0):
+            self.assertFalse(self.m._throttled("203.0.113.9"))     # 1분이 지나면 다시 된다

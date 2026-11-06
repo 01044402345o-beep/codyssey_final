@@ -19,11 +19,29 @@
   const norm = v => String(v ?? '').trim().toLowerCase();
 
   /* ---------- 서버 주소 ----------
-     ?api=https://host 는 이번 방문에서만 쓰고 저장하지 않는다. 녹음이 전송될 서버를 바꾸므로 external 로 알린다.
+     ?api=https://host 는 이번 방문에서만 쓰고 저장하지 않는다(개발용 — localhost·사설망에서만 인정).
+     녹음이 전송될 서버를 바꾸므로 external 로 알린다.
      http(s) 로 열렸으면 같은 출처(''), file:// 이면 null(폴백 전용). */
   /* Firebase Hosting(*.web.app · *.firebaseapp.com)은 화면(정적 파일)만 낸다 — API·통역 WebSocket 은 Render 서버로 간다.
      Hosting에서 ?api=로 임의 서버를 지정하면 ID 토큰·음성이 외부로 갈 수 있으므로 무시한다. */
   const HOSTED_API = 'https://codyssey-final.onrender.com';
+  /* ?api= 는 **개발용**이다. 배포된 화면이 임의 주소를 받아들이면, 로그인한 사람이
+     `…web.app/?api=https://attacker` 링크 한 번만 열어도 ID 토큰(1시간)과 학습 기록·여행 입력·
+     통역 기록·녹음이 공격자에게 간다. 게다가 그 토큰만으로 계정 삭제까지 가능하다.
+     그래서 '내 기기에서 연 화면'일 때만 인정한다 — localhost·127.0.0.1·사설망·.local·file://.
+     폰에서 LAN 주소로 띄우는 시험은 계속 되고, 남의 링크로는 서버가 바뀌지 않는다. */
+  function devOrigin(loc) {
+    const proto = loc.protocol || '';
+    if (proto === 'file:') return true;
+    const host = String(loc.hostname || '').replace(/^\[|\]$/g, '').toLowerCase();
+    if (!host) return false;
+    if (host === 'localhost' || host === '::1' || host === '127.0.0.1') return true;
+    if (/\.local$/.test(host)) return true;
+    if (/^10\./.test(host)) return true;
+    if (/^192\.168\./.test(host)) return true;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
+    return false;
+  }
   function apiBase(loc) {
     const protocol = loc.protocol || '';
     const own = protocol === 'http:' || protocol === 'https:';
@@ -34,6 +52,7 @@
     }
     let raw = null;
     try { raw = new URLSearchParams(loc.search || '').get('api'); } catch (e) { raw = null; }
+    if (raw && !devOrigin(loc)) raw = null;   // 배포된 화면에서는 주소를 바꾸는 링크를 무시한다
     if (raw) {
       try {
         const u = new URL(raw);

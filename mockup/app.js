@@ -4040,7 +4040,7 @@ function scrGen() {
   const failed = /_failed$/.test(t.status), stale = isStale(), requested = /_requested$/.test(t.status);
   const stepList = `<ul class="steps">${g.steps.map((s, i) => {
     const st = failed || stale ? (i < g.step ? 'done' : '') : requested ? '' : i < g.step || (g.stuck && i === g.step) ? (g.stuck && i === g.step ? 'now' : 'done') : i === g.step ? 'now' : '';
-    return `<li class="${st}"><span class="ic">${st === 'done' ? '✓' : ''}</span>${s}</li>`;
+    return `<li class="${st}"><span class="ic">${st === 'done' ? '✓' : ''}</span>${esc(s)}</li>`;   // s 에 국가·도시 이름이 들어간다
   }).join('')}</ul>`;
   let head, extra = '', bottom = '';
   if (failed) {
