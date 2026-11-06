@@ -9,20 +9,27 @@ const AI = require('./ai.js');
 const sent = (o = {}) => ({ situation_id: 'order_menu', situation: '주문', en: 'A table for two, please.', ko: '두 명이요.', ...o });
 const res = (o = {}) => ({ pack: { category_id: 'restaurant', city: 'New York', sentences: [sent()] }, issues: [], attempts: 1, mock: false, usable: 'ok', ...o });
 
-test('apiBase: ?api= 는 저장하지 않고 external 로 표시, file:// 은 폴백 전용', () => {
-  assert.deepEqual(AI.apiBase({ protocol: 'https:', host: 'a.onrender.com', origin: 'https://a.onrender.com', search: '' }), { base: '', external: false, host: 'a.onrender.com' });
-  const ext = AI.apiBase({ protocol: 'https:', host: 'a.onrender.com', origin: 'https://a.onrender.com', search: '?api=https://evil.example' });
-  assert.equal(ext.base, 'https://evil.example'); assert.equal(ext.external, true);
-  assert.equal(AI.apiBase({ protocol: 'file:', host: '', origin: 'null', search: '' }).base, null);
-  // Firebase Hosting 에서 열면 화면만 Firebase, API 는 Render(외부 서버 안내 없음). ?api= 가 있으면 그것이 먼저
+test('apiBase: ?api= 는 개발 출처에서만 인정 — 배포된 화면이 링크로 서버를 바꾸지 못한다', () => {
+  /* 보안 회귀 방지. 예전에는 배포된 화면에서도 ?api= 를 그대로 받아들여,
+     …web.app/?api=https://attacker 링크 한 번으로 로그인 토큰과 기록이 공격자에게 갔다. */
+  const at = (protocol, host, search, hostname) => AI.apiBase({ protocol, host, hostname: hostname || host, origin: protocol + '//' + host, search });
+  assert.deepEqual(at('https:', 'a.onrender.com', ''), { base: '', external: false, host: 'a.onrender.com' });
+  // 배포된 출처에서는 ?api= 를 무시한다(개발용 링크가 남의 화면에서 서버를 바꾸지 못하게)
+  assert.equal(at('https:', 'a.onrender.com', '?api=https://evil.example').base, '');
+  assert.equal(at('https:', 'x.web.app', '?api=https://evil.example').base, 'https://codyssey-final.onrender.com');
   for (const host of ['com-example-myapplicatio-3bb36.web.app', 'com-example-myapplicatio-3bb36.firebaseapp.com']) {
-    assert.deepEqual(AI.apiBase({ protocol: 'https:', host, hostname: host, origin: 'https://' + host, search: '' }),
+    assert.deepEqual(at('https:', host, ''),
       { base: 'https://codyssey-final.onrender.com', external: false, host: 'codyssey-final.onrender.com' }, host);
   }
-  assert.equal(AI.apiBase({ protocol: 'https:', host: 'x.web.app', hostname: 'x.web.app', origin: 'https://x.web.app', search: '?api=https://evil.example' }).base, 'https://evil.example');
-  assert.equal(AI.apiBase({ protocol: 'https:', host: 'web.app.evil.example', hostname: 'web.app.evil.example', origin: 'https://web.app.evil.example', search: '' }).base, '');
-  assert.equal(AI.apiBase({ protocol: 'file:', host: '', origin: 'null', search: '?api=javascript:alert(1)' }).base, null);
-  assert.equal(AI.apiBase({ protocol: 'https:', host: 'a', origin: 'https://a', search: '?api=ftp://x' }).base, '');
+  assert.equal(at('https:', 'web.app.evil.example', '').base, '');
+  // 개발 출처(localhost·사설망)에서는 그대로 인정한다 — 폰에서 LAN 서버로 시험하는 길을 막지 않는다
+  const dev = at('http:', 'localhost:8000', '?api=http://192.168.0.9:8000', 'localhost');
+  assert.equal(dev.base, 'http://192.168.0.9:8000'); assert.equal(dev.external, true);
+  assert.equal(at('http:', '127.0.0.1:8911', '?api=https://evil.example', '127.0.0.1').base, 'https://evil.example');
+  // 스킴은 여전히 http(s) 만
+  assert.equal(at('http:', 'localhost', '?api=ftp://x', 'localhost').base, '');
+  assert.equal(at('file:', '', '').base, null);
+  assert.equal(at('file:', '', '?api=javascript:alert(1)').base, null);
 });
 
 test('응답 분기: degraded 우선 폐기 → mock:true 샘플 → mock:false AI → 그 외 폴백', () => {
