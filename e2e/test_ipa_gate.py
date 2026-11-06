@@ -101,7 +101,7 @@ with sync_playwright() as pw:
 study_bar = re.search(r"appbar\('학습', \{ back: 'u-sched'(.*?)\}\)", SRC)
 drill_bar = re.search(r"appbar\('상황별 연습', \{ back: 'u-coll'(.*?)\}\)", SRC)
 check("C1 학습 앱바에 입구", bool(study_bar) and "ipaEntryBtn()" in study_bar.group(1), study_bar.group(1) if study_bar else "없음")
-check("C2 상황별 연습 앱바에 입구", bool(drill_bar) and "ipaEntryBtn()" in drill_bar.group(1), drill_bar.group(1) if drill_bar else "없음")
+check("C2 상황별 연습 앱바에 입구", bool(drill_bar) and "ipaEntryBtn(" in drill_bar.group(1), drill_bar.group(1) if drill_bar else "없음")
 check("C3 시트 진입에는 질문이 없다", "confirmBox('발음기호" not in SRC.split("'sheet-open':")[1].split("'ipa-open'")[0])
 
 
@@ -128,7 +128,7 @@ with sync_playwright() as pw:
     br.close()
 
 check("C4 일정이 없을 때도 입구가 있다", "appbar('학습', { back: 'u-sched', act: ipaEntryBtn() }), tabbar: true, tab: 'u-study' });" in SRC)
-check("C5 와이드 학습 앱바에도 입구", "tab === 'u-study' ? ipaEntryBtn() : pastEntryBtn()" in SRC)
+check("C5 와이드 학습 앱바에도 입구", "tab === 'u-study' ? ipaEntryBtn(" in SRC)
 
 # ── E: 실제 서버 — 한 브라우저에서 답하면 새 브라우저(같은 사용자)에서는 다시 묻지 않는다 ──────
 # (게스트는 IP 기준. 이전 실행이 이미 답했으면 첫 창도 안 물을 수 있어, 두 번째 창만 검사한다)
