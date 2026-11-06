@@ -2700,14 +2700,19 @@ const IL_ICON = {
   expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 15v5h-5M20 9V4h-5M4 15v5h5"/></svg>',
   close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   pause: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5v14M15 5v14"/></svg>',
+  hear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9v6"/><path d="M8 5v14"/><path d="M12 8v8"/><path d="M16 11v2"/><path d="M20 6v12"/></svg>',
   swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 4v13M8 17l-3-3M8 17l3-3M16 20V7M16 7l-3 3M16 7l3 3"/></svg>',
 };
+/* 언어 이름은 한 곳에서만 정한다. 화면에 '한국어/영어'를 직접 쓰지 않는다 — 언어가 늘면 여기만 고친다. */
+const LANG_NAME = { ko: '한국어', en: '영어', ja: '일본어', zh: '중국어', es: '스페인어', fr: '프랑스어', de: '독일어' };
+const langName = code => LANG_NAME[code] || String(code || '').toUpperCase();
 const interpUiThumb = id => `<span class="il-thumb t-${id}" aria-hidden="true"><i></i><i></i></span>`;
 const LIVE = { on: false, ws: null, stream: null, ctx: null, proc: null, src: null, dst: null,
   status: '', note: '', test: false, provider: '', cap: { source: '', target: '', sp: '', tp: '' }, q: [], playing: false,
   providers: null, pick: null, paused: false, partner: false, hist: [],
   ui: '', uiOpen: false, log: [], logStay: false,
   level: 0, muted: false, mode: '', worklet: null, srcNode: null, raf: 0, gen: 0, bargeUntil: 0, speech: false,
+  recorder: null, recChunks: [], recFrom: 0, recTo: 0, hearUrl: '',
   exclude: [], restart: '', fallback: false,             // 자동 전환: 실패한 엔진은 빼고 다음 엔진, 다 실패하면 검수 문장으로
   browserOk: null, rec: null, tr: null, speaker: 'me' };  // 브라우저 엔진(데스크톱 Chrome·Edge, 기기 안 처리일 때만)
 const livePick = () => LIVE.pick || (() => { try { return localStorage.getItem(INTERP_PROVIDER_KEY) || ''; } catch (e) { return ''; } })();
@@ -2752,7 +2757,7 @@ function interpUiChipsHtml(ui) {
 function liveFarHtml(l) {
   const c = l.cap;
   return `<div class="conv-partner" data-act="live-partner">
-    <span class="conv-who">상대에게 보여주기 · ${esc(l.dst === 'ko' ? '한국어' : '영어')}</span>
+    <span class="conv-who">상대에게 보여주기 · ${esc(langName(l.dst))}</span>
     <p class="conv-big" lang="${esc(l.dst)}">${esc(c.target) || '<span class="conv-empty">말하면 여기에 상대 언어로 나와요</span>'}<span class="live-partial">${esc(liveTail(c))}</span></p>
     <span class="conv-ai" lang="${esc(l.dst)}">${esc(partnerAiLabel(l.dst))}</span><span class="conv-tap">눌러서 크게 ›</span>
   </div>`;
@@ -2762,7 +2767,7 @@ const liveTail = c => (c.tp && (!c.target || c.tp.startsWith(c.target))) ? c.tp.
 function liveNearHtml(l) {
   const c = l.cap;
   return `<div class="conv-me">
-    <span class="conv-who">내가 한 말 · ${esc(l.src === 'ko' ? '한국어' : '영어')}<span class="live-meter" data-live="meter" aria-hidden="true"><i></i></span>${l.mode ? `<span class="live-mode">${l.mode === 'worklet' ? '오디오 스레드' : '기본'}</span>` : ''}${l.muted ? '<span class="live-muted">음소거</span>' : ''}</span>
+    <span class="conv-who">내가 한 말 · ${esc(langName(l.src))}<span class="live-meter" data-live="meter" aria-hidden="true"><i></i></span>${l.mode ? `<span class="live-mode">${l.mode === 'worklet' ? '오디오 스레드' : '기본'}</span>` : ''}${l.muted ? '<span class="live-muted">듣지 않음</span>' : ''}</span>
     <p class="conv-small" lang="${esc(l.src)}">${esc(c.source)}<span class="live-partial">${esc(c.sp)}</span></p>
   </div>`;
 }
@@ -2783,7 +2788,7 @@ function liveBodyHtml(l) {
         <p class="il-log-dst" lang="${esc(l.dst)}">${esc(l.cap.target)}<span class="live-partial">${esc(l.cap.tp)}</span></p></li>` : '';
     const empty = !rows.length && !cur ? '<li class="il-log-empty">마이크를 켜고 말하면 원문과 번역이 차례로 쌓여요.</li>' : '';
     return `<div class="il-listen">
-      <div class="il-pair"><span>${esc(l.src === 'ko' ? '한국어' : '영어')}</span><span class="il-arrow" aria-hidden="true">→</span><span>${esc(l.dst === 'ko' ? '한국어' : '영어')}</span></div>
+      <div class="il-pair"><span>${esc(langName(l.src))}</span><span class="il-arrow" aria-hidden="true">→</span><span>${esc(langName(l.dst))}</span></div>
       <ul class="il-log" data-live="log">${empty}${rows.join('')}${cur}</ul>
     </div>`;
   }
@@ -2843,10 +2848,14 @@ function interpLiveFullHtml() {
     </div>
     <div class="il-body">${liveBodyHtml(l)}</div>
     <div class="il-dock">
-      <button class="il-mic ${l.muted ? 'off' : ''}" data-act="live-mute" aria-pressed="${l.muted ? 'true' : 'false'}" aria-label="${l.muted ? '마이크 켜기' : '마이크 끄기'}">${l.muted ? IL_ICON.micOff : IL_ICON.mic}</button>
+      <!-- 듣기 하나로 합친 버튼: 누르면 듣기/멈춤이 함께 바뀐다. 켜져 있으면 점 3개가 흐른다. -->
+      <button class="il-mic ${l.muted ? 'off' : 'listening'}" data-act="live-listen" aria-pressed="${l.muted ? 'false' : 'true'}" aria-label="${l.muted ? '듣기 다시 시작' : '듣기 멈추기 (마이크 끄기)'}">
+        <span class="il-mic-ic">${l.muted ? IL_ICON.micOff : IL_ICON.mic}</span>
+        <span class="il-live-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      </button>
       <div class="il-acts">
         <button class="il-act" data-act="live-play" title="번역문을 들려주기" aria-label="번역문 들려주기" ${l.cap.target ? '' : 'disabled'}>${I.speaker}<span class="il-act-txt">들려주기</span></button>
-        <button class="il-act" data-act="live-pause" aria-label="${l.paused ? '다시 듣기' : '잠시 멈춤'}">${IL_ICON.pause}<span class="il-act-txt">${l.paused ? '다시 듣기' : '잠시 멈춤'}</span></button>
+        <button class="il-act" data-act="live-hear" title="방금 내가 말한 소리 다시 듣기" aria-label="인식된 음성 들어보기">${IL_ICON.hear}<span class="il-act-txt">내 음성</span></button>
         <button class="il-act" data-act="live-stop" aria-label="통역 끝내기">${IL_ICON.close}<span class="il-act-txt">끝내기</span></button>
       </div>
       ${l.provider === 'browser' ? `<button class="il-act il-turn" data-act="live-turn">${l.speaker === 'me' ? '지금: 내가 말해요 → 상대 차례로' : '지금: 상대가 말해요 → 내 차례로'}</button>` : ''}
@@ -3180,7 +3189,13 @@ function liveMeter() {
   const bar = document.querySelector('[data-live="meter"] i');
   const lv = Math.min(1, LIVE.level * 6);              // 화면용 스케일(RMS 0.17 ≈ 가득)
   if (bar) bar.style.width = (LIVE.muted ? 0 : Math.round(lv * 100)) + '%';
+  if (!LIVE.recorder && LIVE.stream) liveRecStart();   // 스트림이 준비된 첫 프레임에 시작
   const speaking = !LIVE.muted && LIVE.level > 0.045;
+  if (speaking) {                                       // 마지막 발화 구간을 기억한다
+    const now = Date.now();
+    if (!LIVE.recFrom || now - (LIVE.recTo || 0) > 1200) LIVE.recFrom = now;
+    LIVE.recTo = now;
+  }
   if (speaking !== LIVE.speech) {
     LIVE.speech = speaking;
     const box = document.querySelector('.conv-me'); if (box) box.classList.toggle('speaking', speaking);
@@ -3196,7 +3211,46 @@ function liveBarge() {
   LIVE.playingNode = null; LIVE.playing = false;
   LIVE.bargeUntil = performance.now() + 900;   // 곧 도착할 이전 조각도 버린다
 }
+/* 방금 말한 소리를 다시 들려주기 위한 고리 버퍼. 같은 스트림을 한 번 더 녹음한다(메모리에만).
+   청크마다 도착 시각을 붙여 두고, 마지막 발화 구간만 잘라 재생한다. */
+function liveRecStart() {
+  liveRecStop();
+  if (typeof MediaRecorder === 'undefined' || !LIVE.stream) return;
+  const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(m => MediaRecorder.isTypeSupported?.(m));
+  let r = null;
+  try { r = new MediaRecorder(LIVE.stream, mime ? { mimeType: mime } : undefined); } catch (e) { return; }
+  LIVE.recChunks = [];
+  r.ondataavailable = ev => {
+    if (!ev.data || !ev.data.size) return;
+    LIVE.recChunks.push({ t: Date.now(), b: ev.data });
+    if (LIVE.recChunks.length > 80) LIVE.recChunks.shift();   // 400ms × 80 ≈ 32초
+  };
+  try { r.start(400); LIVE.recorder = r; } catch (e) { LIVE.recorder = null; }
+}
+function liveRecStop() {
+  try { if (LIVE.recorder && LIVE.recorder.state !== 'inactive') { LIVE.recorder.ondataavailable = null; LIVE.recorder.stop(); } } catch (e) { /* 이미 끝남 */ }
+  LIVE.recorder = null; LIVE.recChunks = []; LIVE.recFrom = 0; LIVE.recTo = 0;
+  try { if (LIVE.hearUrl) URL.revokeObjectURL(LIVE.hearUrl); } catch (e) { /* 없음 */ }
+  LIVE.hearUrl = '';
+}
+/* 마지막으로 말한 구간만 잘라 재생한다. 1.2초 넘게 조용하면 새 발화로 본다. */
+function liveHearLast() {
+  const now = Date.now();
+  const to = LIVE.recTo || now;
+  const from = LIVE.recFrom || Math.max(0, to - 8000);
+  const parts = LIVE.recChunks.filter(c => c.t >= from - 400 && c.t <= to + 600).map(c => c.b);
+  if (!parts.length) { toast('방금 말한 소리를 아직 담지 못했어요. 조금 더 크게 말해 보세요.'); return; }
+  if (now - to > 20000) { toast('말한 지 20초가 넘어 지웠어요. 다시 말해 주세요.'); return; }
+  let url = '';
+  try { url = URL.createObjectURL(new Blob(parts, { type: parts[0].type || 'audio/webm' })); } catch (e) { toast('소리를 준비하지 못했어요.'); return; }
+  try { if (LIVE.hearUrl) URL.revokeObjectURL(LIVE.hearUrl); } catch (e) { /* 없음 */ }
+  LIVE.hearUrl = url;
+  stopTts();
+  const a = new Audio(url);
+  a.play().catch(() => toast('소리를 재생하지 못했어요.'));
+}
 function stopLive(note) {
+  liveRecStop();
   const had = LIVE.on;
   browserStop();
   LIVE.on = false; LIVE.status = ''; LIVE.provider = '';
@@ -5178,7 +5232,6 @@ function ilogSyncCard() {
 const ilogSessions = () => ilogLoad().filter(x => x.lines && x.lines.length).slice().sort((a, b) => b.at - a.at);
 const ilogDay = ms => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };   // 기기 시간대의 날짜(UTC 날짜와 시각이 어긋나지 않게)
 const ilogTime = ms => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
-const LANG_NAME = { ko: '한국어', en: '영어' };
 function ilogCard(x, open) {
   const n = x.lines.length, route = x.trip && x.trip.route ? x.trip.route : '여행 없이';
   const lines = x.lines.map((l, i) => `<div class="ilog-line">
@@ -6605,7 +6658,18 @@ const ACT = {
     try { if (LIVE.worklet) LIVE.worklet.port.postMessage(LIVE.muted ? 'mute' : 'unmute'); } catch (e) { /* 없음 */ }
     updateLiveUi();
   },
+  /* 듣기 하나로 합쳤다 — 마이크 끄기와 잠시 멈춤을 따로 두면 무엇을 눌러야 할지 헷갈린다.
+     켜기: 트랙·워클릿을 되살리고 멈춤도 푼다. 끄기: 둘 다 멈춘다. */
+  'live-listen': () => {
+    const off = !LIVE.muted;
+    LIVE.muted = off; LIVE.paused = off;
+    try { if (LIVE.stream) LIVE.stream.getAudioTracks().forEach(t => { t.enabled = !off; }); } catch (e) { /* 트랙 없음 */ }
+    try { if (LIVE.worklet) LIVE.worklet.port.postMessage(off ? 'mute' : 'unmute'); } catch (e) { /* 없음 */ }
+    if (off) stopTts();
+    updateLiveUi();
+  },
   'live-pause': () => { LIVE.paused = !LIVE.paused; if (LIVE.paused) stopTts(); updateLiveUi(); },
+  'live-hear': () => liveHearLast(),
   'live-partner': () => { LIVE.partner = true; updateLiveUi(); },
   'live-expand': () => { LIVE.partner = true; updateLiveUi(); },
   'live-ui-open': () => { LIVE.uiOpen = true; updateLiveUi(); },
