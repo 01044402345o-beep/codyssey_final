@@ -3,7 +3,7 @@
 탈퇴가 **완료되지 않았거나 단계가 하나라도 생략/실패**하면, 그 시점의 상태를 **아무도 풀 수 없는 형태로 봉인**해
 비공개 저장소에 격리하고, GitHub 이슈로는 **메타데이터만** 통보한다. 관리자만 개인키로 열람할 수 있다.
 
-이 문서는 **구상 + 런북**이다. **지금 구현된 것은 관리자 CLI(`tools/opsarchive/`)와 앱 훅(`backend/app/evidence.py`)·`/diagnostics/withdraw`·`/health` 지문 노출이고, 앱 훅(`backend/app/evidence.py`)·원장·사후 검증·`/health` 의 지문 노출도 함께 있다** — §3·§4·§7 은 다음 단계의 설계다. 없는 것을 "있다"고 읽게 두지 않는다.
+이 문서는 **구상 + 런북**이다. **지금 구현된 것은 관리자 CLI(`tools/opsarchive/`), 앱 훅(`backend/app/evidence.py` — 원장·사후 검증 결과를 함께 담는다), `POST /diagnostics/withdraw`, `/health` 의 지문 노출이다** — §3·§4·§7 이 그 구현의 설명이다(2026-11-06 코드 확인). 없는 것을 "있다"고 읽게 두지 않는다.
 
 ---
 

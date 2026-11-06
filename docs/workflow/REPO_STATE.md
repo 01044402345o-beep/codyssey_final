@@ -40,7 +40,7 @@
 ├── e2e/                  Playwright 시나리오. 터치 제스처·말하기·동의 검사 포함
 ├── docs/                 현행 요구사항, 반응형, 배포, 연구, 측정, 사용자 테스트,
 │                         AGENT_WORKFLOW.md, REPO_STATE.md
-└── (other/ 는 이 작업 트리에 없음)
+└── other/                (저장소에 없음 — 팀원 로컬 자료. 아래는 그 로컬 사본의 구성)
     └── Project261000/
         ├── codyssey_final/   루트보다 오래된 사본 (lodging.json 없음)
         ├── design/           디자인 가이드.dc.html (2026-10-08), 반응형 전략.dc.html, 반응형 전략 v2.dc.html

@@ -75,8 +75,8 @@ curl -s -H "X-Admin-Token: $HEALTH_DETAIL_TOKEN" https://<앱>.onrender.com/heal
 | `status` | `"ok"` | `degraded` → `config_problems` 확인 (F03) |
 | `config_problems` | `[]` | 내용에 따라 F02 / F03 |
 | `schema_checker` | `true` | `false` → jsonschema 미설치 (F03) |
-| `categories` | `["restaurant"]` | `[]` → **경로 버그, 즉시 중단** (F02) |
-| `situations` | restaurant 10개 | 비었으면 카테고리 파일 문제 |
+| `categories` | `["attraction","lodging","restaurant","transport"]` | `[]` → **경로 버그, 즉시 중단** (F02) |
+| `situations` | 카테고리마다 10개 | 비었으면 카테고리 파일 문제 |
 | `contract_dir` | `.../codyssey_final/agent_contract` | `backend/agent_contract`면 경로 버그 (F02) |
 | `has_api_key` | `true` | `false` → F04 |
 | `stt_providers.groq` | `true` | `false` → 말하기가 목업. Render 에 `GROQ_API_KEY` |
@@ -149,10 +149,10 @@ curl -s -H "X-Admin-Token: $HEALTH_DETAIL_TOKEN" https://<앱>.onrender.com/heal
 ### F04. `has_api_key: false` (목업으로 돌고 있음)
 
 - **증상**: `/generate` 응답이 `mock: true`, `usable: "sample"`. 실제 AI가 아님
-- **확인**: `/health`의 `has_api_key`
+- **확인**: `/health` 상세(헤더 `X-Admin-Token`)의 `has_api_key`
 - **즉시 조치**
   1. Render → Environment → `GEMINI_API_KEY` 등록 (값 붙여넣기 후 저장 → 자동 재시작)
-  2. 재시작 후 `/health`에서 `has_api_key: true`
+  2. 재시작 후 `/health` 상세에서 `has_api_key: true`
   3. `POST /generate` → `mock: false` 확인
 - **롤백**: 해당 없음
 - **주의 (중요)**: `/generate`가 `mock: true`인 상태로 시연하면 **"AI가 동작한다"고 말하면 안 됩니다.**
@@ -442,7 +442,7 @@ firebase deploy --only firestore:rules     # 프로젝트: .firebaserc 의 com-e
 
 | 시각 | 할 일 | 확인 |
 |---|---|---|
-| **T-60분** | `/health` 예열 + 게이트 통과 확인 | `status: ok`, `categories: ["restaurant"]`, `has_api_key: true` |
+| **T-60분** | `/health` 예열 + 게이트 통과 확인 | `status: ok`, `categories` 4개(attraction·lodging·restaurant·transport), (상세 토큰으로) `has_api_key: true` |
 | **T-45분** | `/generate` 1회 실제 호출 | `mock: false`, `usable: "ok"`, `degraded` 없음 |
 | **T-30분** | `/speak-check` 실제 녹음 1회 | `usable: true`, `heard` 비어 있지 않음 |
 | **T-25분** | 프론트 열어 전체 흐름 1회 통과 | 입력 → 생성 → 카드 → 녹음 → 진도 |

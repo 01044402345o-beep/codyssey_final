@@ -35,7 +35,7 @@
 | `include_secrets` | 안전 | toggle | `False` | `EVIDENCE_INCLUDE_SECRETS` | 필요 | ✘ |
 
 - `choice` 옵션 라벨: `observe` = 60분/6시간/24시간, `anchor_interval` = 1시간/6시간/24시간/수동(`0`).
-- `number` 단위 표시(`_UNITS`, 108행): `daily_cap`=회, `per_uid_seconds`=초, `ttl_days`=일.
+- `number` 단위 표시(`workflow.py` `_UNITS`): `daily_cap`=회, `per_uid_seconds`=초, `ttl_days`=일.
 - `action` 노드는 값을 갖지 않는다(편집 불가, `[이 노드 실행]` 만 가능).
 
 ---
@@ -46,11 +46,11 @@
 
 | 노드 id | 미는 env | 값 형식 | 앱이 읽는가 | 앱 근거(evidence.py) | 앱 기본값 |
 |---|---|---|---|---|---|
-| `seal_failures` | `EVIDENCE_SEAL_FAILURES` | `"1"`/`"0"` (toggle) | **예 — `0` 이면 봉인하지 않는다** | evidence.py 에 문자열 없음(봉인 on/off 는 `EVIDENCE_PUBKEY` 유무로 결정) | — |
-| `daily_cap` | `EVIDENCE_DAILY_CAP` | 정수 (`str(값)`) | 예 | 523행 `_int_env("EVIDENCE_DAILY_CAP", 5)` | **5** (서버 감지 예산. 화면 보고는 `EVIDENCE_CLIENT_DAILY_CAP` 별도) |
-| `per_uid_seconds` | `EVIDENCE_PER_UID_SECONDS` | 정수 | 예 | 525행 `_int_env("EVIDENCE_PER_UID_SECONDS", 3600)` | **3600** (노드 기본 60과 다름) |
-| `ttl_days` | `EVIDENCE_TTL_DAYS` | 정수 | 예 | 399·464·562행 `_int_env("EVIDENCE_TTL_DAYS", 90)` | **90** (노드 기본 30과 다름) |
-| `include_secrets` | `EVIDENCE_INCLUDE_SECRETS` | `"1"`/`"0"` | 예 (문자열 `"1"` 일 때만) | 167행 `os.getenv("EVIDENCE_INCLUDE_SECRETS") == "1"` | 꺼짐 |
+| `seal_failures` | `EVIDENCE_SEAL_FAILURES` | `"1"`/`"0"` (toggle) | **예 — `"0"` 이면 봉인하지 않는다** | `seal_and_report` 의 `os.getenv("EVIDENCE_SEAL_FAILURES") == "0"`(그 밖에 `EVIDENCE_PUBKEY` 가 없어도 봉인하지 않는다) | 켜짐 |
+| `daily_cap` | `EVIDENCE_DAILY_CAP` | 정수 (`str(값)`) | 예 | `_int_env("EVIDENCE_DAILY_CAP", 5)` | **5** (서버 감지 예산. 화면 보고는 `EVIDENCE_CLIENT_DAILY_CAP` 별도) |
+| `per_uid_seconds` | `EVIDENCE_PER_UID_SECONDS` | 정수 | 예 | `_int_env("EVIDENCE_PER_UID_SECONDS", 3600)` | **3600** (노드 기본도 3600) |
+| `ttl_days` | `EVIDENCE_TTL_DAYS` | 정수 | 예 | `_int_env("EVIDENCE_TTL_DAYS", 90)` | **90** (노드 기본도 90) |
+| `include_secrets` | `EVIDENCE_INCLUDE_SECRETS` | `"1"`/`"0"` | 예 (문자열 `"1"` 일 때만) | `os.getenv("EVIDENCE_INCLUDE_SECRETS") == "1"` | 꺼짐 |
 | `issue_notify` | (없음, `env=None`) | — | — | 노드가 아무 env 도 밀지 않음 | — |
 | `client_report` | (없음, `env=None`) | — | — | 노드가 아무 env 도 밀지 않음 | — |
 
@@ -58,7 +58,7 @@
 `EVIDENCE_PUBKEY`, `EVIDENCE_KEY_GENERATION`, `EVIDENCE_GH_TOKEN`, `EVIDENCE_GH_REPO`,
 `EVIDENCE_MAX_BYTES`, `EVIDENCE_MAX_SOURCE_BYTES`, `EVIDENCE_MAX_LOGS_BYTES`.
 
-주의: `daily_cap`/`per_uid_seconds`/`ttl_days` 는 **노드 기본값과 앱 기본값이 다르다**. 노드 기본값과 앱 기본값이 같다(5/3600/90). 저장하지 않고 반영해도 의도한 값이 들어간다.
+참고: `daily_cap`/`per_uid_seconds`/`ttl_days` 는 노드 기본값과 앱 기본값이 같다(5/3600/90, `workflow.py` 노드 정의와 `evidence.py` 기준 2026-11-06 확인). 저장하지 않고 반영해도 앱 기본값과 같은 값이 들어간다.
 
 ---
 
