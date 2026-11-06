@@ -22,7 +22,7 @@ from typing import Any, Callable, Optional
 from . import config
 
 ALLOWED_HOSTS = frozenset({
-    "en.wikivoyage.org", "query.wikidata.org",
+    "en.wikivoyage.org", "query.wikidata.org", "query.wikidata.org",
     "ko.wikipedia.org", "en.wikipedia.org", "www.wikidata.org",      # 백업 경로(agents/city_research — GET /city-brief)
     "api.open-meteo.com", "archive-api.open-meteo.com",
     "api.frankfurter.dev", "api.geoapify.com", "api.tavily.com", "places.googleapis.com",
@@ -31,7 +31,7 @@ ALLOWED_HOSTS = frozenset({
     "zh.wikivoyage.org",                                                # 다른 언어판 위키보이지(sources/wikivoyage_intl)
     "apis.data.go.kr",                                                  # 한국관광공사 TourAPI(sources/tourapi)
     "upload.wikimedia.org",                                             # 장소 확인 창 사진(위키미디어 공용 썸네일, GET /place-photo)
-    "commons.wikimedia.org",                                            # 그 사진의 저작자·라이선스(CC BY-SA 표시, place_check.commons_meta)
+    "commons.wikimedia.org",                                            # 그 사진의 저작자·라이선스(CC BY-SA 표시, place_check.commons_meta · commons_geosearch)
     "thumb.wikimedia.org",                                              # 공용 API 가 주는 썸네일 주소(GET /place-photo)
     "nominatim.openstreetmap.org",                                      # 장소 확인 창 주소(좌표 → 주소, place_check._reverse)
 })
