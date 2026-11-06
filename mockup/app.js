@@ -3369,6 +3369,8 @@ function pframe(inner, o = {}) {
 const appbar = (title, o = {}) => `<div class="appbar">${o.back ? `<button class="back" data-act="tab" data-id="${o.back}">${I.back}</button>` : ''}<h2>${title}</h2>${o.step ? `<span class="step">${o.step}</span>` : ''}${o.act || ''}</div>`;
 /* 발음기호 코스 입구 — 학습·상황별 연습 화면 우측 상단. 물어본 뒤에도 계속 남는다. */
 /* mini: 세로가 아주 좁을 때(가로 폰) 완료 안내 버튼 대신 발음기호 옆에 작게 보이는 한 줄(completeMini). 평소에는 CSS 가 숨긴다 */
+/* 앱바 제목 두 벌: 평소에는 full, 세로가 아주 좁을 때(≤480px)는 short — 그때 제목 아래 머리(.study-head)를 접고 그 내용을 앱바로 올린다 */
+const abTitle = (full, short) => short ? `<span class="ab-full">${full}</span><span class="ab-short">${short}</span>` : full;
 const ipaEntryBtn = (mini = '') => `${mini ? `<span class="done-mini" data-live="status-mini" role="status">${mini}</span>` : ''}<button class="act ipa-btn" data-act="ipa-open" aria-label="발음기호 안내"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V7a2 2 0 0 1 2-2h5l8 14h-5L9 12"/><circle cx="17.5" cy="6.5" r="1.4" fill="currentColor" stroke="none"/></svg><span>발음기호</span></button>`;
 const pastEntryBtn = () => `<button class="act" data-act="past-go" aria-label="이전 여행 보기">${I.past}<span>이전 여행</span></button>`;
 const notice = (html, kind = '') => `<div class="notice ${kind}">${kind === 'warn' || kind === 'bad' ? I.alert : I.info}<div>${html}</div></div>`;
@@ -4696,7 +4698,7 @@ function scrSplit(tab) {
   let detail = `<div class="empty">일정이 없어요</div>`;
   if (r) { const v = studyView(r, { inline: true }); detail = `${v.inner}${v.bottom ? `<div class="bottombar">${v.bottom}</div>` : ''}`; }
   return frame(`<div class="split"><div class="split-list">${calHtml(true)}${schedListHtml(r ? r.date : null)}</div><div class="split-detail">${detail}</div></div>`,
-    { appbar: appbar(tab === 'u-study' ? '학습' : '일정표', { act: tab === 'u-study' ? ipaEntryBtn(r ? completeMini(r) : '') : pastEntryBtn() }), tabbar: true, tab, wide: true });
+    { appbar: appbar(tab === 'u-study' ? abTitle('학습', r ? Dt.full(r.date) : '') : '일정표', { act: tab === 'u-study' ? ipaEntryBtn(r ? completeMini(r) : '') : pastEntryBtn() }), tabbar: true, tab, wide: true });
 }
 
 /* 덱의 첫 장 — 오늘의 알람 카드. 뒤집기·진도 집계 없음 */
@@ -4878,13 +4880,13 @@ async function ipaAskOnce() {
 function scrStudy() {
   if (S.drill) {   // 상황별 연습: 넓은 화면에서도 일정 목록 없이 카드만 (뒤로 → 문장 모음)
     const v = studyView(S.drill);
-    return frame(v.inner, { appbar: appbar('상황별 연습', { back: 'u-coll', act: ipaEntryBtn(completeMini(S.drill)) }), bottom: v.bottom, tabbar: false, tab: 'u-study' });
+    return frame(v.inner, { appbar: appbar(abTitle('상황별 연습', esc(S.drill.label)), { back: 'u-coll', act: ipaEntryBtn(completeMini(S.drill)) }), bottom: v.bottom, tabbar: false, tab: 'u-study' });
   }
   if (isWide()) return scrSplit('u-study');
   const r = pickRow();
   if (!r) return frame(`<div class="empty">일정이 없어요</div>`, { appbar: appbar('학습', { back: 'u-sched', act: ipaEntryBtn() }), tabbar: true, tab: 'u-study' });
   const v = studyView(r);
-  return frame(v.inner, { appbar: appbar('학습', { back: 'u-sched', act: ipaEntryBtn(completeMini(r)) }), bottom: v.bottom || undefined, tabbar: v.tabbar, tab: 'u-study' });
+  return frame(v.inner, { appbar: appbar(abTitle('학습', Dt.full(r.date)), { back: 'u-sched', act: ipaEntryBtn(completeMini(r)) }), bottom: v.bottom || undefined, tabbar: v.tabbar, tab: 'u-study' });
 }
 /* 발음기호 코스 화면. 카드 한 장에 기호 하나 — 기호·한국어 이름·조음 방법·최소대립쌍.
    최소대립쌍은 '듣기'로 두 단어를 번갈아 들을 수 있게 한다(기호보다 귀가 먼저다). */

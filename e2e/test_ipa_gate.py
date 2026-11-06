@@ -99,7 +99,7 @@ with sync_playwright() as pw:
 
 # ── C: 소스 계약 — 두 화면 모두 앱바에 입구를 단다 ──────────────────
 study_bar = re.search(r"appbar\('학습', \{ back: 'u-sched'(.*?)\}\)", SRC)
-drill_bar = re.search(r"appbar\('상황별 연습', \{ back: 'u-coll'(.*?)\}\)", SRC)
+drill_bar = re.search(r"appbar\((?:abTitle\()?'상황별 연습'.*?\{ back: 'u-coll'(.*?)\}\)", SRC)
 check("C1 학습 앱바에 입구", bool(study_bar) and "ipaEntryBtn()" in study_bar.group(1), study_bar.group(1) if study_bar else "없음")
 check("C2 상황별 연습 앱바에 입구", bool(drill_bar) and "ipaEntryBtn(" in drill_bar.group(1), drill_bar.group(1) if drill_bar else "없음")
 check("C3 시트 진입에는 질문이 없다", "confirmBox('발음기호" not in SRC.split("'sheet-open':")[1].split("'ipa-open'")[0])

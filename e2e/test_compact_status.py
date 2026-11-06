@@ -4,6 +4,7 @@
   A 가로 폰(844×390·568×320): 큰 안내 버튼 숨김, 발음기호 옆 한 줄(n/m), 카드를 뒤집으면 숫자가 바로 바뀐다
   B 상황별 연습도 같은 방식
   C 세로(390×844)·넓은 화면은 그대로 큰 버튼, 한 줄은 안 보인다
+  D 같은 조건에서 제목 아래 머리를 접고 앱바 제목 자리에 학습은 '날짜 (요일)', 상황별 연습은 상황 이름(세로는 '학습'·'상황별 연습' 그대로)
 """
 import sys
 from playwright.sync_api import sync_playwright
@@ -21,7 +22,8 @@ def check(name, cond, extra=""):
 STATE = """() => { const vis = e => !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0;
   const m = document.querySelector('.appbar .done-mini'), ipa = document.querySelector('.appbar .ipa-btn');
   return { mini: vis(m) ? m.textContent.trim() : null, full: vis(document.querySelector('.study-status')),
-           nextToIpa: !!(m && ipa && m.nextElementSibling === ipa), hs: document.documentElement.scrollWidth - document.documentElement.clientWidth }; }"""
+           nextToIpa: !!(m && ipa && m.nextElementSibling === ipa), title: document.querySelector('.appbar h2').innerText.trim(),
+           head: vis(document.querySelector('.study-head')), hs: document.documentElement.scrollWidth - document.documentElement.clientWidth }; }"""
 
 
 def open_page(b, w, h):
@@ -56,18 +58,24 @@ with sync_playwright() as p:
         s1 = pg.evaluate(STATE)
         check(f"A {w}x{h} 카드를 뒤집으면 한 줄 숫자가 바로 바뀐다", s1["mini"] and "1/" in s1["mini"], s1)
         check(f"A {w}x{h} 가로 스크롤 없음", s1["hs"] <= 0, s1)
+        check(f"D {w}x{h} 학습: 머리('여행 전 학습'·'새 문장') 접힘, 앱바 제목이 '날짜 (요일)'",
+              not s1["head"] and s1["title"] != "학습" and "(" in s1["title"] and "/" in s1["title"], s1)
         to_drill(pg)
         d = pg.evaluate(STATE)
         check(f"B {w}x{h} 상황별 연습도 한 줄(봤어요)", not d["full"] and d["mini"] and "봤어요" in d["mini"], d)
+        label = pg.evaluate("S.drill.label")
+        check(f"D {w}x{h} 상황별 연습: 머리 접힘, 앱바 제목이 상황 이름", not d["head"] and d["title"] == label, [d, label])
         check(f"{w}x{h} 자바스크립트 오류 없음", not errs, errs[:2])
         pg.close()
     pg, errs = open_page(b, 390, 844)
     to_study(pg)
     s = pg.evaluate(STATE)
     check("C 세로 화면은 큰 안내 버튼 그대로, 한 줄은 안 보인다", s["full"] and s["mini"] is None, s)
+    check("D 세로 학습: 머리 그대로, 앱바 제목 '학습'", s["head"] and s["title"] == "학습", s)
     to_drill(pg)
     s = pg.evaluate(STATE)
     check("C 세로 상황별 연습도 그대로", s["full"] and s["mini"] is None, s)
+    check("D 세로 상황별 연습: 머리 그대로, 앱바 제목 '상황별 연습'", s["head"] and s["title"] == "상황별 연습", s)
     check("C 자바스크립트 오류 없음", not errs, errs[:2])
     pg.close()
     b.close()
