@@ -2744,3 +2744,14 @@ body.is-narrow .spk-card { border-radius: 12px; }
   .pframe .app-pad { padding-bottom: 8px; }
   .pnav { overscroll-behavior: contain; }   /* 레일 안 스크롤이 문서 스크롤로 번지지 않게(iOS 실기기에서 '홈'이 밀려나던 화면 대비) */
 }
+
+/* ===== 세로가 아주 좁을 때(≤480px, 가로 폰): 완료 안내 버튼을 접고 앱바 발음기호 옆에 한 줄로 =====
+   제목 아래 큰 버튼(약 64px)이 카드를 밀어내던 자리. 내용(n/m·완료 조건)은 그대로 작게 보인다. */
+.done-mini { display: none; }
+@media (max-height: 480px) {
+  .pframe:has(.appbar .done-mini) .study-status { display: none; }
+  .appbar .done-mini { display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 0; margin-inline-start: auto; margin-inline-end: 8px;
+    font-size: var(--fs-caption, 0.75rem); color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .appbar .done-mini + .ipa-btn { margin-inline-start: 0; }
+  .done-mini-btn { min-height: 44px; padding: 0 6px; font: inherit; font-weight: 700; color: var(--accent-text); background: none; border: 0; }
+}
