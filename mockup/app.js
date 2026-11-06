@@ -6256,35 +6256,92 @@ function withdrawProofBlock() {
   return `<div class="card" style="margin-top:10px">
     <b>${title}</b>
     <div class="small" style="margin:6px 0">${detail}</div>
-    <div class="small" style="opacity:.75">챌린지 ${esc(String(info.proof.challenge).slice(0, 16))}… · 순번 ${esc(seq)} · 결과 ${esc(String(receipt.outcome || '-'))}</div>
+    <div class="small" style="opacity:.75">챌린지 ${esc(String(info.proof.challenge).slice(0, 16))}… · 순번 ${esc(seq)} · 결과 ${esc(String(receipt.outcome || '-'))} · ${receipt.signed === true ? '서버 서명 있음' : '서명 없음'}</div>
     <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
       <button class="btn soft" data-act="proof-download">증명 내려받기</button>
+      <button class="btn soft" data-act="proof-open">증명 열기</button>
       ${confirmed ? '' : '<button class="btn soft" data-act="proof-report">서버에 보고</button>'}
       <button class="btn soft" data-act="proof-clear">이 기기에서 지우기</button>
     </div></div>`;
 }
-function downloadWithdrawProof() {
-  const info = withdrawProofState();
-  if (info.state === 'none') return;
-  const payload = JSON.stringify({
-    schema: 'SEAL-RECEIPT-v1', exported_at: new Date().toISOString(),
+/* 증명 내보내기 — **내려받은 파일은 기기 밖으로 나가는 유일한 사본**이다(메일·USB 로 옮긴다).
+   TLS 는 전송 중만 지키므로, 여기서는 파일 자체를 사용자 암호로 잠근다(AES-256-GCM + PBKDF2).
+   암호를 잊으면 열 수 없다는 것을 확인 창에서 분명히 말한다. */
+function proofPayload(info) {
+  return {
+    schema: 'SEAL-RECEIPT-v2', exported_at: new Date().toISOString(),
     challenge: info.proof.challenge, requested_at: new Date(info.proof.at).toISOString(),
     receipt: info.proof.receipt || null,
     note: info.proof.receipt
       ? '이 파일을 보관하세요. 관리자가 앵커된 기록과 대조할 수 있습니다.'
       : '서버 영수증을 받지 못했습니다(상태 불명). 관리자에게 이 파일을 보여 주세요.',
-  }, null, 2);
+  };
+}
+function saveProofFile(text, name) {
   try {
-    const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
     const link = document.createElement('a');
-    link.href = url;
-    link.download = 'withdraw-proof-' + String(info.proof.challenge).slice(0, 12) + '.json';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    link.href = url; link.download = name;
+    document.body.appendChild(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast('증명 파일을 내려받았어요. 기기를 바꾸기 전에 보관해 두세요.');
   } catch (e) { toast('이 브라우저에서는 파일로 저장할 수 없어요.'); }
+}
+function downloadWithdrawProof(plain) {
+  const info = withdrawProofState();
+  if (info.state === 'none') return;
+  const payload = proofPayload(info);
+  const base = 'withdraw-proof-' + String(info.proof.challenge).slice(0, 12);
+  if (plain) { saveProofFile(JSON.stringify(payload, null, 2), base + '.json'); return; }
+  confirmBox('증명 파일에 암호를 걸까요?',
+    `<b>이 파일은 기기 밖으로 나가는 유일한 사본이에요.</b> 메일·USB 로 옮기면 그대로 읽힐 수 있어서, 암호로 잠글 수 있어요(AES-256-GCM).<br><br>
+     <input class="ip" id="proof-pw" type="password" autocomplete="new-password" placeholder="암호 (8자 이상)" style="width:100%;margin:6px 0">
+     <span class="small">암호를 잊으면 이 파일은 복구되지 않아요. 관리자도 열 수 없습니다.</span><br><br>
+     <button class="btn soft" data-act="proof-plain" style="width:100%">암호 없이 저장</button>`,
+    '암호 걸고 저장', async () => {
+      const el = document.querySelector('#proof-pw');
+      const pw = el ? el.value : '';
+      if (!pw || pw.length < 8) { toast('암호는 8자 이상으로 정해 주세요.'); return; }
+      S.modal = null; render();
+      const r = await ProofCrypto.seal(payload, pw);
+      if (!r.ok) { toast(r.reason === 'short' ? '암호는 8자 이상으로 정해 주세요.' : '이 브라우저에서는 암호를 걸 수 없어요.'); return; }
+      saveProofFile(JSON.stringify(r.envelope, null, 2), base + '.seal.json');
+    });
+}
+/* 증명 열기 — 잠근 파일을 그 자리에서 확인한다. 못 여는 파일이면 이유를 말해 준다. */
+function openWithdrawProof() {
+  if (!ProofCrypto.canSeal()) { toast('이 브라우저에서는 열 수 없어요. 컴퓨터에서 열어 주세요.'); return; }
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.addEventListener('change', () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    const fr = new FileReader();
+    fr.onload = () => {
+      let doc; try { doc = JSON.parse(String(fr.result)); } catch (e) { toast('JSON 파일이 아니에요.'); return; }
+      if (!doc || doc.schema !== ProofCrypto.ENC_SCHEMA) {
+        confirmBox('증명 파일', `<span class="small">암호가 걸리지 않은 파일이에요. 서명은 관리자에게 확인받으세요.</span><pre class="proof-pre" style="white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;font-size:.6875rem;line-height:1.5;background:var(--surface-2);padding:10px;border-radius:10px;margin:8px 0 0">${esc(JSON.stringify(doc, null, 2).slice(0, 1200))}</pre>`, '닫기', () => { S.modal = null; render(); });
+        return;
+      }
+      confirmBox('암호를 넣어 주세요',
+        `<input class="ip" id="proof-pw2" type="password" autocomplete="current-password" placeholder="암호" style="width:100%;margin:6px 0">`,
+        '열기', async () => {
+          const el = document.querySelector('#proof-pw2');
+          const pw = el ? el.value : '';
+          S.modal = null; render();
+          const r = await ProofCrypto.open(doc, pw);
+          if (!r.ok) { toast('열지 못했어요. 암호가 다르거나 파일이 바뀌었어요.'); return; }
+          const rc = r.data.receipt || {};
+          confirmBox('증명 내용',
+            `<span class="small">챌린지 ${esc(String(r.data.challenge || '').slice(0, 16))}… · 결과 ${esc(String(rc.outcome || '-'))} · 순번 ${esc(String(rc.seq === undefined ? '-' : rc.seq))}<br>
+             서명 ${rc.signed === true ? '있음(Ed25519)' : '없음'}</span>
+             <pre class="proof-pre" style="white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;font-size:.6875rem;line-height:1.5;background:var(--surface-2);padding:10px;border-radius:10px;margin:8px 0 0">${esc(JSON.stringify(r.data, null, 2).slice(0, 1200))}</pre>`,
+            '닫기', () => { S.modal = null; render(); });
+        });
+    };
+    fr.readAsText(f);
+  });
+  inp.click();
 }
 function clearWithdrawProof() {
   try { if (STORE) STORE.removeItem(WITHDRAW_PROOF_KEY); } catch (e) { /* 저장소 막힘 */ }
@@ -6626,8 +6683,6 @@ const ACT = {
   'logout-home': () => confirmBox('로그아웃할까요?',
     '학습 진도와 여행 설정은 계정에 저장돼 있어요. 다시 로그인하면 이어서 할 수 있어요.',
     '로그아웃', () => { S.modal = null; ACT.logout(); }, { danger: true }),
-  // 탈퇴 증명 카드 동작
-  'proof-download': () => downloadWithdrawProof(),
   // 실제로 보낸 결과대로 안내한다(예전에는 보내지 못해도 늘 '보고했어요').
   'proof-report': () => {
     reportSavedProof().then(r => toast(
@@ -6902,6 +6957,9 @@ const ACT = {
       ilogForget(ilogLoad().map(v => v.id)); S.ilog = []; ilogSave();
       S.coll.logOpen = null; S.modal = null; render(); toast('통역 기록을 모두 지웠어요.');
     }, { danger: true }); },
+  'proof-download': () => downloadWithdrawProof(false),
+  'proof-plain': () => { S.modal = null; render(); downloadWithdrawProof(true); },
+  'proof-open': () => openWithdrawProof(),
   'ilog-consent': () => askIlogConsent(),
   'ilog-revoke': () => confirmBox('통역 기록 계정 저장을 끌까요?', '서버(계정)에 저장된 통역 기록을 바로 지워요. 이 기기의 기록은 남고, 언제든 다시 켤 수 있어요.', '끄고 지우기', () => { S.modal = null; ilogRevoke(); }, { danger: true }),
   'past-go': () => { S.past.open = null; go('u-past'); },

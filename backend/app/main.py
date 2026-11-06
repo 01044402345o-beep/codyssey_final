@@ -57,6 +57,7 @@ from . import firebase_admin
 from . import firebase_auth
 from . import user_state
 from . import evidence
+from . import receipt_signing
 from . import gemini as ai
 from . import speech_compare as compare
 from . import phonemes
@@ -590,6 +591,7 @@ def health_detail() -> dict[str, Any]:
         "admin_erase": firebase_admin.configured(),
         # 증거 봉인 공개키의 지문·세대(공개 정보). 핀 검증(.github/workflows/verify-key-pin.yml)이 이 값을 본다.
         "evidence": evidence.health_block(),
+        "receipt_signing": receipt_signing.public_info(),   # 공개키만. 개인키는 절대 나가지 않는다
         # 사실 경로의 구글 장소 검색은 붙이지 않았다. google_places 는 그 의미로 남긴다.
         # 일정 플래그와 키는 호출 때마다 읽는다. 임포트 때 고정하지 않는다.
         "itinerary_enabled": itinerary_enabled(),

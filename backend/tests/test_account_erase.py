@@ -100,8 +100,14 @@ class T(unittest.TestCase):
         body = res.json()
         self.assertTrue(body["erased"])
         # 영수증: 클라이언트가 보관해 나중에 "체인에 이 챌린지가 있는가"를 대조한다
-        self.assertEqual(sorted(body["receipt"]), ["challenge", "created_at", "digest", "outcome",
-                                                   "schema", "seq"])
+        # v2: 서명 필드가 붙었다(Ed25519). 키가 없으면 signed:false + reason 으로 정직하게 남는다.
+        base = ["challenge", "created_at", "digest", "outcome", "schema", "seq", "signed"]
+        keys = sorted(body["receipt"])
+        self.assertEqual(keys, sorted(base + ["reason"]) if body["receipt"]["signed"] is False
+                         else sorted(base + ["alg", "sig", "public_key", "key_id"]))
+        self.assertEqual(body["receipt"]["schema"], "SEAL-RECEIPT-v2")
+        if body["receipt"]["signed"] is False:
+            self.assertEqual(body["receipt"]["reason"], "not_configured")
         self.assertEqual(fake.erased, ["uid-1"])   # uid 는 토큰에서만 온다
 
     def test_admin_failure_is_surfaced(self):

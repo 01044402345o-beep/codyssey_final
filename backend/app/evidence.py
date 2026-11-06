@@ -409,14 +409,19 @@ def _commit_entry(extra: dict[str, Any]) -> dict[str, Any]:
 
 
 def receipt_for(challenge: str, entry: dict[str, Any], outcome: str) -> dict[str, Any]:
-    """클라이언트가 보관하는 영수증. 서명은 없다 — 앱에 서명 키를 두지 않기 때문이다.
+    """클라이언트가 보관하는 영수증. **서버가 Ed25519 로 서명한다**(탈퇴 증명).
 
-    영수증의 가치는 서명이 아니라 **앵커된 체인의 위치(seq·digest)** 다: 관리자가 앵커한 범위에
-    이 챌린지가 없으면 누락이 드러나고, 있으면 "그 시점에 시도가 있었다"가 뒷받침된다.
+    서명이 없으면 사용자가 "서버가 영수증을 줬다"고 보여 줘도 그게 서버가 낸 것인지
+    증명할 방법이 없다 — 응답 JSON 은 프록시·악성 클라이언트가 얼마든지 만들 수 있다.
+    이제 영수증만 들고 오프라인에서도 위조 여부를 확인할 수 있다(`app/verify_receipt.py`).
+
+    서명 키가 없으면 `signed:false` 로 정직하게 남긴다 — 그럴듯한 서명을 흉내 내지 않는다.
+    서명이 유효하다는 것은 '위조되지 않았다'는 뜻이지 '탈퇴가 끝났다'는 뜻이 아니다.
+    그 판정은 앵커된 체인의 seq·digest 대조가 한다.
     """
-    return {"challenge": challenge, "outcome": outcome, "seq": entry.get("seq"),
-            "digest": entry.get("digest"), "created_at": entry.get("created_at", 0),
-            "schema": "SEAL-RECEIPT-v1"}
+    from . import receipt_signing
+    return receipt_signing.sign({"challenge": challenge, "outcome": outcome, "seq": entry.get("seq"),
+                                 "digest": entry.get("digest"), "created_at": entry.get("created_at", 0)})
 
 
 def _encode_fields(data: dict[str, Any]) -> dict[str, Any]:
