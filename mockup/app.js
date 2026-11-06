@@ -2712,7 +2712,7 @@ const LIVE = { on: false, ws: null, stream: null, ctx: null, proc: null, src: nu
   providers: null, pick: null, paused: false, partner: false, hist: [],
   ui: '', uiOpen: false, log: [], logStay: false,
   level: 0, muted: false, mode: '', worklet: null, srcNode: null, raf: 0, gen: 0, bargeUntil: 0, speech: false,
-  recorder: null, recChunks: [], recFrom: 0, recTo: 0, hearUrl: '',
+  recorder: null, recTried: false, recHead: null, recChunks: [], recFrom: 0, recTo: 0, hearUrl: '', hearAudio: null, hearMuted: false,
   exclude: [], restart: '', fallback: false,             // 자동 전환: 실패한 엔진은 빼고 다음 엔진, 다 실패하면 검수 문장으로
   browserOk: null, rec: null, tr: null, speaker: 'me' };  // 브라우저 엔진(데스크톱 Chrome·Edge, 기기 안 처리일 때만)
 const livePick = () => LIVE.pick || (() => { try { return localStorage.getItem(INTERP_PROVIDER_KEY) || ''; } catch (e) { return ''; } })();
@@ -3189,7 +3189,7 @@ function liveMeter() {
   const bar = document.querySelector('[data-live="meter"] i');
   const lv = Math.min(1, LIVE.level * 6);              // 화면용 스케일(RMS 0.17 ≈ 가득)
   if (bar) bar.style.width = (LIVE.muted ? 0 : Math.round(lv * 100)) + '%';
-  if (!LIVE.recorder && LIVE.stream) liveRecStart();   // 스트림이 준비된 첫 프레임에 시작
+  if (!LIVE.recorder && !LIVE.recTried && LIVE.stream) liveRecStart();   // 스트림이 준비된 첫 프레임에 한 번만(실패해도 매 프레임 다시 만들지 않는다)
   const speaking = !LIVE.muted && LIVE.level > 0.045;
   if (speaking) {                                       // 마지막 발화 구간을 기억한다
     const now = Date.now();
@@ -3215,13 +3215,16 @@ function liveBarge() {
    청크마다 도착 시각을 붙여 두고, 마지막 발화 구간만 잘라 재생한다. */
 function liveRecStart() {
   liveRecStop();
+  LIVE.recTried = true;
   if (typeof MediaRecorder === 'undefined' || !LIVE.stream) return;
   const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(m => MediaRecorder.isTypeSupported?.(m));
   let r = null;
   try { r = new MediaRecorder(LIVE.stream, mime ? { mimeType: mime } : undefined); } catch (e) { return; }
-  LIVE.recChunks = [];
+  LIVE.recChunks = []; LIVE.recHead = null;
   r.ondataavailable = ev => {
     if (!ev.data || !ev.data.size) return;
+    // 첫 조각에만 파일 머리(webm EBML·mp4 init)가 있다 — 따로 두고 자를 때 앞에 붙인다. 없으면 중간 조각만으로는 재생이 안 된다
+    if (!LIVE.recHead) { LIVE.recHead = ev.data; return; }
     LIVE.recChunks.push({ t: Date.now(), b: ev.data });
     if (LIVE.recChunks.length > 80) LIVE.recChunks.shift();   // 400ms × 80 ≈ 32초
   };
@@ -3229,7 +3232,8 @@ function liveRecStart() {
 }
 function liveRecStop() {
   try { if (LIVE.recorder && LIVE.recorder.state !== 'inactive') { LIVE.recorder.ondataavailable = null; LIVE.recorder.stop(); } } catch (e) { /* 이미 끝남 */ }
-  LIVE.recorder = null; LIVE.recChunks = []; LIVE.recFrom = 0; LIVE.recTo = 0;
+  hearDone();
+  LIVE.recorder = null; LIVE.recTried = false; LIVE.recHead = null; LIVE.recChunks = []; LIVE.recFrom = 0; LIVE.recTo = 0;
   try { if (LIVE.hearUrl) URL.revokeObjectURL(LIVE.hearUrl); } catch (e) { /* 없음 */ }
   LIVE.hearUrl = '';
 }
@@ -3239,15 +3243,34 @@ function liveHearLast() {
   const to = LIVE.recTo || now;
   const from = LIVE.recFrom || Math.max(0, to - 8000);
   const parts = LIVE.recChunks.filter(c => c.t >= from - 400 && c.t <= to + 600).map(c => c.b);
-  if (!parts.length) { toast('방금 말한 소리를 아직 담지 못했어요. 조금 더 크게 말해 보세요.'); return; }
+  if (!parts.length || !LIVE.recHead) { toast('방금 말한 소리를 아직 담지 못했어요. 조금 더 크게 말해 보세요.'); return; }
   if (now - to > 20000) { toast('말한 지 20초가 넘어 지웠어요. 다시 말해 주세요.'); return; }
   let url = '';
-  try { url = URL.createObjectURL(new Blob(parts, { type: parts[0].type || 'audio/webm' })); } catch (e) { toast('소리를 준비하지 못했어요.'); return; }
-  try { if (LIVE.hearUrl) URL.revokeObjectURL(LIVE.hearUrl); } catch (e) { /* 없음 */ }
+  try { url = URL.createObjectURL(new Blob([LIVE.recHead, ...parts], { type: LIVE.recHead.type || 'audio/webm' })); } catch (e) { toast('소리를 준비하지 못했어요.'); return; }
+  hearDone();
   LIVE.hearUrl = url;
   stopTts();
-  const a = new Audio(url);
-  a.play().catch(() => toast('소리를 재생하지 못했어요.'));
+  // 다시 듣는 동안은 듣기를 잠깐 멈춘다 — 스피커 소리가 마이크로 다시 들어가 또 통역되지 않게. 끝나면 되돌린다
+  if (!LIVE.muted) { liveSetListening(false); LIVE.hearMuted = true; }
+  const a = LIVE.hearAudio = new Audio(url);
+  a.onended = a.onerror = () => { if (LIVE.hearAudio === a) hearDone(); };
+  a.play().catch(() => { toast('소리를 재생하지 못했어요.'); if (LIVE.hearAudio === a) hearDone(); });
+}
+/* 다시 듣기를 마친다: 재생을 멈추고 주소를 지우고, 그 때문에 멈췄던 듣기를 되살린다(사용자가 끈 것은 그대로) */
+function hearDone() {
+  const a = LIVE.hearAudio; LIVE.hearAudio = null;
+  try { if (a) { a.onended = a.onerror = null; a.pause(); } } catch (e) { /* 없음 */ }
+  try { if (LIVE.hearUrl) URL.revokeObjectURL(LIVE.hearUrl); } catch (e) { /* 없음 */ }
+  LIVE.hearUrl = '';
+  if (LIVE.hearMuted) { LIVE.hearMuted = false; if (LIVE.on && LIVE.muted) liveSetListening(true); }
+}
+/* 듣기 켜기/끄기 한 곳: 트랙·워클릿·멈춤 상태를 함께 바꾼다 */
+function liveSetListening(on) {
+  LIVE.muted = !on; LIVE.paused = !on;
+  try { if (LIVE.stream) LIVE.stream.getAudioTracks().forEach(t => { t.enabled = on; }); } catch (e) { /* 트랙 없음 */ }
+  try { if (LIVE.worklet) LIVE.worklet.port.postMessage(on ? 'unmute' : 'mute'); } catch (e) { /* 없음 */ }
+  if (!on) stopTts();
+  updateLiveUi();
 }
 function stopLive(note) {
   liveRecStop();
@@ -6660,14 +6683,7 @@ const ACT = {
   },
   /* 듣기 하나로 합쳤다 — 마이크 끄기와 잠시 멈춤을 따로 두면 무엇을 눌러야 할지 헷갈린다.
      켜기: 트랙·워클릿을 되살리고 멈춤도 푼다. 끄기: 둘 다 멈춘다. */
-  'live-listen': () => {
-    const off = !LIVE.muted;
-    LIVE.muted = off; LIVE.paused = off;
-    try { if (LIVE.stream) LIVE.stream.getAudioTracks().forEach(t => { t.enabled = !off; }); } catch (e) { /* 트랙 없음 */ }
-    try { if (LIVE.worklet) LIVE.worklet.port.postMessage(off ? 'mute' : 'unmute'); } catch (e) { /* 없음 */ }
-    if (off) stopTts();
-    updateLiveUi();
-  },
+  'live-listen': () => { LIVE.hearMuted = false; liveSetListening(LIVE.muted); },   // 사용자가 직접 바꾸면 다시 듣기의 자동 복원은 하지 않는다
   'live-pause': () => { LIVE.paused = !LIVE.paused; if (LIVE.paused) stopTts(); updateLiveUi(); },
   'live-hear': () => liveHearLast(),
   'live-partner': () => { LIVE.partner = true; updateLiveUi(); },

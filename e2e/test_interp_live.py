@@ -70,13 +70,26 @@ with sync_playwright() as p:
     check("음량 값이 오디오 스레드에서 올라온다(숫자)", isinstance(lv, (int, float)), str(lv))
     check("rAF 미터 루프가 돈다", page.evaluate("!!LIVE.raf"))
 
-    page.locator('[data-act="live-mute"]').click(); page.wait_for_timeout(200)
-    check("음소거: 트랙 꺼짐 + 표시", page.evaluate("LIVE.muted && !LIVE.stream.getAudioTracks()[0].enabled")
-          and page.locator('.il-mic[aria-pressed="true"]').count() == 1)
+    check("듣는 중: 버튼 하나(듣기)·점 3개 표시·잠시 멈춤 버튼 없음", page.locator('.il-mic.listening[data-act="live-listen"][aria-pressed="true"] .il-live-dots').count() == 1
+          and page.locator('[data-act="live-pause"]').count() == 0 and page.locator('[data-act="live-hear"]').count() == 1)
+    page.locator('[data-act="live-listen"]').click(); page.wait_for_timeout(200)
+    check("듣기 멈춤: 트랙 꺼짐 + 멈춤 + 표시(사선 마이크·점 없음·'듣지 않음')", page.evaluate("LIVE.muted && LIVE.paused && !LIVE.stream.getAudioTracks()[0].enabled")
+          and page.locator('.il-mic.off[aria-pressed="false"]').count() == 1
+          and not page.locator('.il-mic .il-live-dots').first.is_visible() and page.locator('.live-muted').inner_text() == "듣지 않음")
     before = page.evaluate("LIVE.sent || 0"); page.wait_for_timeout(700)
     check("음소거 중에는 서버로 오디오가 안 간다", (page.evaluate("LIVE.sent || 0") - before) < 2000, str(page.evaluate("LIVE.sent || 0") - before))
-    page.locator('[data-act="live-mute"]').click(); page.wait_for_timeout(700)
-    check("음소거 해제 뒤 다시 보낸다", page.evaluate("LIVE.sent || 0") > before + 1000)
+    page.locator('[data-act="live-listen"]').click(); page.wait_for_timeout(700)
+    check("듣기 다시 켠 뒤 다시 보낸다(멈춤도 풀림)", page.evaluate("LIVE.sent || 0") > before + 1000 and page.evaluate("!LIVE.paused"))
+    # 내 음성: 파일 머리 조각 + 마지막 발화 조각으로 재생, 재생 중에는 듣기를 멈췄다가 끝나면 되살린다(스피커 → 마이크 재통역 방지)
+    page.wait_for_timeout(1200)
+    check("내 음성: 녹음기가 한 번만 붙고 파일 머리 조각을 따로 둔다", page.evaluate("!!LIVE.recorder && LIVE.recTried && !!LIVE.recHead"),
+          page.evaluate("[!!LIVE.recorder, LIVE.recTried, !!LIVE.recHead, LIVE.recChunks.length]"))
+    page.evaluate("LIVE.recFrom = Date.now() - 800; LIVE.recTo = Date.now()")
+    page.locator('[data-act="live-hear"]').click(); page.wait_for_timeout(150)
+    check("내 음성 재생 중에는 듣기를 잠깐 멈춘다", page.evaluate("LIVE.muted && LIVE.hearMuted && !!LIVE.hearUrl"),
+          page.evaluate("[LIVE.muted, LIVE.hearMuted, !!LIVE.hearUrl]"))
+    page.evaluate("hearDone()")
+    check("재생이 끝나면 듣기를 되살린다", page.evaluate("!LIVE.muted && !LIVE.hearMuted && !LIVE.hearUrl"))
 
     page.evaluate("LIVE.q = [{ab: LIVE.ctx.createBuffer(1, 160, 24000), gen: LIVE.gen}]; LIVE.playing = true; liveBarge()")
     check("끼어들기: 재생 큐를 비우고 세대를 올린다", page.evaluate("LIVE.q.length") == 0 and page.evaluate("LIVE.playing") is False)
