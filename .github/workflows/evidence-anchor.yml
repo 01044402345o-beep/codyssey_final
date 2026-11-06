@@ -1,4 +1,5 @@
 # 증거 봉인 자동 앵커 — 6시간마다 체크포인트를 검증하고, Cloud KMS 키로 새 체크포인트를 서명해 남긴다.
+# 성공한 실행은 Render 밖의 GitHub 관리 plane에도 /health 지문과 마지막 체인 위치를 남긴다.
 #
 # 왜: 앵커 주기가 곧 사각지대다(관리자가 손으로 돌리지 않는 동안은 증명되지 않는다).
 # 키 파일을 CI 비밀로 두지 않는다 — 서명은 KMS 안에서만(키가 밖으로 나오지 않음), GCP 인증은
@@ -52,6 +53,12 @@ jobs:
           set -o pipefail
           python -m opsarchive auto-anchor --project "$PROJECT" --sa env:GCP_ACCESS_TOKEN \
             --kms-key "$KMS_KEY" --max-age-hours 13 | tee "$GITHUB_WORKSPACE/anchor-result.json"
+
+      - name: 성공한 상태를 오프사이트 기록
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANCHOR_HEALTH_URL: ${{ vars.EVIDENCE_HEALTH_URL || 'https://codyssey-final.onrender.com/health' }}
+        run: python3 .github/scripts/offsite_anchor.py anchor-result.json
 
       - name: 실패하면 이슈로 알림
         if: failure()

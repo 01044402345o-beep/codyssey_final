@@ -1,6 +1,7 @@
 """POST /account/erase — 관리자 탈퇴 엔드포인트. 실행: cd backend && python -m unittest tests.test_account_erase"""
 import json
 import os
+import time
 import unittest
 from unittest import mock
 
@@ -22,6 +23,7 @@ CLAIMS = {
     "email": "traveler@example.com",
     "name": "김여행",
     "firebase": {"sign_in_provider": "google.com"},
+    "auth_time": int(time.time()),
 }
 
 
@@ -81,6 +83,14 @@ class T(unittest.TestCase):
         res = self.post(env=ENV)   # 서비스 계정 JSON 없음
         self.assertEqual(res.status_code, 503)
         self.assertEqual(res.json()["detail"], "admin_unavailable")
+
+    def test_old_authentication_is_rejected_before_admin_delete(self):
+        old = {**CLAIMS, "auth_time": int(time.time()) - 301}
+        with mock.patch.dict(os.environ, {**ENV, "FIREBASE_SERVICE_ACCOUNT_JSON": SA}, clear=True), \
+                mock.patch.object(firebase_auth.id_token, "verify_firebase_token", return_value=old):
+            res = self.client.post("/account/erase", headers={"Authorization": "Bearer signed-token"})
+        self.assertEqual(res.status_code, 401)
+        self.assertEqual(res.json()["detail"], "recent_login_required")
 
     def test_erases_only_the_token_uid(self):
         fake = FakeAdmin()

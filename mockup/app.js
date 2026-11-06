@@ -6308,6 +6308,7 @@ async function eraseOnServer(token, challenge) {
     if (res.status === 404 || res.status === 405) return { status: 'unavailable', receipt: null };
     if (res.status !== 200) {
       let code = ''; try { code = (await res.json()).detail; } catch (e) { code = ''; }
+      if (res.status === 401 && code === 'recent_login_required') return { status: 'reauth', receipt: null };
       return { status: (res.status === 503 && code === 'admin_unavailable') ? 'unavailable' : 'failed', receipt: null };
     }
     const body = await res.json().catch(() => null);
@@ -6432,7 +6433,15 @@ async function doWithdraw() {
     const challenge = newChallenge();
     if (challenge) saveWithdrawProof({ challenge: challenge, at: Date.now(), receipt: null });
     wdStep(2, WD_SERVER_DETAIL);                                     // 가장 오래 걸리는 단계(서버 응답 대기)
-    const admin = await eraseOnServer(token, challenge);
+    let admin = await eraseOnServer(token, challenge);
+    if (admin.status === 'reauth' && FirebaseAuth.reauthenticate) {
+      wdStep(2, '보안을 위해 다시 로그인하는 중');
+      const reauth = await FirebaseAuth.reauthenticate();
+      if (!reauth.ok) return stop(FirebaseAuth.koreanError({ code: reauth.code }) || '다시 로그인하지 못해 탈퇴를 멈췄어요.');
+      try { token = await FirebaseAuth.idToken(true); } catch (e) { token = ''; }
+      if (!token) return stop('다시 로그인한 뒤 인증 정보를 확인하지 못했어요.');
+      admin = await eraseOnServer(token, challenge);
+    }
     if (accountClosed) { wdEnd(); return; }    // 기다리는 사이 다른 경로가 '탈퇴한 계정'을 감지해 이미 정리했다(이중 처리 금지)
     if (admin.status === 'ok') {
       saveWithdrawProof({ challenge: challenge, at: Date.now(), receipt: admin.receipt });

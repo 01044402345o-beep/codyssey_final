@@ -1403,11 +1403,12 @@ def _bearer_token(request: Request) -> str:
     return token.strip()
 
 
-async def _account_token(request: Request) -> tuple[dict[str, str], str]:
+async def _account_token(request: Request, *, require_recent_login: bool = False) -> tuple[dict[str, str], str]:
     """토큰의 uid. 익명 로그인은 계정 기록을 만들지 않는다."""
     try:
         account = await run_in_threadpool(
             firebase_auth.verify_bearer, request.headers.get("authorization") or "",
+            require_recent_login=require_recent_login,
         )
     except firebase_auth.AuthError as exc:
         raise HTTPException(status_code=exc.status, detail=exc.code) from exc
@@ -1529,7 +1530,7 @@ async def account_erase(request: Request) -> dict[str, Any]:
     실패하면 **단계 원장**과 함께 증거를 봉인해 둔다(누가 어디까지 갔는지 남긴다). 성공해도
     사후 검증으로 "남아 있는" 경우를 잡는다 — 응답이 성공이어도 실제로 지워졌는지는 별개다.
     """
-    account, _token = await _account_token(request)
+    account, _token = await _account_token(request, require_recent_login=True)
     if not firebase_admin.configured():
         raise HTTPException(status_code=503, detail="admin_unavailable")
     rate_limit(request)

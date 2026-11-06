@@ -93,8 +93,9 @@ python scripts/check_negatives.py
 | `AI_DAILY_ATTEMPT_BUDGET` / `AI_IP_ATTEMPTS_PER_HOUR` | 회(3000) / 회(150), `0`=무제한 | AI 시도 예산. 시작 때 30회를 예약하고 남은 만큼 돌려준다. 예약이 안 되면 호출 0회로 대체 응답 |
 | `AI_MAX_DETERMINISTIC` | 정수(기본 꺼짐) | 켜면 파싱·검증 차단 같은 입력 탓 실패가 이 횟수 반복될 때 30회 전에 멈춘다. NFR-03 과 다르므로 팀 합의 후에만 |
 | `EVIDENCE_TTL_DAYS` | 일(기본 90) | Firestore `expire_at` — TTL 정책이 자동 삭제한다(암호 파기) |
+| `RECENT_LOGIN_SECONDS` | 초(기본 300, 60~3600으로 제한) | 되돌릴 수 없는 `POST /account/erase` 에서 Firebase ID 토큰의 `auth_time`을 검사한다. 오래된 토큰이면 화면이 Google·이메일 재인증 후 새 토큰으로 재시도한다 |
 | `EVIDENCE_INCLUDE_SECRETS` | `1` 이면 스크럽 해제 | 기본은 자격증명을 `[MASKED]` 로 지운다. 권장하지 않는다 |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | 서비스 계정 JSON **문자열 전체** | 탈퇴(`POST /account/erase`) 전용. 있으면 탈퇴 흔적(`deleted/{uid}`) + 토큰 취소 + 문서 삭제 + Auth 계정 삭제(최근 로그인 불필요). 없으면 503 `admin_unavailable` 이고 화면은 규칙 삭제 + 클라이언트 `deleteUser` 로 되돌아간다. **코드·저장소에 두지 않는다**(Render 환경변수 시크릿). `docs/deploy/DEPLOY_RUNBOOK.md` E 참조 |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | 서비스 계정 JSON **문자열 전체** | 탈퇴(`POST /account/erase`) 전용. 있으면 탈퇴 흔적(`deleted/{uid}`) + 토큰 취소 + 문서 삭제 + Auth 계정 삭제를 수행한다. 없으면 503 `admin_unavailable` 이고 화면은 규칙 삭제 + 클라이언트 `deleteUser` 로 되돌아간다. **코드·저장소에 두지 않는다**(Render 환경변수 시크릿). `docs/deploy/DEPLOY_RUNBOOK.md` E 참조 |
 
 ### 무료 플랜 주의
 

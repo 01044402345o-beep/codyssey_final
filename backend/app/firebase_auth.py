@@ -13,6 +13,7 @@ hasOnly 목록과 같아야 한다 — backend/tests/test_user_state.py 가 교�
 from __future__ import annotations
 
 import os
+import time
 from typing import Any
 
 from google.auth.transport import requests
@@ -54,8 +55,11 @@ def public_config() -> dict[str, Any]:
     return body
 
 
-def verify_bearer(header: str) -> dict[str, str]:
-    """Authorization 헤더의 Firebase ID 토큰을 확인하고 계정 요약을 돌려준다."""
+def verify_bearer(header: str, *, require_recent_login: bool = False) -> dict[str, str]:
+    """Authorization 헤더의 Firebase ID 토큰을 확인하고 계정 요약을 돌려준다.
+
+    되돌릴 수 없는 작업에서만 ``auth_time`` 기반의 최근 로그인 검사를 켠다.
+    """
     if not configured():
         raise AuthError(503, "firebase_unconfigured")
     scheme, _, token = (header or "").partition(" ")
@@ -73,6 +77,19 @@ def verify_bearer(header: str) -> dict[str, str]:
     uid = claims.get("sub") or claims.get("user_id")
     if not isinstance(uid, str) or not uid:
         raise AuthError(401, "invalid_token")
+    if require_recent_login:
+        try:
+            auth_time = int(claims.get("auth_time", 0))
+        except (TypeError, ValueError):
+            auth_time = 0
+        try:
+            max_age = int(os.getenv("RECENT_LOGIN_SECONDS", "300"))
+        except ValueError:
+            max_age = 300
+        max_age = max(60, min(max_age, 3600))
+        now = int(time.time())
+        if not auth_time or auth_time > now + 30 or now - auth_time > max_age:
+            raise AuthError(401, "recent_login_required")
     email = claims.get("email") if isinstance(claims.get("email"), str) else ""
     name = claims.get("name") if isinstance(claims.get("name"), str) else ""
     if not name:

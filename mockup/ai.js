@@ -21,12 +21,17 @@
   /* ---------- 서버 주소 ----------
      ?api=https://host 는 이번 방문에서만 쓰고 저장하지 않는다. 녹음이 전송될 서버를 바꾸므로 external 로 알린다.
      http(s) 로 열렸으면 같은 출처(''), file:// 이면 null(폴백 전용). */
-  /* Firebase Hosting(*.web.app · *.firebaseapp.com)은 화면(정적 파일)만 낸다 — API·통역 WebSocket 은 Render 서버로 간다
-     (11/06: Cloud Run 은 마감 때문에 보류, docs/ops/FIREBASE_DEPLOY.md §0). ?api= 가 있으면 그것이 먼저다. */
+  /* Firebase Hosting(*.web.app · *.firebaseapp.com)은 화면(정적 파일)만 낸다 — API·통역 WebSocket 은 Render 서버로 간다.
+     Hosting에서 ?api=로 임의 서버를 지정하면 ID 토큰·음성이 외부로 갈 수 있으므로 무시한다. */
   const HOSTED_API = 'https://codyssey-final.onrender.com';
   function apiBase(loc) {
     const protocol = loc.protocol || '';
     const own = protocol === 'http:' || protocol === 'https:';
+    const hostname = String(loc.hostname || loc.host || '').replace(/:\d+$/, '');
+    const firebaseHosted = own && /\.(web\.app|firebaseapp\.com)$/i.test(hostname);
+    if (firebaseHosted) {
+      return { base: HOSTED_API, external: false, host: HOSTED_API.replace(/^https:\/\//, '') };
+    }
     let raw = null;
     try { raw = new URLSearchParams(loc.search || '').get('api'); } catch (e) { raw = null; }
     if (raw) {
@@ -37,9 +42,6 @@
           return { base: origin, external: !own || origin !== loc.origin, host: u.host };
         }
       } catch (e) { /* 잘못된 주소는 무시 */ }
-    }
-    if (own && /\.(web\.app|firebaseapp\.com)$/i.test(String(loc.hostname || loc.host || '').replace(/:\d+$/, ''))) {
-      return { base: HOSTED_API, external: false, host: HOSTED_API.replace(/^https:\/\//, '') };   // 우리 서버라 '외부 서버' 안내는 띄우지 않는다
     }
     if (own) return { base: '', external: false, host: loc.host || '' };
     return { base: null, external: false, host: '' };

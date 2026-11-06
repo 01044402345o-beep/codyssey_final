@@ -23,6 +23,7 @@ FirebaseAuth.koreanError = function (err) {
   if (code === 'auth/popup-blocked') return '로그인 창이 차단됐어요. 주소창 오른쪽에서 팝업을 허용해 주세요.';
   if (code === 'auth/operation-not-allowed') return '이 로그인 방식은 Firebase 콘솔에서 아직 꺼져 있어요.';
   if (code === 'auth/requires-recent-login') return '보안을 위해 다시 로그인한 뒤 다시 시도해 주세요.';
+  if (code === 'recent_login_required' || code === 'auth/cancelled') return '보안을 위해 다시 로그인한 뒤 다시 시도해 주세요.';
   return '로그인에 실패했어요. 잠시 뒤 다시 시도해 주세요.';
 };
 
@@ -123,10 +124,33 @@ FirebaseAuth.signInEmail = async function (email, password, name, signup) {
   return account;
 };
 
-FirebaseAuth.idToken = async function () {
+FirebaseAuth.idToken = async function (forceRefresh = false) {
   const user = FirebaseAuth._auth && FirebaseAuth._auth.currentUser;
   if (!user) return '';
-  try { return await user.getIdToken(); } catch (e) { return ''; }
+  try { return await user.getIdToken(!!forceRefresh); } catch (e) { return ''; }
+};
+
+/* 되돌릴 수 없는 서버 작업 전 재인증. 비밀번호는 저장하지 않고 SDK에만 전달한다. */
+FirebaseAuth.reauthenticate = async function () {
+  await FirebaseAuth.ready;
+  const user = FirebaseAuth._auth && FirebaseAuth._auth.currentUser;
+  if (!user || !FirebaseAuth._mod) return { ok: false, code: 'auth/no-current-user' };
+  const mod = FirebaseAuth._mod;
+  try {
+    const provider = (user.providerData || []).find(p => p.providerId === 'google.com');
+    if (provider) {
+      await mod.reauthenticateWithPopup(user, new mod.GoogleAuthProvider());
+    } else {
+      const password = window.prompt('보안을 위해 현재 비밀번호를 입력해 주세요.');
+      if (password === null) return { ok: false, code: 'auth/cancelled' };
+      if (!user.email) return { ok: false, code: 'auth/no-email' };
+      const credential = mod.EmailAuthProvider.credential(user.email, password);
+      await mod.reauthenticateWithCredential(user, credential);
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, code: (err && err.code) ? err.code : 'auth/reauthentication-failed' };
+  }
 };
 
 FirebaseAuth.signOut = async function () {

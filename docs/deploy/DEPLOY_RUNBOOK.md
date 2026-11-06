@@ -291,7 +291,7 @@ curl -s -H "X-Admin-Token: $HEALTH_DETAIL_TOKEN" https://<앱>.onrender.com/heal
 - **원인 후보**
   1. 서비스가 중지/스핀다운 → F07
   2. `file://` 로 열었음 → API 없이 폴백 전용으로 동작(정상). 배포 URL 로 열 것
-  3. 주소창에 `?api=<다른 서버>` 가 붙어 있음 → 상단에 **"외부 서버 <host>"** 가 표시되고 **녹음이 그 서버로 전송**됨. 의도한 게 아니면 `?api=` 를 지움 (값은 저장되지 않음)
+  3. Firebase Hosting에서는 `?api=<다른 서버>`를 무시하고 Render API를 사용한다. 로컬/별도 개발 주소에서만 테스트 override가 적용되며, 외부 서버로 토큰·녹음을 보내지 않도록 운영 배포본은 고정한다.
   4. 별도 프론트를 따로 배포한 경우 → `ALLOW_ORIGINS` 에 그 주소 추가
 - **확인**
   ```bash
@@ -300,7 +300,7 @@ curl -s -H "X-Admin-Token: $HEALTH_DETAIL_TOKEN" https://<앱>.onrender.com/heal
   ```
 - **즉시 조치**: 위 원인 순서대로. 백엔드가 죽었으면 5장 A/B/C. 그동안 화면은 폴백으로 카드 학습을 계속할 수 있음
 - **롤백**: 5장 A
-- **재발 방지**: 시연은 항상 배포 URL(`?api=` 없이)로 연다
+- **재발 방지**: Firebase Hosting에서는 임의 `?api=`가 차단되지만, 시연은 혼동을 줄이기 위해 배포 URL(`?api=` 없이)로 연다
 
 ---
 
