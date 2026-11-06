@@ -4,6 +4,7 @@
   A 가로 폰(844×390·568×320): 큰 안내 버튼 숨김, 발음기호 옆 한 줄(n/m), 카드를 뒤집으면 숫자가 바로 바뀐다
   B 상황별 연습도 같은 방식
   C 세로(390×844)·넓은 화면은 그대로 큰 버튼, 한 줄은 안 보인다
+  E 안내 상자('지난 날짜예요'·'완료한 날이에요'·상황별 연습 설명)는 좁을 때 제목 옆 ⓘ 말풍선으로
   D 같은 조건에서 제목 아래 머리를 접고 앱바 제목 자리에 학습은 '날짜 (요일)', 상황별 연습은 상황 이름(세로는 '학습'·'상황별 연습' 그대로)
 """
 import sys
@@ -77,6 +78,33 @@ with sync_playwright() as p:
     check("C 세로 상황별 연습도 그대로", s["full"] and s["mini"] is None, s)
     check("D 세로 상황별 연습: 머리 그대로, 앱바 제목 '상황별 연습'", s["head"] and s["title"] == "상황별 연습", s)
     check("C 자바스크립트 오류 없음", not errs, errs[:2])
+    pg.close()
+    # ── E: 안내 상자('지난 날짜예요' 등)는 좁을 때 제목 옆 ⓘ 말풍선으로, 세로는 상자 그대로 ──
+    TIP = """() => { const v = e => !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0;
+      const t = document.querySelector('.appbar .ab-tip'), pop = document.querySelector('.appbar .ab-tip-pop');
+      return { tip: v(t), tipW: t ? t.getBoundingClientRect().width : 0, pop: v(pop) ? pop.innerText.trim() : null,
+               banner: v(document.querySelector('.study-banner')) }; }"""
+    PAST = "S.today = S.sched[2].date; navFromMenu('u-study'); S.studyDate = S.sched[0].date; render()"
+    pg, errs = open_page(b, 844, 390)
+    pg.evaluate(PAST); pg.wait_for_timeout(600)
+    t0 = pg.evaluate(TIP)
+    check("E 좁을 때 지난 날짜: 상자 대신 제목 옆 ⓘ(누를 자리 44px), 말풍선은 닫혀 있다", t0["tip"] and not t0["banner"] and t0["pop"] is None and t0["tipW"] >= 44, t0)
+    pg.locator('.appbar .ab-tip').click(); pg.wait_for_timeout(200)
+    t1 = pg.evaluate(TIP)
+    check("E ⓘ 를 누르면 '지난 날짜예요' 말풍선", t1["pop"] and "지난 날짜예요" in t1["pop"]
+          and pg.evaluate("document.querySelector('.appbar .ab-tip').getAttribute('aria-expanded')") == "true", t1)
+    pg.mouse.click(420, 300); pg.wait_for_timeout(200)
+    check("E 말풍선 밖을 누르면 닫힌다", pg.evaluate(TIP)["pop"] is None)
+    to_drill(pg)
+    pg.locator('.appbar .ab-tip').click(); pg.wait_for_timeout(200)
+    t2 = pg.evaluate(TIP)
+    check("E 상황별 연습: 상황 이름 옆 ⓘ — '완료율에는 들어가지 않아요'", t2["pop"] and "완료율에는 들어가지 않아요" in t2["pop"], t2)
+    check("E 자바스크립트 오류 없음", not errs, errs[:2])
+    pg.close()
+    pg, errs = open_page(b, 390, 844)
+    pg.evaluate(PAST); pg.wait_for_timeout(600)
+    t3 = pg.evaluate(TIP)
+    check("E 세로는 안내 상자 그대로, ⓘ 없음", t3["banner"] and not t3["tip"], t3)
     pg.close()
     b.close()
 
