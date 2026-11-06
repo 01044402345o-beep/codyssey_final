@@ -142,3 +142,35 @@ def verify(receipt: dict[str, Any], public_key: str | None = None) -> dict[str, 
     if public_key and kid != receipt.get("key_id"):
         return {"ok": False, "reason": "key_mismatch", "key_id": kid}
     return {"ok": True, "reason": "valid", "key_id": kid}
+
+def history() -> dict[str, str]:
+    """회전해도 옛 영수증을 검증할 수 있게, 지난 공개키를 `EVIDENCE_SIGN_KEYS_OLD` 에 남긴다.
+
+    형식: `kid1:pubkey1,kid2:pubkey2` (kid 는 기존 key_id 와 같은 16자 sha256 앞부분).
+    키를 회전하면 옛 영수증은 새 키로 검증되지 않는다 — 그때 "위조"라고 답하면 거짓말이 된다.
+    """
+    raw = (os.getenv("EVIDENCE_SIGN_KEYS_OLD") or "").strip()
+    out: dict[str, str] = {}
+    for part in raw.split(","):
+        part = part.strip()
+        if not part or ":" not in part:
+            continue
+        kid, pub = part.split(":", 1)
+        kid, pub = kid.strip(), pub.strip()
+        if kid and pub:
+            out[kid] = pub
+    return out
+
+
+def verify_any(receipt: dict[str, Any]) -> dict[str, Any]:
+    """영수증의 key_id 로 알맞은 공개키를 골라 검증한다(현재 키 → 지난 키 순).
+
+    `ok:true` 는 '위조되지 않았다'는 뜻이지 '탈퇴가 끝났다'는 뜻이 아니다.
+    """
+    kid = str(receipt.get("key_id") or "")
+    if kid and kid == key_id():
+        return verify(receipt)
+    old = history().get(kid)
+    if old:
+        return verify(receipt, old)
+    return verify(receipt)      # 알 수 없는 kid — 영수증에 박힌 키로 검증(핀 없음)

@@ -32,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     receipt = doc.get("receipt") or doc          # 내보낸 파일은 {receipt:{...}} 로 감싸여 있다
-    res = receipt_signing.verify(receipt, a.pin)
+    res = receipt_signing.verify(receipt, a.pin) if a.pin else receipt_signing.verify_any(receipt)
 
     print(f"파일     : {a.path}")
     print(f"챌린지   : {receipt.get('challenge')}")

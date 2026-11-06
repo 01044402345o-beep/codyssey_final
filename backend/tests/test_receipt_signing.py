@@ -52,3 +52,20 @@ def test_health_에는_공개키만_나간다(monkeypatch):
     assert info["configured"] and info["alg"] == "Ed25519"
     secret = base64.urlsafe_b64encode(b"\x07" * 32).decode().rstrip("=")
     assert secret not in str(info)                  # 개인키 시드가 새면 안 된다
+
+
+def test_회전해도_옛_영수증을_검증한다(monkeypatch):
+    """키를 바꾸면 옛 영수증이 '위조'로 보이면 안 된다 — 기록을 지키는 기능이 거짓말을 하면 안 된다."""
+    old_seed = base64.urlsafe_b64encode(b"\x07" * 32).decode().rstrip("=")
+    monkeypatch.setenv("EVIDENCE_SIGN_KEY", old_seed)
+    old_receipt = evidence.receipt_for("e" * 32, ENTRY, "ok")
+    monkeypatch.setenv("EVIDENCE_SIGN_KEY", base64.urlsafe_b64encode(b"\x09" * 32).decode().rstrip("="))
+    # 핀 없이 검증하면 영수증에 박힌 키를 쓰므로 통과한다(그게 기본 동작이다).
+    # 그래서 '새 키를 핀으로 고정했을 때' 옛 영수증이 거부되는지를 본다.
+    assert receipt_signing.verify(old_receipt)["ok"] is True
+    new_pin = receipt_signing.public_key_b64()
+    assert receipt_signing.verify(old_receipt, new_pin)["reason"] == "key_mismatch"
+    # 옛 공개키를 이력에 남기면 다시 검증된다
+    monkeypatch.setenv("EVIDENCE_SIGN_KEYS_OLD", f"{old_receipt['key_id']}:{old_receipt['public_key']}")
+    res = receipt_signing.verify_any(old_receipt)
+    assert res["ok"] is True and res["key_id"] == old_receipt["key_id"]
