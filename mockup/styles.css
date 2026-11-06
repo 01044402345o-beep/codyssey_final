@@ -494,6 +494,7 @@ input, select, textarea { min-width: 0; max-width: 100%; }
   margin: 0; padding: 4px 22px 4px 4px; list-style: none; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow);
   scrollbar-width: none; }   /* 기본 막대는 숨기고 오른쪽 22px 에 직접 그린 막대(.geo-sb)를 둔다 */
 .geo-list::-webkit-scrollbar { display: none; }
+.geo-list.up { top: auto; bottom: calc(100% + 4px); }   /* 칸 아래가 키보드에 막히면 위로 연다(app.js geoFit). 높이는 geoFit 이 보이는 영역에 맞춘다 */
 /* 목록 오른쪽 스크롤 막대(app.js geoSb) — 보이는 폭은 6px, 누를 수 있는 폭은 22px */
 .geo-sb { position: absolute; right: 1px; width: 22px; z-index: 31; touch-action: none; cursor: pointer; }
 .geo-sb[hidden] { display: none; }
