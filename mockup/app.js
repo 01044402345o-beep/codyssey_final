@@ -2571,7 +2571,8 @@ function hscrollRestore(root, saved) {
   });
 }
 
-let ILOG_LAND = null;   // 통역 기록에서 방금 누른 카드: 다시 그린 뒤 그 머리로 스크롤·포커스를 옮긴다
+let ILOG_LAND = null;
+let lastIlogPos = null;   // 마지막으로 포커스가 있던 통역 기록 카드 { id, idx } — 삭제 후 자리를 잇는다   // 통역 기록에서 방금 누른 카드: 다시 그린 뒤 그 머리로 스크롤·포커스를 옮긴다
 function ilogLand(f) {
   const cards = [...document.querySelectorAll('.ilog-card')];
   const card = cards.find(c => c.dataset.live === 'ilog-' + f.id);
@@ -2598,6 +2599,11 @@ function render() {
   settlePre();
   if (TALK.on && (!S.sheet || !studyShown())) cancelTalk();   // 시트를 닫는 모든 경로(닫기·카드 넘김·화면 이동)
   if (!studyShown() && SPK.state !== 'idle') cancelSpeak();
+  /* 포커스가 있던 통역 기록 카드가 이번 그리기에서 사라지면(삭제·모두 지우기) 그 자리 다음 카드로 옮긴다.
+     그냥 두면 포커스가 body 로 떨어져 키보드 사용자는 문서 맨 위부터 다시 훑어야 한다. */
+  const fEl = document.activeElement, fCard = fEl && fEl.closest ? fEl.closest('.ilog-card') : null;
+  /* 창을 열면 포커스가 창으로 옮겨 가므로, 마지막으로 보던 카드를 따로 기억해 둔다 */
+  if (fCard) lastIlogPos = { id: fCard.dataset.live, idx: [...document.querySelectorAll('.ilog-card')].indexOf(fCard) };
   const app = $('.app'), same = S.lastScreen === S.screen;
   const prevTop = LEGACY ? (app ? app.scrollTop : 0) : window.scrollY;   // 제품·데모 모드는 문서 스크롤
   const prevList = $('.split-list'), prevListTop = prevList ? prevList.scrollTop : 0;   // 마스터-디테일 목록의 스크롤
@@ -2624,6 +2630,13 @@ function render() {
   { const nl = $('.split-list'); if (nl && prevListTop) nl.scrollTop = prevListTop; }
   hscrollRestore($('#stage'), prevH);
   if (ILOG_LAND) { const f = ILOG_LAND; ILOG_LAND = null; ilogLand(f); }
+  else if (lastIlogPos && S.screen === 'u-coll' && document.activeElement === document.body) {
+    /* 포커스가 body 로 떨어졌다 — 보던 카드가 지워졌으면 같은 자리 다음 카드로, 아니면 그 카드로 */
+    const cs = [...document.querySelectorAll('.ilog-card')];
+    const t = document.querySelector(`.ilog-card[data-live="${lastIlogPos.id}"]`) || cs[Math.min(lastIlogPos.idx, cs.length - 1)];
+    const h = t && t.querySelector('.ilog-head');
+    if (h) h.focus({ preventScroll: true });
+  }
   S.lastScreen = S.screen;
   sessionWrite();   /* 진도·보던 화면 저장 — 모든 상태 변화가 여기를 지난다 */
 }
@@ -3416,9 +3429,31 @@ function modalHtml(center = false) {
 }
 let modalFn = null;
 const previewOk = new Set();   // 이번 접속에서 '미리 학습하기'를 고른 날짜
-function confirmBox(title, body, ok, fn, o = {}) { S.modal = { title, body, ok, ...o }; modalFn = fn; pushOverlay('modal'); render(); }
+let modalReturn = null;   // 창을 열기 전에 포커스가 있던 곳 — 닫으면 그리로 돌려준다
+function confirmBox(title, body, ok, fn, o = {}) {
+  if (!S.modal) modalReturn = document.activeElement;
+  S.modal = { title, body, ok, ...o }; modalFn = fn; pushOverlay('modal'); render(); modalFocus();
+}
+/* aria-modal="true" 만 걸어 두고 포커스를 옮기지 않으면, 스크린리더는 배경에 커서를 둔 채
+   '창이 떴다'고만 알린다. 열 때 취소 버튼(가장 안전한 선택)으로 옮긴다 — 실수로 지우지 않게. */
+function modalFocus() {
+  const b = document.querySelector('.modal [data-act="modal-cancel"]');
+  if (b) b.focus({ preventScroll: true });
+}
 /* 확인 창을 닫는다. o.onCancel 이 있으면(예: 미래 날짜 확인 → 일정표로) 그것을 부른다 — 취소·바깥 클릭·뒤로가기 공통. */
-function closeModal() { const m = S.modal; S.modal = null; modalFn = null; if (m && typeof m.onCancel === 'function') m.onCancel(); else render(); }
+function closeModal() {
+  const m = S.modal, back = modalReturn;
+  S.modal = null; modalFn = null; modalReturn = null;
+  if (m && typeof m.onCancel === 'function') m.onCancel(); else render();
+  requestAnimationFrame(() => {
+    if (back && back.isConnected) { back.focus({ preventScroll: true }); return; }
+    /* 원래 버튼이 다시 그려져 사라졌다면(목록 카드 안 버튼) 그 카드 머리로 돌려준다 */
+    if (document.activeElement !== document.body) return;
+    const card = lastIlogPos && document.querySelector(`.ilog-card[data-live="${lastIlogPos.id}"]`);
+    const h = card && card.querySelector('.ilog-head');
+    if (h) h.focus({ preventScroll: true });
+  });
+}
 
 function userScreen() {
   switch (S.screen) {
@@ -3908,6 +3943,9 @@ document.addEventListener('focusout', e => {      // 포커스가 목록 안에 
     if (!el || a === el || GEO.keep || (a && ul.contains(a))) return;
     geoClose(el.dataset.geo);
   }, 120);
+});
+document.addEventListener('keydown', e => {   // 확인 창은 Esc 로 닫는다(취소와 같은 뜻)
+  if (e.key === 'Escape' && S.modal) { e.preventDefault(); closeModal(); }
 });
 /* 학습 카드 키보드(휴대폰 외장 키보드·컴퓨터 모두): ↑·↓ 뒤집기, ←·→ 이전·다음 카드.
    글자를 쓰는 칸·창·회화 연습 시트가 열려 있을 때와 조합 키(Ctrl·Alt·Meta·Shift)는 건드리지 않는다.
@@ -5123,6 +5161,8 @@ const ILOG_TEXT = 500;    // 한 줄 글자 상한(서버와 같다)
 const ILOG_BYTES = 58000; // 서버 상한(60KB)보다 조금 작게 — 넘으면 오래된 대화부터 버린다
 const ILOG_ID = /^s[a-z0-9]{1,20}$/;
 const hangul = t => /[가-힣]/.test(t || '');
+/* 계정이 바뀌거나 로그아웃하면 메모리에 읽어 둔 기록을 버린다 — 다음에 그 계정 칸에서 새로 읽는다. */
+function ilogReset() { S.ilog = null; ilogPulledFor = ''; ILOG_UI.err = ''; }
 const ILOG_UI = { busy: false, err: '' };
 let ilogTimer = null, ilogInflight = null, ilogPulledFor = '';
 function ilogBox() { return personalStore() || null; }
@@ -5323,7 +5363,7 @@ function ilogCard(x, open) {
       <div><span class="ilog-who ${l.s === 'ko' ? 'me' : 'other'}">${l.s === 'ko' ? '나' : '상대'} · ${LANG_NAME[l.s] || l.s}</span>
         <p class="ilog-src" lang="${esc(l.s)}">${esc(l.src)}</p>
         <p class="ilog-dst" lang="${esc(l.t)}">${esc(l.dst)}</p></div>
-      <button class="ilog-cp" data-act="ilog-copy" data-id="${esc(x.id)}:${i}" aria-label="이 줄 번역 복사">복사</button>
+      <button class="ilog-cp" data-act="ilog-copy" data-id="${esc(x.id)}:${i}" aria-label="이 줄 번역 복사 — ${l.s === 'ko' ? '나' : '상대'} 말 ${i + 1}번째">복사</button>
     </div>`).join('');
   return `<article class="ilog-card" data-live="ilog-${esc(x.id)}">
     <button class="ilog-head" data-act="ilog-open" data-id="${esc(x.id)}" aria-expanded="${open ? 'true' : 'false'}">
@@ -5478,7 +5518,11 @@ function admUsers() {
 /* ================= 이벤트 ================= */
 let toastTimer;
 function toast(msg) {
-  const el = $('#toast'); el.textContent = msg; el.classList.add('show');
+  const el = $('#toast');
+  /* 같은 문구를 다시 띄우면 글자가 그대로라 스크린리더가 다시 읽지 않는다 → 한 프레임 비웠다 채운다 */
+  el.textContent = '';
+  requestAnimationFrame(() => { el.textContent = msg; });
+  el.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
@@ -6476,7 +6520,7 @@ const ACT = {
       return finishLogin(account, signup ? '가입했어요.' : '로그인했어요.', 1);
     }).catch(err => { enEnd(); render(); const msg = FirebaseAuth.koreanError(err); if (msg) toast(msg); });
   },
-  guest: () => { S.user = GUEST_USER; toast('로그인 없이 시작해요. 기록은 이 브라우저에만 남아요.'); ACT['after-login'](); },
+  guest: () => { S.user = GUEST_USER; ilogReset(); toast('로그인 없이 시작해요. 기록은 이 브라우저에만 남아요.'); ACT['after-login'](); },
   'auth-open': () => { S.authMode = null; go('u-auth'); },
   'auth-pick': el => {   // 두 갈래 중 하나를 고르면 폼을 연다. 폼에서 뒤로가기는 고르기로 돌아간다(오버레이 한 칸)
     const v = el.dataset.v || null;
@@ -6502,6 +6546,7 @@ const ACT = {
       skipStateWrite = true;
       S.user = null;
       S.trip = null;
+      ilogReset();   // 메모리에 남은 앞사람의 통역 기록을 비운다
       resetDerived();
       PROG.done = {}; PROG.pre = {}; PROG.act = {};
       RESTORE.screen = null;
