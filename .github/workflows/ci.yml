@@ -102,6 +102,7 @@ jobs:
           python ../e2e/test_no_sticky_top.py http://localhost:8768   # 화면에 고정되는 띠는 내비뿐: 스크롤하면 앱바가 사라지고, 위에 붙는 띠 0(폰·레일·사이드 × 5화면)
           python ../e2e/test_landscape_fluid.py http://localhost:8768   # 가로 모드·노치: 레일 폭에 노치 포함·라벨 한 줄, 오른쪽 노치 여백, 320~1280 9개 크기 가로 넘침 0
           python ../e2e/test_compact_status.py http://localhost:8768   # 세로가 아주 좁을 때(가로 폰) 완료 안내를 발음기호 옆 한 줄로
+          python ../e2e/test_card_keys.py http://localhost:8768   # 학습 카드 키보드: ↑·↓ 뒤집기, ←·→ 이전·다음(글자 칸·창·조합 키는 건드리지 않음)
           python ../e2e/test_speech_text.py http://localhost:8768
           python ../e2e/test_back_nav.py http://localhost:8768   # 하단 뒤로가기 = 이전 화면
           python ../e2e/test_progress_persist.py http://localhost:8768   # 새로고침 진도 유지
