@@ -1587,7 +1587,7 @@ input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
 .conv-hist li { font-size: 0.8125rem; color: var(--text-soft); border-left: 2px solid var(--border); padding-left: 8px; }
 .live-meter { display: inline-block; width: 42px; height: 4px; border-radius: 4px; background: var(--surface-seg); overflow: hidden; }
 .live-meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .08s linear; }
-.live-mode, .live-muted { font-size: 0.625rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--surface-2); color: var(--text-soft); }
+.live-mode, .live-muted { margin-inline-start: 6px; font-size: 0.625rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--surface-2); color: var(--text-soft); }
 .live-muted { background: var(--bad-soft); color: var(--on-bad-soft); }
 .partner-view { position: fixed; inset: 0; z-index: 300; background: var(--inv-bg); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .partner-inner { max-width: 720px; text-align: center; }
@@ -2694,4 +2694,39 @@ body.is-narrow .spk-card { border-radius: 12px; }
 @media (max-width: 380px) {
   .add-place-row { grid-template-columns: minmax(0, 1fr); }
   .ap-kind > select { min-width: 0; }
+}
+
+/* ===== 통역 바닥: 듣기 상태를 색이 아니라 움직임으로 보여준다 =====
+   ① 멈춤·음소거를 한 버튼으로 합쳤다 — 켜짐은 점 3개가 흐르고 테두리가 맥동한다.
+   ② 점은 '소리를 받고 있다'는 뜻이고, 회색+마이크 사선은 '안 받는다'는 뜻이다.
+   색만으로 구분하지 않는다(모양·움직임이 함께 바뀐다). */
+.il-mic { position: relative; display: grid; place-items: center; align-content: center; gap: 3px;
+  border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text);
+  cursor: pointer; }
+.il-mic-ic { display: grid; place-items: center; }
+.il-mic.listening { border-color: var(--ok); animation: ilPulse 2.2s ease-out infinite; }
+.il-mic.off { border-color: var(--border); background: var(--bad-soft); color: var(--on-bad-soft); }
+.il-live-dots { display: none; gap: 3px; align-items: center; height: 5px; }
+.il-mic.listening .il-live-dots { display: flex; }
+.il-live-dots i { width: 4px; height: 4px; border-radius: 999px; background: var(--ok);
+  animation: ilDot 1.05s ease-in-out infinite; }
+.il-live-dots i:nth-child(2) { animation-delay: .14s; }
+.il-live-dots i:nth-child(3) { animation-delay: .28s; }
+@keyframes ilPulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 50%, transparent); }
+  70% { box-shadow: 0 0 0 10px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@keyframes ilDot {
+  0%, 100% { transform: translateY(0); opacity: .45; }
+  50% { transform: translateY(-3px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .il-mic.listening { animation: none; }
+  .il-live-dots i { animation: none; opacity: 1; }
+}
+/* 좁은 화면: 아이콘만 남아도 켜짐/꺼짐이 점으로 구분된다 */
+@media (max-height: 620px), (orientation: landscape) and (max-height: 560px) {
+  .il-mic { gap: 2px; }
+  .il-live-dots i { width: 3px; height: 3px; }
 }
