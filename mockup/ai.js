@@ -21,6 +21,9 @@
   /* ---------- 서버 주소 ----------
      ?api=https://host 는 이번 방문에서만 쓰고 저장하지 않는다. 녹음이 전송될 서버를 바꾸므로 external 로 알린다.
      http(s) 로 열렸으면 같은 출처(''), file:// 이면 null(폴백 전용). */
+  /* Firebase Hosting(*.web.app · *.firebaseapp.com)은 화면(정적 파일)만 낸다 — API·통역 WebSocket 은 Render 서버로 간다
+     (11/06: Cloud Run 은 마감 때문에 보류, docs/ops/FIREBASE_DEPLOY.md §0). ?api= 가 있으면 그것이 먼저다. */
+  const HOSTED_API = 'https://codyssey-final.onrender.com';
   function apiBase(loc) {
     const protocol = loc.protocol || '';
     const own = protocol === 'http:' || protocol === 'https:';
@@ -34,6 +37,9 @@
           return { base: origin, external: !own || origin !== loc.origin, host: u.host };
         }
       } catch (e) { /* 잘못된 주소는 무시 */ }
+    }
+    if (own && /\.(web\.app|firebaseapp\.com)$/i.test(String(loc.hostname || loc.host || '').replace(/:\d+$/, ''))) {
+      return { base: HOSTED_API, external: false, host: HOSTED_API.replace(/^https:\/\//, '') };   // 우리 서버라 '외부 서버' 안내는 띄우지 않는다
     }
     if (own) return { base: '', external: false, host: loc.host || '' };
     return { base: null, external: false, host: '' };
@@ -766,13 +772,17 @@
        화면은 그 주소를 직접 부르지 않고 GET /place-photo 로 서버가 받아 준다(CSP img-src 'self'). */
     const address = typeof d.address === 'string' ? d.address.replace(/[<>{}]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) : '';
     const im = d.image && typeof d.image === 'object' ? d.image : null;
-    /* 썸네일 호스트가 upload.wikimedia.org 에서 thumb.wikimedia.org 로 바뀌었다(11/06 실측: upload 는 데이터센터 IP 에서
-       403/429, thumb 은 200). 둘 다 받는다. credit 은 이제 저작자 이름이고 license 는 그 파일의 라이선스다. */
-    const image = im && /^https:\/\/(upload|thumb)\.wikimedia\.org\/[^\s"'<>]+$/.test(im.src || '')
-      ? { src: im.src, page: /^https:\/\/commons\.wikimedia\.org\/[^\s"'<>]+$/.test(im.page || '') ? im.page : '',
-          credit: typeof im.credit === 'string' && im.credit.trim() ? im.credit.trim().slice(0, 80) : '위키미디어 공용 기여자',
-          license: typeof im.license === 'string' ? im.license.slice(0, 40) : '',
-          licenseUrl: /^https:\/\/creativecommons\.org\//.test(im.licenseUrl || '') ? im.licenseUrl : '' } : null;
+    // 사진은 저작자·라이선스가 있을 때만(CC BY-SA 표시 요건: 저작자 · 라이선스 · 원본 링크)
+    const txt = (v, n) => typeof v === 'string' ? v.replace(/[<>{}]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n) : '';
+    // Google 사진: 화면이 바로 부르는 짧게 쓰는 주소(googleusercontent) + 찍은 사람 표시. 저장하지 않는다
+    const gimage = im && im.provider === 'google' && /^https:\/\/[a-z0-9-]+\.googleusercontent\.com\/[^\s"'<>]+$/.test(im.src || '')
+      ? { src: im.src, provider: 'google', credit: 'Google 지도',
+          authors: (Array.isArray(im.authors) ? im.authors : []).slice(0, 3).map(a => ({ name: txt(a && a.name, 60) || 'Google 사용자',
+            uri: /^https:\/\/[^\s"'<>]+$/.test((a && a.uri) || '') ? a.uri : '' })) } : null;
+    const image = gimage || (im && im.provider !== 'google' && /^https:\/\/(upload|thumb)\.wikimedia\.org\/[^\s"'<>]+$/.test(im.src || '') && txt(im.license, 40)
+      ? { src: im.src, page: /^https:\/\/commons\.wikimedia\.org\/[^\s"'<>]+$/.test(im.page || '') ? im.page : '', credit: 'Wikimedia Commons',
+          author: txt(im.author, 80) || '작자 미상', license: txt(im.license, 40),
+          licenseUrl: /^https?:\/\/[^\s"'<>]+$/.test(im.license_url || '') ? im.license_url : '' } : null);
     return { state: 'found', name, url: src.url, provider: prov, label: RESEARCH_PROVIDER[prov][0], license: RESEARCH_PROVIDER[prov][1],
              km: Number.isFinite(d.distance_km) ? d.distance_km : null, address,
              addressSource: typeof d.address_source === 'string' && address ? d.address_source.slice(0, 60) : '',

@@ -97,54 +97,25 @@ class QuotaTest(unittest.TestCase):
         self.assertNotEqual(k, place_quota.key_for(uid="203.0.113.7"))      # 계정과 IP 는 다른 칸
 
 
-class _FakeHttp:
-    """공용 API(이미지 정보)만 흉내 낸다."""
-    _PAGES = {"1": {"pageid": 1, "title": "File:X.jpg", "imageinfo": [{
-        "thumburl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/X.jpg/500px-X.jpg?utm_source=commons.wikimedia.org",
-        "extmetadata": {"LicenseShortName": {"value": "CC BY-SA 4.0"},
-                        "Artist": {"value": "<a href='#'>Wei-Te Wong</a>"},
-                        "LicenseUrl": {"value": "https://creativecommons.org/licenses/by-sa/4.0/"}}}]}}
-
-    def get_json(self, url, timeout=8):
-        import urllib.parse as up
-        title = up.parse_qs(up.urlparse(url).query).get("titles", ["File:X.jpg"])[0].replace("File:", "")
-        pg = {"pageid": 1, "title": "File:" + title, "imageinfo": [{
-            "thumburl": f"https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/{title}/500px-{title}?utm_source=commons.wikimedia.org",
-            "extmetadata": {"LicenseShortName": {"value": "CC BY-SA 4.0"},
-                            "Artist": {"value": "<a href='#'>Wei-Te Wong</a>"},
-                            "LicenseUrl": {"value": "https://creativecommons.org/licenses/by-sa/4.0/"}}}]}
-
-        class R:
-            ok = True
-        return R(), {"query": {"pages": {"1": pg}}}
-
-
 class EnrichTest(unittest.TestCase):
-    def test_commons_thumbnail_comes_from_the_api_verbatim(self):
-        """11/06: md5 로 주소를 조립하던 방식을 버렸다 — 그 주소는 upload.wikimedia.org(데이터센터 IP 403/429)로
-        가고 폭을 바꾸면 400 이 났다. 이제 공용 API 가 준 thumburl 을 글자 그대로 쓴다(utm 파라미터 포함)."""
-        with mock.patch.object(place_check, "SafeHttp", _FakeHttp):
-            im = place_check.commons_image("Statue_of_Liberty_7.jpg", 500)
-        self.assertIsNotNone(im)
-        self.assertTrue(im["src"].startswith("https://thumb.wikimedia.org/"), im["src"])
-        self.assertIn("500px-Statue_of_Liberty_7.jpg", im["src"])
-        self.assertEqual(im["license"], "CC BY-SA 4.0")
-        self.assertEqual(im["credit"], "Wei-Te Wong")            # 플랫폼 이름이 아니라 저작자
+    def test_commons_thumbnail_uses_md5_path_and_standard_width(self):
+        im = place_check.commons_image("Statue of Liberty 7.jpg")
+        self.assertEqual(im["src"], "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Statue_of_Liberty_7.jpg/500px-Statue_of_Liberty_7.jpg")
         self.assertEqual(im["page"], "https://commons.wikimedia.org/wiki/File:Statue_of_Liberty_7.jpg")
+        self.assertTrue(place_check.commons_image("Map.svg")["src"].endswith("500px-Map.svg.png"))
+        for bad in ("", "../x.jpg", "a/b.jpg", "file.pdf"):
+            self.assertIsNone(place_check.commons_image(bad))
 
-    def test_commons_rejects_non_image_name(self):
-        self.assertIsNone(place_check.commons_image("../../etc/passwd"))
-        self.assertIsNone(place_check.commons_image("thing.txt"))
     def test_wikidata_address_and_image_from_claims(self):
         cl = {"P18": [{"mainsnak": {"datavalue": {"value": "Todaiji.jpg"}}}],
               "P6375": [{"mainsnak": {"datavalue": {"value": {"text": "406-1 Zoshicho, Nara", "language": "en"}}}}]}
         self.assertEqual(place_check._wd_text(cl, "P6375"), "406-1 Zoshicho, Nara")
-        self.assertIn("500px-Todaiji.jpg", place_check._wd_image(cl)["src"])
+        self.assertTrue(place_check._wd_image(cl)["src"].endswith("/500px-Todaiji.jpg"))
         self.assertIsNone(place_check._wd_image({}))
 
     def test_enrich_fills_missing_photo_and_address_but_keeps_found(self):
         got = {"status": "found", "name": "X", "lat": 1.0, "lon": 2.0, "address": "", "image": None}
-        img = {"src": "https://upload.wikimedia.org/a.jpg", "page": "", "credit": "Wikimedia Commons"}
+        img = {"src": "https://upload.wikimedia.org/a.jpg", "page": "", "credit": "Wikimedia Commons", "license": "CC BY-SA 4.0"}
         with mock.patch.object(place_check, "_photo_near", return_value=img), \
                 mock.patch.object(place_check, "_reverse", return_value="1 <b>Main</b> St https://evil.example"):
             out = place_check._enrich(None, "X", dict(got))
@@ -154,9 +125,116 @@ class EnrichTest(unittest.TestCase):
             out = place_check._enrich(None, "X", dict(got))
         self.assertEqual((out["status"], out["image"], out["address"]), ("found", None, ""))   # 보강 실패해도 찾은 결과는 그대로
 
+    def test_photo_without_license_is_dropped(self):
+        got = {"status": "found", "name": "X", "lat": 1.0, "lon": 2.0, "address": "a",
+               "image": place_check.commons_image("X.jpg")}
+        with mock.patch.object(place_check, "commons_meta", return_value=None):
+            self.assertIsNone(place_check._enrich(None, "X", dict(got))["image"])      # 저작자·라이선스를 못 알면 사진 없음
+
+    def test_commons_meta_reads_author_license_and_api_thumb(self):
+        api = {"query": {"pages": {"1": {"imageinfo": [{
+            "thumburl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/63/G.jpg/500px-G.jpg?utm_source=x",
+            "descriptionurl": "https://commons.wikimedia.org/wiki/File:G.jpg",
+            "extmetadata": {"Artist": {"value": '<a href="//commons.wikimedia.org/wiki/User:Kim">Kim &amp; Lee</a>'},
+                            "LicenseShortName": {"value": "CC BY-SA 4.0"},
+                            "LicenseUrl": {"value": "https://creativecommons.org/licenses/by-sa/4.0"}}}]}}}}
+        http = mock.Mock()
+        http.get_json.return_value = (net.Response(200, b"{}"), api)
+        m = place_check.commons_meta(http, place_check.commons_image("G.jpg"))
+        self.assertEqual(m, {"src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/63/G.jpg/500px-G.jpg",
+                             "page": "https://commons.wikimedia.org/wiki/File:G.jpg", "credit": "Wikimedia Commons",
+                             "author": "Kim & Lee", "license": "CC BY-SA 4.0",
+                             "license_url": "https://creativecommons.org/licenses/by-sa/4.0"})
+        api["query"]["pages"]["1"]["imageinfo"][0]["extmetadata"].pop("LicenseShortName")
+        self.assertIsNone(place_check.commons_meta(http, place_check.commons_image("G.jpg")))
+
+    def test_borrowed_photo_needs_same_name(self):
+        near = {"status": "found", "name": "Jamba Juice Shibuya", "lat": 35.66, "lon": 139.70,
+                "image": {"src": "https://upload.wikimedia.org/j.jpg"}}
+        with mock.patch.object(place_check, "_by_wikidata", return_value=near):
+            self.assertIsNone(place_check._photo_near(None, "Blue Bottle Coffee Shibuya", 35.66, 139.70))
+            self.assertEqual(place_check._photo_near(None, "Jamba Juice", 35.66, 139.70), near["image"])
+
     def test_found_result_carries_address_and_image_fields(self):
         r = place_check._found("tourapi", "근대역사박물관", 35.98, 126.71, "https://x", 0.5, "attraction", address="전북 군산시 해망로 240")
         self.assertEqual((r["address"], r["image"]), ("전북 군산시 해망로 240", None))
+
+
+class GooglePhotoTest(unittest.TestCase):
+    """무료 공용 사진이 없을 때만 Google 사진 — 화면이 바로 부르는 photoUri + 찍은 사람 표시, 저장·캐시하지 않는다."""
+    ITEM = {"photos": [{"name": "places/ChIJabc/photos/AU3ubuXYZ",
+                        "authorAttributions": [{"displayName": "Kim <b>", "uri": "//maps.google.com/maps/contrib/123"}]}]}
+
+    def test_first_photo_reads_reference_and_author(self):
+        from app.research.sources import google_places as gp
+        self.assertEqual(gp._first_photo(self.ITEM), {"name": "places/ChIJabc/photos/AU3ubuXYZ",
+                                                       "authors": [{"name": "Kim", "uri": "https://maps.google.com/maps/contrib/123"}]})
+        self.assertIsNone(gp._first_photo({"photos": [{"name": "../../etc"}]}))
+        self.assertIsNone(gp._first_photo({}))
+
+    @mock.patch.dict(os.environ, {"GOOGLE_MAPS_API_KEY": "SECRET", "RESEARCH_SOURCES": "", "ITINERARY_DAILY_CAP": "50"})
+    def test_photo_uri_keeps_key_in_header_and_only_googleusercontent(self):
+        from app.agents import itinerary
+        from app.research.sources import google_places as gp
+        itinerary.reset_daily_cap()
+        seen = {}
+
+        def req(method, url, headers=None, **kw):
+            seen.update(url=url, headers=headers)
+            return net.Response(200, b'{"photoUri": "https://lh3.googleusercontent.com/place-photos/AbC=s500"}')
+        http = mock.Mock(request=req)
+        got = gp.photo_uri(http, gp._first_photo(self.ITEM))
+        self.assertEqual(got["src"], "https://lh3.googleusercontent.com/place-photos/AbC=s500")
+        self.assertEqual((got["provider"], got["authors"][0]["name"]), ("google", "Kim"))
+        self.assertNotIn("SECRET", seen["url"])                                           # 키는 주소가 아니라 머리글에
+        self.assertEqual(seen["headers"]["X-Goog-Api-Key"], "SECRET")
+        self.assertIn("skipHttpRedirect=true", seen["url"])
+        http2 = mock.Mock(request=lambda *a, **k: net.Response(200, b'{"photoUri": "https://evil.example/x.jpg"}'))
+        self.assertIsNone(gp.photo_uri(http2, gp._first_photo(self.ITEM)))
+        with mock.patch.object(itinerary, "_reserve", return_value=0):
+            self.assertIsNone(gp.photo_uri(http, gp._first_photo(self.ITEM)))              # 일 한도를 다 쓰면 부르지 않는다
+
+    def test_google_photo_only_when_no_free_photo_and_never_remembered(self):
+        from app.research.sources import google_places as gp
+        gimg = {"src": "https://lh3.googleusercontent.com/p/A=s500", "provider": "google", "credit": "Google 지도", "authors": []}
+        wd = {"status": "found", "name": "Myeongdong Kyoja", "lat": 37.5638, "lon": 126.9853, "distance_km": 1.0, "kind": "",
+              "address": "", "image": None, "source": {"provider": "wikidata", "url": "https://www.wikidata.org/wiki/Q1", "title": "x", "license": "CC0"}}
+        hit = {"name": "Myeongdong Kyoja Main", "lat": 37.5639, "lon": 126.9854, "url": "https://maps.google.com/?cid=1", "address": "",
+               "photo": {"name": "places/x/photos/y", "authors": []}}
+        place_check.clear()
+        with mock.patch.object(place_check, "_photo_near", return_value=None),                 mock.patch.object(place_check, "_reverse", return_value="서울 중구 명동10길 29"),                 mock.patch.object(gp, "available", return_value=True),                 mock.patch.object(gp, "find", return_value=hit),                 mock.patch.object(gp, "photo_uri", return_value=gimg) as pu:
+            out = place_check._enrich(None, "Myeongdong Kyoja", dict(wd))
+            self.assertEqual(out["image"], gimg)
+            pu.assert_called_once()
+            # 이름이 다르면(근처 다른 가게) Google 사진도 붙이지 않는다
+            other = dict(hit, name="Jamba Juice")
+            with mock.patch.object(gp, "find", return_value=other):
+                self.assertIsNone(place_check._enrich(None, "Myeongdong Kyoja", dict(wd))["image"])
+        # 공용 사진이 있으면 Google 은 부르지 않는다
+        free = dict(wd, image={"src": "https://upload.wikimedia.org/a.jpg", "license": "CC BY-SA 4.0"})
+        with mock.patch.object(gp, "find") as f, mock.patch.object(gp, "photo_uri") as pu2,                 mock.patch.object(place_check, "_reverse", return_value=""):
+            self.assertEqual(place_check._enrich(None, "x", dict(free))["image"]["license"], "CC BY-SA 4.0")
+            f.assert_not_called(); pu2.assert_not_called()
+
+    def test_check_does_not_memo_google_photo(self):
+        place_check.clear()
+        gimg = {"src": "https://lh3.googleusercontent.com/p/A=s500", "provider": "google"}
+        found = {"status": "found", "name": "X", "lat": 1.0, "lon": 2.0, "image": None, "address": "a",
+                 "source": {"provider": "wikidata"}}
+        with mock.patch.object(place_check.config, "research_enabled", return_value=True),                 mock.patch.object(place_check.identity, "resolve", return_value={"cities": [{"ref": {"key": "JP_1", "lat": 1.0, "lon": 2.0}}]}),                 mock.patch.object(place_check.nodes, "enrich_unresolved"),                 mock.patch.object(place_check, "_by_tourapi", return_value=None),                 mock.patch.object(place_check, "_by_wikidata", return_value=dict(found)),                 mock.patch.object(place_check, "_enrich", side_effect=lambda h, n, g: {**g, "image": gimg}):
+            r = place_check.check({"country": {"name": "일본"}, "city": {"name": "나라"}, "place": {"name": "X"}},
+                                  http=mock.Mock(), store=mock.Mock(), cache=mock.Mock())
+            self.assertEqual(r["image"], gimg)                                               # 이번 확인 창에는 보이고
+            again = place_check.check({"country": {"name": "일본"}, "city": {"name": "나라"}, "place": {"name": "X"}},
+                                      http=mock.Mock(), store=mock.Mock(), cache=mock.Mock())
+        self.assertTrue(again.get("cached"))
+        self.assertIsNone(again["image"])                                                    # 기억한 결과에는 Google 사진이 없다
+
+    def test_csp_allows_google_photo_host_only_for_images(self):
+        csp = TestClient(main.app).get("/health").headers.get("content-security-policy", "")
+        img = next(p for p in csp.split(";") if p.strip().startswith("img-src"))
+        self.assertIn("https://*.googleusercontent.com", img)
+        self.assertNotIn("googleusercontent", csp.replace(img, ""))                          # 스크립트·연결에는 열지 않는다
 
 
 class PhotoProxyTest(unittest.TestCase):
@@ -165,7 +243,8 @@ class PhotoProxyTest(unittest.TestCase):
         self.http = TestClient(main.app)
 
     def test_only_wikimedia_images(self):
-        for src in ("http://upload.wikimedia.org/a.jpg", "https://evil.example/a.jpg", "https://upload.wikimedia.org@evil.example/a.jpg"):
+        for src in ("http://upload.wikimedia.org/a.jpg", "https://evil.example/a.jpg", "https://upload.wikimedia.org@evil.example/a.jpg",
+                    "https://169.254.169.254/latest/meta-data", "https://commons.wikimedia.org/wiki/File:a.jpg"):
             self.assertEqual(self.http.get("/place-photo", params={"src": src}).status_code, 404, src)
 
     def test_returns_image_only_by_magic_bytes_and_caches(self):
@@ -178,10 +257,11 @@ class PhotoProxyTest(unittest.TestCase):
         with mock.patch.object(net.SafeHttp, "request", fake):
             r = self.http.get("/place-photo", params={"src": "https://upload.wikimedia.org/x/a.jpg"})
             r2 = self.http.get("/place-photo", params={"src": "https://upload.wikimedia.org/x/a.jpg"})
+            r3 = self.http.get("/place-photo", params={"src": "https://thumb.wikimedia.org/x/b.jpg"})
             bad = self.http.get("/place-photo", params={"src": "https://upload.wikimedia.org/x/a.png"})
         self.assertEqual((r.status_code, r.headers["content-type"], r.content), (200, "image/jpeg", jpg))
-        self.assertEqual(r2.status_code, 200)
-        self.assertEqual(len([c for c in calls if c.endswith(".jpg")]), 1)                 # 두 번째는 캐시
+        self.assertEqual((r2.status_code, r3.status_code), (200, 200))      # 공용 API 가 주는 thumb 호스트도
+        self.assertEqual(len([c for c in calls if c.endswith("/a.jpg")]), 1)                 # 두 번째는 캐시
         self.assertEqual(bad.status_code, 404)                                              # 이미지가 아니면 내보내지 않는다
 
 

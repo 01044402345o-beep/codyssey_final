@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import html
 import re
 import threading
 import time
@@ -30,6 +31,7 @@ from .sources import LICENSES, google_places, tourapi, wikidata
 MAX_KM = 40.0
 PHOTO_KM = 1.0                       # 다른 소스로 찾은 곳에 Wikidata 사진을 붙일 때 허용 거리
 NOMINATIM = "https://nominatim.openstreetmap.org/reverse"
+COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 _nominatim_lock = threading.Lock()
 _nominatim_last = [0.0]              # Nominatim 사용 정책: 초당 1회 이하
 CACHE_TTL = 7 * 86400
@@ -86,61 +88,81 @@ def _clean_addr(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()[:160]
 
 
+def commons_image(filename: str, width: int = 500) -> Optional[dict]:
+    """위키미디어 공용 파일 이름 → 썸네일 주소(upload.wikimedia.org)·파일 문서 주소. 주소 규칙: md5(이름)의 앞 1·2자리 폴더.
+    썸네일 폭은 위키미디어가 정한 표준 폭만 된다(330·500·960 … — 480·640 은 400 오류, 11/05 확인)."""
+    name = (filename or "").strip().replace(" ", "_")
+    if not name or len(name) > 240 or "/" in name or not re.search(r"\.(jpe?g|png|gif|webp|tiff?|svg)$", name, re.I):
+        return None
+    h = hashlib.md5(name.encode("utf-8")).hexdigest()
+    q = urllib.parse.quote(name)
+    ext = ".png" if name.lower().endswith((".svg", ".tif", ".tiff")) else ""
+    return {"src": f"https://upload.wikimedia.org/wikipedia/commons/thumb/{h[0]}/{h[:2]}/{q}/{width}px-{q}{ext}",
+            "page": "https://commons.wikimedia.org/wiki/File:" + q, "credit": "Wikimedia Commons", "file": name}
+
+
+def _plain(s: str, n: int) -> str:
+    """위키미디어 extmetadata 값(HTML 섞임) → 글자만."""
+    s = html.unescape(re.sub(r"<[^>]+>", " ", s or ""))
+    return re.sub(r"\s+", " ", s).strip()[:n]
+
+
+def commons_meta(http: SafeHttp, image: dict) -> Optional[dict]:
+    """사진의 저작자·라이선스·원본 파일 문서(CC BY-SA 표시 요건 — 저작자·라이선스·출처 링크). 공용 API 가 주는 썸네일 주소를 쓴다.
+    라이선스를 알 수 없으면 None — 표시 요건을 못 채우는 사진은 보이지 않는다."""
+    name = (image or {}).get("file") or ""
+    if not name:
+        return None
+    res, d = http.get_json(COMMONS_API + "?" + urllib.parse.urlencode({
+        "action": "query", "titles": "File:" + name, "prop": "imageinfo", "iiprop": "url|extmetadata",
+        "iiurlwidth": 500, "iiextmetadatafilter": "Artist|LicenseShortName|LicenseUrl", "format": "json"}), timeout=8)
+    if not res.ok:
+        return None
+    pages = ((d or {}).get("query") or {}).get("pages") or {}
+    info = next(iter(((p or {}).get("imageinfo") or [{}])[0] for p in pages.values()), {}) if pages else {}
+    meta = info.get("extmetadata") or {}
+    lic = _plain((meta.get("LicenseShortName") or {}).get("value", ""), 40)
+    thumb = str(info.get("thumburl") or "").split("?")[0]      # 공용 API 는 thumb.wikimedia.org(+추적 쿼리)를 준다
+    page = str(info.get("descriptionurl") or image.get("page") or "")
+    if not _license_ok(lic) or not re.fullmatch(r"https://(upload|thumb)\.wikimedia\.org/[^\s\"'<>?]+", thumb):
+        return None
+    lic_url = str((meta.get("LicenseUrl") or {}).get("value") or "")
+    return {"src": thumb, "page": page if page.startswith("https://commons.wikimedia.org/") else image.get("page", ""),
+            "credit": "Wikimedia Commons", "author": _plain((meta.get("Artist") or {}).get("value", ""), 80) or "작자 미상",
+            "license": lic, "license_url": lic_url if re.fullmatch(r"https?://[^\s\"'<>]+", lic_url) else ""}
+
+
+
 def _img_from_page(page: dict, dist: Optional[float]) -> Optional[dict]:
+    """공용 API 페이지(imageinfo) → 사진. API 가 준 썸네일 주소를 그대로 쓴다(폭·호스트를 다시 조립하면 400/403).
+    라이선스가 자유 이용(CC0·PD·CC BY·BY-SA)이 아니면 쓰지 않는다(NC·ND·fair use 제외)."""
     ii = (page.get("imageinfo") or [{}])[0]
-    thumb = ii.get("thumburl") or ""
-    # API 가 준 주소를 그대로 쓴다. 호스트·폭을 다시 조립하면 400/403 이 난다(400px·640px 는 400 실측).
-    if not isinstance(thumb, str) or not thumb.startswith("https://") or len(thumb) > 600:
+    thumb = str(ii.get("thumburl") or "").split("?")[0]
+    if not re.fullmatch(r"https://(upload|thumb)\.wikimedia\.org/[^\s\"'<>?]+", thumb) or len(thumb) > 600:
         return None
     meta = ii.get("extmetadata") or {}
     short = _plain_text(((meta.get("LicenseShortName") or {}) or {}).get("value"))
     if not _license_ok(short):
         return None
-    lic_url = ((meta.get("LicenseUrl") or {}) or {}).get("value") or ""
-    author = _plain_text(((meta.get("Artist") or {}) or {}).get("value")) or "위키미디어 공용 기여자"
+    lic_url = str(((meta.get("LicenseUrl") or {}) or {}).get("value") or "")
     title = str(page.get("title") or "").replace("File:", "")
     return {"src": thumb, "page": "https://commons.wikimedia.org/wiki/File:" + urllib.parse.quote(title.replace(" ", "_")),
-            "credit": author, "license": short,
-            "licenseUrl": lic_url if isinstance(lic_url, str) and lic_url.startswith("https://") else "",
+            "credit": "Wikimedia Commons", "author": _plain_text(((meta.get("Artist") or {}) or {}).get("value"))[:80] or "작자 미상",
+            "license": short[:40], "license_url": lic_url if re.fullmatch(r"https?://[^\s\"'<>]+", lic_url) else "",
             "title": title[:120], "km": None if dist is None else round(dist / 1000.0, 2)}
-
-
-def commons_image(filename: str, width: int = 500, http: Optional[SafeHttp] = None) -> Optional[dict]:
-    """위키미디어 공용 파일 이름 → 썸네일 주소·저작자·라이선스.
-
-    11/06 이전에는 md5(이름)로 주소를 조립했다. 그 방식은 (a) upload.wikimedia.org 로 가는데 이 호스트는
-    데이터센터 IP 에서 403 'honor our robot policy'/429 를 내고, (b) 폭을 400·640 으로 바꾸면 400 이 난다.
-    이제 공용 API 에 물어 **API 가 준 thumburl 을 그대로** 쓰고, 저작자·라이선스도 같이 받는다
-    (CC BY·BY-SA 는 표시 의무가 있고, 지금까지는 플랫폼 이름만 찍고 있었다)."""
-    name = (filename or "").strip().replace(" ", "_")
-    if not name or len(name) > 240 or "/" in name or not re.search(r"\.(jpe?g|png|gif|webp|tiff?)$", name, re.I):
-        return None
-    http = http or SafeHttp()
-    q = {"action": "query", "format": "json", "titles": "File:" + name, "prop": "imageinfo",
-         "iiprop": "url|extmetadata", "iiurlwidth": str(width)}
-    try:
-        res, d = http.get_json(COMMONS_API + "?" + urllib.parse.urlencode(q), timeout=8)
-    except Exception:      # noqa: BLE001 — 사진 없이 카드를 그리는 편이 낫다
-        return None
-    if not res.ok or not isinstance(d, dict):
-        return None
-    pages = ((d.get("query") or {}).get("pages") or {})
-    for page in pages.values() if isinstance(pages, dict) else []:
-        if isinstance(page, dict) and page.get("imageinfo"):
-            return _img_from_page(page, None)
-    return None
 
 
 # ── 위키미디어 공용: 좌표로 찾기(11/06) ────────────────────────────────────────────
 # 이름으로 찾으면 한국 상호에서 0건이다(하동관 0·성수동 카페 0·광장시장 식당 0 실측).
 # 좌표로 찾으면 같은 API·같은 키 없이 8~50건이 나온다. 다만 좌표 결과는 '그 집'이 아니라
 # '그 근처' 사진이므로, 파일 이름이 장소 이름과 맞을 때만 그 장소의 사진으로 인정한다.
-COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 GEO_RADIUS_M = 300
 GEO_LIMIT = 20
 # 표시 의무가 없는(CC0·퍼블릭도메인) 것과, 저작자·라이선스를 붙이면 되는 것만 통과시킨다.
-# 그 밖(fair use·비자유·NC·ND)은 쓰지 않는다.
-_CC_OK = re.compile(r"^(cc0|cc[- ]by([- ]sa)?([- ]\d(\.\d)?)?|public domain|pd)", re.I)
+# 그 밖(fair use·비자유·NC·ND)은 쓰지 않는다. 공공누리는 제1유형(출처표시만)만 — 2·3·4유형은 상업 금지·변경 금지가 붙는다.
+# GFDL·FAL·Attribution 도 공용에서 쓰는 자유 라이선스다(경복궁 대표 사진이 KOGL Type 1 — 빠뜨리면 사진이 사라진다, 11/06 실측)
+_CC_OK = re.compile(r"^(cc0|cc[- ]by([- ]sa)?([- ]\d(\.\d)?)?|public domain|pd|kogl[- ]type[- ]?1\b|gfdl|fal\b|"
+                    r"free art licen[cs]e|attribution\b|copyrighted free use)", re.I)
 _CC_BAD = re.compile(r"(\bnc\b|\bnd\b|non[- ]?commercial|no[- ]?deriv|fair use|non[- ]?free)", re.I)
 
 
@@ -219,7 +241,7 @@ def wikidata_geo_image(http: SafeHttp, name: str, lat: float, lon: float) -> Opt
   FILTER(LANG(?label) IN ({",".join('"' + x + '"' for x in GEO_LANGS)}))
 }} ORDER BY ?dist LIMIT 40"""
     try:
-        res, d = http.get_json(SPARQL + "?" + urllib.parse.urlencode({"query": q, "format": "json"}), timeout=25)
+        res, d = http.get_json(SPARQL + "?" + urllib.parse.urlencode({"query": q, "format": "json"}), timeout=8)   # 확인 창이 기다린다 — 다른 사진 조회와 같은 8초
     except Exception:      # noqa: BLE001
         return None
     if not res.ok or not isinstance(d, dict):
@@ -247,7 +269,7 @@ def wikidata_geo_image(http: SafeHttp, name: str, lat: float, lon: float) -> Opt
     # (경복궁 → '경복궁' 이 36m, '경복궁 사정전' 이 59m — 거리만 보면 사정전이 이겼다)
     hits.sort(key=lambda v: (not any(want == _name_tokens(l) for l in v["labels"]), v["dist"]))
     for hit in hits:
-        got = commons_image(urllib.parse.unquote(hit["file"]), 500, http)
+        got = commons_meta(http, commons_image(urllib.parse.unquote(hit["file"])))
         if got:
             got["km"] = round(hit["dist"] / 1000.0, 2)
             return got
@@ -259,7 +281,8 @@ def commons_geosearch(http: SafeHttp, name: str, lat: float, lon: float) -> Opti
     이름이 맞는 것이 없으면 None — '근처 사진'을 그 장소 사진으로 쓰지 않는다."""
     q = {"action": "query", "format": "json", "generator": "geosearch",
          "ggscoord": f"{lat:.6f}|{lon:.6f}", "ggsradius": str(GEO_RADIUS_M), "ggslimit": str(GEO_LIMIT),
-         "ggsnamespace": "6", "prop": "imageinfo", "iiprop": "url|extmetadata", "iiurlwidth": "500"}
+         "ggsnamespace": "6", "prop": "imageinfo|coordinates", "iiprop": "url|extmetadata", "iiurlwidth": "500",
+         "codistancefrompoint": f"{lat:.6f}|{lon:.6f}"}     # generator 로 부르면 거리는 coordinates[0].dist 에만 온다
     res, d = http.get_json(COMMONS_API + "?" + urllib.parse.urlencode(q), timeout=8)
     if not res.ok or not isinstance(d, dict):
         return None
@@ -281,8 +304,10 @@ def commons_geosearch(http: SafeHttp, name: str, lat: float, lon: float) -> Opti
             continue
         dist = dist_by_id.get(str(page.get("pageid")))
         if dist is None:
+            co = (page.get("coordinates") or [{}])[0] if isinstance(page.get("coordinates"), list) else {}
+            raw = page.get("dist") if page.get("dist") is not None else (co or {}).get("dist")
             try:
-                dist = float(page["dist"]) if page.get("dist") is not None else None
+                dist = float(raw) if raw is not None else None
             except (TypeError, ValueError):
                 dist = None
         img = _img_from_page(page, dist)
@@ -372,29 +397,35 @@ def _by_google(http: SafeHttp, ref: dict, name: str) -> Optional[dict]:
     if not hit:
         return None
     km = _near(ref, hit["lat"], hit["lon"])
-    return None if km is None else _found("google", hit["name"], hit["lat"], hit["lon"], hit["url"], km,
-                                          address=hit.get("address") or "")
+    if km is None:
+        return None
+    got = _found("google", hit["name"], hit["lat"], hit["lon"], hit["url"], km, address=hit.get("address") or "")
+    got["_gphoto"] = hit.get("photo")                    # 사진 참조 — 무료 사진이 없을 때만 주소로 바꾼다(저장 안 함)
+    return got
 
 
 def _photo_near(http: SafeHttp, name: str, lat: float, lon: float) -> Optional[dict]:
-    """사진 폴백: ① 같은 이름의 Wikidata 항목이 PHOTO_KM 안이면 P18
-    ② 아니면 공용 좌표 검색(이름 일치 + 라이선스 통과) ③ 그래도 없으면 None(사진 없이 보여 준다)."""
+    """무료 사진 찾기(이름이 맞는 것만 — 근처 다른 곳의 사진을 붙이지 않는다):
+    ① 같은 이름의 Wikidata 항목이 PHOTO_KM 안이면 그 P18
+    ② 좌표 반경(0.5km)의 Wikidata 항목 중 다국어 라벨(ko·en·ja·zh·fr·es·de)이 이름과 맞는 것의 P18 — 한국어 상호도 맞는다
+    ③ 공용 좌표 검색(300m) — 파일 이름에 이름의 낱말이 모두 있는 것
+    ④ 없으면 None(그다음은 _enrich 의 Google 사진)."""
     try:
         got = _by_wikidata(http, {"lat": lat, "lon": lon}, name)
         if got and got.get("image") and verify.km(lat, lon, got["lat"], got["lon"]) <= PHOTO_KM:
-            return got["image"]
-    except Exception:  # noqa: BLE001 — P18 실패가 좌표 검색을 막지 않게
+            a, b = _key(name), _key(got.get("name") or "")
+            if a and b and (a in b or b in a):
+                return got["image"]
+    except Exception:  # noqa: BLE001 — 한 방법의 실패가 다음 방법을 막지 않게
         pass
-    try:
-        got = wikidata_geo_image(http, name, lat, lon)
+    for finder in (wikidata_geo_image, commons_geosearch):
+        try:
+            got = finder(http, name, lat, lon)
+        except Exception:  # noqa: BLE001
+            got = None
         if got:
             return got
-    except Exception:  # noqa: BLE001
-        pass
-    try:
-        return commons_geosearch(http, name, lat, lon)
-    except Exception:  # noqa: BLE001
-        return None
+    return None
 
 
 def _reverse(http: SafeHttp, lat: float, lon: float) -> str:
@@ -416,6 +447,25 @@ def _enrich(http: SafeHttp, name: str, got: dict) -> dict:
             got["image"] = _photo_near(http, name, got["lat"], got["lon"])
         except Exception:  # noqa: BLE001
             got["image"] = None
+    if got.get("image") and not got["image"].get("license"):
+        try:
+            got["image"] = commons_meta(http, got["image"])     # 저작자·라이선스를 못 알면 사진을 쓰지 않는다
+        except Exception:  # noqa: BLE001
+            got["image"] = None
+    if not got.get("image"):
+        # 무료 공용 사진이 없으면 Google 사진(찍은 사람 표시, 저장·캐시 안 함). 다른 소스로 찾은 곳은 Google 에서 이름으로
+        # 다시 찾되 같은 이름·1km 안일 때만 그 사진을 쓴다(근처 다른 가게 사진을 붙이지 않게)
+        try:
+            ph = got.get("_gphoto")
+            if ph is None and got["source"]["provider"] != "google" and google_places.available():
+                hit = google_places.find(http, {"lat": got["lat"], "lon": got["lon"], "population": 0}, name)
+                if hit and verify.km(got["lat"], got["lon"], hit["lat"], hit["lon"]) <= PHOTO_KM:
+                    a, b = _key(name), _key(hit.get("name") or "")
+                    ph = hit.get("photo") if a and b and (a in b or b in a) else None
+            got["image"] = google_places.photo_uri(http, ph) if ph else None
+        except Exception:  # noqa: BLE001
+            got["image"] = None
+    got.pop("_gphoto", None)
     if not got.get("address"):
         try:
             got["address"] = _clean_addr(_reverse(http, got["lat"], got["lon"]))
@@ -458,6 +508,9 @@ def check(req: dict, *, http: Optional[SafeHttp] = None, store: Any = None, cach
         if got:
             got = _enrich(http, name, got)
             if storable:
-                _memo_put(key, got)
+                keep = dict(got)
+                if (keep.get("image") or {}).get("provider") == "google":
+                    keep["image"] = None                     # Google 사진은 기억하지 않는다(약관) — 다음 확인 때 다시 받는다
+                _memo_put(key, keep)
             return got
     return {"status": "not_found"}                       # 못 찾음은 기억하지 않는다(키·한도가 바뀌면 다시 찾을 수 있게)

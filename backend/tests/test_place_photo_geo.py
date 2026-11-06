@@ -64,11 +64,11 @@ class NameGate(unittest.TestCase):
 
 class License(unittest.TestCase):
     def test_accepts_free(self):
-        for s in ("CC0", "CC BY 4.0", "CC BY-SA 4.0", "Public domain", "PD-USGov", "cc by-sa 2.0"):
+        for s in ("CC0", "CC BY 4.0", "CC BY-SA 4.0", "Public domain", "PD-USGov", "cc by-sa 2.0", "KOGL Type 1", "GFDL", "Attribution"):
             self.assertTrue(place_check._license_ok(s), s)
 
     def test_rejects_nonfree(self):
-        for s in ("", "CC BY-NC 4.0", "CC BY-ND 4.0", "Fair use", "non-free", "All rights reserved"):
+        for s in ("", "CC BY-NC 4.0", "CC BY-ND 4.0", "Fair use", "non-free", "All rights reserved", "KOGL Type 2", "KOGL Type 4"):
             self.assertFalse(place_check._license_ok(s), s)
 
     def test_artist_html_is_plain_text(self):
@@ -81,8 +81,9 @@ class GeoSearch(unittest.TestCase):
                  [{"pageid": 1, "dist": 42.0}])
         got = place_check.commons_geosearch(h, "Shibuya Sky", 35.658, 139.7016)
         self.assertEqual(got["src"], THUMB)          # 호스트·폭을 다시 조립하지 않는다
-        self.assertEqual(got["credit"], "홍길동")
+        self.assertEqual((got["credit"], got["author"]), ("Wikimedia Commons", "홍길동"))   # main 의 사진 형식(저작자는 author)
         self.assertEqual(got["license"], "CC BY-SA 2.0")
+        self.assertEqual(got["license_url"], "https://creativecommons.org/licenses/by-sa/4.0/")
         self.assertEqual(got["km"], 0.04)             # dist 는 query.geosearch 배열에 있다
         self.assertIn("ggscoord=35.658000%7C139.701600", h.urls[0])
         self.assertIn("iiurlwidth=500", h.urls[0])
@@ -141,9 +142,34 @@ class GeoEntity(unittest.TestCase):
                     d = {"query": {"pages": {"1": page(1, "File:" + name, THUMB, "CC BY-SA 4.0")}}}
                 return Resp(True, d), d
         got = place_check.wikidata_geo_image(H(), "경복궁", 37.5796, 126.9770)
-        self.assertEqual(got["title"], "Main.jpg")   # 정확 라벨이 더 멀어도 이긴다
+        self.assertTrue(got["page"].endswith("File:Main.jpg"), got)   # 정확 라벨이 더 멀어도 이긴다
         self.assertEqual(got["license"], "CC BY-SA 4.0")
-        self.assertEqual(got["credit"], "홍길동")
+        self.assertEqual(got["author"], "홍길동")
+        self.assertEqual(got["km"], 0.04)
+
+
+
+class PhotoNearOrder(unittest.TestCase):
+    """이름이 맞는 P18 → 좌표의 위키데이터 라벨 → 공용 좌표 검색. 한 방법의 실패가 다음을 막지 않는다."""
+
+    def test_falls_through_in_order(self):
+        from unittest import mock
+        img = {"src": THUMB, "license": "CC0"}
+        with mock.patch.object(place_check, "_by_wikidata", side_effect=RuntimeError("down")),                 mock.patch.object(place_check, "wikidata_geo_image", return_value=None) as wg,                 mock.patch.object(place_check, "commons_geosearch", return_value=img) as cg:
+            self.assertEqual(place_check._photo_near(None, "광장시장", 37.57, 127.0), img)
+            wg.assert_called_once(); cg.assert_called_once()
+        with mock.patch.object(place_check, "_by_wikidata", return_value=None),                 mock.patch.object(place_check, "wikidata_geo_image", return_value=img),                 mock.patch.object(place_check, "commons_geosearch") as cg:
+            self.assertEqual(place_check._photo_near(None, "광장시장", 37.57, 127.0), img)
+            cg.assert_not_called()
+        with mock.patch.object(place_check, "_by_wikidata", return_value=None),                 mock.patch.object(place_check, "wikidata_geo_image", return_value=None),                 mock.patch.object(place_check, "commons_geosearch", side_effect=RuntimeError("x")):
+            self.assertIsNone(place_check._photo_near(None, "광장시장", 37.57, 127.0))   # 그다음은 Google 사진
+
+    def test_commons_meta_drops_nonfree_license(self):
+        class H:
+            def get_json(self, url, timeout=8):
+                d = {"query": {"pages": {"1": page(1, "File:A.jpg", THUMB, "CC BY-NC 4.0")}}}
+                return Resp(True, d), d
+        self.assertIsNone(place_check.commons_meta(H(), place_check.commons_image("A.jpg")))
 
 
 if __name__ == "__main__":

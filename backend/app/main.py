@@ -768,7 +768,7 @@ def _image_type(data: bytes) -> str:
 @app.get("/place-photo")
 def get_place_photo(src: str, request: Request) -> Response:
     """장소 확인 창의 사진을 서버가 받아 그대로 내보낸다(프런트엔드가 외부 사진 주소에 직접 닿지 않는다 — CSP img-src 'self').
-    허용: https://upload.wikimedia.org (위키미디어 공용, 위키데이터 P18) 의 이미지 파일만. 다른 주소·이미지가 아닌 것은 404."""
+    허용: https://upload.wikimedia.org · thumb.wikimedia.org (위키미디어 공용, 위키데이터 P18) 의 이미지 파일만. 다른 주소·이미지가 아닌 것은 404."""
     ip = client_ip(request)
     with _photo_lock:
         now = time.time()

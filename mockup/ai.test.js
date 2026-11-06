@@ -14,6 +14,13 @@ test('apiBase: ?api= 는 저장하지 않고 external 로 표시, file:// 은 �
   const ext = AI.apiBase({ protocol: 'https:', host: 'a.onrender.com', origin: 'https://a.onrender.com', search: '?api=https://evil.example' });
   assert.equal(ext.base, 'https://evil.example'); assert.equal(ext.external, true);
   assert.equal(AI.apiBase({ protocol: 'file:', host: '', origin: 'null', search: '' }).base, null);
+  // Firebase Hosting 에서 열면 화면만 Firebase, API 는 Render(외부 서버 안내 없음). ?api= 가 있으면 그것이 먼저
+  for (const host of ['com-example-myapplicatio-3bb36.web.app', 'com-example-myapplicatio-3bb36.firebaseapp.com']) {
+    assert.deepEqual(AI.apiBase({ protocol: 'https:', host, hostname: host, origin: 'https://' + host, search: '' }),
+      { base: 'https://codyssey-final.onrender.com', external: false, host: 'codyssey-final.onrender.com' }, host);
+  }
+  assert.equal(AI.apiBase({ protocol: 'https:', host: 'x.web.app', hostname: 'x.web.app', origin: 'https://x.web.app', search: '?api=https://evil.example' }).base, 'https://evil.example');
+  assert.equal(AI.apiBase({ protocol: 'https:', host: 'web.app.evil.example', hostname: 'web.app.evil.example', origin: 'https://web.app.evil.example', search: '' }).base, '');
   assert.equal(AI.apiBase({ protocol: 'file:', host: '', origin: 'null', search: '?api=javascript:alert(1)' }).base, null);
   assert.equal(AI.apiBase({ protocol: 'https:', host: 'a', origin: 'https://a', search: '?api=ftp://x' }).base, '');
 });
@@ -785,15 +792,24 @@ test('직접 추가 장소 확인 응답: found 만 링크·이름을 싣고, ht
 test('장소 확인 창 응답(11/05): 주소는 글자만, 사진은 위키미디어 공용 썸네일만, 좌표는 숫자만', () => {
   const base = { status: 'found', name: 'Tōdai-ji Temple', source: { provider: 'wikidata', url: 'https://www.wikidata.org/wiki/Q186148' } };
   const ok = AI.placeCheckResult({ ...base, lat: 34.689, lon: 135.8398, address: ' 406-1  Zoshicho <b>Nara</b> ', address_source: 'OpenStreetMap (ODbL)',
-    image: { src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/T.jpg/500px-T.jpg', page: 'https://commons.wikimedia.org/wiki/File:T.jpg' } });
+    image: { src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/T.jpg/500px-T.jpg', page: 'https://commons.wikimedia.org/wiki/File:T.jpg',
+             author: ' Kim <b>Lee</b> ', license: 'CC BY-SA 4.0', license_url: 'https://creativecommons.org/licenses/by-sa/4.0' } });
   assert.deepEqual([ok.address, ok.addressSource, ok.lat, ok.lon], ['406-1 Zoshicho b Nara /b', 'OpenStreetMap (ODbL)', 34.689, 135.8398]);
-  // 11/06: 썸네일 호스트가 thumb 으로 바뀌었고, credit 은 저작자명·license 는 그 파일의 라이선스다
   assert.deepEqual(ok.image, { src: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/T.jpg/500px-T.jpg', page: 'https://commons.wikimedia.org/wiki/File:T.jpg',
-    credit: '위키미디어 공용 기여자', license: '', licenseUrl: '' });
-  assert.ok(AI.placeCheckResult({ ...base, image: { src: 'https://thumb.wikimedia.org/x/500px-T.jpg', page: 'https://commons.wikimedia.org/wiki/File:T.jpg', credit: 'Wei-Te Wong', license: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/' } }).image, 'thumb 호스트도 받는다');
+    credit: 'Wikimedia Commons', author: 'Kim b Lee /b', license: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0' });
+  // 저작자·라이선스 표시 요건 — 라이선스가 없으면 사진을 쓰지 않는다. 공용 API 의 thumb 호스트는 받는다
+  assert.equal(AI.placeCheckResult({ ...base, image: { src: 'https://upload.wikimedia.org/a.jpg' } }).image, null);
+  assert.equal(AI.placeCheckResult({ ...base, image: { src: 'https://thumb.wikimedia.org/a.jpg', license: 'CC0' } }).image.author, '작자 미상');
   for (const src of ['http://upload.wikimedia.org/a.jpg', 'https://evil.example/a.jpg', 'https://upload.wikimedia.org/a b.jpg', 'javascript:alert(1)']) {
-    assert.equal(AI.placeCheckResult({ ...base, image: { src } }).image, null, src);
+    assert.equal(AI.placeCheckResult({ ...base, image: { src, license: 'CC0' } }).image, null, src);
   }
+  // Google 사진(무료 사진이 없을 때): 화면이 바로 부르는 googleusercontent 주소 + 찍은 사람. 다른 호스트는 버린다
+  const g = AI.placeCheckResult({ ...base, image: { provider: 'google', src: 'https://lh3.googleusercontent.com/p/A=s500',
+    authors: [{ name: 'Kim <b>', uri: 'https://maps.google.com/maps/contrib/1' }, { name: '', uri: 'javascript:x' }] } });
+  assert.deepEqual(g.image, { src: 'https://lh3.googleusercontent.com/p/A=s500', provider: 'google', credit: 'Google 지도',
+    authors: [{ name: 'Kim b', uri: 'https://maps.google.com/maps/contrib/1' }, { name: 'Google 사용자', uri: '' }] });
+  assert.equal(AI.placeCheckResult({ ...base, image: { provider: 'google', src: 'https://evil.example/a.jpg' } }).image, null);
+  assert.equal(AI.placeCheckResult({ ...base, image: { provider: 'google', src: 'https://upload.wikimedia.org/a.jpg', license: 'CC0' } }).image, null);
   const bare = AI.placeCheckResult({ ...base, lat: 'x' });
   assert.deepEqual([bare.address, bare.image, bare.lat, bare.addressSource], ['', null, null, '']);
 });
