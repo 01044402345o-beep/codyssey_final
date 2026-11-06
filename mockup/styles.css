@@ -2755,3 +2755,12 @@ body.is-narrow .spk-card { border-radius: 12px; }
   .appbar .done-mini + .ipa-btn { margin-inline-start: 0; }
   .done-mini-btn { min-height: 44px; padding: 0 6px; font: inherit; font-weight: 700; color: var(--accent-text); background: none; border: 0; }
 }
+
+/* 세로가 아주 좁을 때(≤480px): 제목 아래 머리('여행 전 학습'·날짜·'새 문장' / '문장 모음에서 고른 묶음…'·상황·'상황별 연습')를 접고,
+   앱바 제목 자리에 날짜(요일)·상황 이름을 보인다(abTitle). 일정표처럼 short 가 없는 앱바는 그대로 */
+.appbar .ab-short { display: none; }
+@media (max-height: 480px) {
+  .appbar:has(.ab-short) .ab-full { display: none; }
+  .appbar .ab-short { display: inline; }
+  .pframe:has(.appbar .ab-short) .study-head { display: none; }
+}
