@@ -9,7 +9,7 @@
 | 위치 | 무엇을 보나 |
 |---|---|
 | `.` (저장소 루트) | 지금 제품. `README.md`, `docs/product/requirements.md`, `mockup/`, `backend/`, `agent_contract/` |
-| `./other` | 이전 자료. 디자인 DC, 기획 PDF, 발표, 예전 스냅샷 |
+| `./other` (이 작업 트리에 없으면 이 행은 적용하지 않는다) | 이전 자료. 디자인 DC, 기획 PDF, 발표, 예전 스냅샷 |
 
 `other/Project261000/codyssey_final` 은 루트보다 오래된 사본이다. 루트와 다르면 루트의 코드와 `docs/product/requirements.md`를 따른다. `other/Project261000/transcribe_app` 은 다른 프로그램이라 이 제품의 기능으로 가져오지 않는다.
 

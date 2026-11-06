@@ -3,7 +3,7 @@
 탈퇴가 **완료되지 않았거나 단계가 하나라도 생략/실패**하면, 그 시점의 상태를 **아무도 풀 수 없는 형태로 봉인**해
 비공개 저장소에 격리하고, GitHub 이슈로는 **메타데이터만** 통보한다. 관리자만 개인키로 열람할 수 있다.
 
-이 문서는 **구상 + 런북**이다. **지금 구현된 것은 관리자 CLI(`tools/opsarchive/`)뿐이고, 앱 훅(`backend/app/evidence.py`)·원장·사후 검증·`/diagnostics/withdraw`·`/health` 의 지문 노출은 아직 없다** — §3·§4·§7 은 다음 단계의 설계다. 없는 것을 "있다"고 읽게 두지 않는다.
+이 문서는 **구상 + 런북**이다. **지금 구현된 것은 관리자 CLI(`tools/opsarchive/`), 앱 훅(`backend/app/evidence.py` — 원장·사후 검증 결과를 함께 담는다), `POST /diagnostics/withdraw`, `/health` 의 지문 노출이다** — §3·§4·§7 이 그 구현의 설명이다(2026-11-06 코드 확인). 없는 것을 "있다"고 읽게 두지 않는다.
 
 ---
 
@@ -70,8 +70,8 @@ scrypt(n=2^15, r=8, p=1) 로 패스프레이즈 유도. 파일 권한 0600.
 | 신원 | `archive_id`(uuid), 시각(UTC), 커밋 sha, 트리 dirty 여부, 서비스·배포 정보 |
 | 단계 원장 | `tombstone_written`/`revoked`/`doc_deleted`/`user_deleted` 각 단계의 성공 여부·HTTP 상태·시각 |
 | 사후 검증 | (a) 흔적 존재 (b) `users/{uid}` 부재 (c) Auth 계정 부재 → 어긋난 항목 |
-| 로그 | 프로세스 링 버퍼(최근 N건, 요청 상관 ID 우선) — 기본 256KB 까지 |
-| 소스 | `backend/`·`mockup/` 파일 트리(경로·크기·sha256) + 내용 tar — 기본 2MB 까지 |
+| 로그 | 프로세스 링 버퍼(최근 N건, 요청 상관 ID 우선) — 기본 64KB 까지 |
+| 소스 | `backend/`·`mockup/` 파일 트리(경로·크기·sha256) + 내용 tar — 기본 512KB 까지 |
 | 런타임 | 환경변수 **이름** 목록, 파이썬/패키지 버전, 인메모리 상태 요약(`is_erased` 캐시 크기 등) |
 | 예외 | 타입·메시지·트레이스백(자격증명 스크럽 후) |
 
@@ -153,7 +153,7 @@ scrypt(n=2^15, r=8, p=1) 로 패스프레이즈 유도. 파일 권한 0600.
 5. 이슈 라벨 'evidence-seal' 생성 + 전역 상한(5/일)·uid 상한(1/시간) 값 확정.
 6. **IAM(§9)**: 아카이브 전용 SA + 커스텀 롤(create/get/list) → 앱 훅이 그 자격증명으로 쓰게 한다.
    검증: `python -m opsarchive iam-check --project <id> --sa <앱 SA.json>` 판정이 `ok`.
-7. **핀(§9)**: `python -m opsarchive pin --key <파일> --health-url <url>` → `security/evidence-key-pin.json` 커밋 → `pin-check` 통과 확인 → main 보호 규칙에 `verify-key-pin` 을 필수 검사로 등록.
+7. **핀(§9)**: `pin-publish --repo <owner/name>` 로 핀을 Actions 변수에 올리고 `pin-remote-check` 로 대조(저장소 파일 없음, §13) → main 보호 규칙에 `verify-key-pin` 을 필수 검사로 등록.
    검증: 핀을 일부러 틀리게 두면 크론이 실패; `armed: true` 로 바꾼 뒤 회전하면 `generation` 을 올려 커밋하지 않은 상태에서 실패해야 한다.
 8. (앱 훅 배포 뒤) 실패 리허설: 탈퇴를 일부러 실패시켜 아카이브 생성 → decrypt 로 열어 확인
 ```

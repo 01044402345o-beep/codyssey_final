@@ -35,12 +35,12 @@
 ├── 시나리오완료.MD        기능·규칙 상세 (이력)
 ├── render.yaml           Render 배포
 ├── agent_contract/       카테고리 계약. restaurant, transport, lodging
-├── backend/              FastAPI. /health, /generate, /speak-check
+├── backend/              FastAPI. /health, /generate, /speak-check, /research, /place-check, /city-brief, /itinerary, /user/state …
 ├── mockup/               화면. index.html, app.js, ai.js, data.js, styles.css
 ├── e2e/                  Playwright 시나리오. 터치 제스처·말하기·동의 검사 포함
 ├── docs/                 현행 요구사항, 반응형, 배포, 연구, 측정, 사용자 테스트,
 │                         AGENT_WORKFLOW.md, REPO_STATE.md
-└── other/                아이디어·자료. 런타임에 서빙하지 않음
+└── other/                (저장소에 없음 — 팀원 로컬 자료. 아래는 그 로컬 사본의 구성)
     └── Project261000/
         ├── codyssey_final/   루트보다 오래된 사본 (lodging.json 없음)
         ├── design/           디자인 가이드.dc.html (2026-10-08), 반응형 전략.dc.html, 반응형 전략 v2.dc.html
@@ -49,7 +49,7 @@
         └── transcribe_app/   다른 프로그램. 이 제품의 범위 밖
 ```
 
-제품은 여행지와 일정을 넣으면 갈 장소에서 쓸 영어 문장을 만들고, 말해 보고, 어려웠던 상황을 브라우저에 기억하는 학습 서비스다. 화면과 API는 같은 주소에서 서빙한다. AI가 하는 일은 문장 생성(`/generate`), 말하기 채점(`/speak-check`), 어려웠던 상황의 다음 생성 반영이다. 장소 목록은 예시 데이터다.
+제품은 여행지와 일정을 넣으면 갈 장소에서 쓸 영어 문장을 만들고, 말해 보고, 어려웠던 상황을 브라우저에 기억하는 학습 서비스다. 화면과 API는 같은 주소에서 서빙한다. AI가 하는 일은 문장 생성(`/generate`), 말하기 채점(`/speak-check`), 어려웠던 상황의 다음 생성 반영, 그리고 장소 조사(`/research`)·장소 확인(`/place-check`)이다. 장소 목록은 공개 자료를 실제로 조사해 만들며, 조사가 꺼졌거나 조사가 실패해 확인된 장소가 없을 때만 예시 목록과 고지를 쓴다.
 
 `169954b`가 팀 `main`에 더한 패치 파일 세 개(`add-agent-workflow-repo-state.patch`, `fix-landscape-fluid.patch`, `results-pr-columns.patch`)는 충돌이 아니라 그 커밋의 추가분이라 이 머지에 남긴다.
 
@@ -64,7 +64,7 @@
 
 ## `.`에서 열려 있는 일
 
-기준 문서: `docs/requirements.md` (2026-10-09, 커밋 `f78b23b` 시점 표기). 아래는 그 문서가 완료로 두지 않은 항목이다. FR-15 행은 이 작업 트리의 `mockup/ai.js` `categoryOfKind`와 `mockup/app.js` `genReport`를 이전 읽기에서 확인했고, `169954b`는 `mockup/app.js`를 바꾸지 않는다.
+기준 문서: `docs/product/requirements.md`. 아래는 그 문서가 완료로 두지 않은 항목이다. FR-15 행은 이 작업 트리의 `mockup/ai.js` `categoryOfKind`와 `mockup/app.js` `genReport`를 이전 읽기에서 확인했고, `169954b`는 `mockup/app.js`를 바꾸지 않는다.
 
 | ID | 상태 | 코드에서 확인한 내용 |
 |---|---|---|
@@ -74,7 +74,7 @@
 | FR-16 로그인·서버 저장 | 예정 | 데모 사용자와 브라우저 저장 |
 | NFR-08 화면 | 부분 | 반응형·다크·넓은 화면 배치는 구현 기록이 `docs/RESPONSIVE_STRATEGY.md`에 있다. 남은 것: 실기기(iOS Safari·iPad), 다크 모드 팀 디자인 검수, 브라우저 뒤로가기와 날짜 선택 |
 | 사용자 테스트 측정값 | 미기록 | `docs/user-test/results.md` 2·3·4절이 빈칸이다. 1절 참가자 5명과 5절 피드백 6행은 채워져 있다. T6(한 단어 빼고 말하기)은 아직 실행 기록이 없다 |
-| 장소 보강 파이프라인 | 제안 | `docs/ENRICHMENT_PIPELINE.md`는 미구현 |
+| 장소 보강 파이프라인 | 제안 | `docs/product/ENRICHMENT_PIPELINE.md`는 미구현 |
 
 이 작업 트리 `README.md` 161행은 `categoryOfKind`와 생성 요청이 식당만 나간다는 문장이다.
 

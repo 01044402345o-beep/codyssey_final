@@ -11,17 +11,17 @@
 
 | 구성 요소 | 현재 상태 | 실시간 회화와의 관계 |
 |---|---|---|
-| 동의 창 `askVoiceConsent` (`mockup/app.js` 2207행~) | 보내는 것: 최대 15초 녹음과 문장. 받는 곳: ① 우리 서버(VAD, Silero·pyannote) ② Groq Whisper(실패 시 OpenAI Whisper)·AssemblyAI ③ 글만 Gemini로. 보관: "서버는 녹음을 저장하지 않음". 창 안에 "무료 등급 API에서는 Google이 제품 개선에 사용하고 사람 검토자가 읽을 수 있음"이라는 문구가 있음 | 실시간 방식은 **목소리 자체가 Google로, 연속으로** 갑니다. 받는 곳·항목·시간 길이·국외 이전 고지가 모두 달라지므로 기존 동의로는 부족합니다 |
+| 동의 창 `askVoiceConsent()` (`mockup/app.js`) | 보내는 것: 최대 15초 녹음과 문장. 받는 곳: ① 우리 서버(VAD, Silero·pyannote) ② Groq Whisper(실패 시 OpenAI Whisper)·AssemblyAI ③ 글만 Gemini로. 보관: "서버는 녹음을 저장하지 않음". 창 안에 "무료 등급 API에서는 Google이 제품 개선에 사용하고 사람 검토자가 읽을 수 있음"이라는 문구가 있음 | 실시간 방식은 **목소리 자체가 Google로, 연속으로** 갑니다. 받는 곳·항목·시간 길이·국외 이전 고지가 모두 달라지므로 기존 동의로는 부족합니다 |
 | 버튼 아래 안내 `speakHtml` (2201행) | "녹음은 {host} 서버로 가고, 말소리가 있을 때만 Groq·AssemblyAI로 전송" | 실시간 모드에서는 별도 문구가 필요합니다 |
 | 로그인 화면 `scrLogin` (1335행) | Gemini에는 도시·장소명·복습 상황 이름만 보낸다는 안내. 녹음은 동의 후에만 서버로 보낸다는 안내 | "목소리가 Google(미국)로 간다"는 내용이 없습니다 |
 | 홈 'AI · 개인정보' 카드 `privacyCard` (2224행) | 동의 상태, 철회 버튼, 복습 목록 삭제 | 실시간 동의 상태, 오늘 사용한 분, 대화 기록 삭제 버튼을 추가해야 합니다 |
 | 동의 버전 `mockup/ai.js` 7행 | "문구를 바꾸면 CONSENT_VERSION을 올려 다시 동의를 받는다" | 실시간 동의는 **별도 키로 분리**하는 것을 권합니다(6장) |
-| `rate_limit` (`backend/app/main.py` 186행) | IP 기준, 프로세스 메모리 슬라이딩 윈도. 기본값 `RATE_LIMIT=20`/`RATE_WINDOW=60`. 런북상 `TRUSTED_PROXY_HOPS=0`이면 모든 사용자가 한 IP로 묶임 | 분 단위 과금인 실시간 세션에는 **uid 기준 일일 분량 한도**가 따로 필요합니다 |
-| `/speak-check` (703행) | **토큰 없이** 호출할 수 있음. 8MB 상한, 15초 녹음 | 실시간 토큰 발급은 반드시 로그인 토큰을 요구해야 합니다 |
+| `rate_limit()` (`backend/app/main.py`) | IP 기준, 프로세스 메모리 슬라이딩 윈도. 기본값 `RATE_LIMIT=20`/`RATE_WINDOW=60`. 런북상 `TRUSTED_PROXY_HOPS=0`이면 모든 사용자가 한 IP로 묶임 | 분 단위 과금인 실시간 세션에는 **uid 기준 일일 분량 한도**가 따로 필요합니다 |
+| `/speak-check` | **토큰 없이** 호출 가능. 1MB·30초 상한(화면 녹음은 15초에서 자동 정지) | 실시간 토큰 발급은 반드시 로그인 토큰을 요구해야 합니다 |
 | 탈퇴 `/account/erase` → `firebase_admin.erase` | 흔적 남김 → 토큰 취소 → `users/{uid}` **문서 하나** 삭제 → Auth 계정 삭제 | Firestore는 상위 문서를 지워도 **하위 컬렉션을 지우지 않습니다**. 대화 기록을 하위 컬렉션에 두면 탈퇴 후에도 남습니다(2.4절) |
 | 증거 봉인 `backend/app/evidence.py` | 탈퇴 실패 시 최근 로그 400줄(`recent_logs`)을 봉인. `scrub_text`는 자격증명만 가림 | 대화 내용(전사)을 로그로 남기면 **봉인 아카이브에 개인정보가 섞입니다**. 전사 내용은 로그에 남기지 않아야 합니다 |
 | 환경변수 (`docs/deploy/DEPLOY_RUNBOOK.md`) | `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `ASSEMBLYAI_API_KEY`, `FIREBASE_*`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `EVIDENCE_*`, `RATE_LIMIT`, `RATE_WINDOW`, `TRUSTED_PROXY_HOPS`, `ALLOW_ORIGINS`(기본 `*`), `CONFIG_STRICT`, `GEMINI_MODEL`, `GEMINI_THINKING_BUDGET`, `ITINERARY_ENABLED`·`ITINERARY_DAILY_CAP` | `ITINERARY_ENABLED`/`ITINERARY_DAILY_CAP`가 이미 **기능 스위치와 일일 상한 패턴**입니다. 실시간 회화도 같은 패턴을 쓰면 됩니다. 값은 출력하지 않았습니다 |
-| 개인정보처리방침 | `docs/` 아래에 독립된 개인정보처리방침 문서는 **찾지 못했습니다**. `requirements.md`, `prd.md` 등에 개인정보 언급이 흩어져 있습니다 | 국외 이전 고지를 "처리방침 공개"로 갈음하려면 처리방침이 있어야 합니다(1장) |
+| 개인정보처리방침 | `docs/product/privacy-policy-draft.md` 초안이 있습니다(2026-11-06 확인). 공개용 확정본은 아직 없습니다. `requirements.md`, `prd.md` 등에 개인정보 언급이 흩어져 있습니다 | 국외 이전 고지를 "처리방침 공개"로 갈음하려면 처리방침이 있어야 합니다(1장) |
 
 ---
 
