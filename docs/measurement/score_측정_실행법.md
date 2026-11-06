@@ -15,7 +15,7 @@
 
 | 조건 | 확인 |
 |---|---|
-| 서버가 **목업이 아님** | `/health` → `has_api_key: true` (없으면 스크립트가 `exit 2`로 중단) |
+| 서버가 **목업이 아님** | `/health` 상세(헤더 `X-Admin-Token: $HEALTH_DETAIL_TOKEN`) → `has_api_key: true`. 측정 스크립트(`measure_score_rate.py`)는 이 값을 검사하지 않으므로 **측정 전에 사람이 확인**한다 |
 | 배포 URL 확정 | 저장소·브랜치·커밋·URL 네 가지를 먼저 고정 |
 | `target` 길이 | 서버 제약 **200자 이하** (`max_length=200`) — 넘으면 422 |
 | 오디오 크기 | **8MB 이하** (초과 시 413) |

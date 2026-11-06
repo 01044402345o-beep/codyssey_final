@@ -1,13 +1,13 @@
 # 시연 전 수동 스모크 체크리스트
 
 자동 테스트(`cd mockup && node --test`)는 응답 분기·저장 조건 같은 **코드 규칙**만 확인합니다.
-실제 AI 생성·마이크·배포 환경은 아래를 **배포 URL에서 직접** 확인해야 합니다. (현재 상태: 배포·실환경 확인 완료 — 2026-11-06. 아래는 시연 전 재확인용)
+실제 AI 생성·마이크·배포 환경은 아래를 **배포 URL에서 직접** 확인해야 합니다. (현재 상태: 배포본에서 도시 조사·도시 브리프·장소 확인 응답 확인 — 2026-11-06. 마이크·실제 생성은 아래로 시연 전 재확인)
 
 시연 점검 완료 기준 = `/health` 호출이 아니라 **실제 생성 1회 + 말하기 1회 확인**.
 
 ## 준비
 - [ ] `main` 머지 후 Render Blueprint 배포, 환경변수 `GEMINI_API_KEY` 입력
-- [ ] `<URL>/health` → `has_api_key: true`, `categories: ["attraction","lodging","restaurant","transport"]` (콜드스타트 깨우기용, 이것만으로는 완료가 아님)
+- [ ] `<URL>/health` → `categories: ["attraction","lodging","restaurant","transport"]`, 헤더 `X-Admin-Token: $HEALTH_DETAIL_TOKEN` 을 붙이면 `has_api_key: true` (토큰 없는 공개 응답에는 `has_api_key` 가 없다. 콜드스타트 깨우기용, 이것만으로는 완료가 아님)
 
 ## 실제 생성 (키 있는 서버)
 - [ ] 여행 입력 → 보고서 → 장소 확정 → 문장 생성이 끝까지 진행 (첫 요청은 시간이 걸릴 수 있음 안내가 뜰 수 있음)
