@@ -3351,7 +3351,7 @@ function scrLogin() {
     <p class="sub">여행지와 일정을 입력하면, 실제로 갈 관광지와 맛집에서 쓸 영어 문장을 만들어 출발 전부터 매일 학습하게 해 드려요.</p>
     <br>
     <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">${gate}</p>
-      <p class="small" style="text-align:center;margin-top:8px">맛집 문장은 AI가 만들고 'AI 생성' 표시가 붙어요 · 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API(외부 서버)로 전송돼요 · 장소 목록은 예시 데이터예요 · 로그인하면 학습 진도·복습 목록·여행 설정이 계정에 저장되요. · 로그인하지 않으면 이 브라우저에서만 잠깐 남고 사라져요. · 말하기 연습에서의 녹음 데이터는 사용자에게 동의를 받은 뒤에만 서버로 보내요.</p></div>
+      <p class="small" style="text-align:center;margin-top:8px">맛집 문장은 AI가 만들고 'AI 생성' 표시가 붙어요 · 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API(외부 서버)로 전송돼요 · 장소 목록은 공개 자료에서 조사하거나 직접 추가한 곳이에요 · 로그인하면 학습 진도·복습 목록·여행 설정이 계정에 저장되요. · 로그인하지 않으면 이 브라우저에서만 잠깐 남고 사라져요. · 말하기 연습에서의 녹음 데이터는 사용자에게 동의를 받은 뒤에만 서버로 보내요.</p></div>
   </div>`);
 }
 
@@ -3895,7 +3895,7 @@ function scrReport() {
   let lead = '';
   if (locked) lead += notice('장소를 확정했어요. 이제 선택을 바꿀 수 없어요.', 'plain');
   if (S.reportMode === 'example') {
-    lead += notice('이 장소 목록은 <b>미리 준비한 예시 데이터</b>예요. (AI 웹 검색은 아직 연결 전이에요) 영업시간과 메뉴는 바뀔 수 있으니 방문 전에 확인해 주세요.');
+    lead += notice('이 장소 목록은 <b>미리 준비한 예시 데이터</b>예요. 이 화면은 공개 자료 조사를 켤 수 없을 때(오프라인 시연 등) 보여요. 영업시간과 메뉴는 바뀔 수 있으니 방문 전에 확인해 주세요.');
     if (meta.found < meta.base) lead += notice(`추천할 장소를 충분히 찾지 못했어요. 기본 ${meta.base}곳 중 ${meta.found}곳만 찾았어요. 후보로 채울 수 있어요.`, 'warn');
   } else if (meta.mode === 'research') {
     lead += notice(`공개 여행 자료(위키보이지·위키데이터 등)에서 <b>실제로 조사한 장소</b>예요 — 이 도시 ${meta.total}곳 중 여행 일정에 맞춰 골랐어요. 영업시간·가격은 방문 전에 확인해 주세요.`);
