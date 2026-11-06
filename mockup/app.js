@@ -2571,6 +2571,29 @@ function hscrollRestore(root, saved) {
   });
 }
 
+let ILOG_LAND = null;   // 통역 기록에서 방금 누른 카드: 다시 그린 뒤 그 머리로 스크롤·포커스를 옮긴다
+function ilogLand(f) {
+  const cards = [...document.querySelectorAll('.ilog-card')];
+  const card = cards.find(c => c.dataset.live === 'ilog-' + f.id);
+  if (!card) return;
+  const head = card.querySelector('.ilog-head');
+  const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if (f.scroll) {
+    /* 앱바는 문서와 함께 스크롤되므로 머리를 화면 맨 위에서 10px 띄운 자리에 앉힌다(styles.css 의 scroll-margin-top) */
+    const top = card.getBoundingClientRect().top;
+    if (Math.abs(top - 10) > 6) card.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
+  }
+  if (f.backTo !== null && f.backTo !== undefined) {
+    /* 접으면 지운 높이만큼 브라우저가 스크롤을 당긴다(스크롤 앵커링). 누르기 전 자리로 되돌린다 —
+       앵커링이 레이아웃 뒤에 한 번 더 도므로 프레임 두 번 + 한 틱 뒤에 맞춘다. */
+    const back = () => { if (Math.abs(window.scrollY - f.backTo) > 1) window.scrollTo(0, f.backTo); };
+    requestAnimationFrame(() => { back(); requestAnimationFrame(back); });
+    setTimeout(back, 60);
+  }
+  if (head) head.focus({ preventScroll: true });
+  card.classList.add('land');
+  setTimeout(() => card.classList.remove('land'), calm ? 600 : 1400);
+}
 function render() {
   settlePre();
   if (TALK.on && (!S.sheet || !studyShown())) cancelTalk();   // 시트를 닫는 모든 경로(닫기·카드 넘김·화면 이동)
@@ -2600,6 +2623,7 @@ function render() {
   else window.scrollTo(0, same ? prevTop : 0);
   { const nl = $('.split-list'); if (nl && prevListTop) nl.scrollTop = prevListTop; }
   hscrollRestore($('#stage'), prevH);
+  if (ILOG_LAND) { const f = ILOG_LAND; ILOG_LAND = null; ilogLand(f); }
   S.lastScreen = S.screen;
   sessionWrite();   /* 진도·보던 화면 저장 — 모든 상태 변화가 여기를 지난다 */
 }
@@ -5312,10 +5336,10 @@ function ilogCard(x, open) {
 }
 function scrCollLog() {
   const list = ilogSessions();
-  const open = S.coll.logOpen || (list[0] || {}).id;
+  const open = S.coll.logOpen === false ? null : (S.coll.logOpen || (list[0] || {}).id);   // false = '전부 접힘'
   const seg = collSegHtml('log');
   if (!list.length) {
-    return frame(`<div class="app-pad">${seg}
+    return frame(`<div class="app-pad ilog-pad">${seg}
       <div class="empty" style="padding:40px 0"><div class="ico">${I.past}</div>
         <b style="color:var(--text);font-size:1.0625rem">아직 통역 기록이 없어요</b>
         <p>통역 화면에서 마이크를 켜고 이야기하면<br>주고받은 문장이 여기에 차례로 쌓여요.</p></div>
@@ -5334,7 +5358,7 @@ function scrCollLog() {
       <div class="split-detail">${ilogCard(list.find(x => x.id === open) || list[0], true)}${foot}</div></div>`,
       { appbar: appbar('문장 모음'), tabbar: true, wide: true });
   }
-  return frame(`<div class="app-pad">${seg}${list.map(x => ilogCard(x, open === x.id)).join('')}
+  return frame(`<div class="app-pad ilog-pad">${seg}${list.map(x => ilogCard(x, open === x.id)).join('')}
     <button class="ilog-clear" data-act="ilog-clear">기록 모두 지우기</button>${foot}</div>`,
     { appbar: appbar('문장 모음'), tabbar: true, tab: 'u-coll' });
 }
@@ -6742,7 +6766,16 @@ const ACT = {
   'cal-prev': () => calShift(-1),
   'cal-next': () => calShift(1),
   'cal-today': () => { S.calMonth = null; render(); },
-  'ilog-open': el => { S.coll.logOpen = S.coll.logOpen === el.dataset.id ? null : el.dataset.id; render(); },
+  'ilog-open': el => {
+    const id = el.dataset.id;
+    if (el.classList.contains('ilog-pick')) { S.coll.logOpen = id; render(); return; }   // 넓은 화면은 목록-상세라 접기를 두지 않는다
+    const shown = S.coll.logOpen === false ? null : (S.coll.logOpen || (ilogSessions()[0] || {}).id);
+    const closing = shown === id;
+    S.coll.logOpen = closing ? false : id;   // null 은 '첫 기록 자동 열기', false 는 '아무것도 열지 않음'
+    /* 접을 때는 높이가 줄어 브라우저가 스크롤을 위로 당긴다 → 그 머리가 있던 자리에 그대로 붙여 둔다 */
+    ILOG_LAND = { id, scroll: !closing, backTo: closing ? Math.round(window.scrollY) : null };
+    render();
+  },
   'ilog-copy': el => {
     const [sid, i] = el.dataset.id.split(':');
     const x = ilogLoad().find(v => v.id === sid), ln = x && x.lines[+i];
