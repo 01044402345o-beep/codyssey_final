@@ -3736,7 +3736,29 @@ document.addEventListener('pointerdown', e => {
     sb.removeEventListener('pointermove', onMove); sb.removeEventListener('pointerup', onUp); sb.removeEventListener('pointercancel', onUp); };
   sb.addEventListener('pointermove', onMove); sb.addEventListener('pointerup', onUp); sb.addEventListener('pointercancel', onUp);
 });
-window.addEventListener('resize', () => document.querySelectorAll('.geo-list:not([hidden])').forEach(geoSb));
+/* 화면 키보드가 올라오면 보이는 영역(visualViewport)만 줄고 레이아웃 높이(vh·innerHeight)는 그대로다(iOS).
+   목록 높이를 50vh 로 두면 가로 모드에서 아래쪽이 키보드 뒤로 들어가 잘렸다(11/07 실기기).
+   보이는 영역 안에서 칸 아래 남은 높이만큼만 쓴다. 남은 높이가 모자라면 칸을 보이는 영역 맨 위로 올리고,
+   그래도 모자라고 위쪽이 더 넓으면 위로 연다. */
+function geoFit(ul, allowScroll = false) {
+  if (!ul || ul.hidden) return;
+  const pick = ul.parentElement, vv = window.visualViewport;
+  const vTop = vv ? vv.offsetTop : 0, vBot = vv ? vv.offsetTop + vv.height : window.innerHeight;
+  let r = pick.getBoundingClientRect();
+  const want = Math.min(320, Math.max(160, ul.scrollHeight));
+  const kb = !!vv && vv.height < window.innerHeight - 80;   // 화면 키보드가 떠 있다(보이는 영역이 확 줄었다)
+  if (allowScroll && kb && vBot - r.bottom - 12 < want && r.top - vTop > 12) {   // 칸을 보이는 영역 맨 위로(키보드가 떠 있을 때만 — 컴퓨터에서 화면이 튀지 않게)
+    window.scrollBy(0, r.top - vTop - 8);
+    r = pick.getBoundingClientRect();
+  }
+  const below = vBot - r.bottom - 12, above = r.top - vTop - 12;
+  const up = below < 120 && above > below;
+  ul.classList.toggle('up', up);
+  ul.style.maxHeight = Math.max(64, Math.min(320, Math.floor(up ? above : below))) + 'px';
+}
+const geoRefit = () => document.querySelectorAll('.geo-list:not([hidden])').forEach(ul => { geoFit(ul, true); geoSb(ul); });   // 키보드가 올라오면 칸을 위로 올려 자리를 만든다
+window.addEventListener('resize', geoRefit);
+if (window.visualViewport) { window.visualViewport.addEventListener('resize', geoRefit); window.visualViewport.addEventListener('scroll', geoRefit); }
 function geoClose(onlyKey) {
   const o = GEO.open;
   if (onlyKey) {                                        // 그 칸은 반드시 닫는다(다른 칸이 열려 있어도)
@@ -3793,6 +3815,7 @@ function geoRender(el, items, note, total, extra = {}) {
   const show = !!(opts || note);
   ul.hidden = !show;
   el.setAttribute('aria-expanded', show ? 'true' : 'false');
+  if (show) geoFit(ul, true);
   geoSb(ul);
   if (show && cur >= 0) {
     const li = ul.querySelector(`[data-geo-i="${cur}"]`);
