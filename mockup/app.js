@@ -6365,7 +6365,7 @@ async function eraseOnServer(token, challenge) {
     if (res.status === 404 || res.status === 405) return { status: 'unavailable', receipt: null };
     if (res.status !== 200) {
       let code = ''; try { code = (await res.json()).detail; } catch (e) { code = ''; }
-      if (res.status === 401 && code === 'recent_login_required') return { status: 'reauth', receipt: null };
+      if (res.status === 403 && code === 'recent_login_required') return { status: 'reauth', receipt: null };
       return { status: (res.status === 503 && code === 'admin_unavailable') ? 'unavailable' : 'failed', receipt: null };
     }
     const body = await res.json().catch(() => null);

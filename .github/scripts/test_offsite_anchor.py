@@ -17,6 +17,7 @@ class OffsiteAnchorTest(unittest.TestCase):
             "service_account_private_key": "must-not-appear",
         })
         self.assertEqual(record["public"]["deploy"]["commit"], "abc123")
+        self.assertNotIn("status", record["public"])
         self.assertNotIn("service_account_private_key", repr(record))
         self.assertEqual(len(record["sha256"]), 64)
 

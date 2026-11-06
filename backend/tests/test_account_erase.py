@@ -89,8 +89,16 @@ class T(unittest.TestCase):
         with mock.patch.dict(os.environ, {**ENV, "FIREBASE_SERVICE_ACCOUNT_JSON": SA}, clear=True), \
                 mock.patch.object(firebase_auth.id_token, "verify_firebase_token", return_value=old):
             res = self.client.post("/account/erase", headers={"Authorization": "Bearer signed-token"})
-        self.assertEqual(res.status_code, 401)
+        self.assertEqual(res.status_code, 403)
         self.assertEqual(res.json()["detail"], "recent_login_required")
+
+    def test_missing_auth_time_is_not_treated_as_old(self):
+        claims = {k: v for k, v in CLAIMS.items() if k != "auth_time"}
+        fake = FakeAdmin()
+        firebase_admin.set_admin(fake)
+        res = self.post(claims)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(fake.erased, ["uid-1"])
 
     def test_erases_only_the_token_uid(self):
         fake = FakeAdmin()

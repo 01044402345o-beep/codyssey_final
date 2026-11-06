@@ -32,6 +32,8 @@
 
 **기각.** 기존 앵커는 Render `/health`와 Firestore 체인만 기록했다. Firebase Hosting 자산 해시, ETag, CSP 모드, 캐시 정책, `ai.js`의 Hosting origin guard는 기록하지 않았다. 따라서 Render가 정상이어도 Firebase가 구 버전으로 롤백되거나 캐시되어 있는 상황을 놓칠 수 있다.
 
+현재 보강 후에도 GitHub Issue는 **독립 provider가 아니다**. 같은 GitHub 조직·저장소 권한을 가진 공격자가 저장소와 Issue를 함께 삭제하거나 수정할 수 있다. H3를 완전히 닫으려면 별도 계정의 저장소, 메일 보관함, 또는 다른 타임스탬프 provider로 동일한 앵커를 복제해야 한다.
+
 ### H0-8 — 운영 배포는 테스트·provenance·rollback으로 자동 게이트된다
 
 **기각 또는 미결.** 저장소에는 Firebase Hosting 자동 배포 workflow가 없고 manual `firebase deploy --only hosting` 절차만 문서화되어 있다. immutable Hosting release ID와 자산 manifest를 PR·Render commit과 묶는 자동 게이트도 확인되지 않았다. rollback 명령은 문서에 있지만 실제 rollback 훈련 기록은 없다.

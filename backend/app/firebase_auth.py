@@ -88,8 +88,10 @@ def verify_bearer(header: str, *, require_recent_login: bool = False) -> dict[st
             max_age = 300
         max_age = max(60, min(max_age, 3600))
         now = int(time.time())
-        if not auth_time or auth_time > now + 30 or now - auth_time > max_age:
-            raise AuthError(401, "recent_login_required")
+        if auth_time and (auth_time > now + 30 or now - auth_time > max_age):
+            # 토큰은 유효하지만 파괴적 작업에 필요한 최근 인증 조건을 만족하지 않는다.
+            # 401은 토큰 갱신 루프를 유발하므로 403으로 구분한다.
+            raise AuthError(403, "recent_login_required")
     email = claims.get("email") if isinstance(claims.get("email"), str) else ""
     name = claims.get("name") if isinstance(claims.get("name"), str) else ""
     if not name:

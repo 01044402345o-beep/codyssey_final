@@ -43,8 +43,9 @@ def fetch_bytes(url: str) -> tuple[int, dict[str, str], bytes]:
 
 
 def health_record(health: dict) -> dict:
-    # 공개 /health 계약 중 지문·배포 상태에 필요한 필드만 보존한다.
-    public = {k: health.get(k) for k in ("status", "situations", "categories", "evidence", "deploy") if k in health}
+    # 정상 동작 중에도 바뀔 수 있는 status·카운터는 앵커 지문에서 제외한다.
+    # 증거 지문, 배포 커밋, 체인 위치만 보존해 실제 드리프트 신호를 안정화한다.
+    public = {k: health.get(k) for k in ("evidence", "deploy") if k in health}
     canonical = json.dumps(public, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
     return {"sha256": hashlib.sha256(canonical).hexdigest(), "public": public}
 

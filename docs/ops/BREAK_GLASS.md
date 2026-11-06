@@ -61,3 +61,5 @@
 `evidence-anchor`가 켜져 있으면 6시간마다 GitHub 관리 plane에 Render `/health`의 `deploy.commit`과 증거 지문, Firebase Hosting `/`, `/index.html`, `ai.js`, `auth.js`, `app.js`의 SHA-256·ETag·CSP 모드·캐시 정책을 기록한다. `ai.js`의 Hosting origin guard가 사라지거나 Hosting CSP가 Report-Only로 돌아가거나 루트가 한 시간 이상 캐시되면 앵커가 실패해야 한다.
 
 서버의 체인 `seq`가 마지막 오프사이트 기록보다 작으면 삭제 또는 롤백의 증거다. 기록이 없으면 어떤 판정도 할 수 없다. Firebase Hosting과 Render가 서로 다른 커밋을 보고하면 배포를 정상으로 간주하지 않는다.
+
+GitHub Issue는 같은 조직·저장소 권한으로 삭제될 수 있으므로 완전한 독립 보관소가 아니다. H3를 닫으려면 별도 계정의 저장소, 메일 보관함 또는 다른 타임스탬프 provider에 동일한 앵커를 복제해야 한다.
