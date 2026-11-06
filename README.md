@@ -119,7 +119,7 @@ FastAPI (backend/app/main.py) ─ Render
 - 말하기 결과가 낮으면 그 상황(`situation_id`)을 브라우저에 저장한다. 점수가 없을 때는 저장할지 사용자에게 묻는다.
 - 다음 문장을 생성할 때 그 상황을 `weak_expressions` 로 보낸다.
 - 서버는 그 상황의 문장이 실제로 생성됐는지 검증한다(`weak_not_covered` 이면 재생성).
-- 한계: 브라우저(기기)별 저장이라 다른 기기에서는 이어지지 않는다.
+- 저장 위치: 브라우저 `localStorage`(`cd_weak`)에 쓰고, 로그인하면 `PUT /user/state` 로 계정에도 올린다. 다른 기기에서 로그인하면 `GET /user/state` 로 되살아난다(`mockup/app.js` `saveWeakList()` → `scheduleStatePush()`, `writeLocalState()`). 로그인하지 않으면 그 브라우저에만 남는다. 저장하는 것은 선호도가 아니라 어려웠던 상황 ID(`situation_id`)다.
 
 ## 7. AI 윤리
 

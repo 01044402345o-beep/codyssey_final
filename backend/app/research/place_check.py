@@ -7,9 +7,11 @@
 - 결과 캐시: TourAPI·Wikidata 결과만 프로세스 메모리(7일). Google 결과는 저장하지 않는다(약관).
 - 사용자 정보는 보내지 않는다(장소 이름·도시·나라만).
 - 확인 창용 주소·사진(11/05): 주소는 TourAPI addr1 · Wikidata P6375(거리 주소) · Google formattedAddress, 없으면
-  OpenStreetMap Nominatim 역지오코딩(좌표 → 주소). 사진은 위키미디어 공용(Wikidata P18)만 — 찾은 곳이 Wikidata 가 아니면
-  같은 이름의 Wikidata 항목이 1km 안에 있을 때만 그 사진을 붙인다. TourAPI 사진은 쓰지 않는다(공공누리 3유형, tourapi.py).
-  사진 주소는 화면이 직접 부르지 않고 GET /place-photo 가 받아 내보낸다(CSP img-src 'self').
+  OpenStreetMap Nominatim 역지오코딩(좌표 → 주소). TourAPI 사진은 쓰지 않는다(공공누리 3유형, tourapi.py).
+- 사진(11/06, _photo_near → _enrich): 이름이 맞는 것만 — ① 같은 이름 Wikidata 항목(1km)의 P18 ② 좌표 0.5km 의 Wikidata 항목 중
+  다국어 라벨이 맞는 것의 P18 ③ 위키미디어 공용 좌표 검색(300m, 파일 이름) ④ 없으면 Google 장소 사진(키 있을 때).
+  공용 사진은 저작자·라이선스(자유 라이선스만)를 붙이고 GET /place-photo 가 받아 내보낸다. Google 사진은 약관상
+  저장·중계하지 않고 화면이 photoUri 를 바로 부른다(찍은 사람 표시, 기억 캐시에서 뺀다).
 """
 from __future__ import annotations
 
