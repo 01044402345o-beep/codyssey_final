@@ -108,6 +108,27 @@ with sync_playwright() as p:
     fh = pg.evaluate("(() => { const f = document.querySelector('.split-detail .flip'); return f ? f.getBoundingClientRect().height : null; })()")
     check("D 2열 학습 카드가 화면 높이(430)를 넘지 않는다", fh is None or fh <= 430, fh)
     pg.close()
+    # ── E: 가로 폰(높이 320~430)에서 조작 바가 카드·뒷면 '듣기'를 덮지 않는다(11/06 실기기 가로 잘림) ──
+    for w, h in [(568, 320), (844, 390), (932, 430)]:
+        pg, errs = page(b, w, h)
+        go(pg, 'u-coll'); pg.locator('[data-act="drill"]').first.click(); pg.wait_for_timeout(700)
+        pg.evaluate("() => document.querySelectorAll('.toast').forEach(t => t.remove())")
+        COVER = """() => { const bar = document.querySelector('.pmain .bottombar'); const br = bar.getBoundingClientRect();
+          const pos = getComputedStyle(bar).position;
+          const ov = e => { const r = e.getBoundingClientRect(); return pos === 'static' ? 0 : Math.max(0, Math.min(r.bottom, br.bottom) - Math.max(r.top, br.top)); };
+          const tts = document.querySelector('.pmain .tts-btn'), face = document.querySelector('.pmain .face.back');
+          return { pos, card: ov(document.querySelector('.pmain .flip')), tts: tts ? ov(tts) : -1,
+                   ttsInFace: !!(tts && face && tts.getBoundingClientRect().bottom <= face.getBoundingClientRect().bottom + 1) }; }"""
+        pg.evaluate("window.scrollTo(0, 0)"); front = pg.evaluate(COVER)
+        pg.locator('.pmain .flip').first.click(); pg.wait_for_timeout(500); pg.evaluate("window.scrollTo(0, 0)"); back = pg.evaluate(COVER)
+        check(f"E {w}x{h} 조작 바가 카드를 덮지 않는다(흐름 안)", front["pos"] == "static" and front["card"] == 0, front)
+        check(f"E {w}x{h} 뒷면 '듣기'가 바에 가리지 않고 카드 안에 보인다", back["tts"] == 0 and back["ttsInFace"], back)
+        pg.close()
+    # 세로는 그대로 sticky(하단 조작 바가 떠 있다)
+    pg, errs = page(b, 390, 844)
+    go(pg, 'u-coll'); pg.locator('[data-act="drill"]').first.click(); pg.wait_for_timeout(700)
+    check("E 세로 화면의 조작 바는 그대로 sticky", pg.evaluate("getComputedStyle(document.querySelector('.pmain .bottombar')).position") == "sticky")
+    pg.close()
     b.close()
 
 print("---")

@@ -2730,3 +2730,17 @@ body.is-narrow .spk-card { border-radius: 12px; }
   .il-mic { gap: 2px; }
   .il-live-dots i { width: 3px; height: 3px; }
 }
+
+/* ===== 가로 폰(높이 ≤560px): 학습 카드·상황별 연습이 조작 바 밑에 깔리던 문제 (11/06 실기기 iPhone 가로 + 5기종 측정) =====
+   카드(224px)·앱바·머리를 합치면 화면(320~430px)을 넘는데 조작 바가 sticky 라 그 위에 떠서,
+   스크롤 맨 위에서 카드의 18~30%, 뒷면 '듣기'·'보통 속도'의 43~100% 를 덮었다(Chromium 4기종 측정, 끝까지 내리면 보임).
+   조작 바를 가로에서만 카드 아래 줄(흐름 안)로 내려 겹침을 없앤다. 카드 높이는 그대로 둔다 —
+   줄이면(132~162px) 뒷면의 '듣기'·'보통 속도'가 카드 안 스크롤 밑으로 숨는다(측정). 모자란 높이는 문서 스크롤이 받는다.
+   색·글자 크기·터치 크기(44px)는 그대로다. 세로 화면은 바뀌지 않는다. */
+@media (orientation: landscape) and (max-height: 560px) {
+  .pframe .bottombar { position: static; background: transparent; border-top: 0;
+    padding: 6px var(--pad-r) calc(6px + env(safe-area-inset-bottom, 0px)) var(--pad-l); }
+  .pframe.has-nav .bottombar { padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
+  .pframe .app-pad { padding-bottom: 8px; }
+  .pnav { overscroll-behavior: contain; }   /* 레일 안 스크롤이 문서 스크롤로 번지지 않게(iOS 실기기에서 '홈'이 밀려나던 화면 대비) */
+}
