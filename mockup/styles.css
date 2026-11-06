@@ -2475,6 +2475,7 @@ body.is-narrow .spk-card { border-radius: 12px; }
   /* 가로에서는 위아래 여백이 곧 '한 화면에 담기는가'다 */
   .pframe:has(.ipa-wrap) .app-pad { padding: 2px var(--pad-r) 8px var(--pad-l); }
   /* 접기 토글이 sticky 하단바 뒤로 들어가 눌리지 않던 문제 — 스크롤 끝에 바 높이만큼 여백을 둔다 */
+.pframe .app { scroll-padding-bottom: 68px; }
   .pframe:has(.ipa-wrap) .app { scroll-padding-bottom: 68px; }
   .ipa-wrap { padding-bottom: 60px; }
   .pframe:has(.ipa-wrap) .bottombar { padding: 4px var(--pad-r) calc(4px + env(safe-area-inset-bottom, 0px)) var(--pad-l); }
