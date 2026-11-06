@@ -46,6 +46,25 @@ def _key(uid: str, ip: str) -> str:
     return hashlib.sha256((SALT + "|" + raw).encode()).hexdigest()[:32]
 
 
+_THROTTLE: dict[str, list[float]] = {}
+THROTTLE_PER_MIN = 30          # 한 IP 가 1분에 남길 수 있는 값의 수 — 사람이 누르는 횟수보다 넉넉하다
+
+
+def _throttled(ip: str) -> bool:
+    now = time.time()
+    with _lock:
+        q = _THROTTLE.setdefault(ip, [])
+        while q and now - q[0] > 60:
+            q.pop(0)
+        if len(q) >= THROTTLE_PER_MIN:
+            return True
+        q.append(now)
+        if len(_THROTTLE) > 5000:                       # 창이 지난 IP 는 버린다
+            for k in [k for k, v in _THROTTLE.items() if not v or now - v[-1] > 60]:
+                _THROTTLE.pop(k, None)
+        return False
+
+
 def _load() -> dict[str, Any]:
     try:
         with open(STORE_PATH, encoding="utf-8") as f:
@@ -109,13 +128,25 @@ def _uid(raw: str) -> str:
 
 
 @router.get("/ipa/gate")
-async def ipa_gate_get(request: Request, uid: str = "") -> JSONResponse:
+def ipa_gate_get(request: Request, uid: str = "") -> JSONResponse:
+    """`async def` 로 두면 동기 파일 읽기(_load)가 이벤트 루프를 막는다 — 0.5 CPU 인스턴스에서
+    한 요청이 전체 응답을 세운다. 동기 함수로 두면 FastAPI 가 스레드풀에서 돌린다."""
     value = seen(_uid(uid), _ip(request))
     return JSONResponse({"seen": value is not None, "value": value})
 
 
 @router.post("/ipa/gate")
 async def ipa_gate_post(request: Request) -> JSONResponse:
+    """인증 없는 쓰기 경로 — 파일 읽기·쓰기를 스레드풀로 넘기고 초당 호출을 제한한다.
+
+    `async def` 안에서 동기 파일 읽기/쓰기를 하면 이벤트 루프가 막힌다. 0.5 CPU 인스턴스에서
+    반복 호출만으로 전체 응답이 느려질 수 있어 스로틀도 이 모듈 안에 둔다(main 을 import 하면
+    테스트에서 모듈이 두 번 로드되어 상태가 갈라진다).
+    """
+    from starlette.concurrency import run_in_threadpool
+
+    if _throttled(_ip(request)):
+        return JSONResponse({"ok": False, "detail": "too_many_requests"}, status_code=429)
     try:
         body = await request.json()
     except Exception:  # noqa: BLE001
@@ -124,5 +155,5 @@ async def ipa_gate_post(request: Request) -> JSONResponse:
         body = {}
     uid = _uid(str(body.get("uid") or ""))
     value = str(body.get("value") or "known")
-    mark(uid, _ip(request), value)
+    await run_in_threadpool(mark, uid, _ip(request), value)
     return JSONResponse({"ok": True, "value": value if value in _VALUES else "known"})
