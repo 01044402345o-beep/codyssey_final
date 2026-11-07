@@ -199,16 +199,21 @@ severity 는 두 단계다. `block` 은 응답을 버리고 재생성, `warn` �
 - **조사 주제→카테고리:** `backend/app/research/situations.py:14-18` 의 `TOPIC_CATEGORIES`
 - **장소 종류(kind)가 빈 요청:** `mockup/ai.js:155` 는 `place_type: p.kind || cat` 을 보낸다. kind 가 비면 transport·lodging 요청은 카테고리 이름이 장소 종류 목록에 없어 422가 난다. 지금 화면은 kind 가 있는 장소만 보내서 안 일어난다. 422가 나면 화면은 그 도시만 기본 문장으로 바꾸고 원인을 보여 주지 않는다.
 
-### 6-5. 테스트가 지키지 않는 것
+### 6-5. 테스트가 지키는 것과 지키지 않는 것
 
-- **CI 의 전체 점검은 restaurant 만 받는다.** `scripts/test_validate_category.py` 는 restaurant 로만 `check_config` 를 돌린다. 그래서 나머지 세 파일의 다음 항목은 CI가 보지 않는다.
-  - `situation_id` 중복
-  - 파일 이름과 `category_id` 일치
-  - good_examples 통과 여부
-  - (지금 손으로 돌리면 네 파일 모두 통과한다.)
-- **카테고리 4개·상황 10개를 단언하는 테스트가 없다.** `validate_category.py:82` 는 8~12개 밖일 때 경고만 낸다.
-- **`situation_id` 를 바꾸면 깨지는 테스트가 없다.** 40개 중 24개 id 는 어떤 테스트에도 나오지 않는다. §7의 "id 를 바꾸지 않는다"는 사람의 주의에만 기댄다.
-- **`KIND_CATEGORY` 와 JSON `place_types` 를 대조하는 테스트가 없다.**
+점검 당시에는 CI 의 전체 점검(`scripts/test_validate_category.py`)이 restaurant 한 파일만 받았다. 이번에 아래 두 테스트를 넣었다.
+
+- `backend/tests/test_contract_invariants.py`
+  - 카테고리가 정확히 네 개인지 본다.
+  - 네 파일 모두 `check_config` 를 오류 없이 통과하는지 본다. 이 점검에는 `situation_id` 중복, good_examples 통과, 플레이스홀더가 들어 있다.
+  - 파일 이름과 `category_id` 가 같은지 본다.
+  - 상황 id 목록을 고정해, 이름을 바꾸거나 지우면 깨지게 한다.
+- `mockup/ai.test.js`: 계약 JSON 의 `place_types` 가 모두 `categoryOfKind` 로 그 파일의 카테고리에 가는지 본다(`KIND_CATEGORY` 와 계약 대조).
+
+아직 남은 공백도 있다.
+
+- `KIND_CATEGORY` 에만 있고 계약에 없는 장소 종류는 잡지 못한다. `KIND_CATEGORY` 가 공개돼 있지 않아서다.
+- §6-1·§6-2 의 판정 문제(키워드 철자, 금지어 오탐)를 고정하는 테스트는 없다. 무엇을 막을지 정한 뒤에 넣는다.
 
 ### 6-6. 데이터와 문서
 
@@ -221,16 +226,16 @@ severity 는 두 단계다. `block` 은 응답을 버리고 재생성, `warn` �
 
 ## 7. 계약을 고칠 때 지켜야 하는 순서
 
-1. `categories/{id}.json` 의 `situations` 를 고친다 (`situation_id` 는 **바꾸지 않는다** — 기존 문장 배정이 끊긴다. 이것을 잡는 테스트는 없다).
+1. `categories/{id}.json` 의 `situations` 를 고친다 (`situation_id` 는 **바꾸지 않는다** — 기존 문장 배정이 끊긴다. 상황을 일부러 추가·삭제했다면 `backend/tests/test_contract_invariants.py` 의 id 표도 같이 고친다).
 2. `schema.json` 이 그 필드를 허용하는지 본다.
 3. §6-4 에 적힌 다른 곳도 함께 고친다.
-4. 아래 세 가지를 모두 돌린다. `pytest` 만으로는 세 카테고리의 전체 점검이 빠진다.
+4. CI 와 같은 검사를 돌린다. `tests/` 가 네 파일의 전체 점검까지 돌리고, 부정 예시는 따로 돈다.
    ```
    cd backend
-   python -m pytest tests -q
+   python -m unittest discover -s tests -t .
    python -m unittest scripts/test_validate_category.py
    python scripts/check_negatives.py
-   for c in attraction lodging restaurant transport; do python scripts/validate_category.py ../agent_contract/categories/$c.json; done
+   cd ../mockup && node --test ai.test.js
    ```
-   Windows 콘솔에서는 `validate_category.py` 가 한글 출력에서 멈추므로 `PYTHONIOENCODING=utf-8` 을 붙인다.
+   경고까지 보려면 `python scripts/validate_category.py ../agent_contract/categories/<id>.json` 를 돌린다. Windows 콘솔에서는 한글 출력에서 멈추므로 `PYTHONIOENCODING=utf-8` 을 붙인다.
 5. `/health` 의 `categories`·`situations` 가 그대로인지 확인한다(공개 필드다).
