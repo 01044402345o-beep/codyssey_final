@@ -32,13 +32,28 @@ jobs:
       # 기존 저장소에서 Secret으로 등록한 경우도 지원한다. Secret은 job if에서
       # 직접 참조할 수 없으므로, 첫 guard step이 이후 단계의 실행 여부를 결정한다.
       EVIDENCE_AUTO_ANCHOR: ${{ vars.EVIDENCE_AUTO_ANCHOR || secrets.EVIDENCE_AUTO_ANCHOR }}
+      # 나머지 설정도 이 저장소에서는 Secret 으로 들어가 있다(11/07: GCP_ANCHOR_SA·EVIDENCE_PIN_SIGNING_KEYS 는 Secret 만,
+      # EVIDENCE_KMS_KEY 는 어디에도 없음). vars 만 읽으면 켜는 순간 빈 값으로 실패해 6시간마다 실패 이슈가 쌓인다.
+      ANCHOR_SA: ${{ vars.GCP_ANCHOR_SA || secrets.GCP_ANCHOR_SA }}
+      ANCHOR_WIF: ${{ vars.GCP_WIF_PROVIDER || secrets.GCP_WIF_PROVIDER }}
+      ANCHOR_KMS_KEY: ${{ vars.EVIDENCE_KMS_KEY || secrets.EVIDENCE_KMS_KEY }}
+      ANCHOR_PIN_KEYS: ${{ vars.EVIDENCE_PIN_SIGNING_KEYS || secrets.EVIDENCE_PIN_SIGNING_KEYS }}
     steps:
       - name: 앵커 활성화 여부 확인
         id: gate
         shell: bash
         run: |
-          if [ "${EVIDENCE_AUTO_ANCHOR}" = "on" ]; then
+          missing=""
+          [ -n "$ANCHOR_SA" ] || missing="$missing GCP_ANCHOR_SA"
+          [ -n "$ANCHOR_WIF" ] || missing="$missing GCP_WIF_PROVIDER"
+          [ -n "$ANCHOR_KMS_KEY" ] || missing="$missing EVIDENCE_KMS_KEY"
+          [ -n "$ANCHOR_PIN_KEYS" ] || missing="$missing EVIDENCE_PIN_SIGNING_KEYS"
+          if [ "${EVIDENCE_AUTO_ANCHOR}" = "on" ] && [ -z "$missing" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
+          elif [ "${EVIDENCE_AUTO_ANCHOR}" = "on" ]; then
+            # 설정이 덜 됐으면 실패(=6시간마다 실패 이슈) 대신 경고만 남기고 건너뛴다. 이름만 적고 값은 출력하지 않는다
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::EVIDENCE_AUTO_ANCHOR=on 이지만 설정이 빠졌다:$missing (변수 또는 Secret)"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
             echo "EVIDENCE_AUTO_ANCHOR가 on이 아니므로 앵커를 건너뜁니다."
@@ -56,17 +71,17 @@ jobs:
       - name: GCP 단기 토큰(WIF, 키 파일 없음)
         if: steps.gate.outputs.enabled == 'true'
         env:
-          GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
-          GCP_ANCHOR_SA: ${{ vars.GCP_ANCHOR_SA }}
+          GCP_WIF_PROVIDER: ${{ env.ANCHOR_WIF }}
+          GCP_ANCHOR_SA: ${{ env.ANCHOR_SA }}
         run: python3 .github/scripts/gcp_wif_token.py
 
       - name: 검증 → KMS 자동 앵커
         if: steps.gate.outputs.enabled == 'true'
         working-directory: tools/opsarchive
         env:
-          EVIDENCE_PIN_SIGNING_KEYS: ${{ vars.EVIDENCE_PIN_SIGNING_KEYS }}
+          EVIDENCE_PIN_SIGNING_KEYS: ${{ env.ANCHOR_PIN_KEYS }}
           PROJECT: ${{ vars.EVIDENCE_PROJECT_ID || 'com-example-myapplicatio-3bb36' }}
-          KMS_KEY: ${{ vars.EVIDENCE_KMS_KEY }}
+          KMS_KEY: ${{ env.ANCHOR_KMS_KEY }}
         run: |
           set -o pipefail
           python -m opsarchive auto-anchor --project "$PROJECT" --sa env:GCP_ACCESS_TOKEN \
