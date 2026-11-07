@@ -1910,7 +1910,7 @@ function sentenceCategory(p) {
   if (p.live && !p.research && p.kind !== 'restaurant') return null;
   return AI.categoryOfKind(p.kind);
 }
-/* 선택한 맛집의 문장만 /generate 로 만든다. 일정·문장 수 계산(R.counts)은 그대로 코드가 한다.
+/* 선택한 장소 중 sentenceCategory 가 있는 곳(맛집·카페·관광지)의 문장만 /generate 로 만든다. 일정·문장 수 계산(R.counts)은 그대로 코드가 한다.
    성공한 도시는 살리고 실패·degraded·형식 불일치 도시만 로컬 템플릿으로 폴백한다. 자동 재시도 없음. */
 async function runAi(tok) {
   if (genAbort) genAbort.abort();
@@ -3500,7 +3500,7 @@ function scrLogin() {
     <p class="sub">여행지와 일정을 입력하면, 실제로 갈 관광지와 맛집에서 쓸 영어 문장을 만들어 출발 전부터 매일 학습하게 해 드려요.</p>
     <br>
     <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">${gate}</p>
-      <p class="small" style="text-align:center;margin-top:8px">맛집 문장은 AI가 만들고 'AI 생성' 표시가 붙어요 · 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API(외부 서버)로 전송돼요 · 장소 목록은 공개 자료에서 조사하거나 직접 추가한 곳이에요 · 로그인하면 학습 진도·복습 목록·여행 설정이 계정에 저장되요. · 로그인하지 않으면 이 브라우저에서만 잠깐 남고 사라져요. · 말하기 연습에서의 녹음 데이터는 사용자에게 동의를 받은 뒤에만 서버로 보내요.</p></div>
+      <p class="small" style="text-align:center;margin-top:8px">맛집·카페·관광지 문장은 AI가 만들고 'AI 생성' 표시가 붙어요(Google 일정에서 가져온 카페·관광지나 AI가 실패한 도시는 기본 문장이에요) · 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API(외부 서버)로 전송돼요 · 장소 목록은 공개 자료에서 조사하거나 직접 추가한 곳이에요 · 로그인하면 학습 진도·복습 목록·여행 설정이 계정에 저장돼요. · 로그인하지 않으면 이 브라우저에서만 잠깐 남고 사라져요. · 말하기 연습에서의 녹음 데이터는 사용자에게 동의를 받은 뒤에만 서버로 보내요.</p></div>
   </div>`);
 }
 
@@ -4032,7 +4032,7 @@ function scrGen() {
   const t = S.trip;
   if (!t || !/_(requested|generating|failed)$/.test(t.status)) {
     return frame(`<div class="app-pad"><div class="empty" style="padding-top:120px"><div class="ico">${I.info}</div>
-      <b style="color:var(--text);font-size:1rem">진행 중인 생성 작업이 없어요</b><p>보고서, 방문 순서, 문장을 만드는 동안 이 화면이 나타나요. (맛집 문장은 AI가 만들어요)<br>오른쪽 데모 버튼으로 생성·실패·멈춤 화면을 확인할 수 있어요.</p>
+      <b style="color:var(--text);font-size:1rem">진행 중인 생성 작업이 없어요</b><p>보고서, 방문 순서, 문장을 만드는 동안 이 화면이 나타나요. (맛집·카페·관광지 문장은 AI가 만들어요)<br>오른쪽 데모 버튼으로 생성·실패·멈춤 화면을 확인할 수 있어요.</p>
       ${t ? `<button class="btn soft" data-act="tab" data-id="${t.status === 'studying' ? 'u-home' : t.status === 'report_done' ? 'u-report' : 'u-input'}">현재 단계로 돌아가기</button>` : `<button class="btn soft" data-act="tab" data-id="u-input">여행 입력으로</button>`}
       </div></div>`);
   }
