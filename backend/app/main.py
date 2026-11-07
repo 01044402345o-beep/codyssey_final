@@ -50,7 +50,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile, WebSocket
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints
@@ -1743,9 +1743,29 @@ def versioned_index_html() -> str | None:
     return _index_cache["html"]
 
 
+# 운영에서는 화면을 Firebase Hosting 으로 넘긴다. 침해된 API 서버가 자기 주소의 화면 코드를 바꿔 고정 지문과
+# 복구 키를 빼 가지 못하게 하려는 것이다(docs/ops/BREAK_GLASS.md §6). 301 을 브라우저가 기억하므로, 한 번 넘어간
+# 사용자는 기억하는 동안 이 서버에 묻지 않고 바로 간다. 처음 오는 사용자는 침해된 서버가 넘기지 않을 수 있다.
+HOSTED_SCREEN = "https://com-example-myapplicatio-3bb36.web.app"
+SCREEN_REDIRECT_MAX_AGE = 604800   # 7일. 기억이 길수록 보호 구간도, 되돌릴 때 기다릴 시간도 길어진다
+
+
+def screen_home() -> str:
+    """화면을 넘길 주소. Render 에서만 기본으로 켠다(로컬·CI 는 이 서버가 화면을 준다). 빈 값이면 끈다."""
+    configured = os.getenv("SCREEN_HOME_URL")
+    url = configured if configured is not None else (HOSTED_SCREEN if os.getenv("RENDER") else "")
+    return url.rstrip("/") if url.startswith("https://") else ""
+
+
 @app.get("/", include_in_schema=False)
 @app.get("/index.html", include_in_schema=False)
-def index_page() -> HTMLResponse:
+def index_page(request: Request) -> Response:
+    home = screen_home()
+    # stay=1: 이 주소의 브라우저 저장소에 남은 탈퇴 증명을 꺼낼 때만 쓴다(저장소는 주소마다 따로다).
+    if home and request.query_params.get("stay") != "1":
+        query = request.url.query
+        return RedirectResponse(home + "/" + ("?" + query if query else ""), status_code=301,
+                                headers={"Cache-Control": "public, max-age=%d" % SCREEN_REDIRECT_MAX_AGE})
     html = versioned_index_html()
     if html is None:
         raise HTTPException(status_code=404)
