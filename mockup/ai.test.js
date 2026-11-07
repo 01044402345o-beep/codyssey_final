@@ -126,6 +126,46 @@ test('generateByCity: 카테고리는 묶음마다 따로, 장소 종류가 plac
   assert.deepEqual(out.map(o => o.categoryId), ['restaurant', 'lodging']);
 });
 
+test('generateByCity: 복습 id 는 같은 카테고리에 저장된 것만 간다(transport 의 buy_ticket 은 attraction 요청에 안 실린다)', async () => {
+  const weakList = [
+    { category_id: 'transport', id: 'buy_ticket', situation: '기차표 사기' },
+    { category_id: 'restaurant', id: 'allergy_notice', situation: '알레르기' },
+  ];
+  const run = async (health, list) => {
+    const bodies = [];
+    const fetchImpl = async (url, opt) => {
+      if (url.endsWith('/health')) return { ok: true, json: async () => health };
+      bodies.push(JSON.parse(opt.body)); return { ok: true, json: async () => res() };
+    };
+    await AI.generateByCity({ fetchImpl, base: '', weakList: list, cities: [
+      { name: 'X', categoryId: 'attraction', places: [{ id: 'a', name: 'A', en: 'A', kind: 'attraction' }] },
+      { name: 'X', categoryId: 'transport', places: [{ id: 't', name: 'T', en: 'T', kind: 'train_station' }] }] });
+    return bodies.map(b => [b.category_id, b.weak_expressions]);
+  };
+  const both = { situations: { attraction: ['buy_ticket', 'guided_tour'], transport: ['buy_ticket'] } };
+  // transport 것만 저장 → attraction 요청엔 없다
+  assert.deepEqual(await run(both, weakList), [['attraction', []], ['transport', ['buy_ticket']]]);
+  // attraction 것을 저장하면 attraction 요청에 간다
+  assert.deepEqual(await run(both, [{ category_id: 'attraction', id: 'buy_ticket', situation: '입장권 사기' }]),
+    [['attraction', ['buy_ticket']], ['transport', []]]);
+  // /health 에 상황 목록이 없어도 카테고리로 거른 id 만 보낸다
+  assert.deepEqual(await run({}, weakList), [['attraction', []], ['transport', ['buy_ticket']]]);
+});
+
+test('generateByCity: 장소 종류가 비면 카테고리 이름 대신 그 카테고리의 장소 종류를 보낸다', async () => {
+  const bodies = [];
+  const fetchImpl = async (url, opt) => {
+    if (url.endsWith('/health')) return { ok: true, json: async () => ({}) };
+    bodies.push(JSON.parse(opt.body)); return { ok: true, json: async () => res() };
+  };
+  await AI.generateByCity({ fetchImpl, base: '', weakList: [], cities: [
+    { name: 'X', categoryId: 'transport', places: [{ id: 't', name: 'T', en: 'T' }] },
+    { name: 'X', categoryId: 'lodging', places: [{ id: 'h', name: 'H', en: 'H', kind: '' }] }] });
+  const types = bodies.map(b => [b.category_id, b.places[0].place_type]);
+  assert.deepEqual(types, [['transport', 'airport'], ['lodging', 'hotel']]);
+  types.forEach(([cat, kind]) => assert.equal(AI.categoryOfKind(kind), cat));
+});
+
 test('categoryOfKind·weakIdsFor: 계약의 place_types 로 카테고리를 찾고 여러 카테고리를 합친다', () => {
   assert.equal(AI.categoryOfKind('Hotel '), 'lodging');
   assert.equal(AI.categoryOfKind('airport'), 'transport');
