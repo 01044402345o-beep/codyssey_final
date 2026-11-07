@@ -17,6 +17,8 @@ ITINERARY_ENABLED 의 기본값은 꺼짐이고, 공개 배포에서 켜지 않�
   PUT  /user/state   같은 기록을 갈아 끼운다. 본문의 uid 는 받지 않는다
   DELETE /user/state 그 기록을 지운다(탈퇴). 계정 삭제는 화면이 deleteUser 로 한다
   POST /account/erase 탈퇴(관리자). 토큰 취소 + 기록 삭제 + 계정 삭제. 서비스 계정 키가 있어야 함
+  GET  /withdraw/recovery-key 복구 키를 봉인할 관리자 공개키
+  POST /withdraw/recovery 탈퇴한 사용자의 복구 보고(관리자 공개키로 봉인됨). 체인의 커밋먼트로 거른다
   POST /generate     카테고리 문장 생성 (+ 스키마·규칙 검증 후 재생성). 토큰 불필요
   POST /itinerary    도시 하나의 장소 수집. category_id 없음. 토큰 불필요
   POST /speak-check  발음 오디오 → 피드백 (멀티모달). 토큰 불필요
@@ -30,6 +32,7 @@ GEMINI_API_KEY 가 없으면 목업으로 응답한다. 그래서 키 없이도 
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import hashlib
 import ipaddress
@@ -358,6 +361,13 @@ class WithdrawReport(BaseModel):
     has_account: bool = False
     server_said_erased: bool = False
     note: str = Field(default="", max_length=500)
+
+
+class RecoveryReport(BaseModel):
+    """탈퇴한 사용자가 보내는 복구 보고. `sealed` 는 브라우저가 관리자 공개키로 봉인한 값이라 서버는 못 연다."""
+
+    commitment: str = Field(pattern=r"^[0-9a-f]{64}$")
+    sealed: str = Field(min_length=1, max_length=8192, pattern=r"^[A-Za-z0-9_-]+$")
 
 
 # ---------------------------------------------------------------- 설정 로드
@@ -1656,6 +1666,53 @@ async def diagnostics_withdraw(request: Request, payload: WithdrawReport) -> dic
     if os.getenv("EVIDENCE_CLIENT_REPORTS") != "0":    # 관리자 마인드맵 client_report 노드로 끌 수 있다
         _seal_in_background("client_report", account["uid"], [], {"client": payload.model_dump()}, None)
     return {"received": True}
+
+
+def _recovery_enabled() -> bool:
+    return evidence.configured() and os.getenv("EVIDENCE_CLIENT_REPORTS") != "0"
+
+
+@app.get("/withdraw/recovery-key")
+async def withdraw_recovery_key(request: Request) -> dict[str, Any]:
+    """복구 키를 봉인할 관리자 공개키. 공개값이지만 /health 는 지문만 노출하므로 경로를 나눈다."""
+    rate_limit(request)
+    if not _recovery_enabled():
+        raise HTTPException(status_code=503, detail="evidence_unavailable")
+    return {"public_key": evidence.public_key_text(), "key_id": evidence.key_id_hex()}
+
+
+@app.post("/withdraw/recovery")
+async def withdraw_recovery(request: Request, payload: RecoveryReport) -> dict[str, Any]:
+    """복구 키 봉투를 관리자에게 넘긴다. 계정이 이미 지워졌으므로 토큰 대신 체인의 커밋먼트로 거른다.
+
+    `received` 는 실제로 봉인·보관했을 때만 돌려준다. 체인에 없으면 404 다 — 시도 기록은 삭제보다 먼저
+    남으므로, 이 경우 화면은 파일을 관리자에게 직접 보여 달라고 안내한다(누락 의심 신호이기도 하다).
+    """
+    rate_limit(request)
+    if not _recovery_enabled():
+        raise HTTPException(status_code=503, detail="evidence_unavailable")
+    try:
+        blob = base64.urlsafe_b64decode(payload.sealed + "=" * (-len(payload.sealed) % 4))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="bad_sealed") from exc
+    if not evidence.sealed_for_current_key(blob):
+        raise HTTPException(status_code=400, detail="bad_sealed")
+    try:
+        known = await run_in_threadpool(evidence.commitment_known, payload.commitment)
+    except Exception as exc:  # noqa: BLE001 — 확인하지 못했으면 받지 않는다
+        raise HTTPException(status_code=503, detail="evidence_unavailable") from exc
+    if not known:
+        logging.getLogger("app.evidence").warning("체인에 없는 커밋먼트의 복구 보고(%s…)", payload.commitment[:12])
+        raise HTTPException(status_code=404, detail="unknown_commitment")
+    # 16진수로 담는다: 증거 수집의 자격증명 스크럽이 base64url 조각을 토큰으로 오인해 지우지 않게.
+    result = await run_in_threadpool(
+        evidence.seal_and_report, "recovery_report", uid=payload.commitment,
+        extra={"commitment": payload.commitment, "sealed_recovery_hex": blob.hex()})
+    if result.get("archive_id"):
+        return {"received": True}
+    if result.get("reason") == "throttled":
+        raise HTTPException(status_code=429, detail="recovery_throttled")
+    raise HTTPException(status_code=503, detail="evidence_unavailable")
 
 
 # 화면(목업)을 같은 서비스에서 서빙한다. 반드시 모든 API 라우트 등록 뒤에 마운트한다.

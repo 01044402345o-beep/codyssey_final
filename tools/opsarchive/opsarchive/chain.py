@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from . import container as C
@@ -25,6 +26,22 @@ MANIFEST_SCHEMA = "SEAL-SIG-v1"
 CHECKPOINT_SCHEMA = "SEAL-CHECKPOINT-v1"
 DOMAIN_MANIFEST = b"EVIDENCE-SEAL/v1/manifest"
 DOMAIN_CHECKPOINT = b"EVIDENCE-SEAL/v1/checkpoint"
+
+
+RECOVERY_KEY_RE = re.compile(r"wrk1-[0-9a-f]{64}")
+DOMAIN_RECOVERY_KEY = b"SEAL-WITHDRAW-KEY-v1\x00"
+
+
+def is_recovery_key(value: str) -> bool:
+    return (value or "").strip().lower().startswith("wrk1-")
+
+
+def recovery_commitment(key: str) -> str:
+    """복구 키의 단방향 커밋먼트(브라우저 proof-crypto.js 와 같은 식). 형식이 틀리면 빈 문자열."""
+    text = (key or "").strip().lower()
+    if not RECOVERY_KEY_RE.fullmatch(text):
+        return ""
+    return hashlib.sha256(DOMAIN_RECOVERY_KEY + bytes.fromhex(text[5:])).hexdigest()
 
 
 class ChainError(Exception):
@@ -161,12 +178,23 @@ def challenge_report(entries: list[dict[str, Any]], challenge: str,
     - `missing_from_chain`: 체인에 없다 → **누락 의심**. 단 "그 요청이 앵커 이전이었다"는 것은
       사용자 기기의 기록(`at`)으로 확인해야 한다(우리는 요청 시각을 모른다).
     - `anchor_has_no_head_seq`: 옛 체크포인트라 앵커 범위를 알 수 없다.
+    - `bad_recovery_key`: 복구 키 형식이 아니다.
+
+    복구 키(`wrk1-…`)를 주면 그 커밋먼트로 찾고 `key_proven: true` 로 표시한다. 커밋먼트만 주면 체인에
+    있다는 것만 보이고, 제시자가 그 요청의 주인인지는 증명되지 않는다. 복구 키 자체는 결과에 남기지 않는다.
     """
+    key_given = is_recovery_key(challenge)
+    if key_given:
+        challenge = recovery_commitment(challenge)
+        if not challenge:
+            return {"challenge": "", "found": False, "key_proven": False, "entries": [], "anchored_seq": None,
+                    "anchored": None, "verdict": "bad_recovery_key", "note": "복구 키 형식이 아니다"}
     hits = find_challenge(entries, challenge)
     anchored_seq = checkpoint.get("head_seq") if isinstance(checkpoint, dict) else None
     report = {
         "challenge": challenge,
         "found": bool(hits),
+        "key_proven": key_given and bool(hits),
         "entries": [{"seq": e.get("seq"), "kind": e.get("kind"), "outcome": e.get("outcome"),
                      "digest": e.get("digest"), "created_at": e.get("created_at")} for e in hits],
         "anchored_seq": anchored_seq,

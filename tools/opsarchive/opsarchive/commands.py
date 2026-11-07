@@ -16,11 +16,10 @@ import os
 import subprocess
 import tempfile
 import time
-import urllib.request
 import uuid
 
 from . import container as C
-from . import chain, config, firebase, gcp, kms, kms_audit, pins, render, witness
+from . import chain, config, firebase, gcp, kms, kms_audit, pins, render, tls, witness
 
 DEFAULT_ENV_KEY = "EVIDENCE_PUBKEY"
 DEFAULT_DIR = os.path.join(os.path.expanduser("~"), ".opsarchive")
@@ -114,8 +113,10 @@ def selftest() -> dict:
 def health(base_url: str, timeout: int = 20) -> dict:
     """앱 /health(지문만 노출된다 — 키 자체는 나오지 않는다)."""
     try:
-        with urllib.request.urlopen(base_url.rstrip("/") + "/health", timeout=timeout) as res:
+        with tls.open_url(base_url.rstrip("/") + "/health", timeout=timeout) as res:
             return json.loads(res.read().decode() or "{}")
+    except tls.InsecureUrl as exc:
+        raise CommandError("insecure_url") from exc
     except Exception as exc:        # noqa: BLE001
         raise CommandError("health_failed") from exc
 
@@ -469,7 +470,7 @@ def verify_chain(project_id: str, sa_path: str, pin_file: str, *, out_dir: str =
     if challenge:
         check = chain.challenge_report(entries, challenge, latest)
         result["challenge_check"] = check
-        if check["verdict"] in ("missing_from_chain",):
+        if check["verdict"] in ("missing_from_chain", "bad_recovery_key"):
             result["ok"] = False                                # 누락 의심은 실패로 올린다
     return result
 
@@ -764,6 +765,35 @@ def decrypt_archive(project_id: str, sa_path: str, archive_id: str, key_file: st
             json.dump(report, fh, ensure_ascii=False, indent=2)
         report["_written"] = path
     return report
+
+
+def verify_recovery_report(project_id: str, sa_path: str, archive_id: str, key_file: str, passphrase: str,
+                           pin_file: str, *, out_dir: str = "checkpoints") -> dict:
+    """복구 보고 아카이브를 열어(겉 봉인 → 안쪽 봉인) 복구 키가 커밋먼트와 맞는지, 체인 앵커 안에 있는지 본다."""
+    report = decrypt_archive(project_id, sa_path, archive_id, key_file, passphrase)
+    checked = open_recovery_report(report, C.load_private_key(key_file, passphrase))
+    result = verify_chain(project_id, sa_path, pin_file, out_dir=out_dir, challenge=checked.pop("_recovery_key"))
+    return {"archive_id": archive_id, **checked, "ok": bool(result.get("ok")),
+            "challenge_check": result.get("challenge_check")}
+
+
+def open_recovery_report(report: dict, private_key: bytes) -> dict:
+    """열린 아카이브에서 안쪽 봉투를 열어 대조한다. 복구 키는 `_recovery_key` 로만 돌려주며 출력에 남기지 않는다."""
+    extra = report.get("extra") if isinstance(report, dict) else None
+    if report.get("trigger") != "recovery_report" or not isinstance(extra, dict):
+        raise CommandError("not_recovery_report")
+    try:
+        inner = json.loads(C.unseal(bytes.fromhex(str(extra.get("sealed_recovery_hex", ""))), private_key))
+    except C.ContainerError as exc:
+        raise CommandError(exc.code) from exc
+    except ValueError as exc:
+        raise CommandError("bad_recovery_report") from exc
+    key = str(inner.get("recovery_key", "")) if isinstance(inner, dict) else ""
+    commitment = chain.recovery_commitment(key)
+    if not commitment or commitment != extra.get("commitment"):
+        raise CommandError("recovery_key_mismatch")
+    return {"commitment": commitment, "requested_at": inner.get("requested_at", ""),
+            "receipt": inner.get("receipt"), "_recovery_key": key}
 
 
 # ------------------------------------------------------------------ Firestore 보안 규칙

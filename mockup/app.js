@@ -6211,18 +6211,12 @@ function clearAccountStorage() {
   if (box) keys.forEach(k => { try { box.removeItem(k); } catch (e) { /* 저장소 막힘 */ } });
   if (STORE && box !== STORE) keys.forEach(k => { try { STORE.removeItem(k); } catch (e) { /* 저장소 막힘 */ } });
 }
-/* 탈퇴 증명 — **사전 커밋먼트**. 요청을 보내기 **전에** 챌린지를 만들어 이 기기에 저장한다.
-   서버가 기록을 생략하면(앱 침해·부분 실패) 이 챌린지가 관리자의 앵커된 체인에 없으므로,
+/* 탈퇴 증명 — **사전 커밋먼트**. 요청을 보내기 **전에** 복구 키를 만들어 이 기기에 저장한다.
+   서버에는 복구 키의 SHA-256 커밋먼트(`challenge`)만 보내므로, 체인이 새도 복구 키는 드러나지 않는다.
+   서버가 기록을 생략하면(앱 침해·부분 실패) 이 커밋먼트가 관리자의 앵커된 체인에 없으므로,
    관리자가 `verify-chain --challenge` 로 대조하면 누락이 드러난다. 계정이 지워진 뒤에도 남아야 하므로
    계정 칸이 아니라 기기 공용 칸(STORE)에 둔다. CSPRNG 가 없으면 만들지 않는다(추측 가능한 값은 증거가 못 된다). */
 const WITHDRAW_PROOF_KEY = 'cd_withdraw_proof';
-function newChallenge() {
-  const box = window.crypto;
-  if (!box || !box.getRandomValues) return '';
-  const bytes = new Uint8Array(16);
-  box.getRandomValues(bytes);
-  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-}
 function saveWithdrawProof(proof) {
   try { if (STORE) STORE.setItem(WITHDRAW_PROOF_KEY, JSON.stringify(proof)); } catch (e) { /* 저장소 막힘 */ }
 }
@@ -6260,6 +6254,7 @@ function withdrawProofBlock() {
     <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
       <button class="btn soft" data-act="proof-download">증명 내려받기</button>
       <button class="btn soft" data-act="proof-open">증명 열기</button>
+      ${info.proof.recovery_key ? '<button class="btn soft" data-act="proof-send">관리자에게 증명 보내기</button>' : ''}
       ${confirmed ? '' : '<button class="btn soft" data-act="proof-report">서버에 보고</button>'}
       <button class="btn soft" data-act="proof-clear">이 기기에서 지우기</button>
     </div></div>`;
@@ -6267,10 +6262,12 @@ function withdrawProofBlock() {
 /* 증명 내보내기 — **내려받은 파일은 기기 밖으로 나가는 유일한 사본**이다(메일·USB 로 옮긴다).
    TLS 는 전송 중만 지키므로, 여기서는 파일 자체를 사용자 암호로 잠근다(AES-256-GCM + PBKDF2).
    암호를 잊으면 열 수 없다는 것을 확인 창에서 분명히 말한다. */
-function proofPayload(info) {
+function proofPayload(info, withKey) {
   return {
     schema: 'SEAL-RECEIPT-v2', exported_at: new Date().toISOString(),
     challenge: info.proof.challenge, requested_at: new Date(info.proof.at).toISOString(),
+    // 복구 키는 암호를 건 파일에만 넣는다. 평문 파일은 메일·USB 에서 그대로 읽히기 때문이다.
+    ...(withKey && info.proof.recovery_key ? { recovery_key: info.proof.recovery_key } : {}),
     receipt: info.proof.receipt || null,
     note: info.proof.receipt
       ? '이 파일을 보관하세요. 관리자가 앵커된 기록과 대조할 수 있습니다.'
@@ -6290,13 +6287,13 @@ function saveProofFile(text, name) {
 function downloadWithdrawProof(plain) {
   const info = withdrawProofState();
   if (info.state === 'none') return;
-  const payload = proofPayload(info);
+  const payload = proofPayload(info, true);
   const base = 'withdraw-proof-' + String(info.proof.challenge).slice(0, 12);
-  if (plain) { saveProofFile(JSON.stringify(payload, null, 2), base + '.json'); return; }
+  if (plain) { saveProofFile(JSON.stringify(proofPayload(info, false), null, 2), base + '.json'); return; }
   confirmBox('증명 파일에 암호를 걸까요?',
     `<b>이 파일은 기기 밖으로 나가는 유일한 사본이에요.</b> 메일·USB 로 옮기면 그대로 읽힐 수 있어서, 암호로 잠글 수 있어요(AES-256-GCM).<br><br>
      <input class="ip" id="proof-pw" type="password" autocomplete="new-password" placeholder="암호 (8자 이상)" style="width:100%;margin:6px 0">
-     <span class="small">암호를 잊으면 이 파일은 복구되지 않아요. 관리자도 열 수 없습니다.</span><br><br>
+     <span class="small">암호를 잊으면 이 파일은 복구되지 않아요. 관리자도 열 수 없습니다. 복구 키는 암호를 건 파일에만 들어가요.</span><br><br>
      <button class="btn soft" data-act="proof-plain" style="width:100%">암호 없이 저장</button>`,
     '암호 걸고 저장', async () => {
       const el = document.querySelector('#proof-pw');
@@ -6353,6 +6350,35 @@ function reportSavedProof() {
   if (info.state !== 'unknown') return Promise.resolve('nothing');
   // 서버에 "영수증을 못 받았다"고 보고한다(증거 봉인 트리거). 로그인 상태에서만 가능하다.
   return reportWithdrawIssue('no_receipt', true);
+}
+/* 복구 키를 관리자에게 보낸다. 탈퇴 뒤에는 로그인할 수 없어 토큰 없이 보낸다.
+   TLS 위에서 다시 관리자 공개키로 봉인하므로, 서버는 커밋먼트만 보고 복구 키는 보지 못한다.
+   반환: sent | nothing | insecure | unknown(체인에 없음) | later | unsupported | failed */
+async function sendRecoveryProof() {
+  const info = withdrawProofState();
+  if (!info.proof || !info.proof.recovery_key) return 'nothing';
+  if (API.base === null) return 'failed';
+  const base = API.base || '';
+  if (!ProofCrypto.isSecureEndpoint(base, location.href)) return 'insecure';
+  try {
+    const keyRes = await fetch(base + '/withdraw/recovery-key', { headers: { Accept: 'application/json' } });
+    if (!keyRes.ok) return 'failed';
+    const keyBody = await keyRes.json();
+    const sealed = await ProofCrypto.sealForAdmin({
+      schema: 'WITHDRAW-RECOVERY-v1', recovery_key: info.proof.recovery_key, commitment: info.proof.challenge,
+      requested_at: new Date(info.proof.at).toISOString(), receipt: info.proof.receipt || null,
+    }, keyBody.public_key);
+    if (!sealed.ok) return sealed.reason === 'unsupported' ? 'unsupported' : 'failed';
+    const res = await fetch(base + '/withdraw/recovery', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ commitment: info.proof.challenge, sealed: sealed.sealed }),
+    });
+    if (res.status === 200) return 'sent';
+    if (res.status === 404) return 'unknown';
+    if (res.status === 429) return 'later';
+    return 'failed';
+  } catch (e) { return 'failed'; }
 }
 /* 관리자 경로: 서버가 서비스 계정으로 탈퇴 흔적·토큰 취소·기록 삭제·계정 삭제를 한 번에 한다.
    반환: { status: 'ok'|'unavailable'|'failed', receipt: {...}|null }
@@ -6525,8 +6551,10 @@ async function doWithdraw() {
     try { token = await FirebaseAuth.idToken(); } catch (e) { token = ''; }
     if (!token) return stop('로그인 정보를 확인하지 못해 탈퇴를 멈췄어요. 잠시 뒤 다시 시도해 주세요.');
     wdStep(1);
-    const challenge = newChallenge();
-    if (challenge) saveWithdrawProof({ challenge: challenge, at: Date.now(), receipt: null });
+    // 증명 스크립트를 못 불러와도 탈퇴는 막지 않는다 — 증명 없이 진행한다(서버가 값을 만든다).
+    const made = window.ProofCrypto ? await ProofCrypto.newRecoveryKey() : null;
+    const challenge = made ? made.commitment : '';
+    if (made) saveWithdrawProof({ challenge: challenge, recovery_key: made.key, at: Date.now(), receipt: null });
     wdStep(2, WD_SERVER_DETAIL);                                     // 가장 오래 걸리는 단계(서버 응답 대기)
     const admin = await eraseOnServer(token, challenge);
     // 재인증은 탈퇴 버튼을 누른 동작 안에서 먼저 한다(withdrawWithRecentLogin). 여기서 다시 구글 창을 열면
@@ -6534,7 +6562,7 @@ async function doWithdraw() {
     if (admin.status === 'reauth') return stop('보안을 위해 다시 로그인 확인이 필요해요. 닫은 뒤 탈퇴하기를 다시 눌러 주세요.');
     if (accountClosed) { wdEnd(); return; }    // 기다리는 사이 다른 경로가 '탈퇴한 계정'을 감지해 이미 정리했다(이중 처리 금지)
     if (admin.status === 'ok') {
-      saveWithdrawProof({ challenge: challenge, at: Date.now(), receipt: admin.receipt });
+      saveWithdrawProof({ challenge: challenge, recovery_key: made ? made.key : '', at: Date.now(), receipt: admin.receipt });
       wdStep(3);
       clearAccountStorage();                   // 서버가 계정·토큰·기록을 지웠다 — 이제 로컬만 정리
       wdStep(4);
@@ -6724,6 +6752,16 @@ const ACT = {
           : r === 'nothing' ? '보고할 \'상태 불명\' 탈퇴 기록이 없어요.'
             : '보고하지 못했어요. 잠시 뒤 다시 시도하거나 증명 파일을 내려받아 관리자에게 보여 주세요.'
     )).catch(() => toast('보고하지 못했어요. 증명 파일을 내려받아 관리자에게 보여 주세요.'));
+  },
+  'proof-send': () => {
+    sendRecoveryProof().then(r => toast(
+      r === 'sent' ? '관리자만 열 수 있게 잠가서 증명을 보냈어요.'
+        : r === 'unknown' ? '서버 기록에서 이 탈퇴 요청을 찾지 못했어요. 증명 파일을 내려받아 관리자에게 직접 보여 주세요.'
+          : r === 'later' ? '요청이 많아요. 잠시 뒤 다시 보내 주세요.'
+            : r === 'insecure' ? '암호화되지 않은 연결이라 보내지 않았어요.'
+              : r === 'unsupported' ? '이 브라우저에서는 잠가서 보낼 수 없어요. 증명 파일을 내려받아 관리자에게 보여 주세요.'
+                : '보내지 못했어요. 잠시 뒤 다시 시도하거나 증명 파일을 내려받아 관리자에게 보여 주세요.'
+    ));
   },
   'proof-clear': () => clearWithdrawProof(),
   // 탈퇴: 계정과 저장된 기록을 모두 지운다(되돌릴 수 없음).

@@ -171,7 +171,8 @@ GUI는 성공을 파란 `✔`, 실패를 빨간 `✘`, 경고를 노란색으로
 | `rotate --service --key [--base-url --no-redeploy]` | 새 키 생성·발행(옛 개인키는 보관) | 되돌릴 수 없음 |
 | `pin --key --health-url [--out --generation --commit --note --sign-key]` | 개인키 지문으로 핀 파일 생성 | 되돌릴 수 없음(세대는 올리기만) |
 | `anchor --project --sa --sign-key [--out]` | 체인을 확인하고 체크포인트를 서명해 앵커 | 되돌릴 수 없음(원장에 남음) |
-| `verify-chain --project --sa [--pin --out --challenge]` | 서명·연속성·사라진 아카이브·챌린지 검증 | 안전 |
+| `verify-chain --project --sa [--pin --out --challenge]` | 서명·연속성·사라진 아카이브·챌린지(또는 복구 키 `wrk1-…`) 검증 | 안전 |
+| `recovery-verify --project --sa --id --key [--pin --out]` | 복구 보고 아카이브를 열어 복구 키 ↔ 커밋먼트 ↔ 체인 대조 | 안전 |
 
 `publish`·`doctor`·`rotate`는 같은 옵션 집합을 받는다: `--service --key --env-key --base-url --pin --no-redeploy`.
 이 중 일부는 특정 명령에서만 쓰인다(예: `--pin`은 `doctor`, `--no-redeploy`는 `publish`·`rotate`).
