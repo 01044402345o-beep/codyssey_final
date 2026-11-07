@@ -22,6 +22,7 @@ from app.validators import SCHEMA_CHECKER_AVAILABLE, check_pattern_declarations,
 ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 RULE_KEYS = ("min_sentences_per_situation", "max_sentences_per_situation", "max_words_per_sentence", "min_sentences_per_category")
+STR_RULE_KEYS = ("tone",)  # 아직 런타임이 읽지 않지만 계약 필수 항목이다 (CATEGORY_CONTRACT.md §6-3)
 SCHEMA_PATH = BACKEND.parent / "agent_contract" / "schema.json"
 IGNORED_PACK_WARN = {"missing_situation", "below_min_sentences"}  # good_examples 는 일부 상황만 보여줘도 된다
 
@@ -55,6 +56,9 @@ def check_config(cfg: Any, stem: str) -> tuple[list[str], list[str]]:
     for k in RULE_KEYS:
         if not isinstance(rules.get(k), int) or isinstance(rules.get(k), bool) or rules[k] < 1:
             errors.append(f"`rules.{k}` 는 1 이상의 정수여야 합니다.")
+    for k in STR_RULE_KEYS:
+        if not isinstance(rules.get(k), str) or not rules[k].strip():
+            errors.append(f"`rules.{k}` 는 비어 있지 않은 문자열이어야 합니다. (예: \"polite\")")
 
     # 3) situations
     sits = cfg["situations"]
@@ -99,6 +103,15 @@ def check_config(cfg: Any, stem: str) -> tuple[list[str], list[str]]:
         errors.append("`negative_case_patterns` 는 객체여야 합니다.")
     for w in check_pattern_declarations(patterns):
         warns.append(w["detail"])
+    # 길이 상한이 두 곳에 적혀 있다. 검증기는 too_long.max 를 먼저 쓰고 프롬프트는 rules 값을 쓰므로 같아야 한다.
+    too_long = patterns.get("too_long")
+    if isinstance(too_long, dict) and "max" in too_long:
+        tl_max = too_long["max"]
+        if tl_max != rules.get("max_words_per_sentence"):
+            errors.append(
+                f"`negative_case_patterns.too_long.max`({tl_max!r}) 와 `rules.max_words_per_sentence`"
+                f"({rules.get('max_words_per_sentence')!r}) 가 다릅니다. 검증기와 프롬프트가 다른 길이를 쓰게 됩니다."
+            )
 
     # 5) good_examples
     goods = cfg["good_examples"]

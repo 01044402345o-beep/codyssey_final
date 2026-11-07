@@ -44,6 +44,25 @@ def _words(text: str) -> int:
     return len(WORD_RE.findall(text or ""))
 
 
+def _positive_int(v: Any) -> int | None:
+    return v if isinstance(v, int) and not isinstance(v, bool) and v > 0 else None
+
+
+def max_words_limit(cfg: dict[str, Any], patterns: dict[str, Any] | None = None) -> int | None:
+    """문장 길이 상한. negative_case_patterns.too_long.max 가 있으면 그 값, 없으면 rules.max_words_per_sentence.
+
+    두 값이 모두 있는데 다르면 scripts/validate_category.py 가 ERROR 로 막는다.
+    """
+    if patterns is None:
+        patterns = cfg.get("negative_case_patterns") or {}
+    p = patterns.get("too_long") if isinstance(patterns, dict) else None
+    from_pattern = _positive_int(p.get("max")) if isinstance(p, dict) else None
+    if from_pattern is not None:
+        return from_pattern
+    rules = cfg.get("rules") if isinstance(cfg.get("rules"), dict) else {}
+    return _positive_int(rules.get("max_words_per_sentence"))
+
+
 def check_pattern_declarations(patterns: dict[str, Any]) -> list[dict[str, Any]]:
     """설정에 적힌 type/match 가 코드에 구현돼 있는지 확인한다."""
     issues: list[dict[str, Any]] = []
@@ -101,10 +120,24 @@ def validate_sentence(
     valid_ids = {s.get("situation_id") for s in cfg.get("situations", []) if isinstance(s, dict)}
     sid = sentence.get("situation_id")
     if sid not in valid_ids:
+        # 이름은 place_mismatch 지만 실제로는 '상황 id 가 계약에 없음'(situation_not_in_config)의
+        # severity 를 정한다. 장소 검사가 아니다. 생성된 place_type 검사는 아래 place_type_not_in_category(warn).
+        # 이름을 바꾸면 네 계약 JSON 과 negative_cases 의 expect 가 함께 바뀌어야 해서 그대로 둔다.
         issues.append({
             "severity": (patterns.get("place_mismatch") or {}).get("severity", "block"),
             "code": "situation_not_in_config",
             "detail": f"situation_id={sid!r} is not in category {cfg.get('category_id')!r}",
+        })
+
+    # 생성된 문장의 장소 종류. 요청 쪽은 main.check_place_types 가 422 로 막지만 출력은 여기서만 본다.
+    # 실패율을 바꾸지 않도록 warn 으로만 기록한다.
+    pt = sentence.get("place_type")
+    allowed_pt = {str(t).strip().lower() for t in (cfg.get("place_types") or []) if isinstance(t, str)}
+    if isinstance(pt, str) and pt.strip() and allowed_pt and pt.strip().lower() not in allowed_pt:
+        issues.append({
+            "severity": "warn",
+            "code": "place_type_not_in_category",
+            "detail": f"place_type={pt!r} 는 카테고리 {cfg.get('category_id')!r} 의 place_types {sorted(allowed_pt)} 에 없습니다.",
         })
 
     low = raw_en.lower()
@@ -138,11 +171,12 @@ def validate_sentence(
                 })
 
     p = patterns.get("too_long") or {}
-    if isinstance(p.get("max"), int) and _words(raw_en) > p["max"]:
+    limit = max_words_limit(cfg, patterns)
+    if limit is not None and _words(raw_en) > limit:
         issues.append({
             "severity": p.get("severity", "warn"),
             "code": "too_long",
-            "detail": f"{_words(raw_en)} words > max {p['max']}",
+            "detail": f"{_words(raw_en)} words > max {limit}",
         })
 
     if seen_en is not None:
@@ -332,6 +366,19 @@ def validate_pack(
             "code": "missing_situation",
             "detail": f"{len(missing)}/{len(cfg.get('situations', []))} situations below min {need}: {missing}",
         })
+
+    # 3-1) 상황별 최대 문장 수 — warn 만 (생성 실패율을 바꾸지 않는다)
+    most = _positive_int(rules.get("max_sentences_per_situation"))
+    if most is not None:
+        over = sorted(
+            (str(sid), n) for sid, n in counts.items() if sid is not None and n > most
+        )
+        if over:
+            issues.append({
+                "severity": "warn",
+                "code": "too_many_in_situation",
+                "detail": f"{len(over)} situations above max {most}: {dict(over)}",
+            })
 
     # 4) 카테고리 최소 문장 수 — 3주차 측정값
     min_total = int(rules.get("min_sentences_per_category", 0) or 0)

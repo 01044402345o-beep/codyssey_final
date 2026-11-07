@@ -463,12 +463,22 @@ def check_place_types(cfg: dict[str, Any], req: GenerateRequest) -> None:
 
 
 def build_prompt(cfg: dict[str, Any], req: GenerateRequest, facts: dict[str, Any] | None = None) -> str:
-    """system_prompt 의 {키} 를 rules 의 같은 키 값으로 치환한다."""
+    """system_prompt 의 {키} 를 rules 의 같은 키 값으로 치환한다.
+
+    치환되지 않은 {키} 는 그대로 두고 경고 로그만 남긴다(동작은 바꾸지 않는다).
+    place_types 는 system_prompt 에 직접 적힌 목록과 어긋날 수 있어 INPUT 에 계약 JSON 값을 함께 넣는다.
+    """
     rules = cfg.get("rules", {})
     body = PLACEHOLDER.sub(
         lambda m: str(rules[m.group(1)]) if m.group(1) in rules else m.group(0),
         cfg.get("system_prompt", ""),
     )
+    unresolved = sorted(set(PLACEHOLDER.findall(body)))
+    if unresolved:
+        logging.getLogger("app.prompt").warning(
+            "system_prompt placeholders not in rules (left as-is): category=%s keys=%s",
+            cfg.get("category_id"), unresolved,
+        )
     mapping = {s.get("situation_id"): s for s in cfg.get("situations", []) if isinstance(s, dict)}
     # 계약에 없는 id 는 프롬프트에 넣지 않는다(검증기가 weak_unknown_situation 경고로 따로 알린다).
     weak_spec = [
@@ -480,6 +490,7 @@ def build_prompt(cfg: dict[str, Any], req: GenerateRequest, facts: dict[str, Any
         "category_id": cfg["category_id"],
         "city": req.city,
         "places": [p.model_dump() for p in req.places],
+        "place_types": list(cfg.get("place_types") or []),
         "situations": cfg.get("situations", []),
         "weak_expressions": weak_spec,
         "rules": rules,
