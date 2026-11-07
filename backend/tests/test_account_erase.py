@@ -1,6 +1,7 @@
 """POST /account/erase — 관리자 탈퇴 엔드포인트. 실행: cd backend && python -m unittest tests.test_account_erase"""
 import json
 import os
+import time
 import unittest
 from unittest import mock
 
@@ -22,6 +23,7 @@ CLAIMS = {
     "email": "traveler@example.com",
     "name": "김여행",
     "firebase": {"sign_in_provider": "google.com"},
+    "auth_time": int(time.time()),
 }
 
 
@@ -82,6 +84,22 @@ class T(unittest.TestCase):
         self.assertEqual(res.status_code, 503)
         self.assertEqual(res.json()["detail"], "admin_unavailable")
 
+    def test_old_authentication_is_rejected_before_admin_delete(self):
+        old = {**CLAIMS, "auth_time": int(time.time()) - 301}
+        with mock.patch.dict(os.environ, {**ENV, "FIREBASE_SERVICE_ACCOUNT_JSON": SA}, clear=True), \
+                mock.patch.object(firebase_auth.id_token, "verify_firebase_token", return_value=old):
+            res = self.client.post("/account/erase", headers={"Authorization": "Bearer signed-token"})
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.json()["detail"], "recent_login_required")
+
+    def test_missing_auth_time_is_not_treated_as_old(self):
+        claims = {k: v for k, v in CLAIMS.items() if k != "auth_time"}
+        fake = FakeAdmin()
+        firebase_admin.set_admin(fake)
+        res = self.post(claims)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(fake.erased, ["uid-1"])
+
     def test_erases_only_the_token_uid(self):
         fake = FakeAdmin()
         firebase_admin.set_admin(fake)
@@ -90,8 +108,14 @@ class T(unittest.TestCase):
         body = res.json()
         self.assertTrue(body["erased"])
         # 영수증: 클라이언트가 보관해 나중에 "체인에 이 챌린지가 있는가"를 대조한다
-        self.assertEqual(sorted(body["receipt"]), ["challenge", "created_at", "digest", "outcome",
-                                                   "schema", "seq"])
+        # v2: 서명 필드가 붙었다(Ed25519). 키가 없으면 signed:false + reason 으로 정직하게 남는다.
+        base = ["challenge", "created_at", "digest", "outcome", "schema", "seq", "signed"]
+        keys = sorted(body["receipt"])
+        self.assertEqual(keys, sorted(base + ["reason"]) if body["receipt"]["signed"] is False
+                         else sorted(base + ["alg", "sig", "public_key", "key_id"]))
+        self.assertEqual(body["receipt"]["schema"], "SEAL-RECEIPT-v2")
+        if body["receipt"]["signed"] is False:
+            self.assertEqual(body["receipt"]["reason"], "not_configured")
         self.assertEqual(fake.erased, ["uid-1"])   # uid 는 토큰에서만 온다
 
     def test_admin_failure_is_surfaced(self):

@@ -87,7 +87,16 @@ def decode(data: bytes, max_seconds: float = MAX_DECODE_SECONDS) -> np.ndarray:
             chunks.append(arr)
 
     try:
-        with av.open(io.BytesIO(data), mode="r", metadata_errors="ignore") as container:
+        # PyAV 20+는 metadata_errors를 받지만, Render/CI에 남아 있는 PyAV 19는
+        # 이 인자를 받지 않는다. 지원 여부만 예외로 판별하고, 나머지 TypeError는
+        # 오디오 디코드 오류로 그대로 처리한다.
+        try:
+            container = av.open(io.BytesIO(data), mode="r", metadata_errors="ignore")
+        except TypeError as exc:
+            if "metadata_errors" not in str(exc):
+                raise
+            container = av.open(io.BytesIO(data), mode="r")
+        with container:
             if not container.streams.audio:
                 raise AudioDecodeError("no audio stream")
             stream = container.streams.audio[0]

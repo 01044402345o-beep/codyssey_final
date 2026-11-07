@@ -6256,35 +6256,92 @@ function withdrawProofBlock() {
   return `<div class="card" style="margin-top:10px">
     <b>${title}</b>
     <div class="small" style="margin:6px 0">${detail}</div>
-    <div class="small" style="opacity:.75">챌린지 ${esc(String(info.proof.challenge).slice(0, 16))}… · 순번 ${esc(seq)} · 결과 ${esc(String(receipt.outcome || '-'))}</div>
+    <div class="small" style="opacity:.75">챌린지 ${esc(String(info.proof.challenge).slice(0, 16))}… · 순번 ${esc(seq)} · 결과 ${esc(String(receipt.outcome || '-'))} · ${receipt.signed === true ? '서버 서명 있음' : '서명 없음'}</div>
     <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
       <button class="btn soft" data-act="proof-download">증명 내려받기</button>
+      <button class="btn soft" data-act="proof-open">증명 열기</button>
       ${confirmed ? '' : '<button class="btn soft" data-act="proof-report">서버에 보고</button>'}
       <button class="btn soft" data-act="proof-clear">이 기기에서 지우기</button>
     </div></div>`;
 }
-function downloadWithdrawProof() {
-  const info = withdrawProofState();
-  if (info.state === 'none') return;
-  const payload = JSON.stringify({
-    schema: 'SEAL-RECEIPT-v1', exported_at: new Date().toISOString(),
+/* 증명 내보내기 — **내려받은 파일은 기기 밖으로 나가는 유일한 사본**이다(메일·USB 로 옮긴다).
+   TLS 는 전송 중만 지키므로, 여기서는 파일 자체를 사용자 암호로 잠근다(AES-256-GCM + PBKDF2).
+   암호를 잊으면 열 수 없다는 것을 확인 창에서 분명히 말한다. */
+function proofPayload(info) {
+  return {
+    schema: 'SEAL-RECEIPT-v2', exported_at: new Date().toISOString(),
     challenge: info.proof.challenge, requested_at: new Date(info.proof.at).toISOString(),
     receipt: info.proof.receipt || null,
     note: info.proof.receipt
       ? '이 파일을 보관하세요. 관리자가 앵커된 기록과 대조할 수 있습니다.'
       : '서버 영수증을 받지 못했습니다(상태 불명). 관리자에게 이 파일을 보여 주세요.',
-  }, null, 2);
+  };
+}
+function saveProofFile(text, name) {
   try {
-    const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
     const link = document.createElement('a');
-    link.href = url;
-    link.download = 'withdraw-proof-' + String(info.proof.challenge).slice(0, 12) + '.json';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    link.href = url; link.download = name;
+    document.body.appendChild(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast('증명 파일을 내려받았어요. 기기를 바꾸기 전에 보관해 두세요.');
   } catch (e) { toast('이 브라우저에서는 파일로 저장할 수 없어요.'); }
+}
+function downloadWithdrawProof(plain) {
+  const info = withdrawProofState();
+  if (info.state === 'none') return;
+  const payload = proofPayload(info);
+  const base = 'withdraw-proof-' + String(info.proof.challenge).slice(0, 12);
+  if (plain) { saveProofFile(JSON.stringify(payload, null, 2), base + '.json'); return; }
+  confirmBox('증명 파일에 암호를 걸까요?',
+    `<b>이 파일은 기기 밖으로 나가는 유일한 사본이에요.</b> 메일·USB 로 옮기면 그대로 읽힐 수 있어서, 암호로 잠글 수 있어요(AES-256-GCM).<br><br>
+     <input class="ip" id="proof-pw" type="password" autocomplete="new-password" placeholder="암호 (8자 이상)" style="width:100%;margin:6px 0">
+     <span class="small">암호를 잊으면 이 파일은 복구되지 않아요. 관리자도 열 수 없습니다.</span><br><br>
+     <button class="btn soft" data-act="proof-plain" style="width:100%">암호 없이 저장</button>`,
+    '암호 걸고 저장', async () => {
+      const el = document.querySelector('#proof-pw');
+      const pw = el ? el.value : '';
+      if (!pw || pw.length < 8) { toast('암호는 8자 이상으로 정해 주세요.'); return; }
+      S.modal = null; render();
+      const r = await ProofCrypto.seal(payload, pw);
+      if (!r.ok) { toast(r.reason === 'short' ? '암호는 8자 이상으로 정해 주세요.' : '이 브라우저에서는 암호를 걸 수 없어요.'); return; }
+      saveProofFile(JSON.stringify(r.envelope, null, 2), base + '.seal.json');
+    });
+}
+/* 증명 열기 — 잠근 파일을 그 자리에서 확인한다. 못 여는 파일이면 이유를 말해 준다. */
+function openWithdrawProof() {
+  if (!ProofCrypto.canSeal()) { toast('이 브라우저에서는 열 수 없어요. 컴퓨터에서 열어 주세요.'); return; }
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.addEventListener('change', () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    const fr = new FileReader();
+    fr.onload = () => {
+      let doc; try { doc = JSON.parse(String(fr.result)); } catch (e) { toast('JSON 파일이 아니에요.'); return; }
+      if (!doc || doc.schema !== ProofCrypto.ENC_SCHEMA) {
+        confirmBox('증명 파일', `<span class="small">암호가 걸리지 않은 파일이에요. 서명은 관리자에게 확인받으세요.</span><pre class="proof-pre" style="white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;font-size:.6875rem;line-height:1.5;background:var(--surface-2);padding:10px;border-radius:10px;margin:8px 0 0">${esc(JSON.stringify(doc, null, 2).slice(0, 1200))}</pre>`, '닫기', () => { S.modal = null; render(); });
+        return;
+      }
+      confirmBox('암호를 넣어 주세요',
+        `<input class="ip" id="proof-pw2" type="password" autocomplete="current-password" placeholder="암호" style="width:100%;margin:6px 0">`,
+        '열기', async () => {
+          const el = document.querySelector('#proof-pw2');
+          const pw = el ? el.value : '';
+          S.modal = null; render();
+          const r = await ProofCrypto.open(doc, pw);
+          if (!r.ok) { toast('열지 못했어요. 암호가 다르거나 파일이 바뀌었어요.'); return; }
+          const rc = r.data.receipt || {};
+          confirmBox('증명 내용',
+            `<span class="small">챌린지 ${esc(String(r.data.challenge || '').slice(0, 16))}… · 결과 ${esc(String(rc.outcome || '-'))} · 순번 ${esc(String(rc.seq === undefined ? '-' : rc.seq))}<br>
+             서명 ${rc.signed === true ? '있음(Ed25519)' : '없음'}</span>
+             <pre class="proof-pre" style="white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;font-size:.6875rem;line-height:1.5;background:var(--surface-2);padding:10px;border-radius:10px;margin:8px 0 0">${esc(JSON.stringify(r.data, null, 2).slice(0, 1200))}</pre>`,
+            '닫기', () => { S.modal = null; render(); });
+        });
+    };
+    fr.readAsText(f);
+  });
+  inp.click();
 }
 function clearWithdrawProof() {
   try { if (STORE) STORE.removeItem(WITHDRAW_PROOF_KEY); } catch (e) { /* 저장소 막힘 */ }
@@ -6308,6 +6365,7 @@ async function eraseOnServer(token, challenge) {
     if (res.status === 404 || res.status === 405) return { status: 'unavailable', receipt: null };
     if (res.status !== 200) {
       let code = ''; try { code = (await res.json()).detail; } catch (e) { code = ''; }
+      if (res.status === 403 && code === 'recent_login_required') return { status: 'reauth', receipt: null };
       return { status: (res.status === 503 && code === 'admin_unavailable') ? 'unavailable' : 'failed', receipt: null };
     }
     const body = await res.json().catch(() => null);
@@ -6413,6 +6471,44 @@ async function finishLogin(account, doneMsg, loadStep) {
 /* 탈퇴: 서버(관리자 또는 규칙) → 브라우저 → (폴백이면) 클라이언트 deleteUser. 되돌릴 수 없다.
    서버 단계가 확정된 뒤에 브라우저 기록을 지운다 — 중간에 멈추면 계정·기록을 그대로 두고,
    나중에 화면을 다시 그려도 빈 기록이 서버로 올라가 지워지지 않게 한다. */
+/* 탈퇴 전 '방금 로그인' 확인. 서버(/account/erase)는 마지막 로그인이 RECENT_LOGIN_SECONDS(기본 300초)보다 오래된
+   토큰을 403 recent_login_required 로 거절한다 — 새어 나간 1시간짜리 토큰만으로 계정이 영구 삭제되지 않게.
+   오래됐으면 확인 창을 한 번 더 띄우고, **그 창의 버튼을 누른 동작 안에서 바로** 다시 로그인한다
+   (서버 응답을 기다린 뒤 구글 창을 열면 팝업 차단에 걸린다. 비밀번호는 가려진 칸으로 받는다). */
+const REAUTH_AFTER = 240;   // 서버 창(기본 300초)보다 짧게 — 확인하는 사이 넘어가지 않게
+async function withdrawWithRecentLogin() {
+  const fa = window.FirebaseAuth;
+  if (!(fa && fa.enabled && accountUid() && API.base !== null && typeof fa.loginAge === 'function')) return doWithdraw();
+  const age = await fa.loginAge();
+  if (age !== null && age < REAUTH_AFTER) return doWithdraw();
+  const prov = typeof fa.signInProvider === 'function' ? fa.signInProvider() : '';
+  const failed = r => { const m = fa.koreanError({ code: r.code }); if (m) toast(m); render(); };
+  if (prov === 'password') {
+    confirmBox('비밀번호를 한 번 더 입력해 주세요',
+      `<p>되돌릴 수 없는 일이라, 탈퇴 전에 본인인지 다시 확인해요.</p>
+       <input class="input" type="password" data-reauth="pw" autocomplete="current-password" placeholder="비밀번호" aria-label="비밀번호">`,
+      '확인하고 탈퇴', async () => {
+        const el = document.querySelector('[data-reauth="pw"]'), pw = el ? el.value : '';
+        S.modal = null; render();
+        const r = await fa.reauth(pw);
+        if (!r.ok) return failed(r);
+        doWithdraw();
+      }, { danger: true, block: true });
+    return;
+  }
+  if (prov === 'google.com') {
+    confirmBox('구글 계정으로 한 번 더 확인해요',
+      '되돌릴 수 없는 일이라, 탈퇴 전에 본인인지 다시 확인해요. 구글 창에서 <b>지금 로그인한 계정</b>을 골라 주세요.',
+      '구글로 확인하고 탈퇴', () => {
+        S.modal = null;
+        const pending = fa.reauth();              // 누른 동작 안에서 바로 창을 연다
+        render();
+        pending.then(r => { if (!r.ok) return failed(r); doWithdraw(); });
+      }, { danger: true });
+    return;
+  }
+  doWithdraw();   // 로그인 방식을 모르면 서버가 판단한다(오래됐으면 403 → 진행 창에 이유)
+}
 async function doWithdraw() {
   const uid = accountUid();
   const fb = !!(window.FirebaseAuth && FirebaseAuth.enabled);
@@ -6433,6 +6529,9 @@ async function doWithdraw() {
     if (challenge) saveWithdrawProof({ challenge: challenge, at: Date.now(), receipt: null });
     wdStep(2, WD_SERVER_DETAIL);                                     // 가장 오래 걸리는 단계(서버 응답 대기)
     const admin = await eraseOnServer(token, challenge);
+    // 재인증은 탈퇴 버튼을 누른 동작 안에서 먼저 한다(withdrawWithRecentLogin). 여기서 다시 구글 창을 열면
+    // 서버 응답을 기다린 뒤라 팝업이 막힌다. 그래도 403 이 오면(시계 차이 등) 아무것도 지우지 않았으니 멈추고 다시 누르게 한다.
+    if (admin.status === 'reauth') return stop('보안을 위해 다시 로그인 확인이 필요해요. 닫은 뒤 탈퇴하기를 다시 눌러 주세요.');
     if (accountClosed) { wdEnd(); return; }    // 기다리는 사이 다른 경로가 '탈퇴한 계정'을 감지해 이미 정리했다(이중 처리 금지)
     if (admin.status === 'ok') {
       saveWithdrawProof({ challenge: challenge, at: Date.now(), receipt: admin.receipt });
@@ -6617,8 +6716,6 @@ const ACT = {
   'logout-home': () => confirmBox('로그아웃할까요?',
     '학습 진도와 여행 설정은 계정에 저장돼 있어요. 다시 로그인하면 이어서 할 수 있어요.',
     '로그아웃', () => { S.modal = null; ACT.logout(); }, { danger: true }),
-  // 탈퇴 증명 카드 동작
-  'proof-download': () => downloadWithdrawProof(),
   // 실제로 보낸 결과대로 안내한다(예전에는 보내지 못해도 늘 '보고했어요').
   'proof-report': () => {
     reportSavedProof().then(r => toast(
@@ -6632,7 +6729,7 @@ const ACT = {
   // 탈퇴: 계정과 저장된 기록을 모두 지운다(되돌릴 수 없음).
   'withdraw': () => confirmBox('탈퇴하면 계정과 기록이 모두 지워져요',
     `학습 진도·복습 목록·말하기 동의·여행 설정이 계정에서 지워지고, 이 브라우저에 저장된 같은 기록도 함께 지워져요. <b>되돌릴 수 없어요.</b>`,
-    '탈퇴하기', () => { S.modal = null; doWithdraw(); }, { danger: true }),
+    '탈퇴하기', () => { S.modal = null; withdrawWithRecentLogin(); }, { danger: true }),
 
   // 홈 D-Day 카드·사이드바에서 여행 설정 수정 화면을 연다.
   'edit-trip': () => openTripEdit(),
@@ -6893,6 +6990,9 @@ const ACT = {
       ilogForget(ilogLoad().map(v => v.id)); S.ilog = []; ilogSave();
       S.coll.logOpen = null; S.modal = null; render(); toast('통역 기록을 모두 지웠어요.');
     }, { danger: true }); },
+  'proof-download': () => downloadWithdrawProof(false),
+  'proof-plain': () => { S.modal = null; render(); downloadWithdrawProof(true); },
+  'proof-open': () => openWithdrawProof(),
   'ilog-consent': () => askIlogConsent(),
   'ilog-revoke': () => confirmBox('통역 기록 계정 저장을 끌까요?', '서버(계정)에 저장된 통역 기록을 바로 지워요. 이 기기의 기록은 남고, 언제든 다시 켤 수 있어요.', '끄고 지우기', () => { S.modal = null; ilogRevoke(); }, { danger: true }),
   'past-go': () => { S.past.open = null; go('u-past'); },

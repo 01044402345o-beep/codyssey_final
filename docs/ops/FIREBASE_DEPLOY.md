@@ -14,8 +14,9 @@
 | Render 자체 화면 | `https://codyssey-final.onrender.com` | 그대로(같은 출처) |
 
 - `firebase.json` 에는 **rewrite 가 없다** — 예전 rewrite 는 없는 Cloud Run 서비스(`codyssey-api`)로 보내 모든 API 가 실패했을 것이다.
-- Hosting CSP(지금 Report-Only)의 `connect-src` 에 Render(https·wss), `img-src` 에 Render(`/place-photo`)·`*.googleusercontent.com`(Google 사진).
-- Render 의 CORS 는 `ALLOW_ORIGINS` 가 비어 `*` 다(11/06 실측: `access-control-allow-origin: *`). 좁히려면
+- Hosting CSP는 **강제 모드**이며 `connect-src` 에 Render(https·wss), `img-src` 에 Render(`/place-photo`)·`*.googleusercontent.com`(Google 사진)을 둔다.
+- Firebase Hosting에서 `?api=`로 임의 서버를 지정하면 ID 토큰·음성이 외부로 갈 수 있으므로 무시한다. 로컬/별도 개발 주소에서만 명시적 테스트 override를 허용한다.
+- Render 의 CORS 는 두 Firebase Hosting 주소로 제한한다:
   `ALLOW_ORIGINS=https://codyssey-final.onrender.com,https://com-example-myapplicatio-3bb36.web.app,https://com-example-myapplicatio-3bb36.firebaseapp.com`.
 - 로그인: Firebase Auth 승인 도메인에 `*.web.app`·`*.firebaseapp.com` 은 기본으로 들어 있다.
 

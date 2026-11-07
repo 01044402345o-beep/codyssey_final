@@ -48,12 +48,15 @@ jobs:
         working-directory: backend
         run: python -m unittest scripts/test_validate_category.py
 
+      - name: 오프사이트 앵커 스크립트 테스트
+        run: python -m unittest discover -s .github/scripts -p "test_offsite_anchor.py"
+
       - name: 검증 규칙 점검 (negative_cases)
         working-directory: backend
         run: python scripts/check_negatives.py
 
       - name: 프론트 테스트
-        run: node --test mockup/ai.test.js mockup/tokens.test.js mockup/commons.test.js mockup/api-origin.test.js   # 토큰 가드: 색 리터럴·다크 블록 동일·글자 대비(AA)
+        run: node --test mockup/ai.test.js mockup/tokens.test.js mockup/commons.test.js mockup/api-origin.test.js mockup/proof-enc.test.js   # 토큰 가드: 색 리터럴·다크 블록 동일·글자 대비(AA)
 
       - name: 서버 기동 확인 (/health 에 restaurant, 화면 서빙)
         working-directory: backend

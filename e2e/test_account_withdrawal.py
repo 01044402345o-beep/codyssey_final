@@ -163,6 +163,57 @@ with sync_playwright() as p:
           has(blank_case["calls"], "POST /account/erase") and no_delete(blank_case["calls"]) and blank_case["user"] is not None and blank_case["local_trip"] is not None,
           str(blank_case))
 
+    re_case = case(403, "recent_login_required")   # 서버: 마지막 로그인이 RECENT_LOGIN_SECONDS 보다 오래됨(보안 점검 #1c)
+    check("403 recent_login_required: 아무것도 지우지 않고 멈춘다(폴백으로 넘어가지 않음)",
+          has(re_case["calls"], "POST /account/erase") and no_delete(re_case["calls"]) and "deleteAccount" not in re_case["calls"]
+          and re_case["user"] is not None and re_case["local_trip"] is not None, str(re_case))
+    check("멈춘 이유가 '다시 로그인 확인'으로 보인다",
+          "다시 로그인 확인" in (page.evaluate("S.withdrawing && S.withdrawing.error") or ""), page.evaluate("S.withdrawing && S.withdrawing.error"))
+    page.evaluate("ACT['wd-close'] && ACT['wd-close']()")
+
+    # --- 탈퇴 버튼: 마지막 로그인이 오래됐으면 한 번 더 확인(구글 창·비밀번호) 뒤에 지운다(#1c) ---
+    def recent(age, prov, reauth_ok=True, password=None):
+        page.evaluate("""(cfg) => {
+          window.__calls = [];
+          window.fetch = async (url, opt = {}) => {
+            const path = String(url).replace(/^https?:\\/\\/[^/]+/, '');
+            window.__calls.push((opt.method || 'GET') + ' ' + path);
+            if (path === '/account/erase') return { ok: true, status: 200, json: async () => ({ erased: true }) };
+            return { ok: true, status: 200, json: async () => ({}) };
+          };
+          const fa = window.FirebaseAuth;
+          fa.enabled = true; fa.account = { uid: 'uidR', provider: cfg.prov };
+          fa.idToken = async () => 'tok';
+          fa.loginAge = async () => cfg.age;
+          fa.signInProvider = () => cfg.prov;
+          fa.reauth = async (pw) => { window.__calls.push('reauth:' + (pw === undefined ? 'popup' : pw)); return cfg.ok ? { ok: true } : { ok: false, code: 'auth/popup-closed-by-user' }; };
+          fa.signOut = async () => { window.__calls.push('signOut'); fa.account = null; };
+          S.user = { uid: 'uidR', provider: cfg.prov, name: 'R', email: 'r@example.com' };
+          ensure('plan'); go('u-home');
+        }""", {"age": age, "prov": prov, "ok": reauth_ok})
+        page.wait_for_timeout(150)
+        page.evaluate("ACT.withdraw()"); page.wait_for_timeout(150)
+        page.evaluate("ACT['modal-ok']()"); page.wait_for_timeout(300)          # '탈퇴하기'
+        title = page.evaluate("S.modal ? S.modal.title : ''")
+        if title:
+            if password is not None:
+                page.fill('[data-reauth="pw"]', password)
+            page.evaluate("ACT['modal-ok']()"); page.wait_for_timeout(400)      # '확인하고 탈퇴'
+        return {"title": title, "calls": page.evaluate("window.__calls"), "user": page.evaluate("S.user")}
+
+    fresh = recent(30, "google.com")
+    check("방금 로그인(30초): 다시 확인 없이 바로 지운다",
+          fresh["title"] == "" and "reauth:popup" not in fresh["calls"] and has(fresh["calls"], "POST /account/erase"), str(fresh))
+    stale = recent(3600, "google.com")
+    check("오래된 로그인(1시간)·구글: 다시 확인 창 → 구글 창 → 그다음에 지운다",
+          "구글" in stale["title"] and "reauth:popup" in stale["calls"]
+          and 0 <= idx(stale["calls"], "reauth:popup") < idx(stale["calls"], "POST /account/erase"), str(stale))
+    cancel = recent(3600, "google.com", reauth_ok=False)
+    check("다시 확인을 닫으면 지우지 않는다", not has(cancel["calls"], "POST /account/erase") and cancel["user"] is not None, str(cancel))
+    pw = recent(3600, "password", password="secret-pw")
+    check("오래된 로그인·이메일: 비밀번호 입력 → 그 비밀번호로 다시 확인 → 지운다",
+          "비밀번호" in pw["title"] and "reauth:secret-pw" in pw["calls"] and has(pw["calls"], "POST /account/erase"), str(pw))
+
     # --- 다른 기기에서 탈퇴된 계정: 서버가 403 account_deleted 로 거부하면 이 기기도 정리한다 ---
     page.evaluate("""() => {
       window.__calls = [];

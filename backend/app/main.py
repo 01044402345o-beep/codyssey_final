@@ -57,6 +57,7 @@ from . import firebase_admin
 from . import firebase_auth
 from . import user_state
 from . import evidence
+from . import receipt_signing
 from . import gemini as ai
 from . import speech_compare as compare
 from . import phonemes
@@ -149,9 +150,30 @@ app.add_middleware(body_limit.BodyLimitMiddleware, default=64 * 1024, limits={
     "/generate": 64 * 1024,
     "/research": 16 * 1024,      # 나라 4 × 80자 + 도시 5 × (80자 + 날짜·숫자) — 2KB 안팎
 })
+
+
+def effective_cors_origins() -> list[str]:
+    """관리형 배포에서는 와일드카드를 허용하지 않는다.
+
+    ALLOW_ORIGINS 가 **없으면** 이 프로젝트의 Firebase Hosting 두 주소(FIREBASE_PROJECT_ID 로 만든다)만 연다.
+    빈 목록으로 닫으면 머지·배포 순간 web.app 화면의 API 호출이 전부 막힌다 — 이 Render 서비스는
+    render.yaml(Blueprint)로 관리되지 않아 거기 적은 ALLOW_ORIGINS 가 자동으로 들어가지 않는다(11/07 확인).
+    같은 출처(Render 화면 자체)는 CORS 와 무관하다."""
+    raw = (os.getenv("ALLOW_ORIGINS") or "").strip()
+    managed = bool(os.getenv("RENDER") or os.getenv("K_SERVICE"))
+    if managed and "*" in raw:
+        return []
+    if managed and not raw:
+        pid = (os.getenv("FIREBASE_PROJECT_ID") or "").strip()
+        if not re.fullmatch(r"[a-z0-9-]{4,40}", pid):
+            return []
+        return [f"https://{pid}.web.app", f"https://{pid}.firebaseapp.com"]
+    return [origin.strip() for origin in (raw or "*").split(",") if origin.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=(os.getenv("ALLOW_ORIGINS") or "*").split(","),
+    allow_origins=effective_cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -380,8 +402,7 @@ def security_review() -> dict[str, Any]:
 
     동작을 바꾸지 않고 '지금 무엇이 열려 있는지'만 알린다. 키 이름·값은 여기에도 넣지 않는다.
     """
-    origins = (os.getenv("ALLOW_ORIGINS") or "").strip()
-    open_cors = origins in ("", "*")
+    open_cors = "*" in effective_cors_origins()                      # 실제로 적용되는 목록 기준(관리형 기본값은 Hosting 두 주소)
     managed = bool(os.getenv("RENDER") or os.getenv("K_SERVICE"))   # 관리형 플랫폼(프록시 뒤)인가
     warns: list[str] = []
     if open_cors:
@@ -579,6 +600,7 @@ def health_detail() -> dict[str, Any]:
         "admin_erase": firebase_admin.configured(),
         # 증거 봉인 공개키의 지문·세대(공개 정보). 핀 검증(.github/workflows/verify-key-pin.yml)이 이 값을 본다.
         "evidence": evidence.health_block(),
+        "receipt_signing": receipt_signing.public_info(),   # 공개키만. 개인키는 절대 나가지 않는다
         # 사실 경로의 구글 장소 검색은 붙이지 않았다. google_places 는 그 의미로 남긴다.
         # 일정 플래그와 키는 호출 때마다 읽는다. 임포트 때 고정하지 않는다.
         "itinerary_enabled": itinerary_enabled(),
@@ -1403,11 +1425,12 @@ def _bearer_token(request: Request) -> str:
     return token.strip()
 
 
-async def _account_token(request: Request) -> tuple[dict[str, str], str]:
+async def _account_token(request: Request, *, require_recent_login: bool = False) -> tuple[dict[str, str], str]:
     """토큰의 uid. 익명 로그인은 계정 기록을 만들지 않는다."""
     try:
         account = await run_in_threadpool(
             firebase_auth.verify_bearer, request.headers.get("authorization") or "",
+            require_recent_login=require_recent_login,
         )
     except firebase_auth.AuthError as exc:
         raise HTTPException(status_code=exc.status, detail=exc.code) from exc
@@ -1529,7 +1552,7 @@ async def account_erase(request: Request) -> dict[str, Any]:
     실패하면 **단계 원장**과 함께 증거를 봉인해 둔다(누가 어디까지 갔는지 남긴다). 성공해도
     사후 검증으로 "남아 있는" 경우를 잡는다 — 응답이 성공이어도 실제로 지워졌는지는 별개다.
     """
-    account, _token = await _account_token(request)
+    account, _token = await _account_token(request, require_recent_login=True)
     if not firebase_admin.configured():
         raise HTTPException(status_code=503, detail="admin_unavailable")
     rate_limit(request)
