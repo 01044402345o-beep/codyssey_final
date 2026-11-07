@@ -153,11 +153,21 @@ app.add_middleware(body_limit.BodyLimitMiddleware, default=64 * 1024, limits={
 
 
 def effective_cors_origins() -> list[str]:
-    """관리형 배포에서는 ALLOW_ORIGINS 누락·와일드카드를 허용하지 않는다."""
+    """관리형 배포에서는 와일드카드를 허용하지 않는다.
+
+    ALLOW_ORIGINS 가 **없으면** 이 프로젝트의 Firebase Hosting 두 주소(FIREBASE_PROJECT_ID 로 만든다)만 연다.
+    빈 목록으로 닫으면 머지·배포 순간 web.app 화면의 API 호출이 전부 막힌다 — 이 Render 서비스는
+    render.yaml(Blueprint)로 관리되지 않아 거기 적은 ALLOW_ORIGINS 가 자동으로 들어가지 않는다(11/07 확인).
+    같은 출처(Render 화면 자체)는 CORS 와 무관하다."""
     raw = (os.getenv("ALLOW_ORIGINS") or "").strip()
     managed = bool(os.getenv("RENDER") or os.getenv("K_SERVICE"))
-    if managed and (not raw or raw == "*" or "*" in raw):
+    if managed and "*" in raw:
         return []
+    if managed and not raw:
+        pid = (os.getenv("FIREBASE_PROJECT_ID") or "").strip()
+        if not re.fullmatch(r"[a-z0-9-]{4,40}", pid):
+            return []
+        return [f"https://{pid}.web.app", f"https://{pid}.firebaseapp.com"]
     return [origin.strip() for origin in (raw or "*").split(",") if origin.strip()]
 
 
@@ -392,8 +402,7 @@ def security_review() -> dict[str, Any]:
 
     동작을 바꾸지 않고 '지금 무엇이 열려 있는지'만 알린다. 키 이름·값은 여기에도 넣지 않는다.
     """
-    origins = (os.getenv("ALLOW_ORIGINS") or "").strip()
-    open_cors = origins in ("", "*")
+    open_cors = "*" in effective_cors_origins()                      # 실제로 적용되는 목록 기준(관리형 기본값은 Hosting 두 주소)
     managed = bool(os.getenv("RENDER") or os.getenv("K_SERVICE"))   # 관리형 플랫폼(프록시 뒤)인가
     warns: list[str] = []
     if open_cors:

@@ -6471,6 +6471,44 @@ async function finishLogin(account, doneMsg, loadStep) {
 /* 탈퇴: 서버(관리자 또는 규칙) → 브라우저 → (폴백이면) 클라이언트 deleteUser. 되돌릴 수 없다.
    서버 단계가 확정된 뒤에 브라우저 기록을 지운다 — 중간에 멈추면 계정·기록을 그대로 두고,
    나중에 화면을 다시 그려도 빈 기록이 서버로 올라가 지워지지 않게 한다. */
+/* 탈퇴 전 '방금 로그인' 확인. 서버(/account/erase)는 마지막 로그인이 RECENT_LOGIN_SECONDS(기본 300초)보다 오래된
+   토큰을 403 recent_login_required 로 거절한다 — 새어 나간 1시간짜리 토큰만으로 계정이 영구 삭제되지 않게.
+   오래됐으면 확인 창을 한 번 더 띄우고, **그 창의 버튼을 누른 동작 안에서 바로** 다시 로그인한다
+   (서버 응답을 기다린 뒤 구글 창을 열면 팝업 차단에 걸린다. 비밀번호는 가려진 칸으로 받는다). */
+const REAUTH_AFTER = 240;   // 서버 창(기본 300초)보다 짧게 — 확인하는 사이 넘어가지 않게
+async function withdrawWithRecentLogin() {
+  const fa = window.FirebaseAuth;
+  if (!(fa && fa.enabled && accountUid() && API.base !== null && typeof fa.loginAge === 'function')) return doWithdraw();
+  const age = await fa.loginAge();
+  if (age !== null && age < REAUTH_AFTER) return doWithdraw();
+  const prov = typeof fa.signInProvider === 'function' ? fa.signInProvider() : '';
+  const failed = r => { const m = fa.koreanError({ code: r.code }); if (m) toast(m); render(); };
+  if (prov === 'password') {
+    confirmBox('비밀번호를 한 번 더 입력해 주세요',
+      `<p>되돌릴 수 없는 일이라, 탈퇴 전에 본인인지 다시 확인해요.</p>
+       <input class="input" type="password" data-reauth="pw" autocomplete="current-password" placeholder="비밀번호" aria-label="비밀번호">`,
+      '확인하고 탈퇴', async () => {
+        const el = document.querySelector('[data-reauth="pw"]'), pw = el ? el.value : '';
+        S.modal = null; render();
+        const r = await fa.reauth(pw);
+        if (!r.ok) return failed(r);
+        doWithdraw();
+      }, { danger: true, block: true });
+    return;
+  }
+  if (prov === 'google.com') {
+    confirmBox('구글 계정으로 한 번 더 확인해요',
+      '되돌릴 수 없는 일이라, 탈퇴 전에 본인인지 다시 확인해요. 구글 창에서 <b>지금 로그인한 계정</b>을 골라 주세요.',
+      '구글로 확인하고 탈퇴', () => {
+        S.modal = null;
+        const pending = fa.reauth();              // 누른 동작 안에서 바로 창을 연다
+        render();
+        pending.then(r => { if (!r.ok) return failed(r); doWithdraw(); });
+      }, { danger: true });
+    return;
+  }
+  doWithdraw();   // 로그인 방식을 모르면 서버가 판단한다(오래됐으면 403 → 진행 창에 이유)
+}
 async function doWithdraw() {
   const uid = accountUid();
   const fb = !!(window.FirebaseAuth && FirebaseAuth.enabled);
@@ -6490,15 +6528,10 @@ async function doWithdraw() {
     const challenge = newChallenge();
     if (challenge) saveWithdrawProof({ challenge: challenge, at: Date.now(), receipt: null });
     wdStep(2, WD_SERVER_DETAIL);                                     // 가장 오래 걸리는 단계(서버 응답 대기)
-    let admin = await eraseOnServer(token, challenge);
-    if (admin.status === 'reauth' && FirebaseAuth.reauthenticate) {
-      wdStep(2, '보안을 위해 다시 로그인하는 중');
-      const reauth = await FirebaseAuth.reauthenticate();
-      if (!reauth.ok) return stop(FirebaseAuth.koreanError({ code: reauth.code }) || '다시 로그인하지 못해 탈퇴를 멈췄어요.');
-      try { token = await FirebaseAuth.idToken(true); } catch (e) { token = ''; }
-      if (!token) return stop('다시 로그인한 뒤 인증 정보를 확인하지 못했어요.');
-      admin = await eraseOnServer(token, challenge);
-    }
+    const admin = await eraseOnServer(token, challenge);
+    // 재인증은 탈퇴 버튼을 누른 동작 안에서 먼저 한다(withdrawWithRecentLogin). 여기서 다시 구글 창을 열면
+    // 서버 응답을 기다린 뒤라 팝업이 막힌다. 그래도 403 이 오면(시계 차이 등) 아무것도 지우지 않았으니 멈추고 다시 누르게 한다.
+    if (admin.status === 'reauth') return stop('보안을 위해 다시 로그인 확인이 필요해요. 닫은 뒤 탈퇴하기를 다시 눌러 주세요.');
     if (accountClosed) { wdEnd(); return; }    // 기다리는 사이 다른 경로가 '탈퇴한 계정'을 감지해 이미 정리했다(이중 처리 금지)
     if (admin.status === 'ok') {
       saveWithdrawProof({ challenge: challenge, at: Date.now(), receipt: admin.receipt });
@@ -6696,7 +6729,7 @@ const ACT = {
   // 탈퇴: 계정과 저장된 기록을 모두 지운다(되돌릴 수 없음).
   'withdraw': () => confirmBox('탈퇴하면 계정과 기록이 모두 지워져요',
     `학습 진도·복습 목록·말하기 동의·여행 설정이 계정에서 지워지고, 이 브라우저에 저장된 같은 기록도 함께 지워져요. <b>되돌릴 수 없어요.</b>`,
-    '탈퇴하기', () => { S.modal = null; doWithdraw(); }, { danger: true }),
+    '탈퇴하기', () => { S.modal = null; withdrawWithRecentLogin(); }, { danger: true }),
 
   // 홈 D-Day 카드·사이드바에서 여행 설정 수정 화면을 연다.
   'edit-trip': () => openTripEdit(),

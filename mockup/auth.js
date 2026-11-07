@@ -24,6 +24,8 @@ FirebaseAuth.koreanError = function (err) {
   if (code === 'auth/operation-not-allowed') return '이 로그인 방식은 Firebase 콘솔에서 아직 꺼져 있어요.';
   if (code === 'auth/requires-recent-login') return '보안을 위해 다시 로그인한 뒤 다시 시도해 주세요.';
   if (code === 'recent_login_required' || code === 'auth/cancelled') return '보안을 위해 다시 로그인한 뒤 다시 시도해 주세요.';
+  if (code === 'auth/user-mismatch') return '지금 로그인한 계정과 다른 계정을 골랐어요. 같은 계정으로 다시 확인해 주세요.';
+  if (code === 'auth/missing-password') return '비밀번호를 입력해 주세요.';
   return '로그인에 실패했어요. 잠시 뒤 다시 시도해 주세요.';
 };
 
@@ -130,23 +132,44 @@ FirebaseAuth.idToken = async function (forceRefresh = false) {
   try { return await user.getIdToken(!!forceRefresh); } catch (e) { return ''; }
 };
 
-/* 되돌릴 수 없는 서버 작업 전 재인증. 비밀번호는 저장하지 않고 SDK에만 전달한다. */
-FirebaseAuth.reauthenticate = async function () {
-  await FirebaseAuth.ready;
+/* 마지막 로그인(토큰의 auth_time)부터 지난 초. 모르면 null.
+   탈퇴처럼 되돌릴 수 없는 일은 서버가 '방금 로그인'을 요구한다(RECENT_LOGIN_SECONDS, 기본 300) — 토큰 갱신으로는 바뀌지 않는다. */
+FirebaseAuth.loginAge = async function () {
   const user = FirebaseAuth._auth && FirebaseAuth._auth.currentUser;
-  if (!user || !FirebaseAuth._mod) return { ok: false, code: 'auth/no-current-user' };
-  const mod = FirebaseAuth._mod;
+  if (!user) return null;
   try {
-    const provider = (user.providerData || []).find(p => p.providerId === 'google.com');
-    if (provider) {
-      await mod.reauthenticateWithPopup(user, new mod.GoogleAuthProvider());
-    } else {
-      const password = window.prompt('보안을 위해 현재 비밀번호를 입력해 주세요.');
-      if (password === null) return { ok: false, code: 'auth/cancelled' };
+    const r = await user.getIdTokenResult();
+    const t = Number(r && r.claims && r.claims.auth_time);
+    return Number.isFinite(t) ? Math.max(0, Date.now() / 1000 - t) : null;
+  } catch (e) { return null; }
+};
+
+/* 이 계정의 로그인 방식: 'google.com' | 'password' | ''(모름) */
+FirebaseAuth.signInProvider = function () {
+  const user = FirebaseAuth._auth && FirebaseAuth._auth.currentUser;
+  const ids = ((user && user.providerData) || []).map(p => p && p.providerId);
+  if (ids.includes('google.com')) return 'google.com';
+  if (ids.includes('password')) return 'password';
+  return '';
+};
+
+/* 되돌릴 수 없는 서버 작업 전 재인증. 비밀번호는 저장하지 않고 SDK에만 전달한다.
+   password 가 문자열이면 이메일 계정, 없으면 구글 창. **구글 창은 누른 동작 안에서 바로 불러야 한다** —
+   서버 응답(403)을 기다린 뒤에 열면 브라우저가 사용자 동작이 아니라고 보고 팝업을 막는다.
+   비밀번호는 window.prompt(가려지지 않음·인앱 브라우저에서 막힘) 대신 화면의 비밀번호 칸으로 받는다(app.js). */
+FirebaseAuth.reauth = async function (password) {
+  await FirebaseAuth.ready;
+  const user = FirebaseAuth._auth && FirebaseAuth._auth.currentUser, mod = FirebaseAuth._mod;
+  if (!FirebaseAuth.enabled || !user || !mod) return { ok: false, code: 'auth/no-current-user' };
+  try {
+    if (typeof password === 'string') {
+      if (!password) return { ok: false, code: 'auth/missing-password' };
       if (!user.email) return { ok: false, code: 'auth/no-email' };
-      const credential = mod.EmailAuthProvider.credential(user.email, password);
-      await mod.reauthenticateWithCredential(user, credential);
+      await mod.reauthenticateWithCredential(user, mod.EmailAuthProvider.credential(user.email, password));
+    } else {
+      await mod.reauthenticateWithPopup(user, new mod.GoogleAuthProvider());
     }
+    await user.getIdToken(true);   // 새 auth_time 이 들어간 토큰
     return { ok: true };
   } catch (err) {
     return { ok: false, code: (err && err.code) ? err.code : 'auth/reauthentication-failed' };
