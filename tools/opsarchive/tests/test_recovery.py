@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import shutil
 import subprocess
 import unittest
@@ -46,6 +47,59 @@ class CommitmentTest(unittest.TestCase):
         self.assertEqual(wrong["verdict"], "missing_from_chain")
         self.assertFalse(wrong["key_proven"])
         self.assertEqual(chain.challenge_report(entries, "wrk1-zz", {"head_seq": 5})["verdict"], "bad_recovery_key")
+
+
+class AvalancheTest(unittest.TestCase):
+    """입력 한 글자·한 비트 변경 → 해시 비트의 평균 50% 가 뒤집혀야 한다.
+
+    평균만 본다. 개별 값은 128±8비트로 흩어지는 것이 정상이라 "매번 50% 이상"은 좋은 해시도 떨어진다.
+    시드를 고정해 결과가 매번 같다.
+    """
+
+    @staticmethod
+    def flipped(a: str, b: str) -> int:
+        return bin(int(a, 16) ^ int(b, 16)).count("1")
+
+    def assert_avalanche(self, samples: list) -> None:
+        self.assertNotIn(0, samples, "같은 해시가 나오면 안 된다")
+        mean = sum(samples) / len(samples) / 256 * 100
+        self.assertGreater(mean, 49.0)
+        self.assertLess(mean, 51.0)
+
+    def test_one_hex_character_of_the_key(self):
+        rng = random.Random(20261107)
+        samples = []
+        for _ in range(50):
+            text = rng.randbytes(32).hex()
+            base = chain.recovery_commitment("wrk1-" + text)
+            for i, ch in enumerate(text):
+                other = rng.choice([c for c in "0123456789abcdef" if c != ch])
+                samples.append(self.flipped(base, chain.recovery_commitment("wrk1-" + text[:i] + other + text[i + 1:])))
+        self.assert_avalanche(samples)
+
+    def test_one_bit_of_the_key(self):
+        rng = random.Random(20261108)
+        samples = []
+        for _ in range(20):
+            raw = bytearray(rng.randbytes(32))
+            base = chain.recovery_commitment("wrk1-" + raw.hex())
+            for bit in range(256):
+                raw[bit // 8] ^= 1 << (bit % 8)
+                samples.append(self.flipped(base, chain.recovery_commitment("wrk1-" + raw.hex())))
+                raw[bit // 8] ^= 1 << (bit % 8)
+        self.assert_avalanche(samples)
+
+
+class SealedTamperTest(unittest.TestCase):
+    def test_flipping_any_byte_of_the_envelope_is_rejected(self):
+        """AES-GCM 암호문은 해시와 달리 한 비트 변경이 그 자리만 바꾼다. 변조를 잡는 것은 인증 태그다."""
+        private, public = C.keypair()
+        blob = C.seal(json.dumps({"recovery_key": KEY}).encode(), public)
+        for i in range(len(blob)):
+            bad = bytearray(blob)
+            bad[i] ^= 1
+            with self.assertRaises(C.ContainerError, msg="byte %d" % i):
+                C.unseal(bytes(bad), private)
 
 
 class OpenReportTest(unittest.TestCase):
