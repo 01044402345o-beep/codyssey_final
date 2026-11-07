@@ -70,6 +70,28 @@ def check_hosted_pin(pin: dict, script: str) -> list[str]:
     return [] if found.group(1) == str(pin.get("fingerprint_sha256", "")) else ["hosted_pin_mismatch"]
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def fetch_screen(url: str, timeout: int = 20) -> tuple[int, str]:
+    """앱 주소 `/` 의 (상태, Location). 리다이렉트를 따라가지 않는다."""
+    opener = urllib.request.build_opener(_NoRedirect())
+    try:
+        with opener.open(url.rstrip("/") + "/", timeout=timeout) as res:
+            return res.status, ""
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.headers.get("Location", "")
+
+
+def check_screen_redirect(status: int, location: str, hosting_url: str) -> list[str]:
+    """앱 주소의 화면이 Hosting 으로 넘어가는가. 넘기지 않으면 침해된 앱이 화면을 바꿔 줄 수 있다."""
+    if status in (301, 308) and location.startswith(hosting_url.rstrip("/") + "/"):
+        return []
+    return ["screen_not_redirected"]
+
+
 def check(pin: dict, health: dict) -> list[str]:
     """불일치 이유 목록. 비어 있으면 통과."""
     if not pin.get("armed"):
@@ -144,6 +166,9 @@ def main(argv: list[str] | None = None) -> int:
             reasons += check_hosted_pin(pin, open(args.hosted_script_file, encoding="utf-8").read())
         elif args.hosting_url:
             reasons += check_hosted_pin(pin, fetch_text(args.hosting_url.rstrip("/") + "/proof-crypto.js"))
+            if not args.health_file:
+                status, location = fetch_screen(str(pin.get("health_url", "")))
+                reasons += check_screen_redirect(status, location, args.hosting_url)
     except Exception as exc:        # noqa: BLE001 — 확인하지 못한 것도 실패다
         reasons.append("recovery_check_failed:" + type(exc).__name__)
     if reasons:

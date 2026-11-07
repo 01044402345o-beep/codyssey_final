@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -87,6 +88,16 @@ class VerifyScriptTest(unittest.TestCase):
         before_deploy = self._run_extra(("--hosted-script-file", "p.js", "// 옛 화면"))
         self.assertEqual(before_deploy.returncode, 0)
         self.assertIn("warning", before_deploy.stdout)
+
+    def test_screen_must_redirect_to_hosting(self):
+        spec = importlib.util.spec_from_file_location("verify_key_pin", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        hosting = "https://app.web.app"
+        self.assertEqual(module.check_screen_redirect(301, hosting + "/", hosting), [])
+        self.assertEqual(module.check_screen_redirect(200, "", hosting), ["screen_not_redirected"])
+        self.assertEqual(module.check_screen_redirect(301, "https://evil.test/", hosting), ["screen_not_redirected"])
+        self.assertEqual(module.check_screen_redirect(301, hosting + ".evil.test/", hosting), ["screen_not_redirected"])
 
     def test_missing_evidence_fails(self):
         done = self._run({"schema": 1, "armed": True, "fingerprint_sha256": "ab" * 32,

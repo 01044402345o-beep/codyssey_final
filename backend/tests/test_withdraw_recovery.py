@@ -122,6 +122,41 @@ class RecoveryRouteTest(unittest.TestCase):
         self.assertEqual(C.unseal(bytes.fromhex(report["extra"]["sealed_recovery_hex"]), self.private), self.inner)
 
 
+class ScreenRedirectTest(unittest.TestCase):
+    """운영(Render)의 화면은 Hosting 으로 넘어가고, API·로컬은 그대로다."""
+
+    def get(self, path, env):
+        clean = {k: v for k, v in os.environ.items() if k not in ("RENDER", "SCREEN_HOME_URL")}
+        client = TestClient(main.app, raise_server_exceptions=False, follow_redirects=False)
+        with mock.patch.dict(os.environ, {**clean, **env}, clear=True):
+            return client.get(path)
+
+    def test_render_redirects_the_screen_and_browsers_remember_it(self):
+        res = self.get("/", {"RENDER": "true"})
+        self.assertEqual(res.status_code, 301)
+        self.assertEqual(res.headers["location"], main.HOSTED_SCREEN + "/")
+        self.assertIn("max-age=604800", res.headers["cache-control"])
+        self.assertEqual(self.get("/index.html", {"RENDER": "true"}).status_code, 301)
+
+    def test_query_is_kept(self):
+        res = self.get("/?demo=1&gate=off", {"RENDER": "true"})
+        self.assertEqual(res.headers["location"], main.HOSTED_SCREEN + "/?demo=1&gate=off")
+
+    def test_api_is_not_redirected(self):
+        self.assertEqual(self.get("/health", {"RENDER": "true"}).status_code, 200)
+
+    def test_stay_keeps_the_old_screen_for_rescuing_saved_proofs(self):
+        self.assertEqual(self.get("/?stay=1", {"RENDER": "true"}).status_code, 200)
+
+    def test_local_and_ci_serve_the_screen(self):
+        self.assertEqual(self.get("/", {}).status_code, 200)
+
+    def test_can_be_turned_off_or_pointed_elsewhere_but_only_to_https(self):
+        self.assertEqual(self.get("/", {"RENDER": "true", "SCREEN_HOME_URL": ""}).status_code, 200)
+        self.assertEqual(self.get("/", {"RENDER": "true", "SCREEN_HOME_URL": "http://a.test"}).status_code, 200)
+        self.assertEqual(self.get("/", {"SCREEN_HOME_URL": "https://a.test/"}).headers["location"], "https://a.test/")
+
+
 class FieldExistsTest(unittest.TestCase):
     """runQuery 는 객체가 아니라 배열을 돌려준다. 빈 결과 행(readTime 만)은 '없음'이다."""
 

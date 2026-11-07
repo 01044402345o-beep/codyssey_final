@@ -11,7 +11,7 @@
 | 화면(`mockup/` 정적 파일) | **Firebase Hosting** `https://com-example-myapplicatio-3bb36.web.app` | `firebase deploy --only hosting` |
 | HTTP API 전부(`/health` `/generate` `/research` `/place-check` `/place-photo` …) | **Render** `https://codyssey-final.onrender.com` | 화면이 `*.web.app`·`*.firebaseapp.com` 에서 열리면 `AI.apiBase` 가 Render 를 고른다(교차 출처) |
 | 통역 WebSocket | **Render** `wss://codyssey-final.onrender.com/interp/stream` | `API.base` 에서 만든다 |
-| Render 자체 화면 | `https://codyssey-final.onrender.com` | 그대로(같은 출처) |
+| Render 자체 화면 | `https://codyssey-final.onrender.com` | Hosting 으로 301(`SCREEN_HOME_URL`, [`BREAK_GLASS.md`](BREAK_GLASS.md) §6). 로컬·CI 는 그대로 화면을 준다 |
 
 - `firebase.json` 에는 **rewrite 가 없다** — 예전 rewrite 는 없는 Cloud Run 서비스(`codyssey-api`)로 보내 모든 API 가 실패했을 것이다.
 - Hosting CSP는 **강제 모드**이며 `connect-src` 에 Render(https·wss), `img-src` 에 Render(`/place-photo`)·`*.googleusercontent.com`(Google 사진)을 둔다.
