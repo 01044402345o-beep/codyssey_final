@@ -3500,7 +3500,7 @@ function scrLogin() {
     <p class="sub">여행지와 일정을 입력하면, 실제로 갈 관광지와 맛집에서 쓸 영어 문장을 만들어 출발 전부터 매일 학습하게 해 드려요.</p>
     <br>
     <div class="ticket">${body}<p class="small" style="text-align:center;margin-top:12px">${gate}</p>
-      <p class="small" style="text-align:center;margin-top:8px">AI가 만든 문장에는 'AI 생성' 표시가 붙어요 · 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API(외부 서버)로 전송돼요 · 장소 목록은 공개 자료에서 조사하거나 직접 추가한 곳이에요 · 도시 조사·직접 추가·예시 장소는 맛집·카페·관광지 모두, Google 일정에서 가져온 장소는 맛집만 AI가 문장을 만들어요(나머지는 기본 틀 문장)</p></div>
+      <p class="small" style="text-align:center;margin-top:8px">AI가 만든 문장에는 'AI 생성' 표시가 붙어요 · 문장을 만들 때 도시·장소명과 복습 상황 이름이 Google Gemini API(외부 서버)로 전송돼요 · 장소 목록은 공개 자료에서 조사하거나 직접 추가한 곳이에요 · 앱이 찾아 준 곳, 직접 추가한 곳, 예시 장소는 맛집·카페·관광지 다 AI가 문장을 만들어 줘요 · Google 일정에서 불러온 곳은 맛집만 AI가 만들고, 카페랑 관광지는 기본 문장으로 나와요</p></div>
   </div>`);
 }
 
