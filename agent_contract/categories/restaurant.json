@@ -18,13 +18,13 @@
     { "situation_id": "order_menu",      "situation": "대표 메뉴 주문" },
     { "situation_id": "ask_recommend",   "situation": "추천 메뉴 요청" },
     { "situation_id": "allergy_notice",  "situation": "알레르기·재료 고지",
-      "required_keywords": ["allergy", "allergic"] },
+      "required_keywords": ["allergy", "allergies", "allergic"] },
     { "situation_id": "request_side",    "situation": "추가 요청 (물·리필·소스)",
-      "required_keywords": ["refill", "one more", "another"] },
+      "required_keywords": ["refill", "one more", "more", "another", "extra", "water", "sauce", "napkin"] },
     { "situation_id": "ask_ingredient",  "situation": "재료·조리법 질문" },
     { "situation_id": "takeout",         "situation": "포장 요청" },
     { "situation_id": "pay_check",       "situation": "계산·영수증 요청",
-      "required_keywords": ["check", "bill", "receipt"] },
+      "required_keywords": ["check", "bill", "receipt", "pay"] },
     { "situation_id": "tip_split",       "situation": "더치페이·분할 결제 문의" }
   ],
 
@@ -61,6 +61,71 @@
       "ko": "이 아이스 라테 포장해 주실 수 있나요?",
       "level": "basic",
       "tags": ["카페", "포장"]
+    },
+    {
+      "place_type": "restaurant",
+      "situation_id": "ask_wait",
+      "situation": "대기 시간·웨이팅 및 호출 방식 확인",
+      "en": "How long is the wait for a table?",
+      "ko": "자리까지 얼마나 기다려야 하나요?",
+      "level": "basic",
+      "tags": ["대기"]
+    },
+    {
+      "place_type": "restaurant",
+      "situation_id": "order_menu",
+      "situation": "대표 메뉴 주문",
+      "en": "I'd like the house special, please.",
+      "ko": "이 집 대표 메뉴로 주세요.",
+      "level": "basic",
+      "tags": ["주문"]
+    },
+    {
+      "place_type": "restaurant",
+      "situation_id": "ask_recommend",
+      "situation": "추천 메뉴 요청",
+      "en": "What would you recommend for a first visit?",
+      "ko": "처음 왔는데 뭘 추천해 주시겠어요?",
+      "level": "basic",
+      "tags": ["추천"]
+    },
+    {
+      "place_type": "restaurant",
+      "situation_id": "request_side",
+      "situation": "추가 요청 (물·리필·소스)",
+      "en": "Could we have some more water, please?",
+      "ko": "물 좀 더 주실 수 있나요?",
+      "level": "basic",
+      "tags": ["추가 요청"],
+      "targets_weak": ["request_side"]
+    },
+    {
+      "place_type": "restaurant",
+      "situation_id": "ask_ingredient",
+      "situation": "재료·조리법 질문",
+      "en": "Does this dish have any pork in it?",
+      "ko": "이 요리에 돼지고기가 들어가나요?",
+      "level": "basic",
+      "tags": ["재료"]
+    },
+    {
+      "place_type": "restaurant",
+      "situation_id": "pay_check",
+      "situation": "계산·영수증 요청",
+      "en": "Could we have the check, please?",
+      "ko": "계산서 좀 주시겠어요?",
+      "level": "basic",
+      "tags": ["계산"],
+      "targets_weak": ["pay_check"]
+    },
+    {
+      "place_type": "restaurant",
+      "situation_id": "tip_split",
+      "situation": "더치페이·분할 결제 문의",
+      "en": "Can we pay separately, please?",
+      "ko": "따로 계산해도 될까요?",
+      "level": "basic",
+      "tags": ["분할 결제"]
     }
   ],
 
@@ -128,11 +193,11 @@
   ],
 
   "negative_case_patterns": {
-    "_note": "terms 는 소문자 기준 부분일치. '행위·태도'만 넣고 명사(beer, wine)나 'now' 같은 일반어는 넣지 말 것 — 정상 문장을 막는다. severity=block 은 재생성, warn 은 검토 대상.",
+    "_note": "terms 는 소문자 기준 부분일치(단어 경계 없음). '행위·태도'만 넣고 명사(beer, wine)나 'now'·'give me the' 같은 일반어는 넣지 말 것 — 정상 문장을 막는다. 'get drunk' 가 'drunken noodles' 를, 'gimme' 가 'gimmel' 을 잡지 않도록 끝에 공백·문장부호를 붙여 적는다. 'right now.'·'right now!' 는 명령문 끝만 잡고 질문('open right now?')은 통과시킨다. severity=block 은 재생성, warn 은 검토 대상.",
     "forbidden_topic": {
       "severity": "block",
       "match": "substring",
-      "terms": ["let's drink", "let's get drunk", "you should drink", "get drunk", "talk about politics", "about religion"]
+      "terms": ["let's drink", "let's get drunk", "you should drink", "get drunk ", "get drunk.", "get drunk?", "get drunk!", "talk about politics", "about religion"]
     },
     "place_mismatch": { "severity": "block", "type": "situation_in_config" },
     "too_long": { "severity": "warn", "type": "word_count", "max": 15 },
@@ -140,7 +205,7 @@
     "not_polite": {
       "severity": "warn",
       "match": "substring",
-      "terms": ["gimme", "give me the", "hurry up", "right now"]
+      "terms": ["gimme ", "gimme!", "hurry up", "right now.", "right now!"]
     }
   }
 }

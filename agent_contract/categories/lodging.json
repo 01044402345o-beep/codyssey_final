@@ -14,20 +14,20 @@
 
   "situations": [
     { "situation_id": "check_in",          "situation": "체크인·예약 확인",
-      "required_keywords": ["check in", "reservation"] },
+      "required_keywords": ["check in", "check-in", "checkin", "checking in", "reservation", "booking"] },
     { "situation_id": "leave_luggage",     "situation": "수하물 맡기기",
-      "required_keywords": ["luggage", "baggage", "keep", "store"] },
+      "required_keywords": ["luggage", "baggage", "bag", "suitcase", "keep", "store"] },
     { "situation_id": "room_upgrade",      "situation": "객실 업그레이드 문의" },
     { "situation_id": "ask_breakfast",     "situation": "조식 시간·위치 질문",
       "required_keywords": ["breakfast"] },
     { "situation_id": "ask_wifi",          "situation": "와이파이 비밀번호 요청" },
     { "situation_id": "early_late_check",  "situation": "얼리 체크인·레이트 체크아웃" },
     { "situation_id": "request_amenity",   "situation": "수건·어메니티 추가 요청",
-      "required_keywords": ["towel", "water"] },
+      "required_keywords": ["towel", "water", "pillow", "blanket", "toothbrush", "toothpaste", "shampoo", "soap", "toilet paper", "amenities", "amenity"] },
     { "situation_id": "order_room_service","situation": "룸서비스 주문" },
     { "situation_id": "room_complaint",    "situation": "객실 문제(청소·소음) 컴플레인" },
     { "situation_id": "check_out",         "situation": "체크아웃·비용 정산",
-      "required_keywords": ["check out", "bill", "pay"] }
+      "required_keywords": ["check out", "check-out", "checkout", "checking out", "bill", "pay", "invoice", "receipt"] }
   ],
 
   "system_prompt": "You generate travel English practice sentences for the 'lodging / hotel' category.\n\nINPUT: city, a list of places (place_type in [hotel, hostel, guesthouse, airbnb]), the situation list, and the learner's weak situations.\n\nRULES:\n- Output ONLY JSON matching the attached schema. No prose, no markdown fences.\n- Generate between {min_sentences_per_situation} and {max_sentences_per_situation} sentences for each situation_id.\n- English: polite register, at most {max_words_per_sentence} words, immediately usable on the spot.\n- Korean: natural translation, not word-for-word.\n- If a weak situation is given, it MUST have at least one sentence, and that sentence must contain the situation's required_keywords (e.g. leave_luggage -> luggage/baggage).\n- Do NOT encourage drinking, or raise politics or religion.\n- Never repeat the same English sentence across situations.\n- When a specific place is given, reference its feature where natural.",
@@ -63,6 +63,72 @@
       "ko": "와이파이 비밀번호가 어떻게 되나요?",
       "level": "basic",
       "tags": ["와이파이"]
+    },
+    {
+      "place_type": "hotel",
+      "situation_id": "room_upgrade",
+      "situation": "객실 업그레이드 문의",
+      "en": "Is it possible to upgrade to a room with a view?",
+      "ko": "전망 좋은 방으로 업그레이드할 수 있을까요?",
+      "level": "intermediate",
+      "tags": ["업그레이드"]
+    },
+    {
+      "place_type": "hotel",
+      "situation_id": "ask_breakfast",
+      "situation": "조식 시간·위치 질문",
+      "en": "What time is breakfast served, and where?",
+      "ko": "조식은 몇 시에, 어디에서 먹을 수 있나요?",
+      "level": "basic",
+      "tags": ["조식"],
+      "targets_weak": ["ask_breakfast"]
+    },
+    {
+      "place_type": "hotel",
+      "situation_id": "early_late_check",
+      "situation": "얼리 체크인·레이트 체크아웃",
+      "en": "Could I have a late checkout tomorrow, please?",
+      "ko": "내일 레이트 체크아웃을 할 수 있을까요?",
+      "level": "basic",
+      "tags": ["체크아웃"]
+    },
+    {
+      "place_type": "hotel",
+      "situation_id": "request_amenity",
+      "situation": "수건·어메니티 추가 요청",
+      "en": "Could I get two more towels, please?",
+      "ko": "수건 두 장 더 주실 수 있나요?",
+      "level": "basic",
+      "tags": ["수건", "어메니티"],
+      "targets_weak": ["request_amenity"]
+    },
+    {
+      "place_type": "hotel",
+      "situation_id": "order_room_service",
+      "situation": "룸서비스 주문",
+      "en": "I'd like to order room service, please.",
+      "ko": "룸서비스를 주문하고 싶습니다.",
+      "level": "basic",
+      "tags": ["룸서비스"]
+    },
+    {
+      "place_type": "hotel",
+      "situation_id": "room_complaint",
+      "situation": "객실 문제(청소·소음) 컴플레인",
+      "en": "Excuse me, the air conditioner in my room isn't working.",
+      "ko": "실례합니다, 제 방 에어컨이 작동하지 않아요.",
+      "level": "basic",
+      "tags": ["객실 문제"]
+    },
+    {
+      "place_type": "hotel",
+      "situation_id": "check_out",
+      "situation": "체크아웃·비용 정산",
+      "en": "I'd like to check out. Could I have the bill, please?",
+      "ko": "체크아웃하려고요. 계산서 주시겠어요?",
+      "level": "basic",
+      "tags": ["체크아웃", "정산"],
+      "targets_weak": ["check_out"]
     }
   ],
 
@@ -130,11 +196,11 @@
   ],
 
   "negative_case_patterns": {
-    "_note": "terms 는 소문자 기준 부분일치. '행위·태도'만 넣고 명사(beer, wine)나 'now' 같은 일반어는 넣지 말 것 — 정상 문장을 막는다. severity=block 은 재생성, warn 은 검토 대상.",
+    "_note": "terms 는 소문자 기준 부분일치(단어 경계 없음). '행위·태도'만 넣고 명사(beer, wine)나 'now' 같은 일반어는 넣지 말 것 — 정상 문장을 막는다. 'get drunk' 가 'drunken noodles' 를, 'gimme' 가 'gimmel' 을 잡지 않도록 끝에 공백·문장부호를 붙여 적는다. 'right now.'·'right now!' 는 명령문 끝만 잡고 질문('open right now?')은 통과시킨다. severity=block 은 재생성, warn 은 검토 대상.",
     "forbidden_topic": {
       "severity": "block",
       "match": "substring",
-      "terms": ["let's drink", "let's get drunk", "you should drink", "get drunk", "talk about politics", "about religion"]
+      "terms": ["let's drink", "let's get drunk", "you should drink", "get drunk ", "get drunk.", "get drunk?", "get drunk!", "let's grab a beer", "let's grab a drink", "let's have a beer", "let's have a drink", "join me for a drink", "talk about politics", "about religion"]
     },
     "place_mismatch": { "severity": "block", "type": "situation_in_config" },
     "too_long": { "severity": "warn", "type": "word_count", "max": 15 },
@@ -142,7 +208,7 @@
     "not_polite": {
       "severity": "warn",
       "match": "substring",
-      "terms": ["gimme", "hurry up", "right now"]
+      "terms": ["gimme ", "gimme!", "hurry up", "right now.", "right now!"]
     }
   }
 }
