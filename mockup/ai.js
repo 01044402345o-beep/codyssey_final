@@ -134,8 +134,11 @@
   }
   const postJson = (fetchImpl, url, body, signal) =>
     httpJson(fetchImpl, url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, signal);
-  /* cities: [{ name, places:[{id,name,en}] }] → [{ city, kind, pools }] */
-  async function generateByCity({ fetchImpl, base, cities, weakIds, signal, timeoutMs = GEN_TIMEOUT_MS, categoryId, placeType }) {
+  /* cities: [{ name, places:[{id,name,en}] }] → [{ city, kind, pools }]
+     weakList: 저장된 복습 목록([{ category_id, id, ... }]). 요청마다 그 카테고리에 저장된 id 만 고른다.
+       buy_ticket 처럼 두 카테고리에 같은 id 가 있어도 다른 카테고리 것이 섞이지 않는다.
+     weakIds: 예전 방식(id 문자열 목록). weakList 가 없을 때만 쓰며, 호출하는 쪽이 이미 한 카테고리로 거른 목록이어야 한다. */
+  async function generateByCity({ fetchImpl, base, cities, weakList, weakIds = [], signal, timeoutMs = GEN_TIMEOUT_MS, categoryId, placeType }) {
     const allFallback = () => cities.map(c => ({ city: c.name, categoryId: c.categoryId, kind: 'fallback', pools: null }));
     if (base === null || base === undefined) return allFallback();
     const t = withTimeout(signal, timeoutMs);        // /health 와 /generate 가 하나의 제한 시간을 공유한다
@@ -147,13 +150,16 @@
       const jobs = cities.map(c => {
         const cat = c.categoryId || categoryId || categoryOfKind(c.placeType) || categoryOfKind(placeType) || 'restaurant';
         const valid = health && health.situations && Array.isArray(health.situations[cat]) ? health.situations[cat] : null;
-        const weak = valid ? weakIds.filter(w => valid.includes(w)) : weakIds;
+        // 먼저 이 요청의 카테고리로 거르고, /health 가 상황 목록을 주면 현재 유효한 id 로 한 번 더 거른다.
+        // /health 에 목록이 없으면 카테고리로 거른 id 를 그대로 보낸다(다른 카테고리 id 는 이미 빠져 있다).
+        const scoped = Array.isArray(weakList) ? weakIdsFor(weakList, cat) : weakIds;
+        const weak = valid ? scoped.filter(w => valid.includes(w)) : scoped;
         // 조사 연결(PR5): 도시 조사 키가 있으면 서버가 조사된 장소만 쓰고 그 사실을 근거로 삼는다.
         // 사용자가 직접 추가했거나 실시간(Google) 장소는 user 로 표시 — 조사 캐시와 맞춰 보지 않는다.
         return postJson(fetchImpl, base + '/generate', {
           category_id: cat, city: c.name,
           // 사용자가 확인 창에서 '맞아요'로 확인한 주소만 함께 보낸다(서버 USER_CONFIRMED_PLACES — 지어내지 않게)
-          places: c.places.map(p => ({ name: p.en || p.name, place_type: p.kind || cat, ...(p.user ? { user: true } : {}),
+          places: c.places.map(p => ({ name: p.en || p.name, place_type: p.kind || defaultKindOf(cat), ...(p.user ? { user: true } : {}),
             ...(p.user && typeof p.address === 'string' && p.address ? { address: p.address.slice(0, 200) } : {}) })),
           weak_expressions: weak,
           ...(RESEARCH_KEY_RE.test(c.researchKey || '') ? { research_key: c.researchKey } : {}),
@@ -299,6 +305,9 @@
     attraction: 'attraction',                                   // 관광지 계약(agent_contract/categories/attraction.json)
   };
   function categoryOfKind(kind) { return KIND_CATEGORY[String(kind == null ? '' : kind).trim().toLowerCase()] || null; }
+  /* 장소 종류가 비었을 때 보낼 값: 그 카테고리로 가는 첫 장소 종류(transport → airport).
+     카테고리 이름(transport·lodging)은 장소 종류 목록에 없어 서버가 422 로 거절한다. */
+  function defaultKindOf(cat) { return Object.keys(KIND_CATEGORY).find(k => KIND_CATEGORY[k] === cat) || cat; }
 
   /* 요청에는 해당 카테고리의 취약 상황 id 만 보낸다 (서버가 현재 유효한 id 로 다시 거른다). */
   function weakIdsFor(list, categoryId) {

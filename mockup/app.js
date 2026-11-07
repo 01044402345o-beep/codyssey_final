@@ -1902,8 +1902,9 @@ function tick(tok, stage) {
   }, 700);
 }
 
-/* 실제 장소는 맛집만 /generate 로 보낸다. 카페·관광지는 문장 요청에 넣지 않는다.
-   예시 장소는 기존과 같이 categoryOfKind 가 있는 종류만 보낸다. 관광지는 null 이라 빠진다. */
+/* 문장 요청(/generate)에 넣을 장소의 카테고리. null 이면 요청에 넣지 않는다.
+   - Google 일정 경로(설명 없는 실시간 장소)는 맛집만 보낸다. 관광지·카페는 범용 틀 문장.
+   - 도시 조사 장소와 예시 장소는 categoryOfKind 가 있는 종류를 모두 보낸다(관광지는 attraction 계약). */
 function sentenceCategory(p) {
   // Google 일정 경로(설명 없음)의 관광지·카페는 범용 틀만. 도시 조사 장소는 관광지·카페도 AI 문장(관광지 계약·어휘 제약)
   if (p.live && !p.research && p.kind !== 'restaurant') return null;
@@ -1930,7 +1931,7 @@ async function runAi(tok) {
   }, 10000);
   let out = [];
   try {
-    out = await AI.generateByCity({ fetchImpl: (u, o) => fetch(u, o), base: API.base, cities, weakIds: AI.weakIdsFor(weakList(), cities.map(c => c.categoryId)), signal: ctl.signal, timeoutMs: AI.GEN_TIMEOUT_MS });
+    out = await AI.generateByCity({ fetchImpl: (u, o) => fetch(u, o), base: API.base, cities, weakList: weakList(), signal: ctl.signal, timeoutMs: AI.GEN_TIMEOUT_MS });
   } finally { clearTimeout(slow); }
   if (tok !== genToken || ctl.signal.aborted) return;   // 오래된 요청은 상태를 덮어쓰지 못한다
   out.forEach(o => { if (o.pools) S.aiPools[aiKey(o.city, o.categoryId)] = { kind: o.kind, pools: o.pools }; });
@@ -1943,7 +1944,7 @@ async function refreshAiSentences() {
   const trip = S.trip;
   if (!trip || !S.plan || API.base === null) return;                 // 계획이 없으면 채울 대상도 없다
   if (Object.keys(S.aiPools).length) return;                         // 이번 세션에 이미 만든 결과가 있으면 그대로
-  if (!S.places.some(p => p.selected && sentenceCategory(p))) return;   // AI 대상 장소가 없으면(예: 관광지만) 그만
+  if (!S.places.some(p => p.selected && sentenceCategory(p))) return;   // AI 대상 장소가 없으면(예: Google 일정의 관광지만) 그만
   const key = [trip.id, trip.studyStart, trip.cities.map(c => c.name + c.start).join(',')].join('|');
   if (aiRefreshKey === key) return;                                  // 같은 여행은 한 번만
   aiRefreshKey = key;
@@ -1957,7 +1958,7 @@ async function refreshAiSentences() {
   const cities = Object.values(groups);
   let out;
   try {
-    out = await AI.generateByCity({ fetchImpl: (u, o) => fetch(u, o), base: API.base, cities, weakIds: AI.weakIdsFor(weakList(), cities.map(c => c.categoryId)), signal: null, timeoutMs: AI.GEN_TIMEOUT_MS });
+    out = await AI.generateByCity({ fetchImpl: (u, o) => fetch(u, o), base: API.base, cities, weakList: weakList(), signal: null, timeoutMs: AI.GEN_TIMEOUT_MS });
   } catch (e) { return; }
   if (S.trip !== trip || !S.plan) return;                            // 응답 사이에 여행이 바뀌면 버린다
   const got = out.filter(o => o.pools);
