@@ -45,6 +45,32 @@ function t(name, fn) {
     assert.strictEqual(c.indexOf('00'.repeat(32)), -1);
   });
 
+  await t('복구 키 한 글자만 바꿔도 해시 비트의 평균 50% 가 뒤집힌다', async () => {
+    // 평균만 본다. 개별 값은 128±8비트로 흩어지는 것이 정상이라 "매번 50% 이상"은 좋은 해시도 떨어진다.
+    const HEX = '0123456789abcdef';
+    const flipped = (a, b) => {
+      let n = 0;
+      for (let i = 0; i < a.length; i++) {
+        let x = parseInt(a[i], 16) ^ parseInt(b[i], 16);
+        while (x) { n += x & 1; x >>= 1; }
+      }
+      return n;
+    };
+    let total = 0, count = 0;
+    for (let round = 0; round < 20; round++) {
+      const made = await PC.newRecoveryKey();
+      const text = made.key.slice(5);
+      for (let i = 0; i < text.length; i++) {
+        const other = HEX[(HEX.indexOf(text[i]) + 1 + (round % 15)) % 16];
+        const bits = flipped(made.commitment, await PC.commitmentOf('wrk1-' + text.slice(0, i) + other + text.slice(i + 1)));
+        assert.notStrictEqual(bits, 0, '같은 해시가 나오면 안 된다');
+        total += bits; count++;
+      }
+    }
+    const mean = total / count / 256 * 100;
+    assert.ok(mean > 49 && mean < 51, '평균 ' + mean);
+  });
+
   await t('복구 키 형식이 아니면 커밋먼트를 만들지 않는다', async () => {
     assert.strictEqual(await PC.commitmentOf('wrk1-abc'), '');
     assert.strictEqual(await PC.commitmentOf('00'.repeat(32)), '');
