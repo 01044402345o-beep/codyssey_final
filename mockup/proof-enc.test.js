@@ -35,6 +35,49 @@ function t(name, fn) {
     assert.strictEqual(o.ok, false);
   });
 
+  const KEY = 'wrk1-' + '00'.repeat(32);
+  // tools/opsarchive/tests/test_recovery.py 와 같은 벡터다 — 양쪽 식이 갈라지면 둘 다 실패한다.
+  const VECTOR = 'cf5d8a7775351fcb9645d58784427a23c988be6a5a3e3c23a892918b8b3651b8';
+
+  await t('복구 키의 커밋먼트는 정해진 벡터와 같고, 키 자체를 담지 않는다', async () => {
+    const c = await PC.commitmentOf(KEY);
+    assert.strictEqual(c, VECTOR);
+    assert.strictEqual(c.indexOf('00'.repeat(32)), -1);
+  });
+
+  await t('복구 키 형식이 아니면 커밋먼트를 만들지 않는다', async () => {
+    assert.strictEqual(await PC.commitmentOf('wrk1-abc'), '');
+    assert.strictEqual(await PC.commitmentOf('00'.repeat(32)), '');
+  });
+
+  await t('복구 키는 매번 새 256비트 난수고, 커밋먼트는 서버 형식(16진수 64자)이다', async () => {
+    const a = await PC.newRecoveryKey();
+    const b = await PC.newRecoveryKey();
+    assert.ok(/^wrk1-[0-9a-f]{64}$/.test(a.key));
+    assert.ok(/^[0-9a-f]{64}$/.test(a.commitment));
+    assert.notStrictEqual(a.key, b.key);
+    assert.strictEqual(a.commitment, await PC.commitmentOf(a.key));
+  });
+
+  await t('TLS 없는 주소로는 보내지 않는다(루프백만 예외)', async () => {
+    assert.strictEqual(PC.isSecureEndpoint('', 'https://a.test/'), true);
+    assert.strictEqual(PC.isSecureEndpoint('https://b.test', 'http://a.test/'), true);
+    assert.strictEqual(PC.isSecureEndpoint('', 'http://localhost:8000/'), true);
+    assert.strictEqual(PC.isSecureEndpoint('', 'http://a.test/'), false);
+    assert.strictEqual(PC.isSecureEndpoint('http://b.test', 'https://a.test/'), false);
+  });
+
+  await t('관리자 봉인은 공개키가 틀리면 만들지 않고, 평문을 담지 않는다', async () => {
+    assert.strictEqual((await PC.sealForAdmin({ recovery_key: KEY }, 'x25519:AAAA')).reason, 'bad_key');
+    const { publicKey } = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
+    const raw = PC.b64e(await crypto.subtle.exportKey('raw', publicKey));
+    const r = await PC.sealForAdmin({ recovery_key: KEY }, 'x25519:' + raw);
+    assert.strictEqual(r.ok, true);
+    const blob = Buffer.from(PC.b64d(r.sealed)).toString('latin1');
+    assert.strictEqual(blob.slice(0, 4), 'MFA1');
+    assert.strictEqual(blob.indexOf(KEY), -1);
+  });
+
   await t('8자 미만은 거부', async () => {
     const s = await PC.seal(doc, 'short');
     assert.strictEqual(s.ok, false);

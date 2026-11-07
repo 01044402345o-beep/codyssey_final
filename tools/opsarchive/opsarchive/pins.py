@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import json
-import urllib.request
 
 SCHEMA = 1
 GENERATION_MAX = 1_000_000
@@ -85,7 +84,7 @@ def make(public_key: bytes, fingerprint: str, key_id: str, *, generation: int,
 
 def fetch_health(health_url: str, timeout: int = 20) -> dict:
     url = health_url.rstrip("/") + "/health"
-    with urllib.request.urlopen(url, timeout=timeout) as res:
+    with tls.open_url(url, timeout=timeout) as res:
         return json.loads(res.read().decode() or "{}")
 
 

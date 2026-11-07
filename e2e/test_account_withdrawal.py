@@ -108,6 +108,7 @@ with sync_playwright() as p:
             const path = String(url).replace(/^https?:\\/\\/[^/]+/, '');
             const auth = (opt.headers && (opt.headers.Authorization || opt.headers.authorization)) || '';
             window.__calls.push((opt.method || 'GET') + ' ' + path + ' ' + auth);
+            if (path === '/account/erase') window.__challengeHeader = (opt.headers || {})['X-Withdraw-Challenge'] || '';
             if (path === '/account/erase') return { ok: cfg.status === 200, status: cfg.status, json: async () => (cfg.body || { detail: cfg.detail }) };
             if (path === '/user/state') return { ok: true, status: 200, json: async () => ({ deleted: true }) };
             return { ok: true, status: 200, json: async () => ({}) };
@@ -303,6 +304,52 @@ with sync_playwright() as p:
     unknown = page.evaluate("({ text: document.body.innerText, rep: !!document.querySelector('[data-act=\"proof-report\"]') })")
     check("탈퇴 증명(영수증 없음): '상태 불명'을 보여주고 서버 보고 버튼을 제공한다",
           "상태 불명" in unknown["text"] and unknown["rep"], str(unknown["text"])[:200])
+
+    # --- 탈퇴 요청: 서버에는 복구 키가 아니라 그 해시(커밋먼트)만 간다. 실제 브라우저의 SHA-256 으로 다시 계산해 본다 ---
+    case(200, "", {"erased": True, "receipt": {"seq": 1, "outcome": "ok"}})
+    sent_proof = page.evaluate("""async () => {
+      const proof = withdrawProof();
+      return { header: window.__challengeHeader, key: proof.recovery_key, challenge: proof.challenge,
+               recomputed: await ProofCrypto.commitmentOf(proof.recovery_key) };
+    }""")
+    check("복구 키: 탈퇴 요청 헤더는 커밋먼트이고 복구 키가 아니다",
+          sent_proof["header"] == sent_proof["challenge"] == sent_proof["recomputed"] and len(sent_proof["header"]) == 64
+          and sent_proof["key"].startswith("wrk1-") and sent_proof["key"][5:] != sent_proof["header"], str(sent_proof["header"]))
+
+    # --- 복구 키: 서버에는 커밋먼트만 가고, 키는 평문 파일에 넣지 않으며, 보낼 때는 봉인한다 ---
+    made = page.evaluate("""async () => {
+      const m = await ProofCrypto.newRecoveryKey();
+      const raw = new Uint8Array(32); crypto.getRandomValues(raw);
+      const pair = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
+      window.__adminKey = 'x25519:' + ProofCrypto.b64e(await crypto.subtle.exportKey('raw', pair.publicKey));
+      window.__sent = [];
+      window.fetch = async (url, init) => {
+        const path = String(url);
+        window.__sent.push({ path, body: (init && init.body) || '' });
+        if (path.endsWith('/withdraw/recovery-key')) return { ok: true, status: 200, json: async () => ({ public_key: window.__adminKey }) };
+        if (path.endsWith('/withdraw/recovery')) return { ok: true, status: window.__recoveryStatus || 200, json: async () => ({}) };
+        return { ok: true, status: 200, json: async () => ({}) };
+      };
+      localStorage.setItem('cd_withdraw_proof', JSON.stringify({ challenge: m.commitment, recovery_key: m.key, at: Date.now(), receipt: null }));
+      S.user = null; S.modal = null; S.screen = 'u-login'; render();
+      const info = withdrawProofState();
+      return { key: m.key, commitment: m.commitment, plain: JSON.stringify(proofPayload(info, false)), locked: JSON.stringify(proofPayload(info, true)) };
+    }""")
+    check("복구 키: 평문 내보내기에는 키가 없고 암호 파일 내용에만 있다",
+          made["key"] not in made["plain"] and made["key"] in made["locked"], "")
+    page.wait_for_timeout(150)
+    page.click('[data-act="proof-send"]')
+    page.wait_for_timeout(500)
+    sent = page.evaluate("window.__sent")
+    report_body = next((x["body"] for x in sent if x["path"].endswith("/withdraw/recovery")), "")
+    check("복구 키: 로그아웃 상태에서도 실제 브라우저가 봉인해 보낸다(요청 어디에도 키 평문 없음)",
+          made["commitment"] in report_body and made["key"] not in str(sent) and "관리자만 열 수 있게" in page.inner_text("#toast"), str(sent)[:200])
+    page.evaluate("window.__recoveryStatus = 404; render()")
+    page.wait_for_timeout(150)
+    page.click('[data-act="proof-send"]')
+    page.wait_for_timeout(500)
+    check("복구 키: 서버 기록에 없으면 보냈다고 하지 않고 파일을 직접 보여 달라고 안내한다",
+          "찾지 못했어요" in page.inner_text("#toast"), page.inner_text("#toast"))
 
     # --- '서버에 보고'는 실제로 보낸 결과대로 안내한다(예전: 로그아웃이라 안 보내도 늘 '보고했어요') ---
     def report(logged_in, status=200):

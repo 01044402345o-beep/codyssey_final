@@ -1873,6 +1873,10 @@ class App:
         def work() -> dict:
             report = commands.decrypt_archive(self.require("project_id"), self.require("sa_path"),
                                              archive_id, key_file, phrase, out_dir=out_dir)
+            if isinstance(report, dict) and report.get("trigger") == "recovery_report":
+                # 복구 보고는 안쪽 봉투까지 열어 복구 키와 체인을 대조한다(복구 키는 결과에 남지 않는다).
+                return commands.verify_recovery_report(self.require("project_id"), self.require("sa_path"), archive_id,
+                                                       key_file, phrase, self.settings.get("pin_path"), out_dir=out_dir)
             keys = ", ".join(sorted(report.keys())[:12]) if isinstance(report, dict) else ""
             return {"열림": "예", "최상위 키": keys or "(요약 없음)",
                     "저장 위치": report.get("_written", "(요약만)") if isinstance(report, dict) else ""}
@@ -1895,7 +1899,8 @@ class App:
                    "서명·seq 연속성·개수 롤백·체인 갈래·**앵커 뒤 사라진 아카이브**를 검사합니다.",
                    "verify", "verify 실행", self.do_verify)
         self._step(steps, 3, "④", "챌린지 대조(사용자 증명)",
-                   "사용자가 보낸 챌린지가 앵커 범위 안에 있는지 봅니다 — 없으면 **누락 의심**입니다.",
+                   "사용자가 보낸 챌린지나 복구 키(wrk1-…)가 앵커 범위 안에 있는지 봅니다 — 없으면 **누락 의심**입니다. "
+                   "복구 키가 맞으면 제시자가 그 탈퇴의 주인임이 증명됩니다(key_proven).",
                    "challenge", "챌린지로 검증", self.do_verify_challenge)
         self._step(steps, 4, "⑤", "KMS 서명 키 점검·핀에 넣기",
                    "설정의 KMS 키(Ed25519)로 시험 서명을 해 보고, 그 공개키를 핀의 **자동 서명 키**로 넣습니다. "
@@ -1982,7 +1987,8 @@ class App:
             pin_path=self.settings.get("pin_path") or "", out_dir=self.settings.get("checkpoints_dir") or ""))
 
     def do_verify_challenge(self) -> None:
-        value = simpledialog.askstring("opsarchive", "사용자가 제시한 챌린지(16진수)", parent=self.root) or ""
+        value = simpledialog.askstring("opsarchive", "사용자가 제시한 챌린지(16진수) 또는 복구 키(wrk1-…)",
+                                       parent=self.root, show="*") or ""
         if value:
             self.do_verify(value.strip().lower())
 

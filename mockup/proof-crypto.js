@@ -70,7 +70,120 @@
     }).catch(function () { return { ok: false, reason: 'bad_password' }; });
   }
 
-  var api = { canSeal: canSeal, seal: seal, open: open, ENC_SCHEMA: ENC_SCHEMA, ITER: ITER, b64e: b64e, b64d: b64d };
+  /* ---- 복구 키와 단방향 커밋먼트 ----
+   * 복구 키는 기기에만 있는 256비트 난수다. 서버와 체인에는 그 SHA-256 커밋먼트만 간다. 그래서 체인·DB·로그가
+   * 새도 복구 키는 드러나지 않고, 복구 키를 내놓는 사람만 "내가 그 탈퇴를 요청했다"를 증명할 수 있다.
+   * SHA-256 의 압축 함수는 Ch·Maj(AND·XOR·NOT)와 회전·모듈러 덧셈으로 된 비선형 단방향 함수다.
+   * 직접 만든 S-box 조합으로 바꾸지 않는다 — 검토되지 않은 해시는 관리자가 증거로 쓸 수 없다(receipt_signing.py).
+   * 입력이 256비트 난수라 사전 공격 대상이 아니므로 느린 KDF 는 필요 없다. */
+  var KEY_PREFIX = 'wrk1-';
+  var KEY_RE = /^wrk1-[0-9a-f]{64}$/;
+  var COMMIT_DOMAIN = 'SEAL-WITHDRAW-KEY-v1\0';
+
+  function hex(bytes) {
+    var a = new Uint8Array(bytes), s = '';
+    for (var i = 0; i < a.length; i++) s += (a[i] < 16 ? '0' : '') + a[i].toString(16);
+    return s;
+  }
+  function unhex(str) {
+    var a = new Uint8Array(str.length / 2);
+    for (var i = 0; i < a.length; i++) a[i] = parseInt(str.substr(i * 2, 2), 16);
+    return a;
+  }
+  function join() {
+    var total = 0, i, at = 0;
+    for (i = 0; i < arguments.length; i++) total += arguments[i].length;
+    var out = new Uint8Array(total);
+    for (i = 0; i < arguments.length; i++) { out.set(arguments[i], at); at += arguments[i].length; }
+    return out;
+  }
+  function ascii(str) { return new TextEncoder().encode(str); }
+
+  function commitmentOf(key) {
+    if (!canSeal() || !KEY_RE.test(String(key))) return Promise.resolve('');
+    var raw = unhex(String(key).slice(KEY_PREFIX.length));
+    return subtle().digest('SHA-256', join(ascii(COMMIT_DOMAIN), raw)).then(hex);
+  }
+  /* CSPRNG·WebCrypto 가 없으면 null — 추측 가능한 값은 증거가 못 되므로 만들지 않는다. */
+  function newRecoveryKey() {
+    if (!canSeal() || !root.crypto.getRandomValues) return Promise.resolve(null);
+    var key = KEY_PREFIX + hex(root.crypto.getRandomValues(new Uint8Array(32)));
+    return commitmentOf(key).then(function (commitment) {
+      return { key: key, commitment: commitment };
+    }).catch(function () { return null; });
+  }
+
+  /* TLS 없는 주소로는 보내지 않는다. 개발용 루프백만 예외다. */
+  function isSecureEndpoint(url, base) {
+    try {
+      var u = new URL(url || '', base);
+      return u.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].indexOf(u.hostname) >= 0;
+    } catch (e) { return false; }
+  }
+
+  /* ---- 관리자 공개키 봉인(MFA1) ----
+   * TLS 는 Render 에서 끝나므로 서버는 평문을 볼 수 있다. 복구 키는 서버도 보면 안 되니 브라우저에서 관리자
+   * 공개키로 봉인한다: gzip → AES-256-GCM → 데이터키를 X25519 로 감싼다. 형식은 backend/app/evidence.py 의
+   * seal 과 같은 바이트다 — tools/opsarchive 의 container.unseal 로 연다(test_recovery.py 가 실제로 연다). */
+  var MFA1 = { salt: 'mfa1', info: 'mfa1-kek', wrapSalt: 'mfa1-nonce', wrapInfo: 'mfa1-wrap' };
+
+  function hkdf(shared, salt, info, length) {
+    return subtle().importKey('raw', shared, 'HKDF', false, ['deriveBits']).then(function (base) {
+      return subtle().deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: ascii(salt), info: ascii(info) }, base, length * 8);
+    }).then(function (bits) { return new Uint8Array(bits); });
+  }
+  function aesGcm(rawKey, iv, plain, aad) {
+    return subtle().importKey('raw', rawKey, 'AES-GCM', false, ['encrypt']).then(function (key) {
+      var params = { name: 'AES-GCM', iv: iv };
+      if (aad) params.additionalData = aad;
+      return subtle().encrypt(params, key, plain);
+    }).then(function (ct) { return new Uint8Array(ct); });
+  }
+  function gzip(bytes) {
+    var stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'));
+    return new Response(stream).arrayBuffer().then(function (buf) { return new Uint8Array(buf); });
+  }
+  /* 평문 객체 + 관리자 공개키(x25519:<base64url>) → base64url 봉투. 던지지 않고 {ok:false, reason} 으로 알린다. */
+  function sealForAdmin(obj, publicKey) {
+    if (!canSeal() || typeof CompressionStream === 'undefined') return Promise.resolve({ ok: false, reason: 'unsupported' });
+    var recipient;
+    try { recipient = b64d(String(publicKey || '').replace(/^x25519:/, '')); } catch (e) { recipient = null; }
+    if (!recipient || recipient.length !== 32) return Promise.resolve({ ok: false, reason: 'bad_key' });
+    var dataKey = root.crypto.getRandomValues(new Uint8Array(32));
+    var iv = root.crypto.getRandomValues(new Uint8Array(12));
+    var ephPub, shared, kek;
+    return subtle().generateKey({ name: 'X25519' }, false, ['deriveBits']).then(function (eph) {
+      return subtle().exportKey('raw', eph.publicKey).then(function (pub) {
+        ephPub = new Uint8Array(pub);
+        return subtle().importKey('raw', recipient, { name: 'X25519' }, false, []);
+      }).then(function (peer) {
+        return subtle().deriveBits({ name: 'X25519', public: peer }, eph.privateKey, 256);
+      });
+    }).then(function (bits) {
+      shared = new Uint8Array(bits);
+      return hkdf(shared, MFA1.salt, MFA1.info, 32);
+    }).then(function (k) {
+      kek = k;
+      return hkdf(shared, MFA1.wrapSalt, MFA1.wrapInfo, 12);
+    }).then(function (wrapNonce) {
+      return aesGcm(kek, wrapNonce, dataKey);
+    }).then(function (sealedKey) {
+      return subtle().digest('SHA-256', recipient).then(function (d) {
+        var wrapped = join(ephPub, sealedKey);
+        return join(ascii('MFA1'), new Uint8Array([1, 1]), new Uint8Array(d).slice(0, 8),
+          new Uint8Array([wrapped.length >> 8, wrapped.length & 255]), wrapped, iv);
+      });
+    }).then(function (header) {
+      return gzip(new TextEncoder().encode(JSON.stringify(obj))).then(function (packed) {
+        return aesGcm(dataKey, iv, packed, header);
+      }).then(function (body) {
+        return { ok: true, sealed: b64e(join(header, body)) };
+      });
+    }).catch(function () { return { ok: false, reason: 'unsupported' }; });
+  }
+
+  var api = { canSeal: canSeal, seal: seal, open: open, ENC_SCHEMA: ENC_SCHEMA, ITER: ITER, b64e: b64e, b64d: b64d,
+    newRecoveryKey: newRecoveryKey, commitmentOf: commitmentOf, isSecureEndpoint: isSecureEndpoint, sealForAdmin: sealForAdmin };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ProofCrypto = api;
 })(typeof window !== 'undefined' ? window : globalThis);

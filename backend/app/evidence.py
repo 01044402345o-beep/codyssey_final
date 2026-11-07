@@ -23,6 +23,7 @@
 - `EVIDENCE_NOTIFY`(기본 켜짐, "0" 이면 끔) : 봉인하면 GitHub 이슈로 알릴지(토큰·저장소가 있어도 끌 수 있다).
 - `EVIDENCE_CLIENT_REPORTS`(기본 켜짐, "0" 이면 끔) : 화면이 보낸 탈퇴 불일치 보고(`/diagnostics/withdraw`)를 봉인할지.
   위 셋은 관리자 GUI 마인드맵(seal_failures·issue_notify·client_report 노드)이 Render 환경변수로 민다.
+- `EVIDENCE_RECOVERY_DAILY_CAP`(기본 20) : 탈퇴한 사용자의 복구 보고(`/withdraw/recovery`) 하루 상한.
 """
 
 from __future__ import annotations
@@ -117,6 +118,19 @@ def health_block() -> dict[str, Any]:
     if not configured():
         return {}
     return {"key_id": key_id_hex(), "fingerprint": fingerprint(), "generation": generation()}
+
+
+def public_key_text() -> str:
+    """브라우저가 복구 키를 봉인할 관리자 공개키(`x25519:<base64url>`). 없으면 빈 문자열."""
+    key = public_key()
+    return "x25519:" + base64.urlsafe_b64encode(key).decode().rstrip("=") if key else ""
+
+
+def sealed_for_current_key(blob: bytes) -> bool:
+    """브라우저가 봉인한 MFA1 인가, 그리고 지금 관리자 키로 봉인됐는가. 서버는 열 수 없으므로 머리만 본다."""
+    key = public_key()
+    return bool(key and blob[:6] == MAGIC + bytes([ALG, VERSION])
+                and blob[6:6 + KEY_ID_LEN] == hashlib.sha256(key).digest()[:KEY_ID_LEN])
 
 
 def seal(data: bytes, recipient: bytes) -> bytes:
@@ -408,6 +422,11 @@ def _commit_entry(extra: dict[str, Any]) -> dict[str, Any]:
     return entry
 
 
+def commitment_known(commitment: str) -> bool:
+    """이 커밋먼트로 시도한 기록이 체인에 있는가. 토큰 없는 복구 보고의 남용을 막는 관문이다."""
+    return firebase_admin.get_admin().field_exists(ENTRIES_COLLECTION, "challenge", commitment)
+
+
 def receipt_for(challenge: str, entry: dict[str, Any], outcome: str) -> dict[str, Any]:
     """클라이언트가 보관하는 영수증. **서버가 Ed25519 로 서명한다**(탈퇴 증명).
 
@@ -524,9 +543,12 @@ _lock = threading.Lock()
 # 화면이 보낸 보고(client_report)와 서버가 감지한 실패(erase_failed·verify_mismatch 등)는 예산을 따로 쓴다.
 # 하나를 같이 쓰면 무료 계정 몇 개로 /diagnostics/withdraw 를 보내 하루 상한을 다 채울 수 있고,
 # 그 뒤 실제로 서버가 감지한 탈퇴 실패는 봉인되지 않는다(2026-10-23 교차 검증 #7).
+# 복구 보고도 따로 쓴다 — 계정이 지워진 사용자가 보내므로 토큰이 없고, 다른 예산을 깎으면 안 된다.
 CLIENT_TRIGGERS = frozenset({"client_report"})
+RECOVERY_TRIGGERS = frozenset({"recovery_report"})
 _last_by_uid: dict[tuple[str, str], float] = {}
-_daily = {"server": {"day": "", "count": 0}, "client": {"day": "", "count": 0}}
+_daily = {"server": {"day": "", "count": 0}, "client": {"day": "", "count": 0},
+          "recovery": {"day": "", "count": 0}}
 
 
 def throttle_ok(uid: str, trigger: str = "") -> bool:
@@ -535,10 +557,14 @@ def throttle_ok(uid: str, trigger: str = "") -> bool:
     - 서버 감지: EVIDENCE_DAILY_CAP(기본 5)/일, 같은 uid 는 EVIDENCE_PER_UID_SECONDS(기본 1시간)에 1번.
     - 화면 보고: EVIDENCE_CLIENT_DAILY_CAP(기본 3)/일, 같은 uid 는 EVIDENCE_CLIENT_PER_UID_SECONDS(기본 하루)에 1번.
       화면 보고는 서버 감지 예산과 uid 간격을 소모하지 않는다.
+    - 복구 보고: EVIDENCE_RECOVERY_DAILY_CAP(기본 20)/일, 같은 커밋먼트는 하루에 1번(uid 자리에 커밋먼트를 넘긴다).
     프로세스 단위라 인스턴스가 여러 개면 상한이 느슨해진다 — 그 사실은 문서에 적혀 있다.
     """
-    kind = "client" if trigger in CLIENT_TRIGGERS else "server"
-    if kind == "client":
+    kind = "client" if trigger in CLIENT_TRIGGERS else "recovery" if trigger in RECOVERY_TRIGGERS else "server"
+    if kind == "recovery":
+        cap = _int_env("EVIDENCE_RECOVERY_DAILY_CAP", 20)
+        window = 86400
+    elif kind == "client":
         cap = _int_env("EVIDENCE_CLIENT_DAILY_CAP", 3)
         window = max(_int_env("EVIDENCE_CLIENT_PER_UID_SECONDS", 86400), 1)
     else:

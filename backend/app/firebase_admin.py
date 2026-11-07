@@ -234,7 +234,7 @@ class ServiceAccountAdmin:
         return str(self._creds.token)
 
     def _call(self, method: str, url: str, body: dict[str, Any] | None = None,
-              already_there: bool = False) -> dict[str, Any]:
+              already_there: bool = False, want_list: bool = False) -> Any:
         """`already_there` 는 '이미 있으면 그대로 둔다'는 호출(흔적 만들기)에만 켠다.
 
         계정 취소·삭제에 409 를 성공으로 삼키면 토큰이 그대로 살아 있는데 성공으로 보고하게 된다.
@@ -265,11 +265,13 @@ class ServiceAccountAdmin:
         except Exception as exc:  # noqa: BLE001 — 주소·토큰은 예외 문자열에 넣지 않는다
             raise AdminError(503, "admin_failed") from exc
         if not raw:
-            return {}
+            return [] if want_list else {}
         try:
             parsed = json.loads(raw)
         except json.JSONDecodeError:
-            return {}
+            return [] if want_list else {}
+        if want_list:
+            return parsed if isinstance(parsed, list) else []
         return parsed if isinstance(parsed, dict) else {}
 
     def revoke(self, uid: str) -> None:
@@ -310,6 +312,18 @@ class ServiceAccountAdmin:
         url = (FIRESTORE + "/projects/" + urllib.request.quote(self.project_id, safe="")
                + "/databases/(default)/documents/" + subpath.lstrip("/"))
         return self._call(method, url, body)
+
+    def field_exists(self, collection: str, field: str, value: str) -> bool:
+        """이 컬렉션에 field == value 인 문서가 있는가(관리자 권한). 호출 실패는 AdminError 로 나간다."""
+        url = (FIRESTORE + "/projects/" + urllib.request.quote(self.project_id, safe="")
+               + "/databases/(default)/documents:runQuery")
+        rows = self._call("POST", url, {"structuredQuery": {
+            "from": [{"collectionId": collection}],
+            "where": {"fieldFilter": {"field": {"fieldPath": field}, "op": "EQUAL",
+                                      "value": {"stringValue": value}}},
+            "limit": 1,
+        }}, want_list=True)
+        return any(isinstance(row, dict) and row.get("document") for row in rows)
 
     def lookup_user(self, uid: str) -> dict[str, Any]:
         """Auth 계정이 남아 있는지 본다(탈퇴 사후 검증). 없으면 빈 dict."""

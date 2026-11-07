@@ -157,7 +157,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="핀 파일 경로(기본: 저장소 밖 ~/.opsarchive/evidence-key-pin.json)")
     q.add_argument("--out", default="checkpoints")
     q.add_argument("--challenge", default="",
-                   help="사용자가 제시한 챌린지(영수증). 앵커 범위 안에 있는지 본다")
+                   help="사용자가 제시한 챌린지(커밋먼트) 또는 복구 키(wrk1-…). 앵커 범위 안에 있는지 본다")
     q.add_argument("--source", choices=["local", "firestore", "both"], default="local",
                    help="체크포인트를 읽을 곳(firestore = 자동 앵커가 쌓은 것)")
     q.add_argument("--max-age-hours", type=float, default=0, help="마지막 체크포인트가 이보다 오래되면 실패(0=검사 안 함)")
@@ -183,6 +183,14 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--id", required=True, dest="archive_id")
     q.add_argument("--key", required=True)
     q.add_argument("--out", default="", help="평문을 저장할 디렉터리(없으면 요약만)")
+
+    q = sub.add_parser("recovery-verify", help="복구 보고 아카이브를 열어 복구 키와 체인을 대조한다")
+    q.add_argument("--project", required=True)
+    q.add_argument("--sa", required=True)
+    q.add_argument("--id", required=True, dest="archive_id")
+    q.add_argument("--key", required=True)
+    q.add_argument("--pin", default=config.read_settings().get("pin_path") or "")
+    q.add_argument("--out", default="checkpoints")
 
     sub.add_parser("tui", help="rich 기반 화면(없으면 안내만)")
     sub.add_parser("gui", help="관리자 창(tkinter — 설치 필요 없음). 키·발행·검증을 버튼으로")
@@ -397,6 +405,12 @@ def main(argv: list[str] | None = None) -> int:
                                               phrase, out_dir=args.out or None)
             _print(report)
             return 0
+        if args.cmd == "recovery-verify":
+            phrase = commands.ask_passphrase(prompt="개인키 패스프레이즈: ")
+            result = commands.verify_recovery_report(args.project, args.sa, args.archive_id, args.key, phrase,
+                                                     args.pin, out_dir=args.out)
+            _print(result)
+            return 0 if result.get("ok") else 1
         if args.cmd == "tui":
             from . import tui
             return tui.run()
