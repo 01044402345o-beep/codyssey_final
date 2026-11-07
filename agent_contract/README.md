@@ -11,7 +11,8 @@
 |---|---|---|
 | 이영애 | 식당·카페 | `restaurant` |
 | 이창진 | 교통·공항 | `transport` |
-| 함명자 | 숙소·체크인 | `lodging` |
+| 함명자 | 숙소·호텔 | `lodging` |
+| 도시 조사 에이전트(PR-V2) | 관광지·명소 | `attraction` |
 | 이주란 | 검증 — 전 카테고리 실패 케이스 | — |
 | 최성빈 | 생성 함수·검증 코드·통합 | — |
 | 한재정 | 전체 리뷰 | — |
@@ -34,7 +35,7 @@ PR 본문에 아래 4개를 체크해 주세요.
 
 - [ ] `situations` — 상황 목록 10개 내외 (`situation_id` 는 영문 스네이크)
 - [ ] `system_prompt` — 이 카테고리 전용 프롬프트
-- [ ] `good_examples` — 좋은 출력 예시 3개
+- [ ] `good_examples` — 좋은 출력 예시 3개 이상
 - [ ] `negative_cases` — 반드시 걸러야 할 예시 5개 (금칙·장소 불일치·중복·길이·말투)
 
 **PR 올리기 전에 점검 한 줄** (내 파일이 서버가 읽을 수 있는 형식인지 확인합니다):
@@ -55,12 +56,15 @@ python backend/scripts/validate_category.py agent_contract/categories/<내_id>.j
 ## 3. 프롬프트에 값 넣기 (플레이스홀더)
 
 `system_prompt` 안에 `{키이름}` 을 쓰면, `rules` 의 **같은 키 값**으로 자동 치환됩니다.
+`rules` 에 있는 키는 **전부** 치환됩니다. 아래는 `restaurant.json` 기준 값입니다.
 
 | 프롬프트에 쓴다 | 치환되는 값 (rules 키) |
 |---|---|
 | `{min_sentences_per_situation}` | 1 |
 | `{max_sentences_per_situation}` | 3 |
 | `{max_words_per_sentence}` | 15 |
+| `{min_sentences_per_category}` | 8 |
+| `{tone}` | polite |
 
 키 이름을 그대로 쓰세요. `{min}` 같은 축약형은 치환되지 않고 글자 그대로 남습니다.
 
@@ -123,6 +127,7 @@ python backend/scripts/validate_category.py agent_contract/categories/<내_id>.j
 | 검사 | 코드 | severity | 측정값 |
 |---|---|---|---|
 | 금칙이 실제로 걸러지는가 | `forbidden_topic` | block | 카테고리별 적중률 |
+| 설정에 없는 상황 id | `situation_not_in_config` | block | `situations` 에 없는 `situation_id` 수 |
 | 취약 상황 반영 | `weak_not_covered` / `weak_content_mismatch` | block | 요청 대비 미반영 수 |
 | 상황 누락 수 | `missing_situation` | warn | `situations` 대비 누락 |
 | 카테고리 최소 문장 수 | `below_min_sentences` | warn | `rules.min_sentences_per_category` 대비 |
