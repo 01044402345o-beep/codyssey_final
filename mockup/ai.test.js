@@ -134,6 +134,18 @@ test('categoryOfKind·weakIdsFor: 계약의 place_types 로 카테고리를 찾�
   assert.deepEqual(AI.weakIdsFor(list, ['restaurant', 'lodging', 'restaurant']), ['allergy_notice', 'check_in']);
 });
 
+test('categoryOfKind: 계약 JSON 의 place_types 전부가 그 파일의 카테고리로 간다(KIND_CATEGORY 가 계약과 어긋나지 않는다)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dir = path.join(__dirname, '..', 'agent_contract', 'categories');
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+  assert.ok(files.length >= 4);
+  for (const f of files) {
+    const cfg = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+    for (const kind of cfg.place_types) assert.equal(AI.categoryOfKind(kind), cfg.category_id, `${f}: ${kind}`);
+  }
+});
+
 test('generateByCity: API 없음(file://)이면 전부 폴백, 호출 안 함', async () => {
   let called = 0;
   const out = await AI.generateByCity({ fetchImpl: async () => { called++; }, base: null, cities: [{ name: 'X', places: [] }], weakIds: [] });
