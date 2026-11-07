@@ -48,4 +48,5 @@ jobs:
           python3 .ci/verify_key_pin.py \
             --expected-fingerprint "${{ vars.EVIDENCE_PIN_FINGERPRINT }}" \
             --expected-generation "${{ vars.EVIDENCE_PIN_GENERATION }}" \
-            --health-url "${{ vars.EVIDENCE_PIN_HEALTH_URL || 'https://codyssey-final.onrender.com' }}"
+            --health-url "${{ vars.EVIDENCE_PIN_HEALTH_URL || 'https://codyssey-final.onrender.com' }}" \
+            --hosting-url "${{ vars.EVIDENCE_HOSTING_URL || 'https://com-example-myapplicatio-3bb36.web.app' }}"

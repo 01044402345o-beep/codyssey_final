@@ -8,6 +8,7 @@ import random
 import shutil
 import subprocess
 import unittest
+import urllib.error
 import urllib.request
 from unittest import mock
 
@@ -129,11 +130,21 @@ class OpenReportTest(unittest.TestCase):
         with mock.patch.object(commands, "decrypt_archive", return_value=self.report()), \
                 mock.patch.object(commands.C, "load_private_key", return_value=self.private), \
                 mock.patch.object(commands, "verify_chain",
-                                  return_value={"ok": True, "challenge_check": {"verdict": "anchored"}}) as verify:
+                                  return_value={"ok": True, "challenge_check": {"verdict": "anchored", "key_proven": True}}) as verify:
             result = commands.verify_recovery_report("p", "s", "a", "k", "pw", "pin")
         self.assertEqual(verify.call_args.kwargs["challenge"], KEY)
         self.assertTrue(result["ok"])
         self.assertNotIn(KEY, json.dumps(result))
+
+    def test_entry_after_the_anchor_is_not_trusted_even_if_the_key_matches(self):
+        """침해된 앱은 자기 복구 키로 체인에 새 시도를 쓸 수 있다 — 앵커 밖이면 키가 맞아도 믿지 않는다."""
+        with mock.patch.object(commands, "decrypt_archive", return_value=self.report()), \
+                mock.patch.object(commands.C, "load_private_key", return_value=self.private), \
+                mock.patch.object(commands, "verify_chain",
+                                  return_value={"ok": True, "challenge_check": {"verdict": "after_anchor", "key_proven": True}}):
+            result = commands.verify_recovery_report("p", "s", "a", "k", "pw", "pin")
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["note"])
 
 
 @unittest.skipUnless(shutil.which("node"), "node 필요")
@@ -145,14 +156,14 @@ class BrowserSealCompatibilityTest(unittest.TestCase):
       (async () => {
         const made = await PC.newRecoveryKey();
         const vector = await PC.commitmentOf(process.argv[3]);
-        const r = await PC.sealForAdmin({ recovery_key: made.key, commitment: made.commitment }, process.argv[2]);
+        const r = await PC.sealForAdmin({ recovery_key: made.key, commitment: made.commitment }, process.argv[2], process.argv[4]);
         console.log(JSON.stringify({ made, vector, r }));
       })().catch(e => { console.error(e); process.exit(1); });
     """
 
     def test_browser_seal_opens_in_the_cli(self):
         private, public = C.keypair()
-        done = subprocess.run(["node", "-e", self.SCRIPT, PROOF_CRYPTO, C.pack_public_key(public), KEY],
+        done = subprocess.run(["node", "-e", self.SCRIPT, PROOF_CRYPTO, C.pack_public_key(public), KEY, C.fingerprint(public)],
                               capture_output=True, text=True, timeout=60, check=True)
         out = json.loads(done.stdout)
         self.assertTrue(out["r"]["ok"], out["r"])
@@ -165,6 +176,62 @@ class BrowserSealCompatibilityTest(unittest.TestCase):
         other, _ = C.keypair()
         with self.assertRaises(C.ContainerError):
             C.unseal(blob, other)
+
+
+class _Res:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self):
+        return json.dumps(self.payload).encode()
+
+
+class PinRouteTest(unittest.TestCase):
+    """침해된 앱은 /health 에는 맞는 지문을 보이고 /withdraw/recovery-key 로만 다른 키를 줄 수 있다."""
+
+    def setUp(self):
+        _, self.public = C.keypair()
+        self.pin = {"schema": 1, "armed": True, "fingerprint_sha256": C.fingerprint(self.public), "generation": 1,
+                    "health_url": "https://app.test"}
+        self.health = {"evidence": {"fingerprint": C.fingerprint(self.public), "generation": 1}}
+
+    def run_check(self, recovery):
+        def opener(url, timeout=20):
+            if url.endswith("/health"):
+                return _Res(self.health)
+            if isinstance(recovery, Exception):
+                raise recovery
+            return _Res(recovery)
+
+        with mock.patch.object(commands.pins, "read", return_value=self.pin), \
+                mock.patch.object(commands.config, "resolve", side_effect=lambda p: p), \
+                mock.patch.object(tls, "open_url", side_effect=opener):
+            return commands.check_pin("pin.json")
+
+    def test_same_key_passes(self):
+        result = self.run_check({"public_key": C.pack_public_key(self.public)})
+        self.assertTrue(result["ok"], result)
+
+    def test_other_key_on_the_recovery_route_fails_even_with_a_good_health(self):
+        _, attacker = C.keypair()
+        result = self.run_check({"public_key": C.pack_public_key(attacker)})
+        self.assertFalse(result["ok"])
+        self.assertIn("recovery_key_mismatch", result["reasons"])
+
+    def test_route_absent_or_off_is_not_a_failure(self):
+        for code in (404, 503):
+            gone = urllib.error.HTTPError("https://app.test", code, "x", {}, None)
+            self.assertTrue(self.run_check(gone)["ok"], code)
+
+    def test_other_errors_fail_closed(self):
+        gone = urllib.error.HTTPError("https://app.test", 500, "x", {}, None)
+        self.assertFalse(self.run_check(gone)["ok"])
 
 
 class TlsTest(unittest.TestCase):

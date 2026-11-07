@@ -321,7 +321,10 @@ with sync_playwright() as p:
       const m = await ProofCrypto.newRecoveryKey();
       const raw = new Uint8Array(32); crypto.getRandomValues(raw);
       const pair = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
-      window.__adminKey = 'x25519:' + ProofCrypto.b64e(await crypto.subtle.exportKey('raw', pair.publicKey));
+      const rawPub = await crypto.subtle.exportKey('raw', pair.publicKey);
+      window.__adminKey = 'x25519:' + ProofCrypto.b64e(rawPub);
+      window.__realPin = ProofCrypto.ADMIN_KEY_FINGERPRINT;
+      ProofCrypto.ADMIN_KEY_FINGERPRINT = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', rawPub)), b => b.toString(16).padStart(2, '0')).join('');
       window.__sent = [];
       window.fetch = async (url, init) => {
         const path = String(url);
@@ -350,6 +353,14 @@ with sync_playwright() as p:
     page.wait_for_timeout(500)
     check("복구 키: 서버 기록에 없으면 보냈다고 하지 않고 파일을 직접 보여 달라고 안내한다",
           "찾지 못했어요" in page.inner_text("#toast"), page.inner_text("#toast"))
+
+    page.evaluate("window.__sent = []; window.__recoveryStatus = 200; ProofCrypto.ADMIN_KEY_FINGERPRINT = window.__realPin; render()")
+    page.wait_for_timeout(150)
+    page.click('[data-act="proof-send"]')
+    page.wait_for_timeout(500)
+    swapped = page.evaluate("window.__sent")
+    check("복구 키: 서버가 고정 지문과 다른 공개키를 주면(침해 대비) 보내지 않고 파일을 안내한다",
+          not any(x["path"].endswith("/withdraw/recovery") for x in swapped) and "예상과 달라" in page.inner_text("#toast"), str(swapped)[:200])
 
     # --- '서버에 보고'는 실제로 보낸 결과대로 안내한다(예전: 로그아웃이라 안 보내도 늘 '보고했어요') ---
     def report(logged_in, status=200):

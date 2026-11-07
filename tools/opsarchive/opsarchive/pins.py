@@ -13,7 +13,12 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
+import urllib.error
+
+from . import tls
 
 SCHEMA = 1
 GENERATION_MAX = 1_000_000
@@ -86,6 +91,22 @@ def fetch_health(health_url: str, timeout: int = 20) -> dict:
     url = health_url.rstrip("/") + "/health"
     with tls.open_url(url, timeout=timeout) as res:
         return json.loads(res.read().decode() or "{}")
+
+
+def fetch_recovery_fingerprint(health_url: str, timeout: int = 20) -> str:
+    """앱이 브라우저에게 주는 봉인 공개키의 지문. 경로가 없거나 꺼져 있으면(404·503) 빈 문자열.
+
+    침해된 앱은 /health 에는 맞는 지문을 보이고 이 경로로만 다른 키를 줄 수 있으므로 따로 본다.
+    """
+    try:
+        with tls.open_url(health_url.rstrip("/") + "/withdraw/recovery-key", timeout=timeout) as res:
+            body = json.loads(res.read().decode() or "{}")
+    except urllib.error.HTTPError as exc:
+        if exc.code in (404, 503):
+            return ""
+        raise
+    raw = str(body.get("public_key", "")).removeprefix("x25519:")
+    return hashlib.sha256(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))).hexdigest()
 
 
 def compare(pin: dict, health: dict) -> dict:
