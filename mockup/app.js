@@ -6353,7 +6353,8 @@ function reportSavedProof() {
 }
 /* 복구 키를 관리자에게 보낸다. 탈퇴 뒤에는 로그인할 수 없어 토큰 없이 보낸다.
    TLS 위에서 다시 관리자 공개키로 봉인하므로, 서버는 커밋먼트만 보고 복구 키는 보지 못한다.
-   반환: sent | nothing | insecure | unknown(체인에 없음) | later | unsupported | failed */
+   서버가 준 공개키는 믿지 않고 화면에 고정된 지문과 대조한다(서버 침해 대비).
+   반환: sent | nothing | insecure | unknown(체인에 없음) | later | unsupported | key_mismatch | failed */
 async function sendRecoveryProof() {
   const info = withdrawProofState();
   if (!info.proof || !info.proof.recovery_key) return 'nothing';
@@ -6367,8 +6368,8 @@ async function sendRecoveryProof() {
     const sealed = await ProofCrypto.sealForAdmin({
       schema: 'WITHDRAW-RECOVERY-v1', recovery_key: info.proof.recovery_key, commitment: info.proof.challenge,
       requested_at: new Date(info.proof.at).toISOString(), receipt: info.proof.receipt || null,
-    }, keyBody.public_key);
-    if (!sealed.ok) return sealed.reason === 'unsupported' ? 'unsupported' : 'failed';
+    }, keyBody.public_key, ProofCrypto.ADMIN_KEY_FINGERPRINT);
+    if (!sealed.ok) return sealed.reason === 'unsupported' || sealed.reason === 'key_mismatch' ? sealed.reason : 'failed';
     const res = await fetch(base + '/withdraw/recovery', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -6755,7 +6756,8 @@ const ACT = {
   },
   'proof-send': () => {
     sendRecoveryProof().then(r => toast(
-      r === 'sent' ? '관리자만 열 수 있게 잠가서 증명을 보냈어요.'
+      r === 'sent' ? '관리자만 열 수 있게 잠가서 증명을 보냈어요. 증명 파일도 함께 보관해 두세요.'
+        : r === 'key_mismatch' ? '서버가 알려준 관리자 키가 예상과 달라 보내지 않았어요. 증명 파일을 내려받아 관리자에게 직접 보여 주세요.'
         : r === 'unknown' ? '서버 기록에서 이 탈퇴 요청을 찾지 못했어요. 증명 파일을 내려받아 관리자에게 직접 보여 주세요.'
           : r === 'later' ? '요청이 많아요. 잠시 뒤 다시 보내 주세요.'
             : r === 'insecure' ? '암호화되지 않은 연결이라 보내지 않았어요.'

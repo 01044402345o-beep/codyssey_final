@@ -126,6 +126,10 @@
    * 공개키로 봉인한다: gzip → AES-256-GCM → 데이터키를 X25519 로 감싼다. 형식은 backend/app/evidence.py 의
    * seal 과 같은 바이트다 — tools/opsarchive 의 container.unseal 로 연다(test_recovery.py 가 실제로 연다). */
   var MFA1 = { salt: 'mfa1', info: 'mfa1-kek', wrapSalt: 'mfa1-nonce', wrapInfo: 'mfa1-wrap' };
+  /* 관리자 공개키 지문. API 서버(Render)가 침해돼 공격자의 공개키를 내줘도 여기서 걸린다. 화면은 Firebase Hosting 에서
+   * 따로 배포되므로 API 서버를 장악해도 이 값은 바꾸지 못한다. 키를 회전하면 이 값을 고쳐 Hosting 을 다시 배포한다.
+   * 값은 관리자가 개인키에서 역산해 올린 Actions 변수(EVIDENCE_PIN_FINGERPRINT)와 같고, verify-key-pin 이 대조한다. */
+  var ADMIN_KEY_FINGERPRINT = '181b495477fbe7293e0b6de44ff831c0760929824a641ac6d62548c7ecfad778';
 
   function hkdf(shared, salt, info, length) {
     return subtle().importKey('raw', shared, 'HKDF', false, ['deriveBits']).then(function (base) {
@@ -143,12 +147,20 @@
     var stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'));
     return new Response(stream).arrayBuffer().then(function (buf) { return new Uint8Array(buf); });
   }
-  /* 평문 객체 + 관리자 공개키(x25519:<base64url>) → base64url 봉투. 던지지 않고 {ok:false, reason} 으로 알린다. */
-  function sealForAdmin(obj, publicKey) {
+  /* 평문 객체 + 관리자 공개키(x25519:<base64url>) + 기대 지문 → base64url 봉투. 던지지 않고 {ok:false, reason} 으로 알린다.
+   * 지문이 다르면 key_mismatch 다. 복구 키를 절대 그 공개키로 봉인하지 않는다. */
+  function sealForAdmin(obj, publicKey, expectedFingerprint) {
     if (!canSeal() || typeof CompressionStream === 'undefined') return Promise.resolve({ ok: false, reason: 'unsupported' });
     var recipient;
     try { recipient = b64d(String(publicKey || '').replace(/^x25519:/, '')); } catch (e) { recipient = null; }
     if (!recipient || recipient.length !== 32) return Promise.resolve({ ok: false, reason: 'bad_key' });
+    if (!expectedFingerprint) return Promise.resolve({ ok: false, reason: 'key_mismatch' });
+    return subtle().digest('SHA-256', recipient).then(function (d) {
+      if (hex(d) !== expectedFingerprint) return { ok: false, reason: 'key_mismatch' };
+      return sealTo(obj, recipient);
+    }).catch(function () { return { ok: false, reason: 'unsupported' }; });
+  }
+  function sealTo(obj, recipient) {
     var dataKey = root.crypto.getRandomValues(new Uint8Array(32));
     var iv = root.crypto.getRandomValues(new Uint8Array(12));
     var ephPub, shared, kek;
@@ -183,7 +195,8 @@
   }
 
   var api = { canSeal: canSeal, seal: seal, open: open, ENC_SCHEMA: ENC_SCHEMA, ITER: ITER, b64e: b64e, b64d: b64d,
-    newRecoveryKey: newRecoveryKey, commitmentOf: commitmentOf, isSecureEndpoint: isSecureEndpoint, sealForAdmin: sealForAdmin };
+    newRecoveryKey: newRecoveryKey, commitmentOf: commitmentOf, isSecureEndpoint: isSecureEndpoint, sealForAdmin: sealForAdmin,
+    ADMIN_KEY_FINGERPRINT: ADMIN_KEY_FINGERPRINT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ProofCrypto = api;
 })(typeof window !== 'undefined' ? window : globalThis);

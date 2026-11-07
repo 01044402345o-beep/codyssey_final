@@ -35,7 +35,7 @@ class OffsiteAnchorTest(unittest.TestCase):
             record = MODULE.hosting_record("https://example.web.app")
 
         self.assertEqual(record["base"], "https://example.web.app")
-        self.assertEqual(len(record["assets"]), 5)
+        self.assertEqual(len(record["assets"]), 6)
         self.assertEqual(record["assets"][0]["csp"], "enforce")
         self.assertEqual(record["assets"][0]["cache_control"], "no-cache")
         self.assertNotIn("x-secret", repr(record))

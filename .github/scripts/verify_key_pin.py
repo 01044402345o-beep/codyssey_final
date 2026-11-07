@@ -12,8 +12,12 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import json
+import re
 import sys
+import urllib.error
 import urllib.request
 
 MISSING = "health_missing_evidence"
@@ -27,6 +31,43 @@ def load_pin(path: str) -> dict:
 def fetch_health(url: str, timeout: int = 20) -> dict:
     with urllib.request.urlopen(url.rstrip("/") + "/health", timeout=timeout) as res:
         return json.loads(res.read().decode() or "{}")
+
+
+def fingerprint_of(body: dict) -> str:
+    raw = str(body.get("public_key", "")).removeprefix("x25519:")
+    return hashlib.sha256(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))).hexdigest()
+
+
+def fetch_recovery_key(url: str, timeout: int = 20) -> dict:
+    """브라우저가 받는 봉인 공개키. 경로가 없거나 꺼져 있으면(404·503) 빈 dict."""
+    try:
+        with urllib.request.urlopen(url.rstrip("/") + "/withdraw/recovery-key", timeout=timeout) as res:
+            return json.loads(res.read().decode() or "{}")
+    except urllib.error.HTTPError as exc:
+        if exc.code in (404, 503):
+            return {}
+        raise
+
+
+def check_recovery_key(pin: dict, body: dict) -> list[str]:
+    """침해된 앱은 /health 에는 맞는 지문을 보이고 이 경로로만 다른 키를 줄 수 있어 따로 본다."""
+    if body and fingerprint_of(body) != str(pin.get("fingerprint_sha256", "")):
+        return ["recovery_key_mismatch"]
+    return []
+
+
+def fetch_text(url: str, timeout: int = 20) -> str:
+    with urllib.request.urlopen(url, timeout=timeout) as res:
+        return res.read().decode("utf-8", "replace")
+
+
+def check_hosted_pin(pin: dict, script: str) -> list[str]:
+    """배포된 화면에 고정된 지문이 핀과 같은가. 아직 지문이 없는 화면(배포 전)은 경고만 한다."""
+    found = re.search(r"ADMIN_KEY_FINGERPRINT = '([0-9a-f]{64})'", script)
+    if not found:
+        print("::warning::Hosting 화면에 고정 지문이 없습니다 — firebase deploy --only hosting 이 필요합니다")
+        return []
+    return [] if found.group(1) == str(pin.get("fingerprint_sha256", "")) else ["hosted_pin_mismatch"]
 
 
 def check(pin: dict, health: dict) -> list[str]:
@@ -51,6 +92,7 @@ def check(pin: dict, health: dict) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    sys.stdout.reconfigure(encoding="utf-8")     # Windows 기본 인코딩(cp949)은 문구의 일부 기호를 못 쓴다
     parser = argparse.ArgumentParser(description="증거 봉인 키 핀 검증")
     parser.add_argument("pin", nargs="?", default="", help="핀 JSON 파일(저장소 밖). CI 는 쓰지 않는다")
     parser.add_argument("--expected-fingerprint", default="",
@@ -59,6 +101,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="CI: Actions 변수 vars.EVIDENCE_PIN_GENERATION")
     parser.add_argument("--health-url", default="", help="CI: Actions 변수 vars.EVIDENCE_PIN_HEALTH_URL")
     parser.add_argument("--health-file", default="", help="테스트용: /health JSON 파일")
+    parser.add_argument("--hosting-url", default="", help="화면(Firebase Hosting) 주소. proof-crypto.js 의 고정 지문을 대조한다")
+    parser.add_argument("--recovery-key-file", default="", help="테스트용: /withdraw/recovery-key JSON 파일")
+    parser.add_argument("--hosted-script-file", default="", help="테스트용: proof-crypto.js 파일")
     args = parser.parse_args(argv)
 
     if args.expected_fingerprint or args.expected_generation:
@@ -90,6 +135,17 @@ def main(argv: list[str] | None = None) -> int:
         print("::error::/health 를 읽지 못했습니다: %s" % type(exc).__name__)
         return 1
     reasons = check(pin, health)
+    try:
+        if args.recovery_key_file:
+            reasons += check_recovery_key(pin, json.load(open(args.recovery_key_file, encoding="utf-8")))
+        elif not args.health_file:
+            reasons += check_recovery_key(pin, fetch_recovery_key(str(pin.get("health_url", ""))))
+        if args.hosted_script_file:
+            reasons += check_hosted_pin(pin, open(args.hosted_script_file, encoding="utf-8").read())
+        elif args.hosting_url:
+            reasons += check_hosted_pin(pin, fetch_text(args.hosting_url.rstrip("/") + "/proof-crypto.js"))
+    except Exception as exc:        # noqa: BLE001 — 확인하지 못한 것도 실패다
+        reasons.append("recovery_check_failed:" + type(exc).__name__)
     if reasons:
         print("::error::핀 검증 실패: %s (pin=%s runtime=%s)" % (
             ", ".join(reasons), pin.get("fingerprint_sha256", "")[:16],

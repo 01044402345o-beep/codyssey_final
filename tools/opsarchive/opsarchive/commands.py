@@ -674,7 +674,17 @@ def check_pin(pin_file: str, *, health_url: str = "") -> dict:
         health = pins.fetch_health(url)
     except Exception as exc:        # noqa: BLE001 — 값으로만 알린다
         return {"armed": True, "ok": False, "reasons": ["health_unreachable:" + type(exc).__name__]}
-    return pins.compare(pin, health)
+    result = pins.compare(pin, health)
+    try:
+        served = pins.fetch_recovery_fingerprint(url)
+    except Exception as exc:        # noqa: BLE001 — 값으로만 알린다
+        result["reasons"].append("recovery_key_unreachable:" + type(exc).__name__)
+        result["ok"] = False
+        return result
+    if served and served != pin.get("fingerprint_sha256"):
+        result["reasons"].append("recovery_key_mismatch")      # /health 와 다른 키를 브라우저에 주고 있다
+        result["ok"] = False
+    return result
 
 
 # ------------------------------------------------------------------ IAM 점검(삭제 예방)
@@ -773,8 +783,13 @@ def verify_recovery_report(project_id: str, sa_path: str, archive_id: str, key_f
     report = decrypt_archive(project_id, sa_path, archive_id, key_file, passphrase)
     checked = open_recovery_report(report, C.load_private_key(key_file, passphrase))
     result = verify_chain(project_id, sa_path, pin_file, out_dir=out_dir, challenge=checked.pop("_recovery_key"))
-    return {"archive_id": archive_id, **checked, "ok": bool(result.get("ok")),
-            "challenge_check": result.get("challenge_check")}
+    check = result.get("challenge_check") or {}
+    # 앵커 안에 있어야만 믿는다. 침해된 앱은 자기 복구 키로 체인에 새 시도를 쓸 수 있어서, 앵커 뒤 항목은
+    # 키가 맞아도(key_proven) 공격자가 만든 것일 수 있다.
+    proven = bool(result.get("ok")) and bool(check.get("key_proven")) and check.get("verdict") == "anchored"
+    return {"archive_id": archive_id, **checked, "ok": proven, "challenge_check": check,
+            "note": "" if proven else "앵커 범위 안에서 증명되지 않았다. 다음 anchor 뒤에 다시 보거나 침해 구간이면 믿지 않는다",
+            "receipt_note": "receipt 는 사용자가 보낸 값이다. 서명은 따로 검증한다"}
 
 
 def open_recovery_report(report: dict, private_key: bytes) -> dict:

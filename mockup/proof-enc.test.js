@@ -94,14 +94,26 @@ function t(name, fn) {
   });
 
   await t('관리자 봉인은 공개키가 틀리면 만들지 않고, 평문을 담지 않는다', async () => {
-    assert.strictEqual((await PC.sealForAdmin({ recovery_key: KEY }, 'x25519:AAAA')).reason, 'bad_key');
+    assert.strictEqual((await PC.sealForAdmin({ recovery_key: KEY }, 'x25519:AAAA', 'ab'.repeat(32))).reason, 'bad_key');
     const { publicKey } = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
     const raw = PC.b64e(await crypto.subtle.exportKey('raw', publicKey));
-    const r = await PC.sealForAdmin({ recovery_key: KEY }, 'x25519:' + raw);
+    const digest = await crypto.subtle.digest('SHA-256', PC.b64d(raw));
+    const pin = Buffer.from(digest).toString('hex');
+    const r = await PC.sealForAdmin({ recovery_key: KEY }, 'x25519:' + raw, pin);
     assert.strictEqual(r.ok, true);
     const blob = Buffer.from(PC.b64d(r.sealed)).toString('latin1');
     assert.strictEqual(blob.slice(0, 4), 'MFA1');
     assert.strictEqual(blob.indexOf(KEY), -1);
+  });
+
+  await t('서버가 다른 공개키를 내주면 봉인하지 않는다(서버 침해 대비)', async () => {
+    const { publicKey } = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
+    const attacker = 'x25519:' + PC.b64e(await crypto.subtle.exportKey('raw', publicKey));
+    const pinned = await PC.sealForAdmin({ recovery_key: KEY }, attacker, PC.ADMIN_KEY_FINGERPRINT);
+    assert.deepStrictEqual(pinned, { ok: false, reason: 'key_mismatch' });
+    const noPin = await PC.sealForAdmin({ recovery_key: KEY }, attacker, '');
+    assert.deepStrictEqual(noPin, { ok: false, reason: 'key_mismatch' });
+    assert.ok(/^[0-9a-f]{64}$/.test(PC.ADMIN_KEY_FINGERPRINT));
   });
 
   await t('8자 미만은 거부', async () => {

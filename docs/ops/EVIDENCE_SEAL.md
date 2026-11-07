@@ -259,11 +259,11 @@ scrypt(n=2^15, r=8, p=1) 로 패스프레이즈 유도. 파일 권한 0600.
 
 **한계**
 
-- 앱이 침해되면 공격자의 공개키를 내줄 수 있어 그 뒤 보내는 복구 키가 노출된다. 브라우저가 공개키를 받는 곳이 앱뿐이기 때문이다. 복구 키로 할 수 있는 일은 "요청의 주인이라고 주장"뿐이고 계정·기록에는 닿지 못한다.
+- 앱 침해 대비와 그 한계는 [`BREAK_GLASS.md`](BREAK_GLASS.md) §6 에 있다. 요약하면 공개키 바꿔치기는 화면의 고정 지문으로 막지만, 화면을 Render 에서 연 사용자는 침해된 앱이 화면 코드까지 바꿀 수 있어 보호되지 않는다. 복구 키로 할 수 있는 일은 "요청의 주인이라고 주장"뿐이고 계정·기록에는 닿지 못한다.
 - 복구 키는 기기 `localStorage` 에 평문으로 있어 XSS 로 읽을 수 있다. 계정이 지워진 뒤에도 남아야 해서 이렇게 둔다.
 - 앱이 시도 기록을 처음부터 생략했다면 복구 보고는 404 로 거절된다. 그때는 사용자가 파일을 직접 보여 주고, 관리자가 `verify-chain` 으로 누락을 판정한다.
 - 기기를 잃으면 증명 카드가 없어 이 화면에서 보낼 수 없다. 암호 파일을 받은 관리자가 키로 직접 대조한다.
-- **실제 Firestore·배포 환경에서는 아직 돌려보지 않았다**(`runQuery` 는 모의 응답으로만 검증했다).
+- **운영에서는 거절 경로만 확인했다(2026-11-07)**: 체인에 없는 커밋먼트는 404, 잘못된 봉투는 400 이고 공개키 지문은 핀과 같다. 체인에 있는 커밋먼트로 끝까지 보낸 적은 아직 없다.
 
 ## 13. 핀(기대 지문)의 저장 위치 — Actions 변수 (2026-10-17 결정)
 
@@ -281,6 +281,7 @@ CI 는 **GitHub Actions 변수**를 읽는다.
 - CI: .github/workflows/verify-key-pin.yml 이 ars.EVIDENCE_PIN_FINGERPRINT·EVIDENCE_PIN_GENERATION·
   EVIDENCE_PIN_HEALTH_URL 을 읽어 /health 와 대조한다. **변수가 비어 있으면 실패(fail-closed)** 한다 —
   "설정을 안 했다"가 조용히 통과하지 않는다.
-- 회전할 때: pin(로컬) → pin-publish(Actions 변수) → publish(Render 재배포) → pin-check/doctor.
+- 회전할 때: pin(로컬) → pin-publish(Actions 변수) → `mockup/proof-crypto.js` 의 `ADMIN_KEY_FINGERPRINT` 수정 → `firebase deploy --only hosting` → publish(Render 재배포) → pin-check/doctor.
+- **예외(2026-11-07)**: 화면의 고정 지문은 저장소 파일에 둔다(`proof-crypto.js`). 브라우저가 검증자이고 화면은 어차피 공개 파일이기 때문이다. CI 의 기대값은 그대로 Actions 변수이고, verify-key-pin 이 둘을 대조한다.
 - 한계: 저장소 파일이 사라졌으므로 **공개 약속(누구나 핀을 확인)** 성질은 없어졌다. 대신 관리자가
   오프라인에 지문을 적어 두고 주기적으로 pin-remote-check 로 대조하는 것을 권한다.

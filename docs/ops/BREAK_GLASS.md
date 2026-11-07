@@ -58,8 +58,38 @@
 
 ## 5. 오프사이트 앵커 판정
 
-`evidence-anchor`가 켜져 있으면 6시간마다 GitHub 관리 plane에 Render `/health`의 `deploy.commit`과 증거 지문, Firebase Hosting `/`, `/index.html`, `ai.js`, `auth.js`, `app.js`의 SHA-256·ETag·CSP 모드·캐시 정책을 기록한다. `ai.js`의 Hosting origin guard가 사라지거나 Hosting CSP가 Report-Only로 돌아가거나 루트가 한 시간 이상 캐시되면 앵커가 실패해야 한다.
+`evidence-anchor`가 켜져 있으면 6시간마다 GitHub 관리 plane에 Render `/health`의 `deploy.commit`과 증거 지문, Firebase Hosting `/`, `/index.html`, `ai.js`, `auth.js`, `app.js`, `proof-crypto.js`의 SHA-256·ETag·CSP 모드·캐시 정책을 기록한다. `ai.js`의 Hosting origin guard가 사라지거나 Hosting CSP가 Report-Only로 돌아가거나 루트가 한 시간 이상 캐시되면 앵커가 실패해야 한다.
 
 서버의 체인 `seq`가 마지막 오프사이트 기록보다 작으면 삭제 또는 롤백의 증거다. 기록이 없으면 어떤 판정도 할 수 없다. Firebase Hosting과 Render가 서로 다른 커밋을 보고하면 배포를 정상으로 간주하지 않는다.
 
 GitHub Issue는 같은 조직·저장소 권한으로 삭제될 수 있으므로 완전한 독립 보관소가 아니다. H3를 닫으려면 별도 계정의 저장소, 메일 보관함 또는 다른 타임스탬프 provider에 동일한 앵커를 복제해야 한다.
+
+## 6. 앱(Render)이 침해됐을 때 — 탈퇴 증명·복구 키
+
+### 침해된 앱이 할 수 있는 것과 막는 것
+
+| 공격 | 대비 | 남는 틈 |
+|---|---|---|
+| 공격자의 공개키를 내줘 복구 키를 가로챈다 | 화면이 고정 지문과 대조해 보내지 않는다(`key_mismatch`) | 아래 "화면 바꿔치기" |
+| `/health` 에만 맞는 지문을 보인다 | `verify-key-pin`·`pin-check` 가 `/withdraw/recovery-key` 도 대조한다 | 요청자를 골라 다른 키를 주면 CI 는 못 본다. 화면의 지문 대조가 막는다 |
+| 자기 복구 키로 체인에 가짜 시도를 쓴다 | `recovery-verify` 는 앵커 안의 항목만 `ok` 로 본다 | 앵커가 돌지 않으면 믿을 구간이 늘지 않는다 |
+| 복구 보고를 받은 척 버린다 | 화면이 증명 파일 보관을 함께 안내한다 | **탐지 수단 없음.** 사용자가 파일을 직접 보여 줘야 한다 |
+| 시도 기록을 생략한다 | 사용자 커밋먼트가 체인에 없어 `missing_from_chain` 이 된다 | 사용자가 제시해야 드러난다 |
+| 봉인된 증거를 연다 | **불가.** 앱에는 공개키뿐이고 개인키는 관리자 로컬에 있다 | - |
+| 영수증을 위조한다 | 앵커된 체인과 대조한다 | `EVIDENCE_SIGN_KEY` 가 앱에 있어 서명만으로는 구분되지 않는다 |
+
+**화면 바꿔치기(막지 못함)**: 화면을 Render 주소에서 연 사용자에게는 침해된 앱이 코드째 바꿔 줄 수 있다. 고정 지문도, `localStorage` 의 복구 키도 지켜 주지 못한다. 고정 지문은 **Firebase Hosting 에서 연 화면**에서만 유효하다. Hosting 배포 권한은 Render 와 별개이기 때문이다. 다만 저장소·CI 까지 장악되면(H4) 이 구분도 사라진다.
+
+### 침해가 의심되면 (순서대로)
+
+1. **증거부터 고정한다.** `verify-chain` 을 돌려 마지막 `seq`·`digest` 를 저장소 밖에 적는다. 마지막 앵커 시각이 곧 믿을 수 있는 경계다.
+2. **복구 경로를 닫는다.** Render 환경변수 `EVIDENCE_CLIENT_REPORTS=0`. 앱 자체를 믿을 수 없으면 서비스를 내린다.
+3. **자격증명을 간다.** Render 의 `FIREBASE_SERVICE_ACCOUNT_JSON`·`EVIDENCE_SIGN_KEY`·AI 키·`EVIDENCE_GH_TOKEN`. 옛 서명 공개키는 `EVIDENCE_SIGN_KEYS_OLD` 로 남긴다.
+4. **봉인 키(`EVIDENCE_PUBKEY`)는 갈 필요가 없다.** 개인키가 앱에 없기 때문이다. 다만 공격자가 값을 바꿨을 수 있으니 `pin-check` 로 확인한다. 그 사이 다른 키로 봉인된 아카이브는 열리지 않는다.
+5. **판정 경계를 적용한다.** 마지막 앵커 뒤의 체인 항목·영수증·복구 보고는 믿지 않는다. 그 구간에 Render 화면에서 복구 키를 보낸 사용자의 키는 노출된 것으로 본다. 할 수 있는 일이 "주인이라고 주장"뿐이므로, 앵커 안의 요청만 인정하면 피해가 번지지 않는다.
+6. **Hosting 자산을 대조한다.** 오프사이트 앵커의 `proof-crypto.js`·`app.js` 해시와 지금 값을 비교한다.
+
+### 아직 쓰이지 않은 방어선
+
+- 침해 훈련을 해 본 적이 없다. 이 절차는 실제로 돌려 보지 않았다.
+- `EVIDENCE_AUTO_ANCHOR=on` 이 아니면 앵커 경계가 오래돼 위 판정의 근거가 약해진다.

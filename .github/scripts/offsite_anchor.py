@@ -53,7 +53,7 @@ def health_record(health: dict) -> dict:
 def hosting_record(base_url: str) -> dict:
     """Firebase Hosting의 실행 자산 지문과 보안 헤더만 기록한다(본문은 저장하지 않는다)."""
     base = base_url.rstrip("/")
-    paths = ("/", "/index.html", "/ai.js", "/auth.js", "/app.js")
+    paths = ("/", "/index.html", "/ai.js", "/auth.js", "/app.js", "/proof-crypto.js")
     assets = []
     for path in paths:
         status, headers, payload = fetch_bytes(base + path)
