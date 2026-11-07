@@ -25,7 +25,8 @@
 | 최성빈 | 통합 / Backend | 생성 함수·검증 코드·말하기 채점 파이프라인, 배포(Render)·CI, 통합 |
 | 이영애 | AI 콘텐츠 | 식당·카페 카테고리 계약(`agent_contract/categories/restaurant.json`) |
 | 이창진 | AI 콘텐츠 | 교통·공항 카테고리 계약(`transport.json`) |
-| 함명자 | AI 콘텐츠 | 숙소·체크인 카테고리 계약(`agent_contract/categories/lodging.json`) |
+| 함명자 | AI 콘텐츠 | 숙소·호텔 카테고리 계약(`agent_contract/categories/lodging.json`) |
+| 도시 조사 에이전트(PR-V2) | AI 콘텐츠 | 관광지·명소 카테고리 계약(`agent_contract/categories/attraction.json`) |
 | 이주란 | 검증 | 전 카테고리 실패 케이스(`negative_cases`)·측정 |
 | 한재정 | 리뷰 | 전체 리뷰 |
 
