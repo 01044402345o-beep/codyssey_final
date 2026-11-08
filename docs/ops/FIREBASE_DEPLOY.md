@@ -8,7 +8,7 @@
 
 | 무엇 | 어디서 | 비고 |
 |---|---|---|
-| 화면(`mockup/` 정적 파일) | **Firebase Hosting** `https://com-example-myapplicatio-3bb36.web.app` | `firebase deploy --only hosting` |
+| 화면(`mockup/` 정적 파일) | **Firebase Hosting** `https://com-example-myapplicatio-3bb36.web.app` | main CI 통과 뒤 자동 배포(아래 '화면 자동 배포'). 손으로는 `firebase deploy --only hosting` |
 | HTTP API 전부(`/health` `/generate` `/research` `/place-check` `/place-photo` …) | **Render** `https://codyssey-final.onrender.com` | 화면이 `*.web.app`·`*.firebaseapp.com` 에서 열리면 `AI.apiBase` 가 Render 를 고른다(교차 출처) |
 | 통역 WebSocket | **Render** `wss://codyssey-final.onrender.com/interp/stream` | `API.base` 에서 만든다 |
 | Render 자체 화면 | `https://codyssey-final.onrender.com` | Hosting 으로 301(`SCREEN_HOME_URL`, [`BREAK_GLASS.md`](BREAK_GLASS.md) §6). 로컬·CI 는 그대로 화면을 준다 |
@@ -19,6 +19,42 @@
 - Render 의 CORS 는 두 Firebase Hosting 주소로 제한한다:
   `ALLOW_ORIGINS=https://codyssey-final.onrender.com,https://com-example-myapplicatio-3bb36.web.app,https://com-example-myapplicatio-3bb36.firebaseapp.com`.
 - 로그인: Firebase Auth 승인 도메인에 `*.web.app`·`*.firebaseapp.com` 은 기본으로 들어 있다.
+
+### 화면 자동 배포 (11/08~) — main 의 CI 가 통과하면 Hosting 에 올린다
+
+Hosting 은 Render 와 달리 저절로 바뀌지 않는다. 11/08 에 병합된 동의 창·랜딩 문구가 운영에 안 나온 원인이 이것이었다.
+`.github/workflows/hosting-deploy.yml` 이 다음을 한다.
+
+```
+main push → CI(test·e2e) 성공 → hosting-deploy
+  ├─ 그 커밋이 main 의 끝이 아니면 건너뜀(더 새 커밋이 배포 — 옛 화면으로 덮지 않음)
+  ├─ 운영 URL 파일 ↔ 저장소 mockup/ 바이트 비교(drift). 같으면 끝
+  ├─ 다르면 WIF 단기 토큰(키 파일 없음, 15분) → Hosting REST API 로 배포(.github/scripts/hosting_deploy.py)
+  └─ 운영 URL 로 다시 비교해 같아질 때까지 확인(최대 2분)
+매일 06:41 KST: 비교만. 다르면 실패로 알린다 → Actions 에서 hosting-deploy 를 수동 실행하면 main 을 올린다
+```
+
+- **firebase CLI 를 쓰지 않는다.** 저장소의 다른 GCP 작업(geo-refresh·오프사이트 앵커)처럼 서드파티 액션 없이 표준 라이브러리로 한다.
+  `firebase.json` 의 `public`·`ignore`·`headers` 를 그대로 옮기며, 11/08 운영 버전의 설정·파일 목록과 같음을 확인했다.
+  `rewrites`·`redirects` 가 생기면 스크립트가 거부한다(조용히 빠뜨리지 않게) — 그때는 스크립트를 고친다.
+- **main 에서만 토큰이 나온다.** WIF 공급자 조건이 `repository=='01044402345o-beep/codyssey_final' && ref=='refs/heads/main'` 이다.
+- **줄바꿈:** Windows 에서 손으로 배포하면 CRLF 로 올라간다(11/07 운영본). 자동 배포는 리눅스라 LF 다. 동작은 같고, 첫 자동 배포에서 텍스트 파일이 한 번 모두 바뀐다.
+
+**처음 한 번 — 프로젝트 소유자가 할 일**(권한 부여라 사람이 한다)
+
+```bash
+P=com-example-myapplicatio-3bb36
+SA=hosting-deploy@$P.iam.gserviceaccount.com
+gcloud iam service-accounts create hosting-deploy --project $P --display-name "GitHub Actions - Hosting deploy (main only)"
+gcloud projects add-iam-policy-binding $P --member "serviceAccount:$SA" --role roles/firebasehosting.admin --condition=None
+gcloud iam service-accounts add-iam-policy-binding $SA --project $P --role roles/iam.workloadIdentityUser   --member "principalSet://iam.googleapis.com/projects/1002366583240/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/01044402345o-beep/codyssey_final"
+gh variable set HOSTING_SA_EMAIL -R 01044402345o-beep/codyssey_final --body "$SA"
+gh variable set HOSTING_DEPLOY -R 01044402345o-beep/codyssey_final --body on
+```
+
+- `GCP_WIF_PROVIDER` 변수는 geo-refresh 가 쓰는 것이 이미 있다.
+- 끄려면 `HOSTING_DEPLOY` 를 `off` 로. 꺼져 있으면 비교만 하고 경고를 남긴다.
+- 되돌리기: Firebase 콘솔 → Hosting → 출시 기록에서 이전 버전 '롤백', 또는 `firebase hosting:clone <site>:@<옛 버전 ID> <site>:live`.
 
 ### Cloud Run 을 보류한 이유 — 마감(11/08 18:00)의 한계
 

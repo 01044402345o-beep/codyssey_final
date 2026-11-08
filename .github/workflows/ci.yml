@@ -51,6 +51,9 @@ jobs:
       - name: 오프사이트 앵커 스크립트 테스트
         run: python -m unittest discover -s .github/scripts -p "test_offsite_anchor.py"
 
+      - name: 화면 자동 배포 스크립트 테스트
+        run: python -m unittest discover -s .github/scripts -p "test_hosting_deploy.py"
+
       - name: 검증 규칙 점검 (negative_cases)
         working-directory: backend
         run: python scripts/check_negatives.py

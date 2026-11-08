@@ -1,0 +1,94 @@
+# 화면(mockup/) 자동 배포 — main 의 CI 가 통과하면 Firebase Hosting 에 올린다.
+#
+# 왜: Hosting 은 누가 `firebase deploy --only hosting` 을 해야 바뀐다. 11/08 에 병합된 동의 창·랜딩 문구가
+#     운영에 안 나온 원인이 이것이었다(Render 는 자동 배포라 서버만 최신이었다).
+#
+# 흐름
+#   1. CI(test·e2e)가 main push 에서 성공 → 이 워크플로가 그 커밋을 받는다.
+#   2. 그 커밋이 지금 main 의 끝이 아니면 건너뛴다(더 새 커밋의 CI 가 배포한다 — 옛 화면으로 덮지 않게).
+#   3. 운영 URL 의 파일과 저장소 파일을 바이트로 비교(drift). 같으면 끝.
+#   4. 다르고 HOSTING_DEPLOY=on 이면 WIF 단기 토큰(키 파일 없음)으로 올리고, 운영 URL 로 다시 비교해 확인한다.
+#   매일 한 번은 비교만 한다 — 누가 다른 브랜치를 손으로 올렸거나 배포가 빠졌으면 실패로 알린다.
+#
+# 필요한 저장소 변수: GCP_WIF_PROVIDER(geo-refresh 와 같은 풀), HOSTING_SA_EMAIL, HOSTING_DEPLOY=on
+#   서비스 계정·권한 만드는 법: docs/ops/FIREBASE_DEPLOY.md '화면 자동 배포'
+name: hosting-deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: "41 21 * * *"     # 매일 06:41 KST — 비교만
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # GitHub OIDC → GCP 단기 토큰
+
+concurrency:
+  group: hosting-deploy
+  cancel-in-progress: false
+
+env:
+  SITE: com-example-myapplicatio-3bb36
+  LIVE_URL: https://com-example-myapplicatio-3bb36.web.app
+
+jobs:
+  deploy:
+    # CI 가 main 에 대한 push 로 성공했을 때만(포크 PR 의 같은 이름 브랜치는 제외)
+    if: >-
+      github.event_name != 'workflow_run' || (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 1
+
+      - name: 지금 main 의 끝인가
+        id: head
+        env:
+          WANT: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          tip=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$tip" = "$WANT" ]; then echo "latest=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::이 커밋(${WANT:0:8})은 main 의 끝(${tip:0:8})이 아닙니다 — 더 새 커밋이 배포합니다"; echo "latest=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: 운영 화면과 비교
+        id: drift
+        if: steps.head.outputs.latest == 'true'
+        run: python3 .github/scripts/hosting_deploy.py drift --base-url "$LIVE_URL"
+
+      - name: 정기 점검 — 운영이 main 과 다르면 실패로 알린다
+        if: github.event_name == 'schedule' && steps.drift.outputs.changed == 'true'
+        run: |
+          echo "::error::운영 화면이 main 과 다릅니다. Actions 에서 hosting-deploy 를 수동 실행(workflow_dispatch)하면 main 을 올립니다."
+          exit 1
+
+      - name: 배포가 꺼져 있음
+        if: github.event_name != 'schedule' && steps.drift.outputs.changed == 'true' && (vars.HOSTING_DEPLOY != 'on' || vars.GCP_WIF_PROVIDER == '' || vars.HOSTING_SA_EMAIL == '')
+        run: echo "::warning::운영 화면이 main 과 다르지만 자동 배포가 꺼져 있습니다(HOSTING_DEPLOY·GCP_WIF_PROVIDER·HOSTING_SA_EMAIL 변수 확인)."
+
+      - name: GCP 단기 토큰(WIF, 키 파일 없음)
+        if: github.event_name != 'schedule' && steps.drift.outputs.changed == 'true' && vars.HOSTING_DEPLOY == 'on' && vars.GCP_WIF_PROVIDER != '' && vars.HOSTING_SA_EMAIL != ''
+        env:
+          GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          GCP_ANCHOR_SA: ${{ vars.HOSTING_SA_EMAIL }}
+        run: python3 .github/scripts/gcp_wif_token.py
+
+      - name: Hosting 에 올리기
+        id: up
+        if: env.GCP_ACCESS_TOKEN != ''
+        env:
+          LABEL: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: python3 .github/scripts/hosting_deploy.py deploy --site "$SITE" --channel live --label "${LABEL:0:12}"
+
+      - name: 운영 URL 로 다시 확인
+        if: steps.up.outcome == 'success'
+        run: python3 .github/scripts/hosting_deploy.py verify --base-url "$LIVE_URL" --attempts 6 --wait 20
