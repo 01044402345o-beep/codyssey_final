@@ -5878,7 +5878,7 @@ function consentVisualHtml(host) {
   const step = (ic, title, sub, tag) => `<li class="cv-step">${cvIc(ic)}<div><b>${title}</b>${sub ? `<span>${sub}</span>` : ''}</div>${tag ? `<em>${tag}</em>` : ''}</li>`;
   return `<ol class="cv-flow" aria-label="녹음이 가는 길">
       ${step('mic', '내 목소리 15초', '+ 연습 중인 문장')}
-      ${step('server', '마디 서버', '말소리일 때만 AI로 보내요', '저장하지 않아요')}
+      ${step('server', '마디 서버', '말소리인지 확인해요', '저장하지 않아요')}
       ${step('ears', '받아쓰기 AI 2곳', 'Groq · AssemblyAI', '둘 다 들은 단어만 채점')}
       ${step('spark', '피드백 AI', 'Google Gemini API · 글만')}
     </ol>

@@ -57,7 +57,7 @@ with sync_playwright() as p:
     page.locator('[data-act="speak-rec"]').first.click(); page.wait_for_timeout(300)
     check("동의 창", page.locator(".modal").count() == 1)
     # 그림(단계 흐름)에 짧게 보이고, 긴 설명은 '자세히 보기' 안에 그대로 있다
-    check("동의 창 그림에 '말소리일 때만 AI로' 전송 안내", "말소리일 때만 AI로" in page.locator(".modal").inner_text())
+    check("동의 창 그림에 '말소리인지 확인해요' 안내", "말소리인지 확인해요" in page.locator(".modal").inner_text())
     check("동의 창 자세히 보기에 '서버 안의 두 신경망이 모두 말소리를 찾으면'", "서버 안의 두 신경망" in page.locator(".modal .cv-more").text_content())
     page.locator('[data-act="modal-ok"]').click(); page.wait_for_timeout(1500)   # 1.5초 무음 녹음
     check("녹음 시작 (무음 마이크)", "녹음 끝내기" in page.locator('[data-act="speak-rec"]').first.inner_text())
