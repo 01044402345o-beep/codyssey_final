@@ -5865,22 +5865,46 @@ function lineActsHtml(s, k, listen) {
    저장소가 막힌 브라우저에서는 이번 접속 동안만 기억한다(consentMem). */
 let consentMem = false;
 const voiceConsent = () => { const c = AI.loadConsent(personalStore()); return c.voice ? c : consentMem ? { voice: true, at: null } : c; };
-function askVoiceConsent(after) {
-  const host = esc(API.host || location.host);
-  confirmBox('말하기 연습 전에 확인해 주세요',
-    `<b>보내는 것</b> · 녹음한 목소리(최대 15초)와 연습 중인 영어 문장<br>
+/* 동의 창 본문 — 녹음이 어디로 가는지 그림(단계 흐름)으로 먼저 보여 주고, 긴 설명은 '자세히 보기'로 접는다.
+   사용자 피드백: 글이 너무 길어 눈에 안 들어온다. 고지 내용은 줄이지 않고 접어서 그대로 둔다(e2e/test_consent.py). */
+const CV_IC = {
+  mic: '<path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  server: '<rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/><path d="M8 7.5h.01M8 16.5h.01"/>',
+  ears: '<path d="M4 7h10M4 12h16M4 17h7"/><path d="m16 15 2 2 3-4"/>',
+  spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
+};
+const cvIc = k => `<svg class="cv-ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CV_IC[k]}</svg>`;
+function consentVisualHtml(host) {
+  const step = (ic, title, sub, tag) => `<li class="cv-step">${cvIc(ic)}<div><b>${title}</b>${sub ? `<span>${sub}</span>` : ''}</div>${tag ? `<em>${tag}</em>` : ''}</li>`;
+  return `<ol class="cv-flow" aria-label="녹음이 가는 길">
+      ${step('mic', '내 목소리 15초', '+ 연습 중인 문장')}
+      ${step('server', '마디 서버', '말소리일 때만 AI로 보내요', '저장하지 않아요')}
+      ${step('ears', '받아쓰기 AI 2곳', 'Groq · AssemblyAI', '둘 다 들은 단어만 채점')}
+      ${step('spark', '피드백 AI', 'Google Gemini API · 글만')}
+    </ol>
+    <p class="cv-side">켜져 있을 때만 · 음소 분석 PC, 꺼져 있으면 클라우드 발음 평가</p>
+    <p class="cv-pill bad">Google 무료 API는 사람 검토자가 읽을 수 있어요 · <b>민감한 개인정보는 말하지 마세요</b></p>
+    <p class="cv-pill ok">거부해도 카드·듣기는 그대로 · 동의는 홈에서 언제든 철회</p>
+    <details class="cv-more"><summary>자세히 보기</summary>${consentDetailHtml(host)}</details>`;
+}
+function consentDetailHtml(host) {
+  return `<b>보내는 것</b> · 녹음한 목소리(최대 15초)와 연습 중인 영어 문장<br>
      <b>받는 곳</b> · ① 이 서비스 서버(${host}) — 말소리가 있는지 신경망(VAD)으로 확인 서버 안의 두 신경망(Silero·pyannote)이 <b>모두</b> 말소리를 찾으면 ② 그 구간의 녹음이 서로 다른 전사 AI 둘에 동시에: Groq Whisper(실패 시 OpenAI Whisper), 교차검증용 AssemblyAI ③ 받아쓴 문장·목표 문장·상황 이름(글만)이 피드백용 Google Gemini API로 ④ 음소 분석이 켜져 있을 때만, 같은 녹음 구간과 목표 문장이 팀이 운영하는 음소 분석 PC로(암호화된 HTTPS, 분석 뒤 저장하지 않아요) ⑤ 음소 분석 PC가 모두 꺼져 있을 때만, 같은 녹음 구간과 목표 문장이 클라우드 발음 평가(Microsoft Azure, 필요하면 Speechace)로<br>
      <b>처리</b> · 전사 AI들은 목표 문장을 모른 채 <b>받아쓰기만</b> 하고, 두 전사에서 <b>모두</b> 들린 단어만 코드가 점수로 계산해요. 교차검증이 안 되면 채점하지 않아요.<br>
      <b>목적</b> · 말하기 연습 피드백 (피드백 문장은 AI가 만든 결과예요)<br>
      <b>보관</b> · 이 서비스 서버와 음소 분석 PC는 녹음을 저장하지 않아요. 전사 AI 회사의 처리·보관은 각 회사 약관을 따라요.<br>
      <b>Google 처리</b> · 무료 등급 API에서는 Google이 전송된 내용을 제품 개선에 사용하고 사람 검토자가 읽을 수 있어요(계정·키와는 분리돼요). <b>민감한 개인정보는 말하지 마세요.</b><br>
      <b>이 브라우저에 저장</b> · 채점 결과로 고른 '어려워한 상황'(복습 목록). 다음 문장을 만들 때 상황 이름만 서버로 보내요. 로그인한 계정은 학습 진도·복습 목록·여행 설정·이용약관 동의 여부 등을 서버에 올려요. 녹음 파일은 올리지 않아요.<br><br>
-     동의하지 않아도 카드 학습과 듣기는 그대로 쓸 수 있어요. 동의는 홈 화면에서 언제든 철회할 수 있고, 철회하면 복습 목록도 지워져요.`,
+     동의하지 않아도 카드 학습과 듣기는 그대로 쓸 수 있어요. 동의는 홈 화면에서 언제든 철회할 수 있고, 철회하면 복습 목록도 지워져요.`;
+}
+function askVoiceConsent(after) {
+  const host = esc(API.host || location.host);
+  confirmBox('말하기 연습 전에 확인해 주세요', consentVisualHtml(host),
     '동의하고 녹음하기', () => {
       S.modal = null;
       if (!saveConsentHere(true)) consentMem = true;
       render(); (after || (() => toggleSpeak()))();
-    }, { cancel: '동의하지 않기' });
+    }, { cancel: '동의하지 않기', block: true });
 }
 function privacyCard() {
   const c = voiceConsent(), n = weakList().length, ic = interpConsent(), ls = ilogSync();

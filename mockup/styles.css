@@ -2672,6 +2672,20 @@ body.is-narrow .spk-card { border-radius: 12px; }
 .add-plain { width: 100%; min-height: 44px; }
 /* 확인 창 — 사진이 주인공이 아니라 '이름·주소가 맞는지'가 주인공이다 */
 .modal .mbody { margin: 8px 0 14px; }
+/* 말하기 동의 창: 녹음이 가는 길을 단계 흐름으로 (긴 설명은 .cv-more 로 접는다) */
+.cv-flow { list-style: none; margin: 4px 0 0; padding: 0; }
+.cv-step { position: relative; display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 10px; padding: 7px 0; }
+.cv-step + .cv-step::before { content: ""; position: absolute; left: 17px; top: -7px; height: 14px; border-left: 2px solid var(--border-strong); }
+.cv-step .cv-ic { width: 36px; height: 36px; padding: 8px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-text); box-sizing: border-box; }
+.cv-step b { display: block; color: var(--text); font-size: .95rem; }
+.cv-step span { display: block; color: var(--text-soft); font-size: .8rem; }
+.cv-step em { font-style: normal; font-size: .75rem; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--ok-soft); color: var(--ok-text); white-space: nowrap; }
+.cv-side { margin: 2px 0 10px 46px; font-size: .78rem; color: var(--text-soft); }
+.cv-pill { margin: 6px 0 0; padding: 8px 10px; border-radius: 10px; font-size: .82rem; line-height: 1.5; }
+.cv-pill.bad { background: var(--bad-soft); color: var(--on-bad-soft); }
+.cv-pill.ok { background: var(--ok-soft); color: var(--ok-text); }
+.cv-more { margin-top: 10px; font-size: .8rem; line-height: 1.7; color: var(--text-soft); }
+.cv-more summary { cursor: pointer; color: var(--accent-text); font-weight: 600; padding: 4px 0; }
 .place-confirm { display: grid; gap: 10px; }
 .pc-photo { display: block; border-radius: 12px; overflow: hidden; background: var(--surface-3); aspect-ratio: 16 / 9; max-height: 148px; }
 .pc-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
