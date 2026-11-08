@@ -2684,6 +2684,7 @@ body.is-narrow .spk-card { border-radius: 12px; }
 .cv-pill { margin: 6px 0 0; padding: 8px 10px; border-radius: 10px; font-size: .82rem; line-height: 1.5; }
 .cv-pill.bad { background: var(--bad-soft); color: var(--on-bad-soft); }
 .cv-pill.ok { background: var(--ok-soft); color: var(--ok-text); }
+.cv-pill.info { background: var(--sea-soft); color: var(--on-sea-soft); }
 .cv-more { margin-top: 10px; font-size: .8rem; line-height: 1.7; color: var(--text-soft); }
 .cv-more summary { cursor: pointer; color: var(--accent-text); font-weight: 600; padding: 4px 0; }
 .place-confirm { display: grid; gap: 10px; }

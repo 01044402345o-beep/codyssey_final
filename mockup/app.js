@@ -2770,9 +2770,10 @@ function liveTermsHtml() {   // 약관 전문 보기(모달) — 동의 창과 �
   return INTERP_TERMS.map(([k, v]) => `<p style="margin:0 0 8px"><b>${esc(k)}</b> · ${esc(v)}</p>`).join('')
     + `<p class="small" style="margin:8px 0 0">v${INTERP_DISCLAIMER_VERSION} · 2026-10-21 시행. 통역 업체가 늘거나 처리 범위가 넓어지는 등 동의 내용이 달라지면 다시 동의를 받아요.</p>`;
 }
-function askInterpConsent(after) {
-  confirmBox('실시간 통역 전에 확인해 주세요',
-    `<b>보내는 것</b> · 마이크로 들어온 소리(통역하는 동안 계속)<br>
+/* 통역 동의 창 — 말하기 동의 창과 같이, 음성이 가는 길을 그림으로 먼저 보이고 긴 설명은 '자세히 보기'로 접는다.
+   고지 내용은 줄이지 않는다(e2e/test_interp_live.py 가 업체 이름·저장 안 함·국외를 화면에서 찾는다). */
+function interpConsentDetailHtml() {
+  return `<b>보내는 것</b> · 마이크로 들어온 소리(통역하는 동안 계속)<br>
      <b>받는 곳</b> · ① 이 서비스 서버를 거쳐 ② 통역 업체로 전송돼요. 지금 운영에서 켠 업체는 Soniox, Inc.(미국) · Microsoft Azure Speech(Microsoft Corp., 미국 — 처리 지역은 운영 설정) · OpenAI, L.L.C.(미국) · Google Gemini Live(Google LLC, 미국 등) 이고, 앞 업체가 안 되면 다음 업체로 저절로 넘어가요. 업체 순서와 켜는 업체는 운영 비용 사정에 따라 바뀌거나 줄 수 있어요(목록에 없는 업체로는 보내지 않아요). 지금 쓰는 업체는 통역 화면 위에 표시해요.<br>
      <b>쓸 수 있는 사람·시간</b> · 로그인한 계정만, 한 번에 최대 3분이에요.<br>
      <b>외부로 안 보내는 경우</b> · '이 기기(브라우저)'·'마디 서버(자체)' 엔진은 음성을 외부 회사로 보내지 않아요. 엔진이 실패하면 다음 엔진으로 자동으로 넘어가요.<br>
@@ -2781,11 +2782,26 @@ function askInterpConsent(after) {
      <b>대화 상대</b> · 내가 참여한 대화에서만 쓰고, 상대에게 AI 통역을 쓴다고 알려 주세요.<br>
      <b>주의</b> · 통역은 AI 가 만든 결과라 틀릴 수 있어요.<br><br> 여권번호·카드번호 같은 민감한 정보는 말하지 마세요.<br><br>
      동의하지 않아도 통역 화면의 문장 보기·들려주기는 그대로 쓸 수 있어요.<br><br>
-     <b>${esc(INTERP_NOTICE)}</b>`,
+     <b>${esc(INTERP_NOTICE)}</b>`;
+}
+function interpConsentVisualHtml() {
+  return `<ol class="cv-flow" aria-label="음성이 가는 길">
+      ${cvStep('mic', '내 마이크 소리', '통역하는 동안 계속')}
+      ${cvStep('server', '마디 서버', '거쳐 가기만 해요', '저장하지 않아요')}
+      ${cvStep('globe', '통역 업체 · 국외(미국 등)', 'Soniox · Microsoft · OpenAI · Google', '암호화 전송')}
+    </ol>
+    <p class="cv-side">'이 기기'·'마디 서버(자체)' 엔진은 외부로 안 보내요 · 로그인 계정만, 한 번 최대 3분</p>
+    <p class="cv-pill bad">AI 통역은 틀릴 수 있어요 · <b>여권·카드번호 같은 민감한 정보는 말하지 마세요</b></p>
+    <p class="cv-pill info">상대에게 AI 통역을 쓴다고 알려 주세요</p>
+    <p class="cv-pill ok">거부해도 문장 보기·들려주기는 그대로</p>
+    <details class="cv-more"><summary>자세히 보기</summary>${interpConsentDetailHtml()}</details>`;
+}
+function askInterpConsent(after) {
+  confirmBox('실시간 통역 전에 확인해 주세요', interpConsentVisualHtml(),
     '동의하고 시작', () => {
       try { localStorage.setItem(INTERP_CONSENT_KEY, JSON.stringify({ voice: true, v: INTERP_CONSENT_VERSION, at: Date.now() })); } catch (e) { /* 저장소 막힘 */ }
       S.modal = null; render(); if (after) after();
-    });
+    }, { block: true });
 }
 function interpUiChipsHtml(ui) {
   return `<div class="il-pick" role="group" aria-label="화면 방식">
@@ -5872,10 +5888,13 @@ const CV_IC = {
   server: '<rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/><path d="M8 7.5h.01M8 16.5h.01"/>',
   ears: '<path d="M4 7h10M4 12h16M4 17h7"/><path d="m16 15 2 2 3-4"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
 };
 const cvIc = k => `<svg class="cv-ic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CV_IC[k]}</svg>`;
+/* 동의 창 단계 하나 — 말하기·통역 동의 창이 같이 쓴다 */
+const cvStep = (ic, title, sub, tag) => `<li class="cv-step">${cvIc(ic)}<div><b>${title}</b>${sub ? `<span>${sub}</span>` : ''}</div>${tag ? `<em>${tag}</em>` : ''}</li>`;
 function consentVisualHtml(host) {
-  const step = (ic, title, sub, tag) => `<li class="cv-step">${cvIc(ic)}<div><b>${title}</b>${sub ? `<span>${sub}</span>` : ''}</div>${tag ? `<em>${tag}</em>` : ''}</li>`;
+  const step = cvStep;
   return `<ol class="cv-flow" aria-label="녹음이 가는 길">
       ${step('mic', '내 목소리 15초', '+ 연습 중인 문장')}
       ${step('server', '마디 서버', '말소리인지 확인해요', '저장하지 않아요')}
