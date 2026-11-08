@@ -52,6 +52,20 @@ gh variable set HOSTING_SA_EMAIL -R 01044402345o-beep/codyssey_final --body "$SA
 gh variable set HOSTING_DEPLOY -R 01044402345o-beep/codyssey_final --body on
 ```
 
+Windows PowerShell 에서는 변수 지정이 다르다(`P=...` 는 오류):
+
+```powershell
+$P = "com-example-myapplicatio-3bb36"
+$SA = "hosting-deploy@$P.iam.gserviceaccount.com"
+gcloud iam service-accounts create hosting-deploy --project $P --display-name "GitHub Actions - Hosting deploy (main only)"
+gcloud projects add-iam-policy-binding $P --member "serviceAccount:$SA" --role roles/firebasehosting.admin --condition=None
+gcloud iam service-accounts add-iam-policy-binding $SA --project $P --role roles/iam.workloadIdentityUser --member "principalSet://iam.googleapis.com/projects/1002366583240/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/01044402345o-beep/codyssey_final"
+gh variable set HOSTING_SA_EMAIL -R 01044402345o-beep/codyssey_final --body $SA
+gh variable set HOSTING_DEPLOY -R 01044402345o-beep/codyssey_final --body on
+```
+
+만든 직후 다음 줄에서 '서비스 계정이 없다'가 나오면 10~20초 뒤 그 줄만 다시 실행한다.
+
 - `GCP_WIF_PROVIDER` 변수는 geo-refresh 가 쓰는 것이 이미 있다.
 - 끄려면 `HOSTING_DEPLOY` 를 `off` 로. 꺼져 있으면 비교만 하고 경고를 남긴다.
 - 되돌리기: Firebase 콘솔 → Hosting → 출시 기록에서 이전 버전 '롤백', 또는 `firebase hosting:clone <site>:@<옛 버전 ID> <site>:live`.
